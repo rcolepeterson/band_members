@@ -687,6 +687,11 @@ body {
   </style>
 </head>
 <body>
+  <div id="password-gate" style="position:fixed;inset:0;z-index:9999;background:#04070b;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;">
+  <div style="color:#edf7ff;font-family:sans-serif;font-size:1.1rem;">Enter password</div>
+  <input type="password" id="gate-input" style="width:260px;max-width:90vw;padding:0.75rem 1rem;border-radius:8px;border:1px solid #444;background:#111;color:#fff;font-size:1rem;" />
+  <div id="gate-error" style="color:#f5c26b;font-size:0.85rem;display:none;">Incorrect password</div>
+</div>
   <a class="skip-link" href="#main-content">Skip to content</a>
   <div class="page-shell">
     <div class="grid-lines" aria-hidden="true"></div>
@@ -878,6 +883,25 @@ body {
   </div>
 
   <script>
+        (function() {
+      const gate = document.getElementById('password-gate');
+      const input = document.getElementById('gate-input');
+      const error = document.getElementById('gate-error');
+      const stored = sessionStorage.getItem('rbft-unlocked');
+      if (stored === 'yes') { gate.style.display = 'none'; return; }
+
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          if (input.value === 'rawk') {
+            sessionStorage.setItem('rbft-unlocked', 'yes');
+            gate.style.display = 'none';
+          } else {
+            error.style.display = 'block';
+            input.value = '';
+          }
+        }
+      });
+    })();
     const selectedName = document.getElementById('selected-node-name');
     const selectedCopy = document.getElementById('selected-node-copy');
     const selectedType = document.getElementById('selected-node-type');
