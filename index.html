@@ -687,14 +687,13 @@ body {
   </style>
 </head>
 <body>
-  <div id="password-gate" style="position:fixed;inset:0;z-index:9999;background:white;display:flex;align-items:flex-start;justify-content:center;padding-top:50px;">
-  <form id="gate-form">
-    <p>Enter password:</p>
-    <input type="password" id="gate-input" name="password" />
-    <br><br>
-    <button type="submit">Submit</button>
-    <p id="gate-error" style="color:red;display:none;">Wrong password, try again.</p>
+ <div id="password-gate" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background-color:#04070b;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
+  <div style="color:#ffffff;font-family:Arial,sans-serif;font-size:18px;">Enter password</div>
+  <form id="gate-form" style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+    <input type="password" id="gate-input" name="password" style="width:220px;padding:12px;font-size:16px;color:#000000;background-color:#ffffff;border:2px solid #999999;border-radius:6px;" />
+    <button type="submit" style="padding:12px 40px;font-size:16px;font-weight:bold;color:#000000;background-color:#8fe8f6;border:2px solid #68bfd2;border-radius:6px;cursor:pointer;">Submit</button>
   </form>
+  <div id="gate-error" style="color:#ff8080;font-family:Arial,sans-serif;font-size:14px;display:none;">Incorrect password</div>
 </div>
   <a class="skip-link" href="#main-content">Skip to content</a>
   <div class="page-shell">
