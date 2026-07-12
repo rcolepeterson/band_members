@@ -729,12 +729,6 @@ body {
   width: min(460px, calc(100vw - 2rem));
 }
 
-/* Keep the second (right-most) popover inside the viewport. */
-.popover-anchor:last-child .popover-up {
-  left: auto;
-  right: 0;
-}
-
 .popover-close {
   position: absolute;
   top: 0.55rem;
@@ -777,8 +771,7 @@ body {
 
 @media (max-width: 900px) {
   .popover-up,
-  .popover-up.popover-wide,
-  .popover-anchor:last-child .popover-up {
+  .popover-up.popover-wide {
     left: 0;
     right: auto;
     width: min(360px, calc(100vw - 1.7rem));
@@ -1303,8 +1296,24 @@ if (shareGraphBtn) {
       bottomPopovers.forEach(({ btn, pop }) => {
         if (pop === except) return;
         pop.hidden = true;
+        pop.style.left = '';
         btn.setAttribute('aria-expanded', 'false');
       });
+    }
+
+    // Nudge an open popover horizontally so its full box stays within the
+    // viewport (with a small margin), regardless of where its trigger pill
+    // sits in the bottom toolbar. Anchored at left:0 by CSS, then shifted here.
+    function clampPopover(pop) {
+      if (!pop || pop.hidden) return;
+      const margin = 12;
+      pop.style.left = '0px';
+      const vw = document.documentElement.clientWidth;
+      const rect = pop.getBoundingClientRect();
+      let shift = 0;
+      if (rect.right > vw - margin) shift = (vw - margin) - rect.right;
+      if (rect.left + shift < margin) shift = margin - rect.left;
+      pop.style.left = shift + 'px';
     }
 
     bottomPopovers.forEach(({ btn, pop }) => {
@@ -1315,14 +1324,20 @@ if (shareGraphBtn) {
         toggleSharePopover(false);
         pop.hidden = !willOpen;
         btn.setAttribute('aria-expanded', String(willOpen));
+        if (willOpen) clampPopover(pop);
       });
       pop.addEventListener('click', (event) => event.stopPropagation());
       pop.querySelectorAll('[data-popover-close]').forEach(closer => {
         closer.addEventListener('click', () => {
           pop.hidden = true;
+          pop.style.left = '';
           btn.setAttribute('aria-expanded', 'false');
         });
       });
+    });
+
+    window.addEventListener('resize', () => {
+      bottomPopovers.forEach(({ pop }) => clampPopover(pop));
     });
 
     if (sharePopover) {
