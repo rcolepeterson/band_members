@@ -183,7 +183,19 @@
   
     .is-ghosted{opacity:0.45;pointer-events:none;filter:saturate(0.5)}
 
-  
+
+    .members-block-label{display:block}
+    #members-container{display:flex;flex-direction:column;gap:var(--space-3);margin-top:var(--space-2)}
+    .member-row{position:relative;border:1px solid var(--color-border);border-radius:var(--radius-md);background:rgba(10,12,18,0.35);padding:0.7rem 0.8rem}
+    .member-row-fields{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)}
+    .member-row-fields label{margin-top:0}
+    .member-row-remove{position:absolute;top:0.35rem;right:0.35rem;width:1.7rem;height:1.7rem;min-height:0;padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:1;font-size:1.05rem;cursor:pointer;color:#effcff;background:rgba(7,12,18,0.5);border:1px solid rgba(225,244,255,0.24);border-radius:var(--radius-md)}
+    .member-row-remove:hover{border-color:#f5c26b}
+    .member-add-btn{margin-top:var(--space-3);width:auto;min-height:0;padding:0.5rem 0.85rem;cursor:pointer;font-size:var(--text-sm);letter-spacing:.06em;text-transform:uppercase;color:var(--color-text-muted);background:rgba(10,12,18,0.55);border:1px dashed var(--color-border);border-radius:var(--radius-md)}
+    .member-add-btn:hover{border-color:rgba(82,174,182,0.56);color:#effcff}
+    @media (max-width: 720px){.member-row-fields{grid-template-columns:1fr}}
+
+
     #existing-band-member-list{justify-content:flex-start;gap:var(--space-2)}
     #existing-band-member-list span{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);padding:0.35rem 0.6rem;border-radius:999px}
 
@@ -1111,10 +1123,21 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <p class="share-popover-copy">Drop a new branch into the tree. Plain text only — links and promo URLs are not allowed.</p>
             <form class="form-grid form-grid-expanded" id="submission-form">
               <div><label for="band-name">Band name</label><input id="band-name" name="band-name" type="text" placeholder="Temple of the Dog" /></div>
-              <div><label for="member-name">Member name</label><input id="member-name" name="member-name" type="text" placeholder="Jeff Ament" /></div>
-              <div><label for="relation-type">Member weight</label><select id="relation-type" name="relation-type"><option value="1">1 — Founder / core member</option><option value="2" selected>2 — Member</option><option value="3">3 — Touring member</option></select></div>
               <div><label for="submission-scene">Scene</label><input id="submission-scene" name="submission-scene" type="text" placeholder="Seattle" /></div>
-              <div><label for="instrument-name">Instrument</label><input id="instrument-name" name="instrument-name" type="text" placeholder="Bass, vocals, drums…" /></div>
+              <div class="form-span-2 members-block">
+                <label class="members-block-label">Band members</label>
+                <div id="members-container">
+                  <div class="member-row" data-member-row>
+                    <button type="button" class="member-row-remove" data-remove-row aria-label="Remove this member" tabindex="-1" hidden>&times;</button>
+                    <div class="member-row-fields">
+                      <div class="form-span-2"><label for="member-name">Member name</label><input id="member-name" class="member-name-input" name="member-name" type="text" placeholder="Jeff Ament" /></div>
+                      <div><label for="instrument-name">Instrument</label><input id="instrument-name" class="instrument-input" name="instrument-name" type="text" placeholder="Bass, vocals, drums…" /></div>
+                      <div><label for="relation-type">Member weight</label><select id="relation-type" class="relation-input" name="relation-type"><option value="1">1 — Founder / core member</option><option value="2" selected>2 — Member</option><option value="3">3 — Touring member</option></select></div>
+                    </div>
+                  </div>
+                </div>
+                <button type="button" class="member-add-btn" id="add-member-row-btn">+ Add another member</button>
+              </div>
               <div><label for="years-active">Years active</label><input id="years-active" name="years-active" type="text" placeholder="1990–1993" /></div>
               <div><label for="band-label">Label</label><input id="band-label" name="band-label" type="text" placeholder="Sub Pop, Epic, SST…" /></div>
               <div class="form-span-2"><label for="albums-released">Albums released</label><input id="albums-released" name="albums-released" type="text" placeholder="Ten; Vs.; Vitalogy" /></div>
@@ -1491,11 +1514,19 @@ if (shareGraphBtn) {
       if (!master || !draft) return { added: false, reason: 'No graph data available yet.' };
       const band = (draft.band || '').trim();
       const scene = ((draft.scene || '').trim()) || 'Seattle';
-      const member = (draft.member || '').trim();
       if (!band) return { added: false, reason: 'A band name is required.' };
 
-      const weight = Number(draft.relation) || 2;
+      // Support both the multi-member shape ({ members: [...] }) and the legacy
+      // single-member shape ({ member, instrument, relation }) so previously
+      // persisted submissions still replay correctly on load.
+      let members = Array.isArray(draft.members) ? draft.members.slice() : [];
+      if (!members.length && (draft.member || '').trim()) {
+        members = [{ member: draft.member, instrument: draft.instrument, relation: draft.relation }];
+      }
+
+      const bandBio = (draft.bio || '').trim();
       let changed = false;
+      let membersAdded = 0;
 
       // Band node — unique per scene, matching the CSV schema { id, type, scene }.
       let bandNode = master.nodes.find(node => node.type === 'band'
@@ -1506,9 +1537,14 @@ if (shareGraphBtn) {
         changed = true;
       }
 
-      if (member) {
-        const instrument = (draft.instrument || '').trim();
-        const bio = (draft.bio || '').trim();
+      members.forEach((entry, index) => {
+        const member = (entry.member || '').trim();
+        if (!member) return;
+        const instrument = (entry.instrument || '').trim();
+        const weight = Number(entry.relation) || 2;
+        // A single bio field is shared per submission; attach it to the first member.
+        const bio = index === 0 ? bandBio : '';
+
         let personNode = master.nodes.find(node => node.type === 'person'
           && normalizeKey(node.id) === normalizeKey(member));
         if (!personNode) {
@@ -1536,11 +1572,12 @@ if (shareGraphBtn) {
         if (!linkExists) {
           master.links.push({ source: band, target: member, relation: 'member', weight });
           changed = true;
+          membersAdded += 1;
         }
-      }
+      });
 
       if (!changed) return { added: false, reason: 'That band and connection already exist in the tree.' };
-      return { added: true };
+      return { added: true, membersAdded };
     }
 
     function getFilteredGraph(master) {
@@ -2318,8 +2355,62 @@ if (shareGraphBtn) {
       feedback.classList.toggle('is-success', !isError);
     }
 
+    const membersContainer = document.getElementById('members-container');
+
+    // Append another set of member fields below the existing rows. The first
+    // row keeps the stable ids (member-name / instrument-name / relation-type)
+    // that the preview + validation code reads; cloned rows drop those ids to
+    // avoid duplicates and are addressed only through their row-scoped classes.
+    function addMemberRow() {
+      const firstRow = membersContainer.querySelector('.member-row');
+      const row = firstRow.cloneNode(true);
+      row.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+      row.querySelectorAll('label[for]').forEach(el => el.removeAttribute('for'));
+      const nameInput = row.querySelector('.member-name-input');
+      const instrumentInput = row.querySelector('.instrument-input');
+      const relationInput = row.querySelector('.relation-input');
+      if (nameInput) { nameInput.value = ''; nameInput.classList.remove('field-error'); }
+      if (instrumentInput) instrumentInput.value = '';
+      if (relationInput) relationInput.value = '2';
+      const removeBtn = row.querySelector('[data-remove-row]');
+      if (removeBtn) removeBtn.hidden = false;
+      row.querySelectorAll('input, select, textarea').forEach(el => {
+        el.addEventListener('input', updateSubmissionPreview);
+        el.addEventListener('change', updateSubmissionPreview);
+        el.addEventListener('blur', updateSubmissionPreview);
+      });
+      membersContainer.appendChild(row);
+      if (nameInput) nameInput.focus();
+    }
+
+    // Remove all cloned rows and reset the primary row to empty defaults.
+    function resetMemberRows() {
+      membersContainer.querySelectorAll('.member-row').forEach((row, index) => {
+        if (index > 0) { row.remove(); return; }
+        const nameInput = row.querySelector('.member-name-input');
+        const instrumentInput = row.querySelector('.instrument-input');
+        const relationInput = row.querySelector('.relation-input');
+        if (nameInput) { nameInput.value = ''; nameInput.classList.remove('field-error'); }
+        if (instrumentInput) instrumentInput.value = '';
+        if (relationInput) relationInput.value = '2';
+      });
+    }
+
+    membersContainer.addEventListener('click', event => {
+      const removeBtn = event.target.closest('[data-remove-row]');
+      if (!removeBtn) return;
+      const rows = membersContainer.querySelectorAll('.member-row');
+      // Never remove the last remaining row.
+      if (rows.length <= 1) return;
+      removeBtn.closest('.member-row').remove();
+      updateSubmissionPreview();
+    });
+
+    document.getElementById('add-member-row-btn').addEventListener('click', addMemberRow);
+
     document.getElementById('save-draft-btn').addEventListener('click', () => {
-      const validationResult = validateSubmissionForm();
+      // Refresh the inline validation/preview UI for the primary row.
+      validateSubmissionForm();
       updateSubmissionPreview();
 
       const band = document.getElementById('band-name').value.trim();
@@ -2328,29 +2419,74 @@ if (shareGraphBtn) {
         showSubmissionFeedback('Enter a band name before saving.', true);
         return;
       }
-      // Duplicate member/connection or blocked bio — never fabricate success.
-      if (!validationResult.valid) {
-        showSubmissionFeedback(document.getElementById('submission-validation').textContent || 'This entry could not be saved.', true);
+
+      const scene = document.getElementById('submission-scene').value.trim() || 'Seattle';
+      const bio = document.getElementById('member-bio').value.trim();
+      if (bio && bioContainsBlockedLink(bio)) {
+        document.getElementById('member-bio').classList.add('field-error');
+        showSubmissionFeedback('Bio must be plain text only — no links, URLs, or promo sites.', true);
         return;
       }
 
+      const master = graphState && graphState.master;
+      const connectionExists = (memberName) => !!master && master.links.some(link => {
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+        return normalizeKey(sourceId) === normalizeKey(band) && normalizeKey(targetId) === normalizeKey(memberName);
+      });
+
+      // Collect every member row. Fully empty rows are skipped; a row with a
+      // name but a problem (duplicate connection, or a duplicate within this
+      // submission) blocks the whole submission so nothing is half-applied.
+      const rows = [...membersContainer.querySelectorAll('.member-row')];
+      const members = [];
+      const seen = new Set();
+      rows.forEach(row => row.querySelector('.member-name-input')?.classList.remove('field-error'));
+      for (const row of rows) {
+        const nameInput = row.querySelector('.member-name-input');
+        const memberName = (nameInput?.value || '').trim();
+        const instrument = (row.querySelector('.instrument-input')?.value || '').trim();
+        const relation = (row.querySelector('.relation-input')?.value || '').trim();
+        if (!memberName && !instrument) continue;
+        if (!memberName) {
+          if (nameInput) nameInput.classList.add('field-error');
+          showSubmissionFeedback('Enter a member name for each row, or clear the row before saving.', true);
+          return;
+        }
+        const key = normalizeKey(memberName);
+        if (seen.has(key)) {
+          if (nameInput) nameInput.classList.add('field-error');
+          showSubmissionFeedback(`${memberName} is listed more than once. Remove the duplicate row.`, true);
+          return;
+        }
+        seen.add(key);
+        if (connectionExists(memberName)) {
+          if (nameInput) nameInput.classList.add('field-error');
+          showSubmissionFeedback(`${memberName} is already connected to ${band} in ${scene}. Remove or change that row.`, true);
+          return;
+        }
+        members.push({ member: memberName, instrument, relation });
+      }
+
+      const bandExisted = !!master && master.nodes.some(node => node.type === 'band'
+        && normalizeKey(node.id) === normalizeKey(band)
+        && normalizeKey(node.scene || '') === normalizeKey(scene));
+
       const draft = {
         band,
-        member: document.getElementById('member-name').value.trim(),
-        relation: document.getElementById('relation-type').value.trim(),
-        scene: document.getElementById('submission-scene').value.trim() || 'Seattle',
-        instrument: document.getElementById('instrument-name').value.trim(),
-        yearsActive: validationResult.duplicate ? '' : document.getElementById('years-active').value.trim(),
-        label: validationResult.duplicate ? '' : document.getElementById('band-label').value.trim(),
-        albums: validationResult.duplicate ? '' : document.getElementById('albums-released').value.trim(),
-        bio: document.getElementById('member-bio').value.trim(),
-        mode: validationResult.duplicate ? 'existing-band-connection' : 'new-band-entry',
+        members,
+        scene,
+        yearsActive: bandExisted ? '' : document.getElementById('years-active').value.trim(),
+        label: bandExisted ? '' : document.getElementById('band-label').value.trim(),
+        albums: bandExisted ? '' : document.getElementById('albums-released').value.trim(),
+        bio,
+        mode: bandExisted ? 'existing-band-connection' : 'new-band-entry',
         savedAt: new Date().toISOString()
       };
 
       // Mutate the live graph data, then re-render. Only on success do we
       // persist and report success to the user.
-      const result = applyDraftToMaster(graphState && graphState.master, draft);
+      const result = applyDraftToMaster(master, draft);
       if (!result.added) {
         showSubmissionFeedback(result.reason || 'Nothing new to add — that entry already exists.', true);
         return;
@@ -2386,8 +2522,18 @@ if (shareGraphBtn) {
       renderDraftList();
       updateSubmissionStats();
       document.getElementById('submission-validation').textContent = `Ready for the next addition. ${submissionDrafts.length} pending.`;
-      showSubmissionFeedback(validationResult.duplicate ? 'Your connection has been added to the tree.' : 'Your band has been added to the tree.', false);
+      const added = result.membersAdded || 0;
+      let successMessage;
+      if (added === 0) {
+        successMessage = 'Your band has been added to the tree.';
+      } else if (added === 1) {
+        successMessage = bandExisted ? 'Your member connection has been added to the tree.' : 'Your band and its member have been added to the tree.';
+      } else {
+        successMessage = `${added} members have been added to ${band}.`;
+      }
+      showSubmissionFeedback(successMessage, false);
       document.getElementById('submission-form').reset();
+      resetMemberRows();
       document.getElementById('submission-scene').value = 'Seattle';
       updateSubmissionPreview();
       setSubmissionMode(false);
