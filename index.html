@@ -1988,7 +1988,15 @@ if (shareGraphBtn) {
           return instruments ? `${d.id} — ${instruments}` : d.id;
         })
         .style('font-size', d => d.type === 'band' ? '12px' : '10px')
-        .style('opacity', d => d.type === 'band' ? 0.98 : 0.8);
+        .style('opacity', d => d.type === 'band' ? 0.98 : 0.8)
+        // Record each label's rendered footprint so the collision force can
+        // reserve horizontal room for the text (which sits to the right of the
+        // node), preventing neighbouring members' labels from overlapping.
+        .each(function(d) {
+          const fontPx = d.type === 'band' ? 12 : 10;
+          d.labelWidth = this.getComputedTextLength() || 0;
+          d.labelHeight = fontPx;
+        });
 
       node.on('click', (_, d) => {
         const linkedNames = links
@@ -2014,11 +2022,47 @@ if (shareGraphBtn) {
         updateSelection(d, linkedNames.length, linkedNames, bandMembers);
       });
 
+      // Count connections per node so bands with many members can push those
+      // members onto a proportionally larger ring (more angular separation =>
+      // labels around the ring no longer stack on top of one another).
+      const degree = {};
+      links.forEach(l => {
+        const s = typeof l.source === 'object' ? l.source.id : l.source;
+        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        degree[s] = (degree[s] || 0) + 1;
+        degree[t] = (degree[t] || 0) + 1;
+      });
+
+      // Collision radius that reserves room for the label box (text extends to
+      // the right of the circle). Half the label width is enough to keep the
+      // labels of two horizontally-adjacent nodes from overlapping, and it also
+      // spreads vertically-stacked nodes well clear of each other.
+      const collideRadius = d => {
+        const base = getNodeOuterRadius(d) + 6;
+        const labelReach = (d.labelWidth || 0) * 0.5 + 6;
+        return Math.max(base, labelReach);
+      };
+
       const simulation = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(links).id(d => d.id).distance(d => d.source.type === 'band' && d.target.type === 'person' ? 74 : 110).strength(0.8))
-        .force('charge', d3.forceManyBody().strength(d => d.type === 'band' ? -420 : -180))
+        .force('link', d3.forceLink(links).id(d => d.id)
+          .distance(l => {
+            if (l.source.type === 'band' && l.target.type === 'person') {
+              const memberCount = degree[l.source.id] || 1;
+              // Grow the ring with member count so crowded bands fan out.
+              return 74 + Math.min(150, Math.sqrt(memberCount) * 20);
+            }
+            return 110;
+          })
+          .strength(0.8))
+        .force('charge', d3.forceManyBody().strength(d => {
+          if (d.type === 'band') {
+            // Stronger repulsion for high-degree bands so their members spread.
+            return -420 - (degree[d.id] || 0) * 14;
+          }
+          return -180;
+        }))
         .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide().radius(d => d.type === 'band' ? 32 : getPersonRadius(d) + 10))
+        .force('collision', d3.forceCollide().radius(collideRadius).strength(0.9).iterations(2))
         .alpha(1)
         .alphaDecay(0.045);
 
@@ -2579,7 +2623,7 @@ if (shareGraphBtn) {
     zoomBehavior = d3.zoom().scaleExtent([0.25, 3]).on('zoom', event => graphGroup.attr('transform', event.transform));
     svgSelection.call(zoomBehavior);
 
-    d3.csv('seattle_band_members-2-2.csv?v=4').then(rows => {
+    d3.csv('seattle_band_members-2-2.csv?v=5').then(rows => {
       const master = buildMasterGraph(rows);
       // Replay any browser-local user submissions on top of the CSV data so
       // previously added bands survive a page refresh in this browser.
