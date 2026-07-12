@@ -8,7 +8,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { validateSubmission, LIMITS } from './bands.mjs';
+import { validateSubmission, LIMITS } from '../netlify/functions/bands.mjs';
 
 test('validateSubmission accepts a well-formed multi-member submission', () => {
   const result = validateSubmission({
