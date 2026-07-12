@@ -15,6 +15,35 @@ import { getStore } from '@netlify/blobs';
 const STORE_NAME = 'band-submissions';
 const BLOB_KEY = 'submissions';
 
+// --- Persistence guarantees (read this before changing store setup) ---------
+//
+// WHY getStore (and NOT getDeployStore): `@netlify/blobs` exposes two kinds of
+// stores. getStore(name) returns a *site-wide* store: its data lives at the
+// site level and is shared across every deploy and deploy context, so it
+// survives redeploys forever until we explicitly delete it. getDeployStore()
+// returns a *deploy-scoped* store whose data is pegged to a single deploy and
+// is WIPED whenever that deploy is replaced — i.e. on every push/merge. Using
+// getDeployStore here would make submissions vanish on the next deploy, which
+// is exactly the failure we are fixing. Never swap this for getDeployStore, and
+// never pass a `deployID` to getStore (that also switches it to deploy scope).
+//
+// WHY consistency: 'strong': by default Blobs reads are eventually consistent
+// and served from an edge cache. Right after a fresh deploy that cache is cold,
+// so an immediate read (e.g. curl straight after a merge) can return an empty
+// list even though the blob still exists in the persistent site store. Strong
+// consistency reads from the source of truth (the uncached edge endpoint that
+// Netlify injects into the function environment), so a submission is visible
+// immediately and every redeploy still sees the full history. It also protects
+// our read-modify-write of the single submissions blob from lost updates caused
+// by a stale read.
+//
+// siteID/token are read automatically from the Netlify Functions environment
+// (NETLIFY_BLOBS_CONTEXT), which is the documented setup for Functions v2 — we
+// intentionally do NOT hardcode them.
+function getSubmissionsStore() {
+  return getStore({ name: STORE_NAME, consistency: 'strong' });
+}
+
 // Field limits — reject obviously malicious/oversized input server-side too,
 // mirroring the client validation.
 const LIMITS = {
@@ -120,7 +149,7 @@ async function readSubmissions(store) {
 }
 
 export default async function handler(req) {
-  const store = getStore(STORE_NAME);
+  const store = getSubmissionsStore();
 
   if (req.method === 'GET') {
     try {
