@@ -339,7 +339,7 @@ body {
   position: absolute;
   top: 8px;
   bottom: 8px;
-  width: 8px;
+  width: 6px;
   border-top: 1px solid rgba(207, 231, 245, 0.95);
   border-bottom: 1px solid rgba(207, 231, 245, 0.95);
   pointer-events: none;
@@ -349,7 +349,7 @@ body {
 .graph-version-pill::before,
 .primary-btn.share-btn::before,
 .share-popover-btn::before {
-  left: 6px;
+  left: 4px;
   border-left: 1px solid rgba(207, 231, 245, 0.95);
 }
 
@@ -357,7 +357,7 @@ body {
 .graph-version-pill::after,
 .primary-btn.share-btn::after,
 .share-popover-btn::after {
-  right: 6px;
+  right: 4px;
   border-right: 1px solid rgba(207, 231, 245, 0.95);
 }
 
@@ -960,13 +960,13 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 .primary-btn.share-btn,
 .panel-toggle-btn {
   min-height: 26px !important;
-  padding: 0 0.6rem !important;
+  padding: 0 0.85rem !important;
   font-size: 0.72rem !important;
   gap: 0.3rem !important;
 }
 .graph-version-pill {
   min-height: 24px !important;
-  padding: 0.1rem 0.5rem !important;
+  padding: 0.1rem 0.8rem !important;
   font-size: 0.62rem !important;
 }
 .graph-panel-head .panel-title { font-size: 0.72rem !important; }
@@ -1256,6 +1256,15 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   if (node.weight === 2) return 7.5;
   if (node.weight === 3) return 6.5;
   return 7.5;
+}
+
+// Outermost drawn radius of a node (halo for bands / lead members), used to
+// offset labels so text clears the circle instead of overlapping it.
+function getNodeOuterRadius(node) {
+  const r = getPersonRadius(node);
+  if (node.type === "band") return r + 7;
+  if (node.weight === 1) return r + 4;
+  return r;
 }
 
 function getPersonFill(node) {
@@ -1971,7 +1980,7 @@ if (shareGraphBtn) {
 
       node.append('text')
         .attr('class', 'node-label')
-        .attr('x', 12)
+        .attr('x', d => getNodeOuterRadius(d) + 6)
         .attr('y', 4)
         .text(d => {
           if (d.type === 'band') return d.id;
