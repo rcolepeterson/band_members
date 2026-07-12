@@ -1,0 +1,8 @@
+[build]
+  # Static site — no build step. Everything is served from the repo root.
+  publish = "."
+  functions = "netlify/functions"
+
+[functions]
+  # Netlify Functions v2 (ESM, Request/Response signature).
+  node_bundler = "esbuild"

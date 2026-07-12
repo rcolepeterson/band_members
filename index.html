@@ -1482,14 +1482,54 @@ if (shareGraphBtn) {
     // ---------------------------------------------------------------------
     // User submissions ("Add your band") persistence.
     //
-    // LIMITATION: This is a static, client-only app with no backend API to
-    // write to. User-added bands are therefore stored in this browser's
-    // localStorage and merged on top of the CSV-loaded graph on every page
-    // load. Additions survive a page refresh in the SAME browser only — they
-    // are NOT shared across users, devices, or browsers, and are lost if the
-    // browser's localStorage is cleared.
+    // PRIMARY source of truth: a shared backend (Netlify Function backed by
+    // Netlify Blobs) at BANDS_ENDPOINT. GET returns every submission as an
+    // array of "draft" objects; POST appends one. Submissions are shared across
+    // all users, devices, and browsers, and go live immediately for everyone.
+    //
+    // FALLBACK: browser localStorage. It is only used as an offline/error
+    // safety net — if a POST to the backend fails we still store the draft
+    // locally (and replay it on load) so the user isn't blocked in this
+    // browser. Anything that reaches the backend is the shared truth; the
+    // localStorage copy is best-effort and intentionally not authoritative.
     // ---------------------------------------------------------------------
+    const BANDS_ENDPOINT = '/.netlify/functions/bands';
     const USER_SUBMISSIONS_KEY = 'rbft-user-submissions';
+
+    // Fetch all shared submissions from the backend. Returns an array of draft
+    // objects (same shape applyDraftToMaster consumes). Throws on network or
+    // server error so the caller can fall back to the local-only copy.
+    async function fetchSharedSubmissions() {
+      const response = await fetch(BANDS_ENDPOINT, {
+        method: 'GET',
+        headers: { 'accept': 'application/json' }
+      });
+      if (!response.ok) throw new Error(`Backend GET failed with ${response.status}`);
+      const data = await response.json();
+      return Array.isArray(data?.submissions) ? data.submissions : [];
+    }
+
+    // POST a single draft to the backend. Resolves with the stored record
+    // (including its server-generated id/timestamp) on success; throws with a
+    // user-facing message on validation/network/server error.
+    async function postSharedSubmission(draft) {
+      let response;
+      try {
+        response = await fetch(BANDS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(draft)
+        });
+      } catch (networkError) {
+        throw new Error('Could not reach the server. Check your connection and try again.');
+      }
+      let data = null;
+      try { data = await response.json(); } catch (parseError) { /* non-JSON error body */ }
+      if (!response.ok) {
+        throw new Error((data && data.error) || `The server rejected the submission (${response.status}).`);
+      }
+      return (data && data.submission) || draft;
+    }
 
     function loadUserSubmissions() {
       try {
@@ -2459,7 +2499,7 @@ if (shareGraphBtn) {
 
     document.getElementById('add-member-row-btn').addEventListener('click', addMemberRow);
 
-    document.getElementById('save-draft-btn').addEventListener('click', () => {
+    document.getElementById('save-draft-btn').addEventListener('click', async () => {
       // Refresh the inline validation/preview UI for the primary row.
       validateSubmissionForm();
       updateSubmissionPreview();
@@ -2535,59 +2575,97 @@ if (shareGraphBtn) {
         savedAt: new Date().toISOString()
       };
 
-      // Mutate the live graph data, then re-render. Only on success do we
-      // persist and report success to the user.
-      const result = applyDraftToMaster(master, draft);
-      if (!result.added) {
-        showSubmissionFeedback(result.reason || 'Nothing new to add — that entry already exists.', true);
-        return;
-      }
-
-      // Clear active filters so the freshly added band is guaranteed visible
-      // in the graph without a page reload.
-      currentFilter = 'all';
-      currentSearch = '';
-      if (currentScene !== 'all' && normalizeKey(currentScene) !== normalizeKey(draft.scene)) {
-        currentScene = draft.scene;
-      }
-      document.getElementById('node-search').value = '';
-      const sceneSelect = document.getElementById('scene-filter');
-      if (sceneSelect) {
-        if (![...sceneSelect.options].some(opt => opt.value === draft.scene)) {
-          const option = document.createElement('option');
-          option.value = draft.scene;
-          option.textContent = draft.scene;
-          sceneSelect.appendChild(option);
+      // Apply a draft to the live graph and re-render. Clears active filters so
+      // the freshly added band is guaranteed visible without a page reload.
+      // Returns the applyDraftToMaster result.
+      const commitToGraph = (draftToApply) => {
+        const applied = applyDraftToMaster(master, draftToApply);
+        if (!applied.added) return applied;
+        currentFilter = 'all';
+        currentSearch = '';
+        if (currentScene !== 'all' && normalizeKey(currentScene) !== normalizeKey(draftToApply.scene)) {
+          currentScene = draftToApply.scene;
         }
-        sceneSelect.value = currentScene;
-      }
-      syncFilterButtons();
-      renderGraph();
+        document.getElementById('node-search').value = '';
+        const sceneSelect = document.getElementById('scene-filter');
+        if (sceneSelect) {
+          if (![...sceneSelect.options].some(opt => opt.value === draftToApply.scene)) {
+            const option = document.createElement('option');
+            option.value = draftToApply.scene;
+            option.textContent = draftToApply.scene;
+            sceneSelect.appendChild(option);
+          }
+          sceneSelect.value = currentScene;
+        }
+        syncFilterButtons();
+        renderGraph();
+        return applied;
+      };
 
-      // Persist to browser localStorage (see limitation note on applyDraftToMaster).
-      submissionDrafts.unshift(draft);
-      const stored = loadUserSubmissions();
-      stored.push(draft);
-      saveUserSubmissions(stored);
+      // Reset the form and report the outcome. When wasShared is false the
+      // write only reached this browser's localStorage fallback, so we surface
+      // that plainly (warning style) rather than a clean green success.
+      const finishAndReport = (result, wasShared) => {
+        submissionDrafts.unshift(draft);
+        renderDraftList();
+        updateSubmissionStats();
+        document.getElementById('submission-validation').textContent = `Ready for the next addition. ${submissionDrafts.length} pending.`;
+        const added = result.membersAdded || 0;
+        let message;
+        if (added === 0) {
+          message = 'Your band has been added to the tree.';
+        } else if (added === 1) {
+          message = bandExisted ? 'Your member connection has been added to the tree.' : 'Your band and its member have been added to the tree.';
+        } else {
+          message = `${added} members have been added to ${band}.`;
+        }
+        if (!wasShared) {
+          message += ' (Saved to this browser only — could not reach the server, so others will not see it yet.)';
+        }
+        showSubmissionFeedback(message, !wasShared);
+        document.getElementById('submission-form').reset();
+        resetMemberRows();
+        document.getElementById('submission-scene').value = 'Seattle';
+        updateSubmissionPreview();
+        setSubmissionMode(false);
+      };
 
-      renderDraftList();
-      updateSubmissionStats();
-      document.getElementById('submission-validation').textContent = `Ready for the next addition. ${submissionDrafts.length} pending.`;
-      const added = result.membersAdded || 0;
-      let successMessage;
-      if (added === 0) {
-        successMessage = 'Your band has been added to the tree.';
-      } else if (added === 1) {
-        successMessage = bandExisted ? 'Your member connection has been added to the tree.' : 'Your band and its member have been added to the tree.';
-      } else {
-        successMessage = `${added} members have been added to ${band}.`;
+      const saveButton = document.getElementById('save-draft-btn');
+      const previousLabel = saveButton.textContent;
+      saveButton.disabled = true;
+      saveButton.textContent = 'Saving…';
+      showSubmissionFeedback('Saving your band…', false);
+
+      try {
+        // Backend is the primary source of truth: POST first and only report a
+        // clean success once it confirms the write, then render the returned
+        // record (which carries the server-generated id/timestamp).
+        const storedRecord = await postSharedSubmission(draft);
+        const result = commitToGraph(storedRecord);
+        if (!result.added) {
+          showSubmissionFeedback(result.reason || 'Nothing new to add — that entry already exists.', true);
+          return;
+        }
+        finishAndReport(result, true);
+      } catch (error) {
+        // Offline/error safety net: this keeps the OLD localStorage-merge
+        // behavior so the user isn't blocked in this browser. It is a fallback
+        // ONLY — the Netlify Blobs backend is the shared source of truth once
+        // reachable; anything saved here is not visible to other visitors.
+        console.warn('Backend save failed; storing locally as a fallback.', error);
+        const result = commitToGraph(draft);
+        if (!result.added) {
+          showSubmissionFeedback(result.reason || 'Nothing new to add — that entry already exists.', true);
+          return;
+        }
+        const localStored = loadUserSubmissions();
+        localStored.push(draft);
+        saveUserSubmissions(localStored);
+        finishAndReport(result, false);
+      } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = previousLabel;
       }
-      showSubmissionFeedback(successMessage, false);
-      document.getElementById('submission-form').reset();
-      resetMemberRows();
-      document.getElementById('submission-scene').value = 'Seattle';
-      updateSubmissionPreview();
-      setSubmissionMode(false);
     });
 
     (function () {
@@ -2621,11 +2699,18 @@ if (shareGraphBtn) {
     zoomBehavior = d3.zoom().scaleExtent([0.25, 3]).on('zoom', event => graphGroup.attr('transform', event.transform));
     svgSelection.call(zoomBehavior);
 
-    d3.csv('seattle_band_members-2-2.csv?v=5').then(rows => {
+    d3.csv('seattle_band_members-2-2.csv?v=5').then(async rows => {
       const master = buildMasterGraph(rows);
-      // Replay any browser-local user submissions on top of the CSV data so
-      // previously added bands survive a page refresh in this browser.
-      loadUserSubmissions().forEach(draft => applyDraftToMaster(master, draft));
+      // Merge shared submissions from the backend (primary source of truth).
+      // If the backend is unreachable, fall back to replaying this browser's
+      // local-only copy so previously added bands still survive a refresh.
+      try {
+        const shared = await fetchSharedSubmissions();
+        shared.forEach(draft => applyDraftToMaster(master, draft));
+      } catch (error) {
+        console.warn('Could not load shared submissions; falling back to local copy.', error);
+        loadUserSubmissions().forEach(draft => applyDraftToMaster(master, draft));
+      }
       graphState = { master };
       const sceneSelect = document.getElementById('scene-filter');
       const scenes = Array.from(new Set(master.nodes.map(node => node.scene).filter(Boolean))).sort();
