@@ -1129,12 +1129,20 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                     <button type="button" class="member-row-remove" data-remove-row aria-label="Remove this member" tabindex="-1" hidden>&times;</button>
                     <div class="member-row-fields">
                       <div class="form-span-2"><label for="member-name">Member name</label><input id="member-name" class="member-name-input" name="member-name" type="text" placeholder="Jeff Ament" /></div>
-                      <div><label for="instrument-name">Instrument</label><input id="instrument-name" class="instrument-input" name="instrument-name" type="text" placeholder="Bass, vocals, drums…" /></div>
+                      <div><label for="instrument-name">Instrument(s)</label><input id="instrument-name" class="instrument-input" name="instrument-name" type="text" list="instrument-suggestions" maxlength="200" autocomplete="off" placeholder="Guitar, Vocals — comma-separate several" /></div>
                       <div><label for="relation-type">Member weight</label><select id="relation-type" class="relation-input" name="relation-type"><option value="1">1 — Founder / core member</option><option value="2" selected>2 — Member</option><option value="3">3 — Touring member</option></select></div>
                     </div>
                   </div>
                 </div>
                 <button type="button" class="member-add-btn" id="add-member-row-btn">+ Add another member</button>
+                <datalist id="instrument-suggestions">
+                  <option value="Vocals"></option>
+                  <option value="Guitar"></option>
+                  <option value="Bass"></option>
+                  <option value="Drums"></option>
+                  <option value="Keyboards"></option>
+                  <option value="Synth"></option>
+                </datalist>
               </div>
               <div><label for="years-active">Years active</label><input id="years-active" name="years-active" type="text" placeholder="1990–1993" /></div>
               <div><label for="band-label">Label</label><input id="band-label" name="band-label" type="text" placeholder="Sub Pop, Epic, SST…" /></div>
@@ -1246,6 +1254,41 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 
     function normalizeKey(value) {
       return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    const MAX_INSTRUMENTS = 6;
+    const MAX_INSTRUMENT_LENGTH = 40;
+
+    // Parse one or more raw instrument strings (each possibly comma-separated,
+    // e.g. "Guitar, Vocals") into a clean, de-duplicated array. Trims whitespace,
+    // drops empties, collapses case-insensitive duplicates, and caps count/length
+    // so a single member can list several instruments without junk breaking the
+    // layout. Accepts legacy single-value inputs unchanged.
+    function parseInstruments(...values) {
+      const seen = new Set();
+      const result = [];
+      values.forEach(value => {
+        String(value == null ? '' : value).split(',').forEach(part => {
+          const trimmed = part.replace(/\s+/g, ' ').trim().slice(0, MAX_INSTRUMENT_LENGTH);
+          if (!trimmed) return;
+          const key = trimmed.toLowerCase();
+          if (seen.has(key)) return;
+          seen.add(key);
+          if (result.length < MAX_INSTRUMENTS) result.push(trimmed);
+        });
+      });
+      return result;
+    }
+
+    // Display string for a node's instruments. Reads the canonical `instruments`
+    // array and falls back to the legacy instrument1/instrument2 fields so older
+    // node shapes keep rendering exactly as before.
+    function instrumentText(node) {
+      if (!node) return '';
+      const list = Array.isArray(node.instruments)
+        ? node.instruments
+        : parseInstruments(node.instruments, node.instrument1, node.instrument2);
+      return list.join(', ');
     }
 
     function getPersonRadius(node) {
@@ -1437,19 +1480,22 @@ if (shareGraphBtn) {
         const target = (row.target || '').trim();
         if (!source || !target) return;
         const scene = (row.scene || 'Seattle').trim();
-        const instrument1 = (row['Instrument 1'] || row['Intrument 1'] || '').trim();
-        const instrument2 = (row['Instrument 2'] || row['Intrument 2'] || '').trim();
+        const instruments = parseInstruments(
+          row['Instrument 1'] || row['Intrument 1'],
+          row['Instrument 2'] || row['Intrument 2'],
+          row['Instrument 3'] || row['Intrument 3'],
+          row['Instrument 4'] || row['Intrument 4']
+        );
         const bio = (row.bio || row.Bio || row.notes || row.Notes || '').trim();
 
         if (!nodeMap.has(source)) {
           nodeMap.set(source, { id: source, type: 'band', scene });
         }
         if (!nodeMap.has(target)) {
-          nodeMap.set(target, { id: target, type: 'person', scene, instrument1, instrument2, bio });
+          nodeMap.set(target, { id: target, type: 'person', scene, instruments, bio });
         } else {
           const existing = nodeMap.get(target);
-          if (!existing.instrument1 && instrument1) existing.instrument1 = instrument1;
-          if (!existing.instrument2 && instrument2) existing.instrument2 = instrument2;
+          if ((!existing.instruments || !existing.instruments.length) && instruments.length) existing.instruments = instruments;
           if (!existing.bio && bio) existing.bio = bio;
         }
 
@@ -1547,7 +1593,7 @@ if (shareGraphBtn) {
       members.forEach((entry, index) => {
         const member = (entry.member || '').trim();
         if (!member) return;
-        const instrument = (entry.instrument || '').trim();
+        const instruments = parseInstruments(entry.instrument);
         const weight = Number(entry.relation) || 2;
         // A single bio field is shared per submission; attach it to the first member.
         const bio = index === 0 ? bandBio : '';
@@ -1559,14 +1605,13 @@ if (shareGraphBtn) {
             id: member,
             type: 'person',
             scene,
-            instrument1: instrument,
-            instrument2: '',
+            instruments,
             bio,
             weight
           });
           changed = true;
         } else {
-          if (!personNode.instrument1 && instrument) { personNode.instrument1 = instrument; changed = true; }
+          if ((!personNode.instruments || !personNode.instruments.length) && instruments.length) { personNode.instruments = instruments; changed = true; }
           if (!personNode.bio && bio) { personNode.bio = bio; changed = true; }
           if (weight < (personNode.weight || 2)) { personNode.weight = weight; }
         }
@@ -1601,7 +1646,7 @@ if (shareGraphBtn) {
       if (currentSearch) {
         const term = currentSearch.toLowerCase();
         const matchedNodes = nodes.filter(node => {
-          const instruments = [node.instrument1, node.instrument2].filter(Boolean).join(' ').toLowerCase();
+          const instruments = instrumentText(node).toLowerCase();
           return node.id.toLowerCase().includes(term) || instruments.includes(term) || (node.scene || '').toLowerCase().includes(term);
         });
         const matchedIds = new Set(matchedNodes.map(node => node.id));
@@ -1712,7 +1757,7 @@ if (shareGraphBtn) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'member-chip';
-        const instruments = [person.instrument1, person.instrument2].filter(Boolean).join(', ');
+        const instruments = instrumentText(person);
         button.textContent = instruments ? `${person.id} — ${instruments}` : person.id;
         button.addEventListener('click', () => updateSelection(person, getNodeConnections(person.id).length));
         container.appendChild(button);
@@ -1739,7 +1784,7 @@ if (shareGraphBtn) {
       selectedType.textContent = node.type;
       selectedScene.textContent = node.scene || '—';
       selectedDegree.textContent = degree;
-      selectedInstrument.textContent = [node.instrument1, node.instrument2].filter(Boolean).join(', ') || '—';
+      selectedInstrument.textContent = instrumentText(node) || '—';
       if (selectedBio) selectedBio.textContent = node.bio || '—';
       const resolvedConnections = linkedNames && linkedNames.length ? linkedNames : getNodeConnections(node.id);
       renderConnectionChips('selected-node-connections', resolvedConnections, 'No linked bands or members');
@@ -1797,7 +1842,7 @@ if (shareGraphBtn) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'member-chip';
-        const instruments = [person.instrument1, person.instrument2].filter(Boolean).join(', ');
+        const instruments = instrumentText(person);
         button.textContent = instruments ? `${person.id} — ${instruments}` : person.id;
         button.addEventListener('click', () => updateSelection(person, getNodeConnections(person.id).length));
         container.appendChild(button);
@@ -1825,7 +1870,7 @@ if (shareGraphBtn) {
       selectedType.textContent = node.type;
       selectedScene.textContent = node.scene || '—';
       selectedDegree.textContent = degree;
-      selectedInstrument.textContent = [node.instrument1, node.instrument2].filter(Boolean).join(', ') || '—';
+      selectedInstrument.textContent = instrumentText(node) || '—';
       selectedBio.textContent = node.bio || '—';
       renderConnectionChips('selected-node-connections', getNodeConnections(node.id), 'No linked bands or members');
       if (node.type === 'band') {
@@ -1982,7 +2027,7 @@ if (shareGraphBtn) {
         .attr('y', 4)
         .text(d => {
           if (d.type === 'band') return d.id;
-          const instruments = [d.instrument1, d.instrument2].filter(Boolean).join(', ');
+          const instruments = instrumentText(d);
           return instruments ? `${d.id} — ${instruments}` : d.id;
         })
         .style('font-size', d => d.type === 'band' ? '12px' : '10px')
@@ -2286,7 +2331,7 @@ if (shareGraphBtn) {
           selectedType.textContent = 'person draft';
           selectedScene.textContent = scene || '—';
           selectedDegree.textContent = '—';
-          selectedInstrument.textContent = document.getElementById('instrument-name').value.trim() || '—';
+          selectedInstrument.textContent = parseInstruments(document.getElementById('instrument-name').value).join(', ') || '—';
           selectedBio.textContent = safeBio || '—';
         }
         return;
@@ -2299,7 +2344,7 @@ if (shareGraphBtn) {
         : `Existing band found in the tree. Connected members: ${connections.join(', ') || 'none yet'}.`;
       previewSource.textContent = `Pulled from current tree · ${matchedNode.type}`;
       previewScene.textContent = matchedNode.scene || previewScene.textContent || '—';
-      previewInstrument.textContent = [matchedNode.instrument1, matchedNode.instrument2].filter(Boolean).join(', ') || previewInstrument.textContent || '—';
+      previewInstrument.textContent = instrumentText(matchedNode) || previewInstrument.textContent || '—';
       if (matchedNode.type === 'person') {
         selectedBio.textContent = typedBio || matchedNode.bio || '—';
       }
@@ -2314,7 +2359,7 @@ if (shareGraphBtn) {
       const member = document.getElementById('member-name').value.trim();
       const relation = document.getElementById('relation-type').value.trim();
       const scene = document.getElementById('submission-scene').value.trim();
-      const instrument = document.getElementById('instrument-name').value.trim();
+      const instrument = parseInstruments(document.getElementById('instrument-name').value).join(', ');
       const years = document.getElementById('years-active').value.trim();
       const label = document.getElementById('band-label').value.trim();
       const albums = document.getElementById('albums-released').value.trim();
