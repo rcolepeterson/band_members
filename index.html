@@ -852,6 +852,127 @@ main.layout {
   justify-content: flex-end;
 }
 
+/* ============================================================
+   PASS 5: full-screen graph background + floating HUD, and
+   half-size toolbar pills.
+   The D3 stage becomes an edge-to-edge, full-viewport layer that
+   IS the page background; the header, hero title, filter toolbar,
+   and bottom pill toggles float on top of it. No page scroll is
+   introduced (the shell stays locked to 100dvh) and the graph's
+   own D3 zoom/pan gesture is untouched.
+   ============================================================ */
+
+/* The stage fills the entire viewport as the base layer. Because it is
+   fixed with inset:0 its measured box (read by the D3 render/fit code via
+   getBoundingClientRect) is a definite full-viewport size, so the SVG can
+   never collapse to an empty framed box. */
+.graph-stage {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  z-index: 0;
+}
+
+/* The SVG stretches edge-to-edge inside the fixed stage. Absolute inset:0
+   fills the used height regardless of percentage-height resolution quirks. */
+#graph-svg {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+/* The in-flow HUD chrome floats above the graph. The workspace/panel are now
+   empty shells (the stage is fixed) so collapse them to nothing. */
+main.layout { padding: 0 !important; gap: 0 !important; }
+#graph-workspace.workspace,
+.graph-panel { min-height: 0 !important; }
+.graph-shell-footer { display: none !important; }
+
+/* Header: a thin, transparent bar of pills floating at the top. */
+.site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: transparent;
+  border-bottom: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  pointer-events: none;
+}
+.site-header .header-inner { pointer-events: none; padding: var(--space-3) var(--space-4); }
+.site-header .header-btn { pointer-events: auto; }
+
+/* Hero: compact, centered title floating just below the header. It does not
+   capture pointer events so the graph stays draggable behind it. */
+.hero {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 35;
+  min-height: 0 !important;
+  padding: var(--space-3) var(--space-4) 0 !important;
+  pointer-events: none;
+}
+.hero .hero-inner { pointer-events: none; gap: 0.15rem; }
+.hero .hero-logo-wrap { margin-bottom: 0; }
+.hero .hero-copy-clean,
+.hero .eyebrow,
+.hero .hero-logo,
+.hero .hero-logo-clean,
+.hero #logo-missing-note { display: none !important; }
+.hero .hero-title-clean {
+  font-size: 0.95rem !important;
+  letter-spacing: 0.18em;
+  color: rgba(236, 246, 255, 0.85);
+}
+
+/* The top filter toolbar floats clear of the header + title band. */
+.graph-overlay {
+  z-index: 10;
+  padding-top: clamp(3.2rem, 7vh, 4.5rem) !important;
+}
+.graph-overlay-bottom { z-index: 12; }
+
+/* Keep the graph badge unobtrusive above the graph. */
+.graph-badge { z-index: 9; }
+
+/* ---- Half-size toolbar pills (top row + bottom toggles + header) ----
+   Keep the frosted-glass + bracket-corner styling; only shrink the box. */
+.tool-chip,
+.header-btn,
+.primary-btn.share-btn,
+.panel-toggle-btn {
+  min-height: 26px !important;
+  padding: 0 0.6rem !important;
+  font-size: 0.72rem !important;
+  gap: 0.3rem !important;
+}
+.graph-version-pill {
+  min-height: 24px !important;
+  padding: 0.1rem 0.5rem !important;
+  font-size: 0.62rem !important;
+}
+.graph-panel-head .panel-title { font-size: 0.72rem !important; }
+.graph-toolbar-left { gap: 0.4rem !important; }
+.graph-toolbar-bottom { gap: 0.4rem !important; }
+
+@media (max-width: 640px) {
+  .graph-overlay { padding-top: clamp(3.2rem, 10vh, 4.5rem) !important; }
+  .hero .hero-title-clean { font-size: 0.82rem !important; }
+}
+
   </style>
 </head>
 <body>
@@ -2163,7 +2284,6 @@ if (shareGraphBtn) {
       console.error(error);
       const fallback = document.getElementById('graph-fallback');
       fallback.style.display = 'flex';
-      statusPill.textContent = 'Data unavailable';
       graphBadge.textContent = 'CSV missing';
       noteLeft.textContent = 'The local CSV could not be loaded in this tab.';
       noteRight.textContent = 'Keep the HTML and seattle_band_members-2-2.csv in the same local folder and serve with python -m http.server.';
