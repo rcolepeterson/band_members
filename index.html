@@ -1449,6 +1449,100 @@ if (shareGraphBtn) {
       };
     }
 
+    // ---------------------------------------------------------------------
+    // User submissions ("Add your band") persistence.
+    //
+    // LIMITATION: This is a static, client-only app with no backend API to
+    // write to. User-added bands are therefore stored in this browser's
+    // localStorage and merged on top of the CSV-loaded graph on every page
+    // load. Additions survive a page refresh in the SAME browser only — they
+    // are NOT shared across users, devices, or browsers, and are lost if the
+    // browser's localStorage is cleared.
+    // ---------------------------------------------------------------------
+    const USER_SUBMISSIONS_KEY = 'rbft-user-submissions';
+
+    function loadUserSubmissions() {
+      try {
+        const raw = localStorage.getItem(USER_SUBMISSIONS_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        console.warn('Could not read saved band submissions from localStorage.', error);
+        return [];
+      }
+    }
+
+    function saveUserSubmissions(drafts) {
+      try {
+        localStorage.setItem(USER_SUBMISSIONS_KEY, JSON.stringify(drafts));
+        return true;
+      } catch (error) {
+        console.warn('Could not persist band submission to localStorage.', error);
+        return false;
+      }
+    }
+
+    // Mutates the master graph in place, adding the band/member node(s) and the
+    // member-to-band link for a single draft. Mirrors the exact node/link shape
+    // produced by buildMasterGraph() so user-added data is indistinguishable
+    // from CSV-derived data. Returns { added: boolean, reason?: string }.
+    function applyDraftToMaster(master, draft) {
+      if (!master || !draft) return { added: false, reason: 'No graph data available yet.' };
+      const band = (draft.band || '').trim();
+      const scene = ((draft.scene || '').trim()) || 'Seattle';
+      const member = (draft.member || '').trim();
+      if (!band) return { added: false, reason: 'A band name is required.' };
+
+      const weight = Number(draft.relation) || 2;
+      let changed = false;
+
+      // Band node — unique per scene, matching the CSV schema { id, type, scene }.
+      let bandNode = master.nodes.find(node => node.type === 'band'
+        && normalizeKey(node.id) === normalizeKey(band)
+        && normalizeKey(node.scene || '') === normalizeKey(scene));
+      if (!bandNode) {
+        master.nodes.push({ id: band, type: 'band', scene });
+        changed = true;
+      }
+
+      if (member) {
+        const instrument = (draft.instrument || '').trim();
+        const bio = (draft.bio || '').trim();
+        let personNode = master.nodes.find(node => node.type === 'person'
+          && normalizeKey(node.id) === normalizeKey(member));
+        if (!personNode) {
+          master.nodes.push({
+            id: member,
+            type: 'person',
+            scene,
+            instrument1: instrument,
+            instrument2: '',
+            bio,
+            weight
+          });
+          changed = true;
+        } else {
+          if (!personNode.instrument1 && instrument) { personNode.instrument1 = instrument; changed = true; }
+          if (!personNode.bio && bio) { personNode.bio = bio; changed = true; }
+          if (weight < (personNode.weight || 2)) { personNode.weight = weight; }
+        }
+
+        const linkExists = master.links.some(link => {
+          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+          return normalizeKey(sourceId) === normalizeKey(band) && normalizeKey(targetId) === normalizeKey(member);
+        });
+        if (!linkExists) {
+          master.links.push({ source: band, target: member, relation: 'member', weight });
+          changed = true;
+        }
+      }
+
+      if (!changed) return { added: false, reason: 'That band and connection already exist in the tree.' };
+      return { added: true };
+    }
+
     function getFilteredGraph(master) {
       if (!master) return master;
       let nodes = master.nodes.slice();
@@ -2216,15 +2310,35 @@ if (shareGraphBtn) {
       return;
     }
 
+    function showSubmissionFeedback(message, isError) {
+      const feedback = document.getElementById('submission-feedback');
+      feedback.textContent = message;
+      feedback.classList.add('is-visible');
+      feedback.classList.toggle('is-warning', !!isError);
+      feedback.classList.toggle('is-success', !isError);
+    }
+
     document.getElementById('save-draft-btn').addEventListener('click', () => {
       const validationResult = validateSubmissionForm();
       updateSubmissionPreview();
-      if (!validationResult.valid) return;
+
+      const band = document.getElementById('band-name').value.trim();
+      if (!band) {
+        document.getElementById('band-name').classList.add('field-error');
+        showSubmissionFeedback('Enter a band name before saving.', true);
+        return;
+      }
+      // Duplicate member/connection or blocked bio — never fabricate success.
+      if (!validationResult.valid) {
+        showSubmissionFeedback(document.getElementById('submission-validation').textContent || 'This entry could not be saved.', true);
+        return;
+      }
+
       const draft = {
-        band: document.getElementById('band-name').value.trim(),
+        band,
         member: document.getElementById('member-name').value.trim(),
         relation: document.getElementById('relation-type').value.trim(),
-        scene: document.getElementById('submission-scene').value.trim(),
+        scene: document.getElementById('submission-scene').value.trim() || 'Seattle',
         instrument: document.getElementById('instrument-name').value.trim(),
         yearsActive: validationResult.duplicate ? '' : document.getElementById('years-active').value.trim(),
         label: validationResult.duplicate ? '' : document.getElementById('band-label').value.trim(),
@@ -2233,13 +2347,46 @@ if (shareGraphBtn) {
         mode: validationResult.duplicate ? 'existing-band-connection' : 'new-band-entry',
         savedAt: new Date().toISOString()
       };
+
+      // Mutate the live graph data, then re-render. Only on success do we
+      // persist and report success to the user.
+      const result = applyDraftToMaster(graphState && graphState.master, draft);
+      if (!result.added) {
+        showSubmissionFeedback(result.reason || 'Nothing new to add — that entry already exists.', true);
+        return;
+      }
+
+      // Clear active filters so the freshly added band is guaranteed visible
+      // in the graph without a page reload.
+      currentFilter = 'all';
+      currentSearch = '';
+      if (currentScene !== 'all' && normalizeKey(currentScene) !== normalizeKey(draft.scene)) {
+        currentScene = draft.scene;
+      }
+      document.getElementById('node-search').value = '';
+      const sceneSelect = document.getElementById('scene-filter');
+      if (sceneSelect) {
+        if (![...sceneSelect.options].some(opt => opt.value === draft.scene)) {
+          const option = document.createElement('option');
+          option.value = draft.scene;
+          option.textContent = draft.scene;
+          sceneSelect.appendChild(option);
+        }
+        sceneSelect.value = currentScene;
+      }
+      syncFilterButtons();
+      renderGraph();
+
+      // Persist to browser localStorage (see limitation note on applyDraftToMaster).
       submissionDrafts.unshift(draft);
+      const stored = loadUserSubmissions();
+      stored.push(draft);
+      saveUserSubmissions(stored);
+
       renderDraftList();
       updateSubmissionStats();
       document.getElementById('submission-validation').textContent = `Ready for the next addition. ${submissionDrafts.length} pending.`;
-      const feedback = document.getElementById('submission-feedback');
-      feedback.textContent = validationResult.duplicate ? 'Your connection has been added to the tree.' : 'Your band has been added to the tree.';
-      feedback.classList.add('is-visible');
+      showSubmissionFeedback(validationResult.duplicate ? 'Your connection has been added to the tree.' : 'Your band has been added to the tree.', false);
       document.getElementById('submission-form').reset();
       document.getElementById('submission-scene').value = 'Seattle';
       updateSubmissionPreview();
@@ -2279,6 +2426,9 @@ if (shareGraphBtn) {
 
     d3.csv('seattle_band_members-2-2.csv?v=4').then(rows => {
       const master = buildMasterGraph(rows);
+      // Replay any browser-local user submissions on top of the CSV data so
+      // previously added bands survive a page refresh in this browser.
+      loadUserSubmissions().forEach(draft => applyDraftToMaster(master, draft));
       graphState = { master };
       const sceneSelect = document.getElementById('scene-filter');
       const scenes = Array.from(new Set(master.nodes.map(node => node.scene).filter(Boolean))).sort();
