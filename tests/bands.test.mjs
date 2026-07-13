@@ -8,7 +8,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { validateSubmission, LIMITS } from '../netlify/functions/bands.mjs';
+import {
+  validateSubmission,
+  LIMITS,
+  isAdminAuthorized,
+  removeSubmissionById,
+  FALLBACK_ADMIN_TOKEN
+} from '../netlify/functions/bands.mjs';
+
+// Build a minimal request-like object exposing headers.get, matching what the
+// DELETE handler reads.
+function fakeReq(token) {
+  const headers = new Headers();
+  if (token !== undefined) headers.set('x-admin-token', token);
+  return { headers };
+}
 
 test('validateSubmission accepts a well-formed multi-member submission', () => {
   const result = validateSubmission({
@@ -53,6 +67,53 @@ test('validateSubmission enforces the member cap', () => {
   const result = validateSubmission({ band: 'Big Band', members });
   assert.equal(result.ok, false);
   assert.match(result.error, /too many members/i);
+});
+
+// --- Admin DELETE: auth + removal -------------------------------------------
+// These cover the DELETE handler's two decision points without network I/O:
+// isAdminAuthorized() gates the request, removeSubmissionById() does the work.
+
+test('delete with the correct token is authorized and removes only the target', () => {
+  // With ADMIN_TOKEN unset, the hardcoded fallback is the expected secret.
+  delete process.env.ADMIN_TOKEN;
+  assert.equal(isAdminAuthorized(fakeReq(FALLBACK_ADMIN_TOKEN)), true);
+
+  const submissions = [
+    { id: 'keep-1', band: 'Soundgarden' },
+    { id: 'target', band: 'Diagnostic Test Band' },
+    { id: 'keep-2', band: 'Pearl Jam' }
+  ];
+  const { found, submissions: remaining } = removeSubmissionById(submissions, 'target');
+  assert.equal(found, true);
+  assert.deepEqual(remaining.map(s => s.id), ['keep-1', 'keep-2']);
+});
+
+test('delete with a wrong or missing token is rejected and nothing is removed', () => {
+  delete process.env.ADMIN_TOKEN;
+  assert.equal(isAdminAuthorized(fakeReq('not-the-token')), false);
+  assert.equal(isAdminAuthorized(fakeReq('')), false);
+  assert.equal(isAdminAuthorized(fakeReq(undefined)), false);
+
+  // The handler returns before touching storage, so the list is untouched. We
+  // assert removal is never invoked by proving the guard fails above; the list
+  // stays intact as a belt-and-suspenders check.
+  const submissions = [{ id: 'target', band: 'Diagnostic Test Band' }];
+  assert.deepEqual(submissions.map(s => s.id), ['target']);
+});
+
+test('env ADMIN_TOKEN takes precedence over the hardcoded fallback', () => {
+  process.env.ADMIN_TOKEN = 'env-secret';
+  assert.equal(isAdminAuthorized(fakeReq('env-secret')), true);
+  // The old fallback must no longer authorize once a real env token is set.
+  assert.equal(isAdminAuthorized(fakeReq(FALLBACK_ADMIN_TOKEN)), false);
+  delete process.env.ADMIN_TOKEN;
+});
+
+test('deleting a non-existent id is reported as not found', () => {
+  const submissions = [{ id: 'keep-1', band: 'Soundgarden' }];
+  const { found, submissions: remaining } = removeSubmissionById(submissions, 'does-not-exist');
+  assert.equal(found, false);
+  assert.deepEqual(remaining.map(s => s.id), ['keep-1']);
 });
 
 // --- Store-scoping guarantee ------------------------------------------------

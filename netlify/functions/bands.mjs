@@ -15,6 +15,31 @@ import { getStore } from '@netlify/blobs';
 const STORE_NAME = 'band-submissions';
 const BLOB_KEY = 'submissions';
 
+// Admin auth for the DELETE handler. The real secret should live in a Netlify
+// environment variable (process.env.ADMIN_TOKEN). The constant below is a
+// TEMPORARY fallback for a repo with no Netlify env vars configured yet — move
+// ADMIN_TOKEN to a real Netlify environment variable (Site settings >
+// Environment variables) for real security, then delete this fallback constant.
+const FALLBACK_ADMIN_TOKEN = 'wuMexYAcvCf4EMEjuey666YAGWLZ6Joq';
+const ADMIN_TOKEN_HEADER = 'x-admin-token';
+
+// Fail closed: authorize only when a non-empty expected token exists AND the
+// caller presents exactly that token. env ADMIN_TOKEN takes precedence; the
+// hardcoded fallback is used only when the env var is unset.
+function isAdminAuthorized(req) {
+  const expected = process.env.ADMIN_TOKEN || FALLBACK_ADMIN_TOKEN;
+  if (!expected) return false;
+  const provided = req.headers?.get?.(ADMIN_TOKEN_HEADER) || '';
+  return provided === expected;
+}
+
+// Remove the submission with the given id. Returns { found, submissions } where
+// submissions is the resulting list (unchanged when the id was not present).
+function removeSubmissionById(submissions, id) {
+  const next = submissions.filter(entry => entry?.id !== id);
+  return { found: next.length !== submissions.length, submissions: next };
+}
+
 // --- Persistence guarantees (read this before changing store setup) ---------
 //
 // WHY getStore (and NOT getDeployStore): `@netlify/blobs` exposes two kinds of
@@ -189,8 +214,33 @@ export default async function handler(req) {
     return jsonResponse({ submission: result.draft }, 201);
   }
 
+  if (req.method === 'DELETE') {
+    // Admin-only: remove a single bad/spam/duplicate submission by id.
+    if (!isAdminAuthorized(req)) {
+      return jsonResponse({ error: 'Unauthorized.' }, 401);
+    }
+
+    const id = new URL(req.url).searchParams.get('id');
+    if (!id) {
+      return jsonResponse({ error: 'An id query parameter is required.' }, 400);
+    }
+
+    try {
+      // Read-modify-write the single submissions blob.
+      const submissions = await readSubmissions(store);
+      const { found, submissions: remaining } = removeSubmissionById(submissions, id);
+      if (!found) {
+        return jsonResponse({ error: 'No submission with that id.' }, 404);
+      }
+      await store.setJSON(BLOB_KEY, remaining);
+      return jsonResponse({ submissions: remaining });
+    } catch (error) {
+      return jsonResponse({ error: 'Could not delete submission.' }, 500);
+    }
+  }
+
   return jsonResponse({ error: 'Method not allowed.' }, 405);
 }
 
 // Exported for isolated unit testing of the validation logic (see repo verify step).
-export { validateSubmission, LIMITS };
+export { validateSubmission, LIMITS, isAdminAuthorized, removeSubmissionById, FALLBACK_ADMIN_TOKEN };
