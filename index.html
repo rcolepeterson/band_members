@@ -1558,20 +1558,20 @@ if (shareGraphBtn) {
     // produced by buildMasterGraph() so user-added data is indistinguishable
     // from CSV-derived data. Returns { added: boolean, reason?: string }.
     function applyDraftToMaster(master, draft) {
-      if (!master || !draft) return { added: false, reason: 'No graph data available yet.' };
-      const band = (draft.band || '').trim();
-      const scene = ((draft.scene || '').trim()) || 'Seattle';
+      if (!master || !draft || typeof draft !== 'object') return { added: false, reason: 'No graph data available yet.' };
+      const band = String(draft.band || '').trim();
+      const scene = String(draft.scene || '').trim() || 'Seattle';
       if (!band) return { added: false, reason: 'A band name is required.' };
 
       // Support both the multi-member shape ({ members: [...] }) and the legacy
       // single-member shape ({ member, instrument, relation }) so previously
       // persisted submissions still replay correctly on load.
       let members = Array.isArray(draft.members) ? draft.members.slice() : [];
-      if (!members.length && (draft.member || '').trim()) {
+      if (!members.length && String(draft.member || '').trim()) {
         members = [{ member: draft.member, instrument: draft.instrument, relation: draft.relation }];
       }
 
-      const bandBio = (draft.bio || '').trim();
+      const bandBio = String(draft.bio || '').trim();
       let changed = false;
       let membersAdded = 0;
 
@@ -1585,9 +1585,10 @@ if (shareGraphBtn) {
       }
 
       members.forEach((entry, index) => {
-        const member = (entry.member || '').trim();
+        if (!entry || typeof entry !== 'object') return;
+        const member = String(entry.member || '').trim();
         if (!member) return;
-        const instrument = (entry.instrument || '').trim();
+        const instrument = String(entry.instrument || '').trim();
         const weight = Number(entry.relation) || 2;
         // A single bio field is shared per submission; attach it to the first member.
         const bio = index === 0 ? bandBio : '';
@@ -1625,6 +1626,24 @@ if (shareGraphBtn) {
 
       if (!changed) return { added: false, reason: 'That band and connection already exist in the tree.' };
       return { added: true, membersAdded };
+    }
+
+    // Merge a list of submission drafts into the master graph, isolating each
+    // draft so one malformed/unexpected record can never abort the rest. Any
+    // draft that throws is logged (with its id) and skipped; the remaining
+    // drafts still render. Returns the count of drafts that failed to merge.
+    function mergeSubmissionsIntoMaster(master, drafts) {
+      let failed = 0;
+      (Array.isArray(drafts) ? drafts : []).forEach(draft => {
+        try {
+          applyDraftToMaster(master, draft);
+        } catch (error) {
+          failed += 1;
+          const id = (draft && draft.id) || '(unknown id)';
+          console.warn(`Skipping band submission that could not be merged (id: ${id}): ${error && error.message ? error.message : error}`, { draft, error });
+        }
+      });
+      return failed;
     }
 
     function getFilteredGraph(master) {
@@ -2706,10 +2725,10 @@ if (shareGraphBtn) {
       // local-only copy so previously added bands still survive a refresh.
       try {
         const shared = await fetchSharedSubmissions();
-        shared.forEach(draft => applyDraftToMaster(master, draft));
+        mergeSubmissionsIntoMaster(master, shared);
       } catch (error) {
         console.warn('Could not load shared submissions; falling back to local copy.', error);
-        loadUserSubmissions().forEach(draft => applyDraftToMaster(master, draft));
+        mergeSubmissionsIntoMaster(master, loadUserSubmissions());
       }
       graphState = { master };
       const sceneSelect = document.getElementById('scene-filter');
