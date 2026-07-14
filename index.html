@@ -1655,12 +1655,18 @@ if (shareGraphBtn) {
       let changed = false;
       let membersAdded = 0;
 
-      // Band node — unique per scene, matching the CSV schema { id, type, scene }.
+      // Band node — dedup by NAME ONLY (case-insensitive). Scene is a soft
+      // attribute, not part of identity: users often type 'Seattle' when the
+      // CSV has 'Seattle, WA' (or vice versa), and treating those as different
+      // bands creates duplicate nodes on the graph. If an existing band node
+      // matches by name, we reuse it and only fill in scene if it was blank.
       let bandNode = master.nodes.find(node => node.type === 'band'
-        && normalizeKey(node.id) === normalizeKey(band)
-        && normalizeKey(node.scene || '') === normalizeKey(scene));
+        && normalizeKey(node.id) === normalizeKey(band));
       if (!bandNode) {
         master.nodes.push({ id: band, type: 'band', scene });
+        changed = true;
+      } else if (!bandNode.scene && scene) {
+        bandNode.scene = scene;
         changed = true;
       }
 
@@ -2328,6 +2334,55 @@ if (shareGraphBtn) {
       return /(?:https?:\/\/|www\.|[a-z0-9-]+\.(?:com|net|org|io|co|fm|tv|gg|ly|me|info|biz|xyz|site|link|app|dev|music|band|rocks|live))/i.test(value);
     }
 
+    // --- Case-insensitive canonical match helpers ------------------------------
+    // Look up an existing node by normalized name and return its display id.
+    // These power the "Matched existing entry" hint under the band/member fields
+    // and the silent auto-fill that snaps user input to the canonical spelling.
+    function findCanonicalBandName(typed) {
+      if (!typed || !graphState || !graphState.master) return null;
+      const key = normalizeKey(typed);
+      const match = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(node.id) === key);
+      return match ? match.id : null;
+    }
+    function findCanonicalMemberName(typed) {
+      if (!typed || !graphState || !graphState.master) return null;
+      const key = normalizeKey(typed);
+      const match = graphState.master.nodes.find(node => node.type === 'person' && normalizeKey(node.id) === key);
+      return match ? match.id : null;
+    }
+
+    // Show or clear a small hint element directly after the given input.
+    // The hint element is created lazily on first use and reused after that,
+    // so no HTML markup edits are needed. Passing null/empty clears it.
+    function showMatchHint(field, canonicalName) {
+      if (!field) return;
+      let hint = field.parentElement && field.parentElement.querySelector(':scope > .field-match-hint');
+      if (!hint) {
+        hint = document.createElement('div');
+        hint.className = 'field-match-hint';
+        hint.style.fontSize = 'var(--text-xs)';
+        hint.style.color = 'var(--color-text-muted)';
+        hint.style.marginTop = '0.25rem';
+        field.parentElement && field.parentElement.appendChild(hint);
+      }
+      if (canonicalName) {
+        hint.innerHTML = `Matched existing entry: <strong>${canonicalName}</strong>`;
+      } else {
+        hint.textContent = '';
+      }
+    }
+
+    // Silently correct the input to the canonical spelling, but never overwrite
+    // while the user is actively typing in that field — that would move the
+    // caret and feel hostile. The next validation cycle (blur / other input)
+    // will apply it once focus has moved.
+    function applyCanonicalMatch(field, canonicalName) {
+      if (!field || !canonicalName) return;
+      if (field.value === canonicalName) return;
+      if (document.activeElement === field) return;
+      field.value = canonicalName;
+    }
+
     function validateSubmissionForm() {
       const bandField = document.getElementById('band-name');
       const sceneField = document.getElementById('submission-scene');
@@ -2344,6 +2399,20 @@ if (shareGraphBtn) {
       bioField.classList.remove('field-error');
       validation.classList.remove('is-warning', 'is-success');
 
+      // Canonical-match hints + silent auto-fill. Runs before the rest of the
+      // validator so downstream comparisons see the corrected values when the
+      // user is not focused on the field. Match by name only; scene is a soft
+      // attribute (see applyDraftToMaster for the same rule).
+      const canonicalBand = findCanonicalBandName(band);
+      const canonicalMember = findCanonicalMemberName(member);
+      showMatchHint(bandField, canonicalBand && canonicalBand !== band ? canonicalBand : null);
+      showMatchHint(memberField, canonicalMember && canonicalMember !== member ? canonicalMember : null);
+      applyCanonicalMatch(bandField, canonicalBand);
+      applyCanonicalMatch(memberField, canonicalMember);
+      // Refresh locals in case auto-fill just replaced the raw value.
+      const bandNow = bandField.value.trim();
+      const memberNow = memberField.value.trim();
+
       if (bio && bioContainsBlockedLink(bio)) {
         bioField.classList.add('field-error');
         validation.classList.add('is-warning');
@@ -2351,44 +2420,49 @@ if (shareGraphBtn) {
         return { valid: false, duplicate: false, memberExists: false, duplicateConnection: false };
       }
 
-      const memberBandState = renderExistingMemberBands(member, band, scene);
+      const memberBandState = renderExistingMemberBands(memberNow, bandNow, scene);
 
-      if (!band || !scene || !graphState || !graphState.master) {
+      if (!bandNow || !scene || !graphState || !graphState.master) {
         setSubmissionMode(false);
         renderExistingBandMembers('', '', false);
         validation.textContent = 'Enter both a band name and a scene to check for duplicates. Members can appear in multiple bands.';
         return { valid: true, duplicate: false, memberExists: false, duplicateConnection: memberBandState.duplicateConnection };
       }
 
-      const bandExists = graphState.master.nodes.some(node => node.type === 'band' && normalizeKey(node.id) === normalizeKey(band) && normalizeKey(node.scene || '') === normalizeKey(scene));
+      // Band exists check: match by NAME ONLY (case-insensitive). Scene is a
+      // soft attribute — users type 'Seattle' when the CSV has 'Seattle, WA'
+      // and we don't want that to look like a different band.
+      const bandExists = !!canonicalBand;
 
       if (bandExists) {
         bandField.classList.add('field-error');
-        sceneField.classList.add('field-error');
+        // Only flag the scene field when the user actually gave a scene that
+        // conflicts — not just because a band matched.
+        if (scene) sceneField.classList.add('field-error');
         validation.classList.add('is-warning');
         setSubmissionMode(true);
-        const memberState = renderExistingBandMembers(band, scene, true);
+        const memberState = renderExistingBandMembers(bandNow, scene, true);
         if (memberState.memberExists || memberBandState.duplicateConnection) {
-          validation.textContent = `${memberField.value.trim()} is already connected to ${band} in ${scene}. Add a different member or create a different connection.`;
+          validation.textContent = `${memberNow || memberField.value.trim()} is already connected to ${bandNow} in ${scene}. Add a different member or create a different connection.`;
           return { valid: false, duplicate: true, memberExists: true, duplicateConnection: true };
         }
-        validation.textContent = `A band named ${band} already exists in the ${scene} scene. You can still add a member to this band or add a new connection for an existing member.`;
+        validation.textContent = `A band named ${bandNow} already exists${scene ? ` in the ${scene} scene` : ''}. You can still add a member to this band or add a new connection for an existing member.`;
         return { valid: true, duplicate: true, memberExists: false, duplicateConnection: false };
       }
 
       if (memberBandState.duplicateConnection) {
         validation.classList.add('is-warning');
-        validation.textContent = `${member} is already connected to ${band} in ${scene}.`;
+        validation.textContent = `${memberNow} is already connected to ${bandNow} in ${scene}.`;
         setSubmissionMode(false);
-        renderExistingBandMembers(band, scene, false);
+        renderExistingBandMembers(bandNow, scene, false);
         memberField.classList.add('field-error');
         return { valid: false, duplicate: false, memberExists: false, duplicateConnection: true };
       }
 
       validation.classList.add('is-success');
-      validation.textContent = `No duplicate band found for ${band} in ${scene}.`;
+      validation.textContent = `No duplicate band found for ${bandNow} in ${scene}.`;
       setSubmissionMode(false);
-      renderExistingBandMembers(band, scene, false);
+      renderExistingBandMembers(bandNow, scene, false);
       return { valid: true, duplicate: false, memberExists: false, duplicateConnection: false };
     }
 
