@@ -1741,6 +1741,56 @@ if (shareGraphBtn) {
       });
     }
 
+    // Canonicalize a raw scene string (from CSV or user submission) so that
+    // 'Seattle' and 'Seattle, WA' resolve to the same value throughout the app.
+    //
+    // The bug this fixes: the CSV stores scenes with a state suffix
+    // ('Seattle, WA', 'Portland, OR', ...) but the submission form's default
+    // strips it down to bare city ('Seattle'). Filter code then does strict
+    // equality on node.scene, so submitted bands vanish when the mobile UI
+    // (which defaults to 'Seattle, WA') filters by scene.
+    //
+    // Strategy: for any scene whose city portion matches a canonical scene
+    // that already exists in the CSV, upgrade the bare value to the full one.
+    // Anything else passes through unchanged, so untouched data stays as-is.
+    const SCENE_CANONICAL_BY_CITY = {
+      // city (lowercased) -> canonical full scene string
+      'seattle':      'Seattle, WA',
+      'tacoma':       'Tacoma, WA',
+      'portland':     'Portland, OR',
+      'issaqua':      'Issaqua, WA',    // CSV typo preserved intentionally; schema PR will fix
+      'issaquah':     'Issaqua, WA',    // if a user types the correct spelling, still map to the CSV form
+      'los angeles':  'Los Angeles',
+      'new york':     'New York, NY',
+      'chicago':      'Chicago, IL',
+      'cleveland':    'Cleveland, OH',
+      'coral springs':'Coral Springs, FL',
+      'champaign':    'Champaign, IL',
+      'kansas city':  'Kansas City, MO',
+      'oklahoma city':'Oklahoma City, OK',
+      'palm desert':  'Palm Desert, CA',
+      'rockford':     'Rockford, IL',
+      'venice':       'Venice, CA',
+      'new jersey':   'New Jersey',
+      'aukland':      'Aukland, NZ',    // CSV typo preserved intentionally; schema PR will fix
+      'auckland':     'Aukland, NZ',
+      'sydney':       'Sydney, AU',
+      'melbourne':    'Melbourne, AU',
+      'london':       'London, EN',
+      'birmingham':   'Birmingham, EN',
+      'manchester':   'Manchester, EN',
+      'glasgow':      'Glasgow, SCT',
+      'san francisco':'San Francisco', // no state suffix in CSV; keep bare
+    };
+    function canonicalizeScene(raw) {
+      const trimmed = String(raw || '').trim();
+      if (!trimmed) return trimmed;
+      // Extract the city portion: everything before the first comma.
+      const city = trimmed.split(',')[0].trim().toLowerCase();
+      const canonical = SCENE_CANONICAL_BY_CITY[city];
+      return canonical || trimmed;
+    }
+
     function buildMasterGraph(rows) {
       const nodeMap = new Map();
       const links = [];
@@ -1749,7 +1799,7 @@ if (shareGraphBtn) {
         const source = (row.source || '').trim();
         const target = (row.target || '').trim();
         if (!source || !target) return;
-        const scene = (row.scene || 'Seattle').trim();
+        const scene = canonicalizeScene(row.scene || 'Seattle');
         const instrument1 = (row['Instrument 1'] || row['Intrument 1'] || '').trim();
         const instrument2 = (row['Instrument 2'] || row['Intrument 2'] || '').trim();
         const bio = (row.bio || row.Bio || row.notes || row.Notes || '').trim();
@@ -1952,7 +2002,7 @@ if (shareGraphBtn) {
     function applyDraftToMaster(master, draft) {
       if (!master || !draft || typeof draft !== 'object') return { added: false, reason: 'No graph data available yet.' };
       const band = String(draft.band || '').trim();
-      const scene = String(draft.scene || '').trim() || 'Seattle';
+      const scene = canonicalizeScene(String(draft.scene || '').trim() || 'Seattle');
       if (!band) return { added: false, reason: 'A band name is required.' };
 
       // Support both the multi-member shape ({ members: [...] }) and the legacy
