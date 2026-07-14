@@ -1,0 +1,18 @@
+{
+  "_comment": "Manual disambiguation pins for name -> MBID. When MusicBrainz search returns multiple candidates for a band or person name, add an entry here to force the correct one. The ingestion pipeline reads this before running search, so any name in this file skips the search step entirely. Format: key = exact name as it appears in the seed CSV, value = { mbid, source: 'manual', note: 'why this pin exists' }.",
+  "Pearl Jam": {
+    "mbid": "83b9cbe7-9857-49e2-ab8e-b57b01038103",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — the Seattle grunge band. MB search returns 39 hits for the name."
+  },
+  "Nirvana": {
+    "mbid": "5b11f4ce-a62d-471e-81fc-a69a8278c7da",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — the Aberdeen/Seattle grunge trio. Not the 1960s UK psychedelic band of the same name."
+  },
+  "Dave Grohl": {
+    "mbid": "4d5f891d-9bce-45ae-ad86-912dd27252fa",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — the Foo Fighters/Nirvana drummer, born 1969-01-14. Has 23 member-of-band relations. Common name; verify MBID with `curl mb/artist/<id>` before adding new pins."
+  }
+}

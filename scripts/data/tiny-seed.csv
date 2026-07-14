@@ -1,0 +1,5 @@
+source,target,source_type,target_type,relation_type,city,state,country,genre,weight,Intrument 1,Intrument 2,Intrument 3,Intrument 4
+Nirvana,Kurt Cobain,band,person,member_of,Aberdeen,WA,USA,Grunge,3,vocals,,,
+Nirvana,Krist Novoselic,band,person,member_of,Aberdeen,WA,USA,Grunge,3,bass,,,
+Nirvana,Dave Grohl,band,person,member_of,Aberdeen,WA,USA,Grunge,3,drums,,,
+Pearl Jam,Eddie Vedder,band,person,member_of,Seattle,WA,USA,Grunge,4,vocals,,,
