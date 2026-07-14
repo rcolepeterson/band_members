@@ -78,6 +78,8 @@
     .detail-card{padding:var(--space-4);border-radius:var(--radius-lg);background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);display:grid;gap:var(--space-2);min-width:0}.detail-title{font-size:var(--text-sm);font-weight:700}.detail-copy{font-size:var(--text-sm);color:var(--color-text-muted)}
     .detail-stat{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-3);font-size:var(--text-sm);padding:0.55rem 0;border-bottom:1px solid rgba(255,255,255,0.06);min-width:0}.detail-stat:last-child{border-bottom:none}.detail-stat span:first-child{color:var(--color-text-muted);flex:0 0 84px}.detail-stat strong{flex:1 1 auto;min-width:0;text-align:right}.detail-stat span:last-child{color:var(--color-text-muted)}
     .form-grid{display:grid;gap:var(--space-3)}label{font-size:var(--text-xs);letter-spacing:.1em;text-transform:uppercase;color:var(--color-text-muted)}
+    .location-fields-row{display:grid;grid-template-columns:2fr 1fr 1.4fr;gap:var(--space-3)}
+    @media (max-width: 640px){.location-fields-row{grid-template-columns:1fr}}
     input,select,textarea{width:100%;margin-top:var(--space-2);padding:0.85rem 0.95rem;border-radius:var(--radius-md);border:1px solid var(--color-border);background:rgba(10,12,18,0.55);min-height:48px}textarea{min-height:108px;resize:vertical}
     input:focus,select:focus,textarea:focus{outline:none;border-color:rgba(82,174,182,0.56);box-shadow:0 0 0 3px rgba(82,174,182,0.16)}
     .submit-btn{display:block;width:100%;min-height:54px;padding:0 2.5rem;border-radius:var(--radius-full);background:var(--color-primary);color:var(--color-text-inverse);font-weight:700;font-size:var(--text-base);text-align:center;white-space:nowrap}.submit-btn:hover{background:var(--color-primary-hover)}
@@ -1433,7 +1435,15 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <p class="share-popover-copy">Drop a new branch into the tree. Plain text only — links and promo URLs are not allowed.</p>
             <form class="form-grid form-grid-expanded" id="submission-form">
               <div><label for="band-name">Band name</label><input id="band-name" name="band-name" type="text" placeholder="Temple of the Dog" /></div>
-              <div><label for="submission-scene">Scene</label><input id="submission-scene" name="submission-scene" type="text" placeholder="Seattle" /></div>
+              <div class="form-span-2 location-fields">
+                <label class="members-block-label">Location</label>
+                <div class="location-fields-row">
+                  <div><label for="submission-city">City</label><input id="submission-city" name="submission-city" type="text" placeholder="Seattle" /></div>
+                  <div><label for="submission-state">State</label><select id="submission-state" name="submission-state"><option value="">—</option></select></div>
+                  <div><label for="submission-country">Country</label><select id="submission-country" name="submission-country"></select></div>
+                </div>
+                <div class="field-note">State applies to US locations only and is disabled for other countries.</div>
+              </div>
               <div class="form-span-2 members-block">
                 <label class="members-block-label">Band members</label>
                 <div id="members-container">
@@ -1860,6 +1870,46 @@ if (shareGraphBtn) {
       // Single part: default to US city with unknown state.
       return { city: parts[0] || '', state: '', country: 'USA' };
     }
+
+    // USPS 2-letter state/territory codes, for the submission form's State
+    // dropdown (US only -- disabled/cleared for any other country).
+    const USPS_STATE_CODES = [
+      'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
+      'KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
+      'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT',
+      'VA','WA','WV','WI','WY','DC','PR'
+    ];
+
+    // ISO 3166-1 alpha-3 country list for the submission form's Country
+    // dropdown. Covers every country already present in the source CSV
+    // (USA, GBR, AUS, NZL) plus a broader set of common countries so new
+    // submissions aren't limited to the current data. Sorted alphabetically
+    // by display name, with USA pinned first as the default.
+    const ISO3_COUNTRIES = [
+      { code: 'USA', name: 'United States' },
+      { code: 'AUS', name: 'Australia' },
+      { code: 'AUT', name: 'Austria' },
+      { code: 'BEL', name: 'Belgium' },
+      { code: 'BRA', name: 'Brazil' },
+      { code: 'CAN', name: 'Canada' },
+      { code: 'DNK', name: 'Denmark' },
+      { code: 'FIN', name: 'Finland' },
+      { code: 'FRA', name: 'France' },
+      { code: 'DEU', name: 'Germany' },
+      { code: 'GRC', name: 'Greece' },
+      { code: 'IRL', name: 'Ireland' },
+      { code: 'ITA', name: 'Italy' },
+      { code: 'JPN', name: 'Japan' },
+      { code: 'MEX', name: 'Mexico' },
+      { code: 'NLD', name: 'Netherlands' },
+      { code: 'NZL', name: 'New Zealand' },
+      { code: 'NOR', name: 'Norway' },
+      { code: 'PRT', name: 'Portugal' },
+      { code: 'ESP', name: 'Spain' },
+      { code: 'SWE', name: 'Sweden' },
+      { code: 'CHE', name: 'Switzerland' },
+      { code: 'GBR', name: 'United Kingdom' },
+    ];
 
     function buildMasterGraph(rows) {
       const nodeMap = new Map();
@@ -2713,7 +2763,7 @@ if (shareGraphBtn) {
         .filter(link => {
           const sourceNode = graphState.master.nodes.find(node => node.id === link.source);
           const targetNode = graphState.master.nodes.find(node => node.id === link.target);
-          return sourceNode && targetNode && sourceNode.type === 'band' && targetNode.type === 'person' && normalizeKey(sourceNode.id) === normalizeKey(band) && normalizeKey(sourceNode.scene || '') === normalizeKey(scene);
+          return sourceNode && targetNode && sourceNode.type === 'band' && targetNode.type === 'person' && normalizeKey(sourceNode.id) === normalizeKey(band) && normalizeKey(locationLabel(sourceNode) || '') === normalizeKey(scene);
         })
         .map(link => link.target)
         .filter((value, index, array) => array.indexOf(value) === index)
@@ -2730,7 +2780,7 @@ if (shareGraphBtn) {
         })
         .map(link => {
           const bandNode = graphState.master.nodes.find(node => node.id === link.source);
-          return bandNode ? { name: bandNode.id, scene: bandNode.scene || 'Unknown scene' } : null;
+          return bandNode ? { name: bandNode.id, scene: locationLabel(bandNode) || 'Unknown scene' } : null;
         })
         .filter(Boolean)
         .filter((value, index, array) => index === array.findIndex(item => normalizeKey(item.name) === normalizeKey(value.name) && normalizeKey(item.scene) === normalizeKey(value.scene)))
@@ -2868,18 +2918,31 @@ if (shareGraphBtn) {
       field.value = canonicalName;
     }
 
+    // Reads the three submission-form location fields and returns both the
+    // normalized { city, state, country } and a human-readable label (via
+    // locationLabel) for use in validation/preview copy that used to read a
+    // single free-text 'scene' string.
+    function readSubmissionLocation() {
+      const city = normalizeLocationField(document.getElementById('submission-city').value);
+      const country = normalizeCountry(document.getElementById('submission-country').value) || 'USA';
+      const state = normalizeState(document.getElementById('submission-state').value, country);
+      const label = locationLabel({ city, state, country }) || city;
+      return { city, state, country, label };
+    }
+
     function validateSubmissionForm() {
       const bandField = document.getElementById('band-name');
-      const sceneField = document.getElementById('submission-scene');
+      const cityField = document.getElementById('submission-city');
       const memberField = document.getElementById('member-name');
       const bioField = document.getElementById('member-bio');
       const validation = document.getElementById('submission-validation');
       const band = bandField.value.trim();
-      const scene = sceneField.value.trim();
+      const location = readSubmissionLocation();
+      const scene = location.label;
       const member = memberField.value.trim();
       const bio = bioField.value.trim();
       bandField.classList.remove('field-error');
-      sceneField.classList.remove('field-error');
+      cityField.classList.remove('field-error');
       memberField.classList.remove('field-error');
       bioField.classList.remove('field-error');
       validation.classList.remove('is-warning', 'is-success');
@@ -2923,7 +2986,7 @@ if (shareGraphBtn) {
         bandField.classList.add('field-error');
         // Only flag the scene field when the user actually gave a scene that
         // conflicts — not just because a band matched.
-        if (scene) sceneField.classList.add('field-error');
+        if (scene) cityField.classList.add('field-error');
         validation.classList.add('is-warning');
         setSubmissionMode(true);
         const memberState = renderExistingBandMembers(bandNow, scene, true);
@@ -2955,7 +3018,7 @@ if (shareGraphBtn) {
       if (!graphState || !graphState.master) return;
       const band = document.getElementById('band-name').value.trim();
       const member = document.getElementById('member-name').value.trim();
-      const scene = document.getElementById('submission-scene').value.trim();
+      const scene = readSubmissionLocation().label;
       const previewName = document.getElementById('submission-preview-name');
       const previewCopy = document.getElementById('submission-preview-copy');
       const previewSource = document.getElementById('submission-preview-source');
@@ -2972,7 +3035,7 @@ if (shareGraphBtn) {
         matchedNode = graphState.master.nodes.find(node => node.type === 'person' && normalizeKey(node.id) === normalizeKey(member));
       }
       if (!matchedNode && band) {
-        matchedNode = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(node.id) === normalizeKey(band) && (!scene || normalizeKey(node.scene || '') === normalizeKey(scene)));
+        matchedNode = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(node.id) === normalizeKey(band) && (!scene || normalizeKey(locationLabel(node) || '') === normalizeKey(scene)));
       }
 
       if (!matchedNode) {
@@ -2996,7 +3059,7 @@ if (shareGraphBtn) {
         ? `Existing member found in the tree. Connected bands: ${connections.join(', ') || 'none yet'}.`
         : `Existing band found in the tree. Connected members: ${connections.join(', ') || 'none yet'}.`;
       previewSource.textContent = `Pulled from current tree · ${matchedNode.type}`;
-      previewScene.textContent = matchedNode.scene || previewScene.textContent || '—';
+      previewScene.textContent = locationLabel(matchedNode) || previewScene.textContent || '—';
       previewInstrument.textContent = [matchedNode.instrument1, matchedNode.instrument2].filter(Boolean).join(', ') || previewInstrument.textContent || '—';
       if (matchedNode.type === 'person') {
         selectedBio.textContent = typedBio || matchedNode.bio || '—';
@@ -3011,7 +3074,7 @@ if (shareGraphBtn) {
       const band = document.getElementById('band-name').value.trim();
       const member = document.getElementById('member-name').value.trim();
       const relation = document.getElementById('relation-type').value.trim();
-      const scene = document.getElementById('submission-scene').value.trim();
+      const scene = readSubmissionLocation().label;
       const instrument = document.getElementById('instrument-name').value.trim();
       const years = document.getElementById('years-active').value.trim();
       const label = document.getElementById('band-label').value.trim();
@@ -3141,6 +3204,54 @@ if (shareGraphBtn) {
       renderGraph();
     });
 
+    // Populate the State <select> with USPS codes. Disabled entirely (with a
+    // blank selection) for any non-US country, since the schema only stores
+    // state for US rows.
+    function populateStateOptions(country) {
+      const stateSelect = document.getElementById('submission-state');
+      if (!stateSelect) return;
+      const isUS = country === 'USA';
+      const previousValue = stateSelect.value;
+      stateSelect.innerHTML = '';
+      const blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = isUS ? 'Select a state…' : '—';
+      stateSelect.appendChild(blank);
+      USPS_STATE_CODES.forEach(code => {
+        const option = document.createElement('option');
+        option.value = code;
+        option.textContent = code;
+        stateSelect.appendChild(option);
+      });
+      stateSelect.disabled = !isUS;
+      if (isUS && USPS_STATE_CODES.includes(previousValue)) {
+        stateSelect.value = previousValue;
+      } else {
+        stateSelect.value = '';
+      }
+    }
+
+    // Populate the Country <select> with the ISO-3 list, USA first/default.
+    (function initSubmissionLocationFields() {
+      const countrySelect = document.getElementById('submission-country');
+      if (!countrySelect) return;
+      ISO3_COUNTRIES.forEach(({ code, name }) => {
+        const option = document.createElement('option');
+        option.value = code;
+        option.textContent = `${name} (${code})`;
+        countrySelect.appendChild(option);
+      });
+      countrySelect.value = 'USA';
+      populateStateOptions('USA');
+      document.getElementById('submission-city').value = 'Seattle';
+      document.getElementById('submission-state').value = 'WA';
+
+      countrySelect.addEventListener('change', () => {
+        populateStateOptions(countrySelect.value);
+        updateSubmissionPreview();
+      });
+    })();
+
     document.querySelectorAll('#submission-form input, #submission-form select, #submission-form textarea').forEach(el => {
       el.addEventListener('input', updateSubmissionPreview);
       el.addEventListener('change', updateSubmissionPreview);
@@ -3230,7 +3341,13 @@ if (shareGraphBtn) {
         return;
       }
 
-      const scene = document.getElementById('submission-scene').value.trim() || 'Seattle';
+      const location = readSubmissionLocation();
+      if (!location.city) {
+        document.getElementById('submission-city').classList.add('field-error');
+        showSubmissionFeedback('Enter a city before saving.', true);
+        return;
+      }
+      const scene = location.label;
       const bio = document.getElementById('member-bio').value.trim();
       if (bio && bioContainsBlockedLink(bio)) {
         document.getElementById('member-bio').classList.add('field-error');
@@ -3280,12 +3397,14 @@ if (shareGraphBtn) {
 
       const bandExisted = !!master && master.nodes.some(node => node.type === 'band'
         && normalizeKey(node.id) === normalizeKey(band)
-        && normalizeKey(node.scene || '') === normalizeKey(scene));
+        && normalizeKey(locationLabel(node) || '') === normalizeKey(scene));
 
       const draft = {
         band,
         members,
-        scene,
+        city: location.city,
+        state: location.state,
+        country: location.country,
         yearsActive: bandExisted ? '' : document.getElementById('years-active').value.trim(),
         label: bandExisted ? '' : document.getElementById('band-label').value.trim(),
         albums: bandExisted ? '' : document.getElementById('albums-released').value.trim(),
@@ -3302,21 +3421,25 @@ if (shareGraphBtn) {
         if (!applied.added) return applied;
         currentFilter = 'all';
         currentSearch = '';
-        if (currentScene !== 'all' && normalizeKey(currentScene) !== normalizeKey(draftToApply.scene)) {
-          currentScene = draftToApply.scene;
+        const draftKey = locationKey({ city: draftToApply.city, state: draftToApply.state, country: draftToApply.country });
+        const draftLabel = locationLabel({ city: draftToApply.city, state: draftToApply.state, country: draftToApply.country });
+        if (currentScene !== 'all' && !currentScene.startsWith('country:') && normalizeKey(currentScene) !== normalizeKey(draftKey)) {
+          currentScene = draftKey;
         }
         document.getElementById('node-search').value = '';
         const sceneSelect = document.getElementById('scene-filter');
         if (sceneSelect) {
-          if (![...sceneSelect.options].some(opt => opt.value === draftToApply.scene)) {
+          if (draftKey && ![...sceneSelect.options].some(opt => opt.value === draftKey)) {
             const option = document.createElement('option');
-            option.value = draftToApply.scene;
-            option.textContent = draftToApply.scene;
+            option.value = draftKey;
+            option.textContent = draftLabel;
             sceneSelect.appendChild(option);
           }
           sceneSelect.value = currentScene;
         }
         syncFilterButtons();
+        renderCountryChips();
+        syncCountryChipButtons();
         renderGraph();
         return applied;
       };
@@ -3344,7 +3467,10 @@ if (shareGraphBtn) {
         showSubmissionFeedback(message, !wasShared);
         document.getElementById('submission-form').reset();
         resetMemberRows();
-        document.getElementById('submission-scene').value = 'Seattle';
+        document.getElementById('submission-city').value = 'Seattle';
+        document.getElementById('submission-country').value = 'USA';
+        populateStateOptions('USA');
+        document.getElementById('submission-state').value = 'WA';
         updateSubmissionPreview();
         setSubmissionMode(false);
       };
