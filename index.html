@@ -4566,14 +4566,15 @@ if (shareGraphBtn) {
         const segments = document.querySelectorAll('.mobile-scene-segment');
         const DEFAULT_LOCATION = TOP_LOCATIONS[0] ? TOP_LOCATIONS[0].key : null;
 
-        // On mobile page load, default to the single most populous location.
+        // On mobile page load, show the full tree by default. The scene
+        // segments still exist in the hamburger sheet as one-tap shortcuts;
+        // we just don't preselect one anymore so first-time mobile visitors
+        // see the whole graph, matching desktop behavior.
         if (MOBILE_QUERY.matches) {
-          if (DEFAULT_LOCATION) {
-            currentScene = DEFAULT_LOCATION;
-            desktopSceneSelect.value = DEFAULT_LOCATION;
-            if (mobileSceneSelect) mobileSceneSelect.value = DEFAULT_LOCATION;
-            updateSegmentActive(DEFAULT_LOCATION);
-          }
+          currentScene = 'all';
+          desktopSceneSelect.value = 'all';
+          if (mobileSceneSelect) mobileSceneSelect.value = 'all';
+          updateSegmentActive('all');
           menuBtn.hidden = false;
         }
 
