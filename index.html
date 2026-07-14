@@ -694,6 +694,276 @@ body {
 }
 
 /* ============================================================
+   MOBILE-FIRST LAYOUT (<=900px)
+   Graph fills the viewport. Filters + search + scene selector
+   collapse into a bottom sheet toggled by a hamburger button.
+   Node-details panel becomes a bottom sheet on tap.
+   ============================================================ */
+@media (max-width: 900px) {
+  /* Hide the top overlay card entirely on mobile — it's replaced by the
+     hamburger button + bottom sheet. Node-details bottom-sheet still lives
+     inside .graph-overlay-bottom which is a different element. */
+  .graph-stage .graph-overlay:not(.graph-overlay-bottom) {
+    display: none !important;
+  }
+
+  /* Give the graph the full stage so nodes have room to breathe. */
+  .graph-stage {
+    min-height: 100dvh !important;
+  }
+
+  /* Hamburger button — floats at top-right of the graph. */
+  .mobile-menu-btn {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+    right: 0.85rem;
+    z-index: 40;
+    width: 46px;
+    height: 46px;
+    min-height: 46px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: rgba(9, 11, 17, 0.82);
+    color: var(--color-text-muted);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    cursor: pointer;
+  }
+
+  .mobile-menu-btn:hover,
+  .mobile-menu-btn:focus-visible {
+    color: var(--color-primary-hover);
+    border-color: rgba(82, 174, 182, 0.35);
+  }
+
+  .mobile-menu-btn-icon {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: currentColor;
+    border-radius: 999px;
+    position: relative;
+  }
+
+  .mobile-menu-btn-icon::before,
+  .mobile-menu-btn-icon::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    width: 20px;
+    height: 2px;
+    background: currentColor;
+    border-radius: 999px;
+  }
+
+  .mobile-menu-btn-icon::before { top: -6px; }
+  .mobile-menu-btn-icon::after  { top:  6px; }
+
+  /* Backdrop dim for open sheets. */
+  .mobile-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 6, 10, 0.55);
+    z-index: 60;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease;
+  }
+
+  .mobile-sheet-backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* The sheets themselves. */
+  .mobile-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 70;
+    max-height: 85dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    background: linear-gradient(180deg, rgba(14, 18, 26, 0.98), rgba(9, 12, 18, 0.98));
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top-left-radius: 22px;
+    border-top-right-radius: 22px;
+    padding: 0.75rem 1.1rem calc(env(safe-area-inset-bottom, 0px) + 1.4rem);
+    transform: translateY(100%);
+    transition: transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.55);
+  }
+
+  .mobile-sheet.is-open {
+    transform: translateY(0);
+  }
+
+  .mobile-sheet-handle {
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
+    margin: 0 auto 0.85rem;
+  }
+
+  .mobile-sheet-title {
+    font-size: 0.9rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin: 0 0 0.65rem;
+  }
+
+  .mobile-sheet-close {
+    position: absolute;
+    top: 0.55rem;
+    right: 0.65rem;
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(9, 11, 17, 0.55);
+    color: var(--color-text-muted);
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  /* Segmented scene control at the top of the menu sheet. */
+  .mobile-scene-segments {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 0.4rem;
+    padding: 0.35rem;
+    background: rgba(9, 11, 17, 0.6);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    margin-bottom: 1rem;
+  }
+
+  .mobile-scene-segment {
+    padding: 0.55rem 0.75rem;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    min-height: 44px;
+    text-align: center;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .mobile-scene-segment.is-active {
+    background: rgba(82, 174, 182, 0.16);
+    color: var(--color-primary-hover);
+    box-shadow: inset 0 0 0 1px rgba(82, 174, 182, 0.35);
+  }
+
+  /* When the sheet is open, reveal the tool chips + filter row inside it. */
+  .mobile-sheet .mobile-sheet-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .mobile-sheet .mobile-sheet-tools .tool-chip,
+  .mobile-sheet .mobile-sheet-tools .primary-btn {
+    min-height: 44px;
+    padding: 0 1rem;
+    font-size: 0.9rem;
+  }
+
+  .mobile-sheet .mobile-sheet-filter-row {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .mobile-sheet .mobile-sheet-filter-row label {
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .mobile-sheet .mobile-sheet-filter-row input,
+  .mobile-sheet .mobile-sheet-filter-row select {
+    width: 100%;
+    min-height: 48px;
+    font-size: 1rem;
+    padding: 0.6rem 0.9rem;
+  }
+
+  /* Bigger, more legible node labels on mobile. */
+  #graph-svg text {
+    font-size: 14px !important;
+  }
+
+  #graph-svg text.node-label-person {
+    font-size: 12px !important;
+  }
+
+  /* Bottom floating chips: bump touch targets + add safe-area padding. */
+  .graph-overlay-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.6rem);
+  }
+
+  .graph-toolbar-bottom .tool-chip,
+  .graph-toolbar-bottom .panel-toggle-btn {
+    min-height: 46px;
+    padding: 0 1rem;
+    font-size: 0.9rem;
+  }
+
+  /* Node-details popover -> bottom sheet look. Reuse existing popover markup
+     but reposition it as a full-width slide-up on mobile. */
+  #project-pulse-popover.is-open-mobile,
+  #add-band-popover.is-open-mobile {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    max-width: 100%;
+    max-height: 85dvh;
+    overflow-y: auto;
+    border-top-left-radius: 22px;
+    border-top-right-radius: 22px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    z-index: 75;
+    padding: 1rem 1.1rem calc(env(safe-area-inset-bottom, 0px) + 1.4rem);
+  }
+
+  /* Hide the hero (logo etc) on mobile — the graph is the star. */
+  .hero { display: none !important; }
+  .stage-header-spacer { display: none !important; }
+
+  /* Site header collapses to a small title on mobile. */
+  .site-header {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Entire header right side is hidden on mobile — hamburger owns the top-right. */
+  .header-right { display: none !important; }
+}
+
+/* ============================================================
    PASS 4: bottom-floating panel toggles + glass popovers,
    full-viewport lock (no page scroll), logo-less header.
    ============================================================ */
@@ -1016,6 +1286,40 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       <section id="graph-workspace" class="workspace" aria-label="Graph workspace">
         <article class="graph-panel">
   <div class="graph-stage" aria-label="D3 graph visualization stage">
+    <!-- Mobile-only hamburger button + slide-up menu sheet. Hidden on desktop via CSS. -->
+    <button class="mobile-menu-btn" id="mobile-menu-btn" type="button" aria-label="Open filters and search menu" aria-expanded="false" aria-controls="mobile-menu-sheet" hidden>
+      <span class="mobile-menu-btn-icon" aria-hidden="true"></span>
+    </button>
+    <div class="mobile-sheet-backdrop" id="mobile-sheet-backdrop" hidden></div>
+    <aside class="mobile-sheet" id="mobile-menu-sheet" role="dialog" aria-label="Filters and search" aria-modal="false" hidden>
+      <div class="mobile-sheet-handle" aria-hidden="true"></div>
+      <button class="mobile-sheet-close" type="button" id="mobile-menu-close" aria-label="Close menu">&times;</button>
+      <h3 class="mobile-sheet-title">Explore the tree</h3>
+      <div class="mobile-scene-segments" id="mobile-scene-segments" role="tablist" aria-label="Quick scene switch">
+        <button class="mobile-scene-segment is-active" type="button" data-scene="__seattle" role="tab">Seattle</button>
+        <button class="mobile-scene-segment" type="button" data-scene="all" role="tab">All scenes</button>
+        <button class="mobile-scene-segment" type="button" data-scene="__other" role="tab">Other…</button>
+      </div>
+      <div class="mobile-sheet-tools" id="mobile-sheet-tools" aria-label="Graph filters">
+        <button class="tool-chip active" type="button" data-filter="all">All nodes</button>
+        <button class="tool-chip" type="button" data-filter="band">Bands only</button>
+        <button class="tool-chip" type="button" data-filter="person">Musicians only</button>
+        <button class="tool-chip" type="button" data-action="fit">Fit graph</button>
+        <button class="tool-chip" type="button" data-action="clear">Clear filters</button>
+      </div>
+      <div class="mobile-sheet-filter-row">
+        <div>
+          <label for="mobile-node-search">Search band or musician</label>
+          <input id="mobile-node-search" type="search" placeholder="Search for Heart, Dave Grohl, Pearl Jam" />
+        </div>
+        <div id="mobile-scene-picker-wrap" style="display:none">
+          <label for="mobile-scene-filter">Scene</label>
+          <select id="mobile-scene-filter">
+            <option value="all">All scenes</option>
+          </select>
+        </div>
+      </div>
+    </aside>
     <div class="graph-overlay">
       <div class="panel-head graph-panel-head">
         <div>
@@ -2903,6 +3207,218 @@ if (shareGraphBtn) {
         sceneSelect.appendChild(option);
       });
       syncFilterButtons();
+
+      // ============================================================
+      // MOBILE-FIRST: wire the hamburger + bottom sheet + Seattle default.
+      // Runs after the scene dropdown is populated so we know what scenes exist.
+      // ============================================================
+      (function initMobileLayout() {
+        const MOBILE_QUERY = window.matchMedia('(max-width: 900px)');
+        const menuBtn = document.getElementById('mobile-menu-btn');
+        const menuSheet = document.getElementById('mobile-menu-sheet');
+        const menuBackdrop = document.getElementById('mobile-sheet-backdrop');
+        const menuClose = document.getElementById('mobile-menu-close');
+        const mobileSearch = document.getElementById('mobile-node-search');
+        const mobileSceneSelect = document.getElementById('mobile-scene-filter');
+        const mobileScenePickerWrap = document.getElementById('mobile-scene-picker-wrap');
+        const desktopSearch = document.getElementById('node-search');
+        const desktopSceneSelect = document.getElementById('scene-filter');
+        const segments = document.querySelectorAll('.mobile-scene-segment');
+
+        if (!menuBtn || !menuSheet || !desktopSceneSelect) return;
+
+        // Copy scene options from desktop dropdown into the mobile one.
+        function syncMobileSceneOptions() {
+          if (!mobileSceneSelect) return;
+          const current = mobileSceneSelect.value;
+          mobileSceneSelect.innerHTML = '';
+          Array.from(desktopSceneSelect.options).forEach(opt => {
+            const clone = document.createElement('option');
+            clone.value = opt.value;
+            clone.textContent = opt.textContent;
+            mobileSceneSelect.appendChild(clone);
+          });
+          if (current && [...mobileSceneSelect.options].some(o => o.value === current)) {
+            mobileSceneSelect.value = current;
+          } else {
+            mobileSceneSelect.value = desktopSceneSelect.value;
+          }
+        }
+        syncMobileSceneOptions();
+
+        // Find the canonical "Seattle" scene option — the CSV uses e.g. "Seattle, WA",
+        // not the bare string. Prefer exact/starts-with match on "Seattle".
+        function findSeattleSceneValue() {
+          const opts = [...desktopSceneSelect.options].map(o => o.value);
+          const exact = opts.find(v => v === 'Seattle');
+          if (exact) return exact;
+          const startsWith = opts.find(v => /^Seattle\b/i.test(v));
+          if (startsWith) return startsWith;
+          const anyMatch = opts.find(v => /seattle/i.test(v));
+          return anyMatch || null;
+        }
+        const SEATTLE_SCENE = findSeattleSceneValue();
+
+        // On mobile page load, default the scene to Seattle if that scene exists.
+        if (MOBILE_QUERY.matches) {
+          if (SEATTLE_SCENE) {
+            currentScene = SEATTLE_SCENE;
+            desktopSceneSelect.value = SEATTLE_SCENE;
+            if (mobileSceneSelect) mobileSceneSelect.value = SEATTLE_SCENE;
+            updateSegmentActive(SEATTLE_SCENE);
+          }
+          menuBtn.hidden = false;
+        }
+
+        // React to viewport size changes (rotation, dev-tools resize).
+        MOBILE_QUERY.addEventListener('change', ev => {
+          menuBtn.hidden = !ev.matches;
+          if (!ev.matches) closeSheet(); // exit mobile view -> close sheet if open
+        });
+
+        function openSheet() {
+          menuSheet.hidden = false;
+          menuBackdrop.hidden = false;
+          // Force reflow so the transition triggers.
+          void menuSheet.offsetHeight;
+          menuSheet.classList.add('is-open');
+          menuBackdrop.classList.add('is-open');
+          menuBtn.setAttribute('aria-expanded', 'true');
+        }
+
+        function closeSheet() {
+          menuSheet.classList.remove('is-open');
+          menuBackdrop.classList.remove('is-open');
+          menuBtn.setAttribute('aria-expanded', 'false');
+          setTimeout(() => {
+            if (!menuSheet.classList.contains('is-open')) {
+              menuSheet.hidden = true;
+              menuBackdrop.hidden = true;
+            }
+          }, 280);
+        }
+
+        menuBtn.addEventListener('click', () => {
+          if (menuSheet.classList.contains('is-open')) closeSheet();
+          else openSheet();
+        });
+        menuClose.addEventListener('click', closeSheet);
+        menuBackdrop.addEventListener('click', closeSheet);
+
+        // Segmented scene control: Seattle / All / Other (opens dropdown).
+        // data-scene values: "__seattle" (canonical Seattle scene), "all", "__other"
+        function updateSegmentActive(sceneValue) {
+          const isSeattle = SEATTLE_SCENE && sceneValue === SEATTLE_SCENE;
+          const isAll = sceneValue === 'all';
+          segments.forEach(seg => {
+            const target = seg.dataset.scene;
+            const isActive =
+              (target === '__seattle' && isSeattle) ||
+              (target === 'all' && isAll) ||
+              (target === '__other' && !isSeattle && !isAll);
+            seg.classList.toggle('is-active', isActive);
+          });
+          if (mobileScenePickerWrap) {
+            mobileScenePickerWrap.style.display = (!isSeattle && !isAll) ? '' : 'none';
+          }
+        }
+
+        segments.forEach(seg => {
+          seg.addEventListener('click', () => {
+            const target = seg.dataset.scene;
+            if (target === '__seattle') {
+              if (!SEATTLE_SCENE) return; // no Seattle scene in data — skip
+              currentScene = SEATTLE_SCENE;
+              desktopSceneSelect.value = SEATTLE_SCENE;
+              if (mobileSceneSelect) mobileSceneSelect.value = SEATTLE_SCENE;
+              updateSegmentActive(SEATTLE_SCENE);
+              renderGraph();
+            } else if (target === 'all') {
+              currentScene = 'all';
+              desktopSceneSelect.value = 'all';
+              if (mobileSceneSelect) mobileSceneSelect.value = 'all';
+              updateSegmentActive('all');
+              renderGraph();
+            } else if (target === '__other') {
+              if (mobileScenePickerWrap) mobileScenePickerWrap.style.display = '';
+              if (mobileSceneSelect) {
+                const firstOther = [...mobileSceneSelect.options].find(o =>
+                  o.value !== 'all' && o.value !== SEATTLE_SCENE
+                );
+                if (firstOther) {
+                  currentScene = firstOther.value;
+                  mobileSceneSelect.value = currentScene;
+                  desktopSceneSelect.value = currentScene;
+                  renderGraph();
+                }
+              }
+              segments.forEach(s => s.classList.toggle('is-active', s === seg));
+            }
+          });
+        });
+
+        // Two-way sync: mobile controls -> desktop state, and vice versa.
+        if (mobileSearch) {
+          mobileSearch.addEventListener('input', ev => {
+            currentSearch = ev.target.value.trim();
+            if (desktopSearch) desktopSearch.value = ev.target.value;
+            renderGraph();
+          });
+        }
+        if (mobileSceneSelect) {
+          mobileSceneSelect.addEventListener('change', ev => {
+            currentScene = ev.target.value;
+            desktopSceneSelect.value = ev.target.value;
+            updateSegmentActive(ev.target.value);
+            renderGraph();
+          });
+        }
+
+        // Mobile sheet tool chips mirror desktop chip behavior via same data attrs.
+        // Trigger clicks on the desktop chips so all existing behavior fires.
+        document.querySelectorAll('#mobile-sheet-tools .tool-chip').forEach(chip => {
+          chip.addEventListener('click', () => {
+            const filter = chip.dataset.filter;
+            const action = chip.dataset.action;
+            if (filter) {
+              const target = document.querySelector('.graph-overlay:not(.graph-overlay-bottom) .tool-chip[data-filter="' + filter + '"]');
+              if (target) target.click();
+              // Reflect active state in the mobile sheet.
+              document.querySelectorAll('#mobile-sheet-tools .tool-chip[data-filter]').forEach(c => {
+                c.classList.toggle('active', c === chip);
+              });
+            } else if (action) {
+              const target = document.querySelector('.graph-overlay:not(.graph-overlay-bottom) .tool-chip[data-action="' + action + '"]');
+              if (target) target.click();
+            }
+          });
+        });
+
+        // Convert existing popover panels (project-pulse + add-band) to bottom-sheet
+        // look on mobile by tagging them when they open.
+        function hookPopoverForMobile(popoverId) {
+          const popover = document.getElementById(popoverId);
+          if (!popover) return;
+          const observer = new MutationObserver(() => {
+            if (!MOBILE_QUERY.matches) {
+              popover.classList.remove('is-open-mobile');
+              return;
+            }
+            // On mobile, whenever the popover becomes visible, add our class.
+            if (!popover.hidden) popover.classList.add('is-open-mobile');
+            else popover.classList.remove('is-open-mobile');
+          });
+          observer.observe(popover, { attributes: true, attributeFilter: ['hidden'] });
+        }
+        hookPopoverForMobile('project-pulse-popover');
+        hookPopoverForMobile('add-band-popover');
+
+        // Escape key closes the menu sheet on mobile.
+        document.addEventListener('keydown', ev => {
+          if (ev.key === 'Escape' && menuSheet.classList.contains('is-open')) closeSheet();
+        });
+      })();
+
       requestAnimationFrame(() => {
         renderGraph();
         setTimeout(() => fitGraph(60), 700);
