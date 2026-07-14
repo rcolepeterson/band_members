@@ -47,24 +47,49 @@ test('validateSubmission rejects a missing band name', () => {
   assert.match(result.error, /band name is required/i);
 });
 
+test('validateSubmission rejects a missing scene', () => {
+  const result = validateSubmission({
+    band: 'Nirvana',
+    members: [{ member: 'Kurt Cobain', instrument: 'Guitar' }]
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /scene is required/i);
+});
+
 test('validateSubmission rejects links in the bio', () => {
-  const result = validateSubmission({ band: 'Nirvana', bio: 'visit nirvana.band now' });
+  const result = validateSubmission({
+    band: 'Nirvana',
+    scene: 'Seattle',
+    members: [{ member: 'Kurt Cobain', instrument: 'Guitar' }],
+    bio: 'visit nirvana.band now'
+  });
   assert.equal(result.ok, false);
   assert.match(result.error, /plain text/i);
+});
+
+test('validateSubmission rejects a member row missing an instrument', () => {
+  const result = validateSubmission({
+    band: 'Pearl Jam',
+    scene: 'Seattle',
+    members: [{ member: 'Eddie Vedder' }]
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /name and an instrument/i);
 });
 
 test('validateSubmission rejects duplicate members', () => {
   const result = validateSubmission({
     band: 'Pearl Jam',
-    members: [{ member: 'Eddie Vedder' }, { member: 'eddie vedder' }]
+    scene: 'Seattle',
+    members: [{ member: 'Eddie Vedder', instrument: 'Vocals' }, { member: 'eddie vedder', instrument: 'Vocals' }]
   });
   assert.equal(result.ok, false);
   assert.match(result.error, /more than once/i);
 });
 
 test('validateSubmission enforces the member cap', () => {
-  const members = Array.from({ length: LIMITS.maxMembers + 1 }, (_, i) => ({ member: `M${i}` }));
-  const result = validateSubmission({ band: 'Big Band', members });
+  const members = Array.from({ length: LIMITS.maxMembers + 1 }, (_, i) => ({ member: `M${i}`, instrument: 'Guitar' }));
+  const result = validateSubmission({ band: 'Big Band', scene: 'Seattle', members });
   assert.equal(result.ok, false);
   assert.match(result.error, /too many members/i);
 });

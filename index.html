@@ -179,6 +179,14 @@
     .validation-message.is-warning{color:#f5c26b}
     .validation-message.is-success{color:#8fd8a6}
     .field-error{border-color:#f5c26b !important;box-shadow:0 0 0 3px rgba(245,194,107,0.14) !important}
+    .field-note{font-size:var(--text-xs);color:var(--color-text-faint);margin-top:0.35rem}
+
+    .admin-submission-list{display:grid;gap:var(--space-3);max-height:420px;overflow-y:auto;padding-top:var(--space-2)}
+    .admin-submission-row{border-color:rgba(255,255,255,0.08)}
+    .admin-submission-row.is-duplicate{border-color:rgba(245,194,107,0.5);background:rgba(245,194,107,0.06)}
+    .dup-badge{display:inline-block;margin-left:var(--space-2);padding:0.15rem 0.55rem;border-radius:var(--radius-full);background:rgba(245,194,107,0.18);color:#f5c26b;font-size:var(--text-xs);letter-spacing:.04em;text-transform:uppercase;vertical-align:middle}
+    .admin-delete-btn{border-color:rgba(224,110,110,0.4);color:#e08a8a}
+    .admin-delete-btn:hover{background:rgba(224,110,110,0.14);border-color:rgba(224,110,110,0.6)}
 
   
     .is-ghosted{opacity:0.45;pointer-events:none;filter:saturate(0.5)}
@@ -1120,16 +1128,16 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <div class="share-popover-title">Add your band</div>
             <p class="share-popover-copy">Drop a new branch into the tree. Plain text only — links and promo URLs are not allowed.</p>
             <form class="form-grid form-grid-expanded" id="submission-form">
-              <div><label for="band-name">Band name</label><input id="band-name" name="band-name" type="text" placeholder="Temple of the Dog" /></div>
-              <div><label for="submission-scene">Scene</label><input id="submission-scene" name="submission-scene" type="text" placeholder="Seattle" /></div>
+              <div><label for="band-name">Band name</label><input id="band-name" name="band-name" type="text" placeholder="Temple of the Dog" required /></div>
+              <div><label for="submission-scene">Scene</label><input id="submission-scene" name="submission-scene" type="text" placeholder="Seattle" list="scene-options" required /><datalist id="scene-options"></datalist><div class="field-note">Pick an existing scene from the list if one fits — typing a new variant of the same scene (e.g. "Seattle" vs "Seattle, WA") can create a duplicate band.</div></div>
               <div class="form-span-2 members-block">
                 <label class="members-block-label">Band members</label>
                 <div id="members-container">
                   <div class="member-row" data-member-row>
                     <button type="button" class="member-row-remove" data-remove-row aria-label="Remove this member" tabindex="-1" hidden>&times;</button>
                     <div class="member-row-fields">
-                      <div class="form-span-2"><label for="member-name">Member name</label><input id="member-name" class="member-name-input" name="member-name" type="text" placeholder="Jeff Ament" /></div>
-                      <div><label for="instrument-name">Instrument</label><input id="instrument-name" class="instrument-input" name="instrument-name" type="text" placeholder="Bass, vocals, drums…" /></div>
+                      <div class="form-span-2"><label for="member-name">Member name</label><input id="member-name" class="member-name-input" name="member-name" type="text" placeholder="Jeff Ament" required /></div>
+                      <div><label for="instrument-name">Instrument</label><input id="instrument-name" class="instrument-input" name="instrument-name" type="text" placeholder="Bass, vocals, drums…" required /></div>
                       <div><label for="relation-type">Member weight</label><select id="relation-type" class="relation-input" name="relation-type"><option value="1">1 — Founder / core member</option><option value="2" selected>2 — Member</option><option value="3">3 — Touring member</option></select></div>
                     </div>
                   </div>
@@ -1167,6 +1175,32 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <div id="submission-mode" class="validation-message" aria-live="polite">Mode: Create a new band entry.</div>
             <div id="submission-feedback" class="validation-message submission-feedback" aria-live="polite"></div>
             <div class="footer-strip"><button class="submit-btn" type="button" id="save-draft-btn">Save draft band</button></div>
+          </div>
+        </div>
+
+        <div class="popover-anchor">
+          <button class="tool-chip panel-toggle-btn" type="button" id="admin-tools-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="admin-tools-popover">Manage duplicates</button>
+          <div class="share-popover popover-up popover-wide" id="admin-tools-popover" role="dialog" aria-label="Manage duplicates" hidden>
+            <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
+            <div class="share-popover-title">Manage duplicates</div>
+            <p class="share-popover-copy">Remove bad or duplicate crowd-submitted entries. Bands baked into the original CSV can't be removed here — those need a CSV edit and redeploy.</p>
+
+            <div id="admin-locked" class="detail-card">
+              <div class="detail-title">Admin access</div>
+              <p class="detail-copy">Enter the admin token to manage submissions on this device. It's remembered locally so you won't need to paste it again here.</p>
+              <div><label for="admin-token-input">Admin token</label><input id="admin-token-input" type="password" autocomplete="off" placeholder="Paste the admin token" /></div>
+              <div class="footer-strip"><button class="submit-btn" type="button" id="admin-unlock-btn">Unlock</button></div>
+              <div id="admin-unlock-feedback" class="validation-message" aria-live="polite"></div>
+            </div>
+
+            <div id="admin-unlocked" style="display:none">
+              <div class="footer-strip">
+                <button class="tool-chip" type="button" id="admin-refresh-btn">Refresh list</button>
+                <button class="tool-chip" type="button" id="admin-lock-btn">Forget token</button>
+              </div>
+              <div id="admin-submissions-summary" class="section-label">Loading submissions…</div>
+              <div id="admin-submissions-list" class="admin-submission-list"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1248,6 +1282,18 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
     }
 
+    // Scenes get typed inconsistently ("Seattle" vs "Seattle, WA" vs "seattle,wa"),
+    // and a cosmetic difference like a trailing state/region should never cause
+    // the same real-world scene to be treated as two different ones — that was
+    // the root cause of bands like Screaming Trees getting duplicated (CSV data
+    // used "Seattle, WA"; the submission form defaulted to plain "Seattle").
+    // Comparison strips everything from the first comma onward; the original
+    // text (whatever casing/format the user typed) is still what gets stored
+    // and displayed.
+    function normalizeScene(value) {
+      return normalizeKey(String(value || '').split(',')[0]);
+    }
+
     function getPersonRadius(node) {
   if (node.type === "band") return 11;
   if (node.weight === 1) return 8.5;
@@ -1320,6 +1366,7 @@ if (shareGraphBtn) {
     const bottomPopovers = [
       { btn: document.getElementById('project-pulse-btn'), pop: document.getElementById('project-pulse-popover') },
       { btn: document.getElementById('add-band-btn'), pop: document.getElementById('add-band-popover') },
+      { btn: document.getElementById('admin-tools-btn'), pop: document.getElementById('admin-tools-popover') },
     ].filter(entry => entry.btn && entry.pop);
 
     function closeBottomPopovers(except) {
@@ -1578,7 +1625,7 @@ if (shareGraphBtn) {
       // Band node — unique per scene, matching the CSV schema { id, type, scene }.
       let bandNode = master.nodes.find(node => node.type === 'band'
         && normalizeKey(node.id) === normalizeKey(band)
-        && normalizeKey(node.scene || '') === normalizeKey(scene));
+        && normalizeScene(node.scene || '') === normalizeScene(scene));
       if (!bandNode) {
         master.nodes.push({ id: band, type: 'band', scene });
         changed = true;
@@ -2142,7 +2189,7 @@ if (shareGraphBtn) {
         .filter(link => {
           const sourceNode = graphState.master.nodes.find(node => node.id === link.source);
           const targetNode = graphState.master.nodes.find(node => node.id === link.target);
-          return sourceNode && targetNode && sourceNode.type === 'band' && targetNode.type === 'person' && normalizeKey(sourceNode.id) === normalizeKey(band) && normalizeKey(sourceNode.scene || '') === normalizeKey(scene);
+          return sourceNode && targetNode && sourceNode.type === 'band' && targetNode.type === 'person' && normalizeKey(sourceNode.id) === normalizeKey(band) && normalizeScene(sourceNode.scene || '') === normalizeScene(scene);
         })
         .map(link => link.target)
         .filter((value, index, array) => array.indexOf(value) === index)
@@ -2162,7 +2209,7 @@ if (shareGraphBtn) {
           return bandNode ? { name: bandNode.id, scene: bandNode.scene || 'Unknown scene' } : null;
         })
         .filter(Boolean)
-        .filter((value, index, array) => index === array.findIndex(item => normalizeKey(item.name) === normalizeKey(value.name) && normalizeKey(item.scene) === normalizeKey(value.scene)))
+        .filter((value, index, array) => index === array.findIndex(item => normalizeKey(item.name) === normalizeKey(value.name) && normalizeScene(item.scene) === normalizeScene(value.scene)))
         .sort((a, b) => a.name.localeCompare(b.name));
     }
 
@@ -2191,7 +2238,7 @@ if (shareGraphBtn) {
         list.appendChild(chip);
       });
 
-      const duplicateConnection = !!band && !!scene && bands.some(item => normalizeKey(item.name) === normalizeKey(band) && normalizeKey(item.scene) === normalizeKey(scene));
+      const duplicateConnection = !!band && !!scene && bands.some(item => normalizeKey(item.name) === normalizeKey(band) && normalizeScene(item.scene) === normalizeScene(scene));
       return { duplicateConnection, bands };
     }
 
@@ -2280,7 +2327,7 @@ if (shareGraphBtn) {
         return { valid: true, duplicate: false, memberExists: false, duplicateConnection: memberBandState.duplicateConnection };
       }
 
-      const bandExists = graphState.master.nodes.some(node => node.type === 'band' && normalizeKey(node.id) === normalizeKey(band) && normalizeKey(node.scene || '') === normalizeKey(scene));
+      const bandExists = graphState.master.nodes.some(node => node.type === 'band' && normalizeKey(node.id) === normalizeKey(band) && normalizeScene(node.scene || '') === normalizeScene(scene));
 
       if (bandExists) {
         bandField.classList.add('field-error');
@@ -2333,7 +2380,7 @@ if (shareGraphBtn) {
         matchedNode = graphState.master.nodes.find(node => node.type === 'person' && normalizeKey(node.id) === normalizeKey(member));
       }
       if (!matchedNode && band) {
-        matchedNode = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(node.id) === normalizeKey(band) && (!scene || normalizeKey(node.scene || '') === normalizeKey(scene)));
+        matchedNode = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(node.id) === normalizeKey(band) && (!scene || normalizeScene(node.scene || '') === normalizeScene(scene)));
       }
 
       if (!matchedNode) {
@@ -2530,7 +2577,12 @@ if (shareGraphBtn) {
         return;
       }
 
-      const scene = document.getElementById('submission-scene').value.trim() || 'Seattle';
+      const scene = document.getElementById('submission-scene').value.trim();
+      if (!scene) {
+        document.getElementById('submission-scene').classList.add('field-error');
+        showSubmissionFeedback('Enter a scene before saving — pick an existing one from the list if it fits, so this band merges with matching entries instead of creating a duplicate.', true);
+        return;
+      }
       const bio = document.getElementById('member-bio').value.trim();
       if (bio && bioContainsBlockedLink(bio)) {
         document.getElementById('member-bio').classList.add('field-error');
@@ -2551,16 +2603,25 @@ if (shareGraphBtn) {
       const rows = [...membersContainer.querySelectorAll('.member-row')];
       const members = [];
       const seen = new Set();
-      rows.forEach(row => row.querySelector('.member-name-input')?.classList.remove('field-error'));
+      rows.forEach(row => {
+        row.querySelector('.member-name-input')?.classList.remove('field-error');
+        row.querySelector('.instrument-input')?.classList.remove('field-error');
+      });
+      if (!rows.some(row => (row.querySelector('.member-name-input')?.value || '').trim() && (row.querySelector('.instrument-input')?.value || '').trim())) {
+        showSubmissionFeedback('Add at least one band member with both a name and an instrument before saving.', true);
+        return;
+      }
       for (const row of rows) {
         const nameInput = row.querySelector('.member-name-input');
         const memberName = (nameInput?.value || '').trim();
         const instrument = (row.querySelector('.instrument-input')?.value || '').trim();
         const relation = (row.querySelector('.relation-input')?.value || '').trim();
         if (!memberName && !instrument) continue;
-        if (!memberName) {
+        if (!memberName || !instrument) {
           if (nameInput) nameInput.classList.add('field-error');
-          showSubmissionFeedback('Enter a member name for each row, or clear the row before saving.', true);
+          const instrumentInput = row.querySelector('.instrument-input');
+          if (instrumentInput) instrumentInput.classList.add('field-error');
+          showSubmissionFeedback('Each member row needs both a name and an instrument — fill both in or clear the row before saving.', true);
           return;
         }
         const key = normalizeKey(memberName);
@@ -2580,7 +2641,7 @@ if (shareGraphBtn) {
 
       const bandExisted = !!master && master.nodes.some(node => node.type === 'band'
         && normalizeKey(node.id) === normalizeKey(band)
-        && normalizeKey(node.scene || '') === normalizeKey(scene));
+        && normalizeScene(node.scene || '') === normalizeScene(scene));
 
       const draft = {
         band,
@@ -2613,6 +2674,8 @@ if (shareGraphBtn) {
             option.value = draftToApply.scene;
             option.textContent = draftToApply.scene;
             sceneSelect.appendChild(option);
+            const sceneDatalist = document.getElementById('scene-options');
+            if (sceneDatalist) sceneDatalist.appendChild(option.cloneNode(true));
           }
           sceneSelect.value = currentScene;
         }
@@ -2687,6 +2750,234 @@ if (shareGraphBtn) {
       }
     });
 
+    // --- Admin: manage/delete duplicate or bad crowd submissions ------------
+    // Submissions live in the shared Netlify Blobs store (see
+    // netlify/functions/bands.mjs); only those can be deleted here. Bands
+    // baked into the base CSV are not submissions and can't be removed from
+    // this panel — fix those in the CSV and redeploy.
+    const ADMIN_TOKEN_KEY = 'rbft-admin-token';
+    const adminLockedEl = document.getElementById('admin-locked');
+    const adminUnlockedEl = document.getElementById('admin-unlocked');
+    const adminTokenInput = document.getElementById('admin-token-input');
+    const adminUnlockFeedback = document.getElementById('admin-unlock-feedback');
+    const adminSummaryEl = document.getElementById('admin-submissions-summary');
+    const adminListEl = document.getElementById('admin-submissions-list');
+
+    function getAdminToken() {
+      try { return localStorage.getItem(ADMIN_TOKEN_KEY) || ''; } catch (error) { return ''; }
+    }
+    function setAdminToken(token) {
+      try { localStorage.setItem(ADMIN_TOKEN_KEY, token); } catch (error) { /* ignore */ }
+    }
+    function clearAdminToken() {
+      try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch (error) { /* ignore */ }
+    }
+
+    function setAdminUnlockedView(unlocked) {
+      if (adminLockedEl) adminLockedEl.style.display = unlocked ? 'none' : '';
+      if (adminUnlockedEl) adminUnlockedEl.style.display = unlocked ? '' : 'none';
+    }
+
+    // Every distinct raw scene string used by any band node with a given
+    // normalized name. A band name mapping to more than one scene string is
+    // exactly the "Screaming Trees in Seattle" + "Screaming Trees (no scene)"
+    // situation — even after the normalizeScene() fix, which only prevents new
+    // duplicates going forward and doesn't retroactively merge ones already saved.
+    function computeBandSceneVariants() {
+      const map = new Map();
+      const master = graphState && graphState.master;
+      if (!master) return map;
+      master.nodes.forEach(node => {
+        if (node.type !== 'band') return;
+        const key = normalizeKey(node.id);
+        const scenes = map.get(key) || new Set();
+        scenes.add(node.scene || '(no scene)');
+        map.set(key, scenes);
+      });
+      return map;
+    }
+
+    function formatMembers(submission) {
+      let members = Array.isArray(submission.members) ? submission.members : [];
+      if (!members.length && submission.member) {
+        members = [{ member: submission.member, instrument: submission.instrument }];
+      }
+      if (!members.length) return 'No members listed';
+      return members.map(m => `${m.member || 'Unknown'}${m.instrument ? ` (${m.instrument})` : ''}`).join(', ');
+    }
+
+    async function loadAdminSubmissions() {
+      if (!adminListEl) return;
+      adminSummaryEl.textContent = 'Loading submissions…';
+      adminListEl.innerHTML = '';
+      let submissions;
+      try {
+        submissions = await fetchSharedSubmissions();
+      } catch (error) {
+        adminSummaryEl.textContent = 'Could not load submissions. Check your connection and try Refresh list.';
+        return;
+      }
+      if (!submissions.length) {
+        adminSummaryEl.textContent = 'No crowd-submitted entries yet.';
+        return;
+      }
+      const sceneVariants = computeBandSceneVariants();
+      const rows = submissions.map(sub => {
+        const variants = sceneVariants.get(normalizeKey(sub.band)) || new Set();
+        const isDuplicate = variants.size > 1;
+        return { sub, isDuplicate, variants };
+      });
+      // Show likely duplicates first, newest first within each group.
+      rows.sort((a, b) => (b.isDuplicate - a.isDuplicate) || (new Date(b.sub.savedAt || 0) - new Date(a.sub.savedAt || 0)));
+      const dupCount = rows.filter(r => r.isDuplicate).length;
+      adminSummaryEl.textContent = `${submissions.length} submission${submissions.length === 1 ? '' : 's'}` + (dupCount ? ` · ${dupCount} flagged as a possible duplicate` : '');
+
+      rows.forEach(({ sub, isDuplicate, variants }) => {
+        const row = document.createElement('div');
+        row.className = 'detail-card admin-submission-row' + (isDuplicate ? ' is-duplicate' : '');
+
+        const title = document.createElement('div');
+        title.className = 'detail-title';
+        title.textContent = sub.band || '(no band name)';
+        if (isDuplicate) {
+          const badge = document.createElement('span');
+          badge.className = 'dup-badge';
+          badge.textContent = 'Possible duplicate';
+          title.appendChild(badge);
+        }
+        row.appendChild(title);
+
+        const savedAt = sub.savedAt ? new Date(sub.savedAt).toLocaleString() : 'unknown time';
+        const sceneLine = document.createElement('p');
+        sceneLine.className = 'detail-copy';
+        sceneLine.textContent = `Scene: ${sub.scene || '(none)'} · Submitted ${savedAt}`;
+        row.appendChild(sceneLine);
+
+        const membersLine = document.createElement('p');
+        membersLine.className = 'detail-copy';
+        membersLine.textContent = `Members: ${formatMembers(sub)}`;
+        row.appendChild(membersLine);
+
+        if (isDuplicate) {
+          const others = [...variants].filter(s => s !== (sub.scene || '(no scene)'));
+          const otherLine = document.createElement('p');
+          otherLine.className = 'detail-copy';
+          otherLine.textContent = `This band name also appears with scene(s): ${others.join(', ') || '(no scene)'}.`;
+          row.appendChild(otherLine);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'footer-strip';
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'tool-chip admin-delete-btn';
+        deleteBtn.textContent = 'Delete this submission';
+        deleteBtn.dataset.id = sub.id || '';
+        actions.appendChild(deleteBtn);
+        row.appendChild(actions);
+
+        adminListEl.appendChild(row);
+
+        deleteBtn.addEventListener('click', async () => {
+          const id = deleteBtn.dataset.id;
+          if (!id) return;
+          if (!window.confirm('Delete this submission for everyone? This cannot be undone.')) return;
+          deleteBtn.disabled = true;
+          deleteBtn.textContent = 'Deleting…';
+          try {
+            const response = await fetch(`${BANDS_ENDPOINT}?id=${encodeURIComponent(id)}`, {
+              method: 'DELETE',
+              headers: { 'x-admin-token': getAdminToken() }
+            });
+            if (response.status === 401) {
+              adminSummaryEl.textContent = 'That admin token was rejected. Try unlocking again.';
+              clearAdminToken();
+              setAdminUnlockedView(false);
+              return;
+            }
+            if (!response.ok) {
+              const data = await response.json().catch(() => null);
+              throw new Error((data && data.error) || `Delete failed (${response.status}).`);
+            }
+            // The graph currently holds this submission merged into master —
+            // reload so the CSV + remaining submissions are refetched and
+            // remerged cleanly rather than surgically unpicking one node/link
+            // out of a live D3 simulation.
+            location.reload();
+          } catch (error) {
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = 'Delete this submission';
+            adminSummaryEl.textContent = error.message || 'Could not delete that submission.';
+          }
+        });
+      });
+    }
+
+    const adminUnlockBtn = document.getElementById('admin-unlock-btn');
+    if (adminUnlockBtn) {
+      adminUnlockBtn.addEventListener('click', async () => {
+        const token = (adminTokenInput.value || '').trim();
+        if (!token) {
+          adminUnlockFeedback.textContent = 'Paste the admin token first.';
+          return;
+        }
+        adminUnlockBtn.disabled = true;
+        adminUnlockBtn.textContent = 'Checking…';
+        adminUnlockFeedback.textContent = '';
+        try {
+          // Cheapest way to verify a token without a dedicated endpoint: try
+          // deleting a submission id that will never exist. A valid token gets
+          // a 404 ("no submission with that id"); an invalid token gets a 401
+          // before the id is even looked at.
+          const response = await fetch(`${BANDS_ENDPOINT}?id=__token_check__`, {
+            method: 'DELETE',
+            headers: { 'x-admin-token': token }
+          });
+          if (response.status === 401) {
+            adminUnlockFeedback.textContent = 'That token was rejected.';
+            return;
+          }
+          setAdminToken(token);
+          adminTokenInput.value = '';
+          setAdminUnlockedView(true);
+          loadAdminSubmissions();
+        } catch (error) {
+          adminUnlockFeedback.textContent = 'Could not reach the server. Check your connection and try again.';
+        } finally {
+          adminUnlockBtn.disabled = false;
+          adminUnlockBtn.textContent = 'Unlock';
+        }
+      });
+    }
+
+    const adminRefreshBtn = document.getElementById('admin-refresh-btn');
+    if (adminRefreshBtn) adminRefreshBtn.addEventListener('click', loadAdminSubmissions);
+
+    const adminLockBtn = document.getElementById('admin-lock-btn');
+    if (adminLockBtn) {
+      adminLockBtn.addEventListener('click', () => {
+        clearAdminToken();
+        setAdminUnlockedView(false);
+      });
+    }
+
+    const adminToolsBtn = document.getElementById('admin-tools-btn');
+    if (adminToolsBtn) {
+      adminToolsBtn.addEventListener('click', () => {
+        // Runs after the shared bottomPopovers listener (registered earlier)
+        // has already flipped this popover's hidden state, so pop.hidden
+        // reflects the post-click state here.
+        const pop = document.getElementById('admin-tools-popover');
+        if (pop && pop.hidden) return;
+        if (getAdminToken()) {
+          setAdminUnlockedView(true);
+          loadAdminSubmissions();
+        } else {
+          setAdminUnlockedView(false);
+        }
+      });
+    }
+
     (function () {
       const logo = document.querySelector('.hero-logo-clean');
       const logoNote = document.getElementById('logo-missing-note');
@@ -2732,12 +3023,14 @@ if (shareGraphBtn) {
       }
       graphState = { master };
       const sceneSelect = document.getElementById('scene-filter');
+      const sceneDatalist = document.getElementById('scene-options');
       const scenes = Array.from(new Set(master.nodes.map(node => node.scene).filter(Boolean))).sort();
       scenes.forEach(scene => {
         const option = document.createElement('option');
         option.value = scene;
         option.textContent = scene;
         sceneSelect.appendChild(option);
+        if (sceneDatalist) sceneDatalist.appendChild(option.cloneNode(true));
       });
       syncFilterButtons();
       requestAnimationFrame(() => {

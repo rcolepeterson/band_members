@@ -34,10 +34,10 @@ function extract(name) {
 }
 
 const factory = new Function(
-  [extract('normalizeKey'), extract('applyDraftToMaster'), extract('mergeSubmissionsIntoMaster')].join('\n') +
-  '\n; return { applyDraftToMaster, mergeSubmissionsIntoMaster };'
+  [extract('normalizeKey'), extract('normalizeScene'), extract('applyDraftToMaster'), extract('mergeSubmissionsIntoMaster')].join('\n') +
+  '\n; return { applyDraftToMaster, mergeSubmissionsIntoMaster, normalizeScene };'
 );
-const { applyDraftToMaster, mergeSubmissionsIntoMaster } = factory();
+const { applyDraftToMaster, mergeSubmissionsIntoMaster, normalizeScene } = factory();
 
 const emptyMaster = () => ({ nodes: [], links: [] });
 const bandNodes = (m, name) => m.nodes.filter(n => n.type === 'band' && n.id === name);
@@ -112,6 +112,29 @@ test('one malformed record does NOT abort merging of the others', () => {
   } finally {
     console.warn = originalWarn;
   }
+});
+
+test('normalizeScene treats "Seattle" and "Seattle, WA" as the same scene', () => {
+  assert.equal(normalizeScene('Seattle'), normalizeScene('Seattle, WA'));
+  assert.equal(normalizeScene('  Seattle,  WA '), normalizeScene('seattle'));
+  assert.notEqual(normalizeScene('Seattle'), normalizeScene('Portland, OR'));
+});
+
+test('regression: same band submitted with "Seattle" then "Seattle, WA" (or no scene) merges into one node, not a duplicate', () => {
+  // This is the exact bug report: Screaming Trees added once under the
+  // "Seattle" scene and again by a teammate with no scene typed (which the
+  // caller defaults to a bare "Seattle") must NOT produce two band nodes just
+  // because the base dataset happens to use "Seattle, WA".
+  const master = emptyMaster();
+  master.nodes.push({ id: 'Screaming Trees', type: 'band', scene: 'Seattle, WA' });
+  const result = applyDraftToMaster(master, {
+    band: 'Screaming Trees', scene: 'Seattle',
+    members: [{ member: 'Mark Lanegan', instrument: 'vocals', relation: '1' }],
+    mode: 'new-band-entry'
+  });
+  assert.equal(result.added, true);
+  assert.equal(bandNodes(master, 'Screaming Trees').length, 1, 'no duplicate band node created');
+  assert.deepEqual(membersOf(master, 'Screaming Trees'), ['Mark Lanegan']);
 });
 
 test('reproduces the production snapshot: single Metallica node with all members', () => {

@@ -112,7 +112,8 @@ function validateSubmission(payload) {
   if (!band) return { ok: false, error: 'A band name is required.' };
   if (band.length > LIMITS.band) return { ok: false, error: 'Band name is too long.' };
 
-  const scene = asTrimmedString(payload.scene) || 'Seattle';
+  const scene = asTrimmedString(payload.scene);
+  if (!scene) return { ok: false, error: 'A scene is required.' };
   if (scene.length > LIMITS.scene) return { ok: false, error: 'Scene name is too long.' };
 
   const bio = asTrimmedString(payload.bio);
@@ -130,6 +131,9 @@ function validateSubmission(payload) {
   if (rawMembers.length > LIMITS.maxMembers) {
     return { ok: false, error: 'Too many members in one submission.' };
   }
+  if (!rawMembers.some(entry => entry && asTrimmedString(entry.member) && asTrimmedString(entry.instrument))) {
+    return { ok: false, error: 'At least one band member with a name and an instrument is required.' };
+  }
 
   const members = [];
   const seen = new Set();
@@ -138,7 +142,7 @@ function validateSubmission(payload) {
     const member = asTrimmedString(entry.member);
     const instrument = asTrimmedString(entry.instrument);
     if (!member && !instrument) continue; // skip fully empty rows
-    if (!member) return { ok: false, error: 'Each member row needs a name.' };
+    if (!member || !instrument) return { ok: false, error: 'Each member row needs both a name and an instrument.' };
     if (member.length > LIMITS.member) return { ok: false, error: 'Member name is too long.' };
     if (instrument.length > LIMITS.instrument) return { ok: false, error: 'Instrument name is too long.' };
     const key = member.toLowerCase();
