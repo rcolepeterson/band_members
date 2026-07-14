@@ -1639,8 +1639,16 @@ if (shareGraphBtn) {
     // Nudge an open popover horizontally so its full box stays within the
     // viewport (with a small margin), regardless of where its trigger pill
     // sits in the bottom toolbar. Anchored at left:0 by CSS, then shifted here.
+    // On mobile (<=900px) the popover renders as a full-width bottom sheet via
+    // CSS; skip the clamp entirely so we don't fight it with inline styles.
     function clampPopover(pop) {
       if (!pop || pop.hidden) return;
+      const isMobile = window.matchMedia('(max-width: 900px)').matches;
+      if (isMobile) {
+        // Clear any prior desktop shift so CSS positioning is authoritative.
+        pop.style.left = '';
+        return;
+      }
       const margin = 12;
       pop.style.left = '0px';
       const vw = document.documentElement.clientWidth;
