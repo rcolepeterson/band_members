@@ -3941,13 +3941,17 @@ if (shareGraphBtn) {
 
       [document.getElementById('country-chip-row'), document.getElementById('mobile-country-chip-row')].forEach(row => {
         if (!row) return;
+        const isMobileRow = row.id === 'mobile-country-chip-row';
         row.innerHTML = '';
         const allChip = document.createElement('button');
         allChip.type = 'button';
         allChip.className = 'tool-chip country-chip active';
         allChip.dataset.country = 'all';
         allChip.textContent = 'All';
-        allChip.addEventListener('click', () => selectCountryFilter(null));
+        allChip.addEventListener('click', () => {
+          selectCountryFilter(null);
+          if (isMobileRow) window.dispatchEvent(new CustomEvent('rbft:close-mobile-sheet'));
+        });
         row.appendChild(allChip);
 
         countries.forEach(code => {
@@ -3956,7 +3960,10 @@ if (shareGraphBtn) {
           chip.className = 'tool-chip country-chip';
           chip.dataset.country = code;
           chip.textContent = `All ${code}`;
-          chip.addEventListener('click', () => selectCountryFilter(code));
+          chip.addEventListener('click', () => {
+            selectCountryFilter(code);
+            if (isMobileRow) window.dispatchEvent(new CustomEvent('rbft:close-mobile-sheet'));
+          });
           row.appendChild(chip);
         });
       });
@@ -4634,6 +4641,9 @@ if (shareGraphBtn) {
               updateSegmentActive('all');
               syncCountryChipButtons();
               renderGraph();
+              // Single-tap scene pick — dismiss the sheet so the user
+              // sees the filtered graph without swiping down.
+              closeSheetAndBlur(null);
             } else if (target === '__other') {
               if (mobileScenePickerWrap) mobileScenePickerWrap.style.display = '';
               if (mobileSceneSelect) {
@@ -4649,6 +4659,8 @@ if (shareGraphBtn) {
                 }
               }
               segments.forEach(s => s.classList.toggle('is-active', s === seg));
+              // "Other…" reveals the Scene <select>; the user still needs
+              // to pick from it, so we intentionally keep the sheet open.
             } else if (target) {
               // One of the dynamic top-location segments.
               currentScene = target;
@@ -4657,16 +4669,40 @@ if (shareGraphBtn) {
               updateSegmentActive(target);
               syncCountryChipButtons();
               renderGraph();
+              closeSheetAndBlur(null);
             }
           });
         });
 
         // Two-way sync: mobile controls -> desktop state, and vice versa.
+        // Closing the hamburger sheet after a user commits a filter keeps
+        // the graph visible instead of forcing them to swipe the sheet
+        // down to see what they just filtered to.
+        function closeSheetAndBlur(el) {
+          if (el && typeof el.blur === 'function') el.blur();
+          closeSheet();
+        }
+        // Global bridge: any code (e.g. dynamically-rendered country chips)
+        // can request the sheet be dismissed by firing this event.
+        window.addEventListener('rbft:close-mobile-sheet', () => closeSheetAndBlur(null));
         if (mobileSearch) {
           mobileSearch.addEventListener('input', ev => {
             currentSearch = ev.target.value.trim();
             if (desktopSearch) desktopSearch.value = ev.target.value;
             renderGraph();
+          });
+          // Enter / "Search" on the mobile keyboard: commit the query and
+          // dismiss the sheet so the resulting graph is visible.
+          mobileSearch.addEventListener('keydown', ev => {
+            if (ev.key === 'Enter') {
+              ev.preventDefault();
+              closeSheetAndBlur(mobileSearch);
+            }
+          });
+          // The native 'search' event fires when the user taps the clear
+          // affordance or submits on iOS/Android; treat both as "done".
+          mobileSearch.addEventListener('search', () => {
+            if (mobileSearch.value.trim()) closeSheetAndBlur(mobileSearch);
           });
         }
         if (mobileSceneSelect) {
@@ -4676,6 +4712,9 @@ if (shareGraphBtn) {
             updateSegmentActive(ev.target.value);
             syncCountryChipButtons();
             renderGraph();
+            // Scene is a single-tap decision — dismiss the sheet so the
+            // user sees the filtered graph immediately.
+            closeSheetAndBlur(mobileSceneSelect);
           });
         }
 
@@ -4707,11 +4746,16 @@ if (shareGraphBtn) {
             currentGenre = ev.target.value;
             desktopGenreSelect.value = ev.target.value;
             renderGraph();
+            // Genre is a single-tap decision — dismiss the sheet.
+            closeSheetAndBlur(mobileGenreSelect);
           });
         }
 
         // Mobile sheet tool chips mirror desktop chip behavior via same data attrs.
         // Trigger clicks on the desktop chips so all existing behavior fires.
+        // View-filter chips (Bands only / Musicians only / All nodes) and
+        // actions (Fit / Clear) also dismiss the sheet so the user sees the
+        // result of what they just tapped.
         document.querySelectorAll('#mobile-sheet-tools .tool-chip').forEach(chip => {
           chip.addEventListener('click', () => {
             const filter = chip.dataset.filter;
@@ -4723,9 +4767,11 @@ if (shareGraphBtn) {
               document.querySelectorAll('#mobile-sheet-tools .tool-chip[data-filter]').forEach(c => {
                 c.classList.toggle('active', c === chip);
               });
+              closeSheetAndBlur(null);
             } else if (action) {
               const target = document.querySelector('.graph-overlay:not(.graph-overlay-bottom) .tool-chip[data-action="' + action + '"]');
               if (target) target.click();
+              closeSheetAndBlur(null);
             }
           });
         });
