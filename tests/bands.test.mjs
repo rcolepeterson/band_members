@@ -175,6 +175,26 @@ test('migrateSubmissionForRead lazily backfills genre for legacy blobs', () => {
   assert.equal(migrateSubmissionForRead(modern).genre, 'Grunge');
 });
 
+test('migrateSubmissionForRead lazily backfills yearsActive / label / albums for legacy blobs', () => {
+  // Legacy submission has none of the meta fields — surface them as '' so
+  // the client sees a consistent shape (mirrors the genre migration).
+  const legacy = { id: 'x', band: 'Nirvana', city: 'Aberdeen', state: 'WA', country: 'USA' };
+  const migrated = migrateSubmissionForRead(legacy);
+  assert.equal(migrated.yearsActive, '');
+  assert.equal(migrated.label, '');
+  assert.equal(migrated.albums, '');
+
+  // Modern submission carries the fields — pass them through unchanged.
+  const modern = {
+    id: 'y', band: 'Alice in Chains', city: 'Seattle', state: 'WA', country: 'USA',
+    yearsActive: '1987–present', label: 'Columbia', albums: 'Facelift; Dirt'
+  };
+  const out = migrateSubmissionForRead(modern);
+  assert.equal(out.yearsActive, '1987–present');
+  assert.equal(out.label, 'Columbia');
+  assert.equal(out.albums, 'Facelift; Dirt');
+});
+
 test('deleting a non-existent id is reported as not found', () => {
   const submissions = [{ id: 'keep-1', band: 'Soundgarden' }];
   const { found, submissions: remaining } = removeSubmissionById(submissions, 'does-not-exist');
