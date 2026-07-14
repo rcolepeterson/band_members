@@ -27,6 +27,21 @@ export function normalizeLocationField(raw) {
   return String(raw || '').trim();
 }
 
+// Genre normalization: trim + title-case the first character of each word.
+// Empty/missing -> ''. Genre lives alongside city/state/country on band nodes
+// (never on person nodes -- members inherit their band's genre implicitly).
+// This is deliberately lenient so users can free-type new genres via the
+// submission form's <datalist>: 'grunge', 'GRUNGE', and 'Grunge' all collapse
+// to the same normalized value. Multi-word genres like 'post-punk' or
+// 'alternative rock' also get consistent casing.
+export function normalizeGenre(raw) {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return '';
+  // Split on spaces AND hyphens so 'post-punk' -> 'Post-Punk'. We rejoin with
+  // the original separator by processing char-by-char.
+  return trimmed.replace(/(^|[\s\-\/])(\p{L})/gu, (m, sep, ch) => sep + ch.toUpperCase());
+}
+
 // USPS-style state normalization: uppercase, US-only 2-letter code.
 // Non-US rows should always have blank state; enforce that at ingest so
 // downstream code never has to worry about 'EN' vs 'GBR' vs blank.
