@@ -33,8 +33,37 @@ function extract(name) {
   return html.slice(start, j);
 }
 
+// Post-schema-refactor, applyDraftToMaster calls the six location helpers.
+// Pull them in too so the extracted function actually resolves its refs.
+// (Same reason we already pull normalizeKey.)
+const LOCATION_HELPERS = [
+  'normalizeLocationField',
+  'normalizeState',
+  'normalizeCountry',
+  'locationKey',
+  'locationLabel',
+  'parseLegacyScene',
+];
+
+// Helper to extract a `const NAME = { ... };` declaration from index.html.
+function extractConstObject(name) {
+  const start = html.indexOf(`const ${name}`);
+  assert.ok(start >= 0, `${name} not found in index.html`);
+  const end = html.indexOf('};', start) + 2;
+  return html.slice(start, end);
+}
+
 const factory = new Function(
-  [extract('normalizeKey'), extract('applyDraftToMaster'), extract('mergeSubmissionsIntoMaster')].join('\n') +
+  [
+    // LEGACY_COUNTRY_ALIASES and KNOWN_CITY_LOCATIONS are consts referenced
+    // by parseLegacyScene — extract them directly.
+    extractConstObject('LEGACY_COUNTRY_ALIASES'),
+    extractConstObject('KNOWN_CITY_LOCATIONS'),
+    ...LOCATION_HELPERS.map(extract),
+    extract('normalizeKey'),
+    extract('applyDraftToMaster'),
+    extract('mergeSubmissionsIntoMaster'),
+  ].join('\n') +
   '\n; return { applyDraftToMaster, mergeSubmissionsIntoMaster };'
 );
 const { applyDraftToMaster, mergeSubmissionsIntoMaster } = factory();

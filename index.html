@@ -68,7 +68,7 @@
     .graph-panel{padding:0;min-height:780px;display:grid;grid-template-rows:auto 1fr auto;gap:var(--space-4);background:transparent;border:none;box-shadow:none}
     .panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4)}.graph-panel-head{margin-bottom:var(--space-3)}.graph-toolbar{align-items:center}.graph-version-pill{margin-left:auto;min-height:40px;display:inline-flex;align-items:center}.panel-title{font-size:var(--text-lg);font-weight:700}.panel-copy{font-size:var(--text-sm);color:var(--color-text-muted);max-width:56ch}
     .status-pill{padding:0.4rem 0.8rem;border-radius:var(--radius-full);background:rgba(82,174,182,0.12);color:var(--color-primary-hover);font-size:var(--text-xs);letter-spacing:.1em;text-transform:uppercase}
-    .toolbar{display:flex;flex-wrap:wrap;gap:var(--space-3)}.graph-toolbar{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--space-3);row-gap:var(--space-3)}.graph-toolbar-left{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;min-width:0}.graph-version-pill{justify-self:end;white-space:nowrap}.tool-chip{min-height:40px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);background:rgba(255,255,255,0.02);font-size:var(--text-sm)}.tool-chip.active{background:rgba(82,174,182,0.12);border-color:rgba(82,174,182,0.35);color:var(--color-primary-hover)}.graph-status-chip{display:inline-flex;align-items:center;justify-content:center;cursor:default;pointer-events:none;opacity:.9;color:var(--color-text-muted)}
+    .toolbar{display:flex;flex-wrap:wrap;gap:var(--space-3)}.graph-toolbar{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--space-3);row-gap:var(--space-3)}.graph-toolbar-left{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;min-width:0}.graph-version-pill{justify-self:end;white-space:nowrap}.tool-chip{min-height:40px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);background:rgba(255,255,255,0.02);font-size:var(--text-sm)}.tool-chip.active{background:rgba(82,174,182,0.12);border-color:rgba(82,174,182,0.35);color:var(--color-primary-hover)}.graph-status-chip{display:inline-flex;align-items:center;justify-content:center;cursor:default;pointer-events:none;opacity:.9;color:var(--color-text-muted)}.country-chip-row{margin-top:var(--space-2)}.country-chip{min-height:32px;padding:0 var(--space-3);font-size:var(--text-xs)}
     .graph-stage{position:relative;border-radius:calc(var(--radius-xl) + var(--space-2));overflow:hidden;background:radial-gradient(circle at top, rgba(82,174,182,0.08), transparent 34%),linear-gradient(180deg, rgba(10,14,20,0.92), rgba(8,11,17,0.98));border:none;min-height:720px;box-shadow:0 30px 80px rgba(0,0,0,0.34)}
     #graph-svg{width:100%;height:100%;min-height:520px}
     .graph-badge{position:absolute;right:var(--space-5);bottom:var(--space-5);padding:0.5rem 0.8rem;border-radius:var(--radius-full);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;background:rgba(9,11,17,0.72);border:1px solid rgba(255,255,255,0.08);color:var(--color-text-muted)}
@@ -78,6 +78,8 @@
     .detail-card{padding:var(--space-4);border-radius:var(--radius-lg);background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);display:grid;gap:var(--space-2);min-width:0}.detail-title{font-size:var(--text-sm);font-weight:700}.detail-copy{font-size:var(--text-sm);color:var(--color-text-muted)}
     .detail-stat{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-3);font-size:var(--text-sm);padding:0.55rem 0;border-bottom:1px solid rgba(255,255,255,0.06);min-width:0}.detail-stat:last-child{border-bottom:none}.detail-stat span:first-child{color:var(--color-text-muted);flex:0 0 84px}.detail-stat strong{flex:1 1 auto;min-width:0;text-align:right}.detail-stat span:last-child{color:var(--color-text-muted)}
     .form-grid{display:grid;gap:var(--space-3)}label{font-size:var(--text-xs);letter-spacing:.1em;text-transform:uppercase;color:var(--color-text-muted)}
+    .location-fields-row{display:grid;grid-template-columns:2fr 1fr 1.4fr;gap:var(--space-3)}
+    @media (max-width: 640px){.location-fields-row{grid-template-columns:1fr}}
     input,select,textarea{width:100%;margin-top:var(--space-2);padding:0.85rem 0.95rem;border-radius:var(--radius-md);border:1px solid var(--color-border);background:rgba(10,12,18,0.55);min-height:48px}textarea{min-height:108px;resize:vertical}
     input:focus,select:focus,textarea:focus{outline:none;border-color:rgba(82,174,182,0.56);box-shadow:0 0 0 3px rgba(82,174,182,0.16)}
     .submit-btn{display:block;width:100%;min-height:54px;padding:0 2.5rem;border-radius:var(--radius-full);background:var(--color-primary);color:var(--color-text-inverse);font-weight:700;font-size:var(--text-base);text-align:center;white-space:nowrap}.submit-btn:hover{background:var(--color-primary-hover)}
@@ -1296,9 +1298,8 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       <button class="mobile-sheet-close" type="button" id="mobile-menu-close" aria-label="Close menu">&times;</button>
       <h3 class="mobile-sheet-title">Explore the tree</h3>
       <div class="mobile-scene-segments" id="mobile-scene-segments" role="tablist" aria-label="Quick scene switch">
-        <button class="mobile-scene-segment is-active" type="button" data-scene="__seattle" role="tab">Seattle</button>
-        <button class="mobile-scene-segment" type="button" data-scene="all" role="tab">All scenes</button>
-        <button class="mobile-scene-segment" type="button" data-scene="__other" role="tab">Other…</button>
+        <!-- Populated dynamically at load time with the top 2-3 most populous
+             locations, plus "All" and "Other…" -- see initMobileLayout(). -->
       </div>
       <div class="mobile-sheet-tools" id="mobile-sheet-tools" aria-label="Graph filters">
         <button class="tool-chip active" type="button" data-filter="all">All nodes</button>
@@ -1318,6 +1319,9 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <option value="all">All scenes</option>
           </select>
         </div>
+      </div>
+      <div class="toolbar country-chip-row" id="mobile-country-chip-row" aria-label="Country quick filters">
+        <!-- Populated dynamically, mirrors #country-chip-row. -->
       </div>
     </aside>
     <div class="graph-overlay">
@@ -1353,6 +1357,12 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <option value="all">All scenes</option>
           </select>
         </div>
+      </div>
+
+      <div class="toolbar country-chip-row" id="country-chip-row" aria-label="Country quick filters">
+        <!-- Populated dynamically: an "All" chip plus one chip per distinct
+             country in the graph (e.g. "All USA", "All GBR"). See
+             renderCountryChips(). -->
       </div>
 
       <div class="share-popover" id="share-popover" hidden>
@@ -1409,7 +1419,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             </div>
             <div class="detail-card" id="selected-node-stats">
               <div class="detail-stat"><span>Type</span><span id="selected-node-type">—</span></div>
-              <div class="detail-stat"><span>Scene</span><span id="selected-node-scene">—</span></div>
+              <div class="detail-stat"><span>Location</span><span id="selected-node-scene">—</span></div>
               <div class="detail-stat"><span>Connections</span><span id="selected-node-degree">—</span></div>
               <div class="detail-stat"><span>Instrument</span><span id="selected-node-instrument">—</span></div>
               <div class="detail-stat"><span>Bio</span><span id="selected-node-bio">—</span></div>
@@ -1425,7 +1435,15 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <p class="share-popover-copy">Drop a new branch into the tree. Plain text only — links and promo URLs are not allowed.</p>
             <form class="form-grid form-grid-expanded" id="submission-form">
               <div><label for="band-name">Band name</label><input id="band-name" name="band-name" type="text" placeholder="Temple of the Dog" /></div>
-              <div><label for="submission-scene">Scene</label><input id="submission-scene" name="submission-scene" type="text" placeholder="Seattle" /></div>
+              <div class="form-span-2 location-fields">
+                <label class="members-block-label">Location</label>
+                <div class="location-fields-row">
+                  <div><label for="submission-city">City</label><input id="submission-city" name="submission-city" type="text" placeholder="Seattle" /></div>
+                  <div><label for="submission-state">State</label><select id="submission-state" name="submission-state"><option value="">—</option></select></div>
+                  <div><label for="submission-country">Country</label><select id="submission-country" name="submission-country"></select></div>
+                </div>
+                <div class="field-note">State applies to US locations only and is disabled for other countries.</div>
+              </div>
               <div class="form-span-2 members-block">
                 <label class="members-block-label">Band members</label>
                 <div id="members-container">
@@ -1462,7 +1480,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
               <div id="submission-preview-name" class="panel-title" style="font-size:var(--text-base)">Nothing entered yet</div>
               <p id="submission-preview-copy" class="detail-copy">As you type, this card previews how a member/band view could summarize the information.</p>
               <div id="submission-preview-source" class="section-label">Awaiting input</div>
-              <div class="detail-stat"><span>Scene</span><span id="preview-scene">—</span></div>
+              <div class="detail-stat"><span>Location</span><span id="preview-scene">—</span></div>
               <div class="detail-stat"><span>Instrument</span><span id="preview-instrument">—</span></div>
               <div class="detail-stat"><span>Years active</span><span id="preview-years">—</span></div>
               <div class="detail-stat"><span>Label</span><span id="preview-label">—</span></div>
@@ -1741,55 +1759,172 @@ if (shareGraphBtn) {
       });
     }
 
-    // Canonicalize a raw scene string (from CSV or user submission) so that
-    // 'Seattle' and 'Seattle, WA' resolve to the same value throughout the app.
+    // ---------------------------------------------------------------------
+    // Location schema helpers
     //
-    // The bug this fixes: the CSV stores scenes with a state suffix
-    // ('Seattle, WA', 'Portland, OR', ...) but the submission form's default
-    // strips it down to bare city ('Seattle'). Filter code then does strict
-    // equality on node.scene, so submitted bands vanish when the mobile UI
-    // (which defaults to 'Seattle, WA') filters by scene.
+    // Nodes carry three location fields: city (plain text), state (USPS
+    // 2-letter uppercase for US rows; blank for non-US), and country (ISO
+    // 3166-1 alpha-3 for every row, e.g. USA, GBR, NZL, AUS).
     //
-    // Strategy: for any scene whose city portion matches a canonical scene
-    // that already exists in the CSV, upgrade the bare value to the full one.
-    // Anything else passes through unchanged, so untouched data stays as-is.
-    const SCENE_CANONICAL_BY_CITY = {
-      // city (lowercased) -> canonical full scene string
-      'seattle':      'Seattle, WA',
-      'tacoma':       'Tacoma, WA',
-      'portland':     'Portland, OR',
-      'issaqua':      'Issaqua, WA',    // CSV typo preserved intentionally; schema PR will fix
-      'issaquah':     'Issaqua, WA',    // if a user types the correct spelling, still map to the CSV form
-      'los angeles':  'Los Angeles',
-      'new york':     'New York, NY',
-      'chicago':      'Chicago, IL',
-      'cleveland':    'Cleveland, OH',
-      'coral springs':'Coral Springs, FL',
-      'champaign':    'Champaign, IL',
-      'kansas city':  'Kansas City, MO',
-      'oklahoma city':'Oklahoma City, OK',
-      'palm desert':  'Palm Desert, CA',
-      'rockford':     'Rockford, IL',
-      'venice':       'Venice, CA',
-      'new jersey':   'New Jersey',
-      'aukland':      'Aukland, NZ',    // CSV typo preserved intentionally; schema PR will fix
-      'auckland':     'Aukland, NZ',
-      'sydney':       'Sydney, AU',
-      'melbourne':    'Melbourne, AU',
-      'london':       'London, EN',
-      'birmingham':   'Birmingham, EN',
-      'manchester':   'Manchester, EN',
-      'glasgow':      'Glasgow, SCT',
-      'san francisco':'San Francisco', // no state suffix in CSV; keep bare
-    };
-    function canonicalizeScene(raw) {
-      const trimmed = String(raw || '').trim();
-      if (!trimmed) return trimmed;
-      // Extract the city portion: everything before the first comma.
-      const city = trimmed.split(',')[0].trim().toLowerCase();
-      const canonical = SCENE_CANONICAL_BY_CITY[city];
-      return canonical || trimmed;
+    // This replaces the old single 'scene' field. The canonical source for
+    // these six functions is scripts/location-helpers.mjs, which the Node
+    // test suite (tests/graph-merge.test.mjs) imports directly. The copies
+    // below are intentionally identical, byte-for-byte in logic, to that
+    // module.
+    //
+    // Why duplicated instead of `import`ed: this page's main script is a
+    // classic (non-module) script, and several unrelated pre-existing
+    // functions elsewhere in this same script are declared twice (sloppy-mode
+    // tolerates silent function redeclaration; the *last* declaration wins).
+    // Converting this script to `type="module"` -- the natural way to import
+    // a shared .mjs file into a browser page -- makes those pre-existing
+    // duplicates a hard SyntaxError, since ES modules always run in strict
+    // mode. Fixing those unrelated duplicates is out of scope for this
+    // refactor, so the helpers are kept here as a plain, non-module copy.
+    // If you change the rules in scripts/location-helpers.mjs, mirror the
+    // change here (and in netlify/functions/bands.mjs's own hand-copy).
+    // ---------------------------------------------------------------------
+    function normalizeLocationField(raw) {
+      return String(raw || '').trim();
     }
+
+    function normalizeState(rawState, country) {
+      const state = normalizeLocationField(rawState).toUpperCase();
+      if (!state) return '';
+      if (country && country !== 'USA') return ''; // discard non-US state values
+      return state.slice(0, 2); // USPS is always 2 letters
+    }
+
+    function normalizeCountry(rawCountry) {
+      const country = normalizeLocationField(rawCountry).toUpperCase();
+      if (!country) return '';
+      return country.slice(0, 3);
+    }
+
+    function locationKey(node) {
+      if (!node) return '';
+      const city = normalizeLocationField(node.city);
+      const state = normalizeLocationField(node.state);
+      const country = normalizeLocationField(node.country);
+      if (!city && !state && !country) return '';
+      return `${country}|${state}|${city}`;
+    }
+
+    function locationLabel(node) {
+      if (!node) return '';
+      const city = normalizeLocationField(node.city);
+      const state = normalizeLocationField(node.state);
+      const country = normalizeLocationField(node.country);
+      if (country === 'USA') {
+        if (city && state) return `${city}, ${state}`;
+        return city || state || 'USA';
+      }
+      if (city && country) return `${city}, ${country}`;
+      return city || country || '';
+    }
+
+    const LEGACY_COUNTRY_ALIASES = {
+      'NZ': 'NZL',
+      'AU': 'AUS',
+      'EN': 'GBR',
+      'SCT': 'GBR', // Scotland -> UK
+      'UK': 'GBR',
+    };
+    // Known-city lookup for bare-city legacy inputs. See scripts/location-helpers.mjs
+    // for the full explanation. Keep the two copies in sync by hand.
+    const KNOWN_CITY_LOCATIONS = {
+      'seattle':       { state: 'WA', country: 'USA' },
+      'tacoma':        { state: 'WA', country: 'USA' },
+      'issaquah':      { state: 'WA', country: 'USA' },
+      'portland':      { state: 'OR', country: 'USA' },
+      'los angeles':   { state: 'CA', country: 'USA' },
+      'venice':        { state: 'CA', country: 'USA' },
+      'palm desert':   { state: 'CA', country: 'USA' },
+      'san francisco': { state: 'CA', country: 'USA' },
+      'new york':      { state: 'NY', country: 'USA' },
+      'berkeley heights': { state: 'NJ', country: 'USA' },
+      'chicago':       { state: 'IL', country: 'USA' },
+      'champaign':     { state: 'IL', country: 'USA' },
+      'rockford':      { state: 'IL', country: 'USA' },
+      'cleveland':     { state: 'OH', country: 'USA' },
+      'coral springs': { state: 'FL', country: 'USA' },
+      'kansas city':   { state: 'MO', country: 'USA' },
+      'oklahoma city': { state: 'OK', country: 'USA' },
+      'auckland':      { state: '', country: 'NZL' },
+      'sydney':        { state: '', country: 'AUS' },
+      'melbourne':     { state: '', country: 'AUS' },
+      'london':        { state: '', country: 'GBR' },
+      'birmingham':    { state: '', country: 'GBR' },
+      'manchester':    { state: '', country: 'GBR' },
+      'glasgow':       { state: '', country: 'GBR' },
+    };
+    function parseLegacyScene(raw) {
+      const trimmed = normalizeLocationField(raw);
+      if (!trimmed) return { city: '', state: '', country: '' };
+      const parts = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        const city = parts[0];
+        const suffix = parts[1].toUpperCase();
+        if (LEGACY_COUNTRY_ALIASES[suffix]) {
+          return { city, state: '', country: LEGACY_COUNTRY_ALIASES[suffix] };
+        }
+        if (suffix.length === 3) {
+          return { city, state: '', country: suffix };
+        }
+        if (suffix.length === 2) {
+          return { city, state: suffix, country: 'USA' };
+        }
+        return { city: trimmed, state: '', country: 'USA' };
+      }
+      // Single-part bare-city input: look up the known-city table so the
+      // resulting locationKey matches the CSV rows for the same scene.
+      const rawCity = parts[0] || '';
+      const known = KNOWN_CITY_LOCATIONS[rawCity.toLowerCase()];
+      if (known) {
+        return { city: rawCity, state: known.state, country: known.country };
+      }
+      return { city: rawCity, state: '', country: 'USA' };
+    }
+
+    // USPS 2-letter state/territory codes, for the submission form's State
+    // dropdown (US only -- disabled/cleared for any other country).
+    const USPS_STATE_CODES = [
+      'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
+      'KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
+      'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT',
+      'VA','WA','WV','WI','WY','DC','PR'
+    ];
+
+    // ISO 3166-1 alpha-3 country list for the submission form's Country
+    // dropdown. Covers every country already present in the source CSV
+    // (USA, GBR, AUS, NZL) plus a broader set of common countries so new
+    // submissions aren't limited to the current data. Sorted alphabetically
+    // by display name, with USA pinned first as the default.
+    const ISO3_COUNTRIES = [
+      { code: 'USA', name: 'United States' },
+      { code: 'AUS', name: 'Australia' },
+      { code: 'AUT', name: 'Austria' },
+      { code: 'BEL', name: 'Belgium' },
+      { code: 'BRA', name: 'Brazil' },
+      { code: 'CAN', name: 'Canada' },
+      { code: 'DNK', name: 'Denmark' },
+      { code: 'FIN', name: 'Finland' },
+      { code: 'FRA', name: 'France' },
+      { code: 'DEU', name: 'Germany' },
+      { code: 'GRC', name: 'Greece' },
+      { code: 'IRL', name: 'Ireland' },
+      { code: 'ITA', name: 'Italy' },
+      { code: 'JPN', name: 'Japan' },
+      { code: 'MEX', name: 'Mexico' },
+      { code: 'NLD', name: 'Netherlands' },
+      { code: 'NZL', name: 'New Zealand' },
+      { code: 'NOR', name: 'Norway' },
+      { code: 'PRT', name: 'Portugal' },
+      { code: 'ESP', name: 'Spain' },
+      { code: 'SWE', name: 'Sweden' },
+      { code: 'CHE', name: 'Switzerland' },
+      { code: 'GBR', name: 'United Kingdom' },
+    ];
 
     function buildMasterGraph(rows) {
       const nodeMap = new Map();
@@ -1799,16 +1934,18 @@ if (shareGraphBtn) {
         const source = (row.source || '').trim();
         const target = (row.target || '').trim();
         if (!source || !target) return;
-        const scene = canonicalizeScene(row.scene || 'Seattle');
+        const country = normalizeCountry(row.country);
+        const city = normalizeLocationField(row.city);
+        const state = normalizeState(row.state, country);
         const instrument1 = (row['Instrument 1'] || row['Intrument 1'] || '').trim();
         const instrument2 = (row['Instrument 2'] || row['Intrument 2'] || '').trim();
         const bio = (row.bio || row.Bio || row.notes || row.Notes || '').trim();
 
         if (!nodeMap.has(source)) {
-          nodeMap.set(source, { id: source, type: 'band', scene });
+          nodeMap.set(source, { id: source, type: 'band', city, state, country });
         }
         if (!nodeMap.has(target)) {
-          nodeMap.set(target, { id: target, type: 'person', scene, instrument1, instrument2, bio });
+          nodeMap.set(target, { id: target, type: 'person', city, state, country, instrument1, instrument2, bio });
         } else {
           const existing = nodeMap.get(target);
           if (!existing.instrument1 && instrument1) existing.instrument1 = instrument1;
@@ -2002,7 +2139,19 @@ if (shareGraphBtn) {
     function applyDraftToMaster(master, draft) {
       if (!master || !draft || typeof draft !== 'object') return { added: false, reason: 'No graph data available yet.' };
       const band = String(draft.band || '').trim();
-      const scene = canonicalizeScene(String(draft.scene || '').trim() || 'Seattle');
+      // Accept the new city/state/country shape, or fall back to splitting a
+      // legacy `draft.scene` string (old-shape submissions, e.g. from the 14
+      // pre-refactor Netlify Blob entries or older client code paths).
+      let city = normalizeLocationField(draft.city);
+      let country = normalizeCountry(draft.country);
+      let state = normalizeState(draft.state, country);
+      if (!city && !country && draft.scene) {
+        const legacy = parseLegacyScene(draft.scene);
+        city = legacy.city;
+        country = legacy.country;
+        state = legacy.state;
+      }
+      if (!country && city) country = 'USA';
       if (!band) return { added: false, reason: 'A band name is required.' };
 
       // Support both the multi-member shape ({ members: [...] }) and the legacy
@@ -2017,18 +2166,21 @@ if (shareGraphBtn) {
       let changed = false;
       let membersAdded = 0;
 
-      // Band node — dedup by NAME ONLY (case-insensitive). Scene is a soft
+      // Band node — dedup by NAME ONLY (case-insensitive). Location is a soft
       // attribute, not part of identity: users often type 'Seattle' when the
       // CSV has 'Seattle, WA' (or vice versa), and treating those as different
       // bands creates duplicate nodes on the graph. If an existing band node
-      // matches by name, we reuse it and only fill in scene if it was blank.
+      // matches by name, we reuse it and only fill in city/state/country if
+      // it was blank.
       let bandNode = master.nodes.find(node => node.type === 'band'
         && normalizeKey(node.id) === normalizeKey(band));
       if (!bandNode) {
-        master.nodes.push({ id: band, type: 'band', scene });
+        master.nodes.push({ id: band, type: 'band', city, state, country });
         changed = true;
-      } else if (!bandNode.scene && scene) {
-        bandNode.scene = scene;
+      } else if (!bandNode.city && city) {
+        bandNode.city = city;
+        bandNode.state = state;
+        bandNode.country = country;
         changed = true;
       }
 
@@ -2047,7 +2199,9 @@ if (shareGraphBtn) {
           master.nodes.push({
             id: member,
             type: 'person',
-            scene,
+            city,
+            state,
+            country,
             instrument1: instrument,
             instrument2: '',
             bio,
@@ -2100,7 +2254,16 @@ if (shareGraphBtn) {
       let links = master.links.slice();
 
       if (currentScene !== 'all') {
-        const sceneIds = new Set(nodes.filter(node => node.scene === currentScene).map(node => node.id));
+        // Two filter formats share the currentScene variable:
+        //   - a locationKey ('country|state|city') for a single scene
+        //   - 'country:XXX' for a country-wide quick-filter chip
+        let sceneIds;
+        if (currentScene.startsWith('country:')) {
+          const targetCountry = currentScene.slice('country:'.length);
+          sceneIds = new Set(nodes.filter(node => normalizeCountry(node.country) === targetCountry).map(node => node.id));
+        } else {
+          sceneIds = new Set(nodes.filter(node => locationKey(node) === currentScene).map(node => node.id));
+        }
         nodes = nodes.filter(node => sceneIds.has(node.id));
         links = links.filter(link => sceneIds.has(link.source) && sceneIds.has(link.target));
       }
@@ -2109,7 +2272,7 @@ if (shareGraphBtn) {
         const term = currentSearch.toLowerCase();
         const matchedNodes = nodes.filter(node => {
           const instruments = [node.instrument1, node.instrument2].filter(Boolean).join(' ').toLowerCase();
-          return node.id.toLowerCase().includes(term) || instruments.includes(term) || (node.scene || '').toLowerCase().includes(term);
+          return node.id.toLowerCase().includes(term) || instruments.includes(term) || locationLabel(node).toLowerCase().includes(term);
         });
         const matchedIds = new Set(matchedNodes.map(node => node.id));
         const keepIds = new Set(matchedIds);
@@ -2244,7 +2407,7 @@ if (shareGraphBtn) {
         ? 'Band node selected. Use this card to track scene, total relationships, and prepare deeper drill-down views.'
         : 'Musician node selected. This is a good place for bio details, instruments, and future profile notes.';
       selectedType.textContent = node.type;
-      selectedScene.textContent = node.scene || '—';
+      selectedScene.textContent = locationLabel(node) || '—';
       selectedDegree.textContent = degree;
       selectedInstrument.textContent = [node.instrument1, node.instrument2].filter(Boolean).join(', ') || '—';
       if (selectedBio) selectedBio.textContent = node.bio || '—';
@@ -2330,7 +2493,7 @@ if (shareGraphBtn) {
         ? 'Band node selected. Use this card to track scene, total relationships, and prepare deeper drill-down views.'
         : 'Musician node selected. This is a good place for bio details, instruments, and future profile notes.';
       selectedType.textContent = node.type;
-      selectedScene.textContent = node.scene || '—';
+      selectedScene.textContent = locationLabel(node) || '—';
       selectedDegree.textContent = degree;
       selectedInstrument.textContent = [node.instrument1, node.instrument2].filter(Boolean).join(', ') || '—';
       selectedBio.textContent = node.bio || '—';
@@ -2359,6 +2522,23 @@ if (shareGraphBtn) {
       svgSelection.transition().duration(750).call(zoomBehavior.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
     }
 
+    // Flavor C node labels: when viewing multiple scenes at once, band node
+    // labels append a location suffix so it's clear which scene each band
+    // belongs to -- bare city for US bands ("Sweet Water · Seattle"), city +
+    // country for non-US bands ("Bee Gees · London, GBR"). When the graph is
+    // filtered down to a single scene (a specific locationKey selected, not
+    // 'all' and not a country chip), the suffix is redundant and dropped.
+    // Person nodes never get this suffix.
+    function bandNodeLabel(d) {
+      const isSingleSceneView = currentScene && currentScene !== 'all' && !currentScene.startsWith('country:');
+      if (isSingleSceneView) return d.id;
+      const country = normalizeCountry(d.country);
+      const city = normalizeLocationField(d.city);
+      if (!city) return d.id;
+      const suffix = country && country !== 'USA' ? `${city}, ${country}` : city;
+      return `${d.id} · ${suffix}`;
+    }
+
     function renderGraph() {
       if (!graphState || !svgSelection) return;
       const filtered = getFilteredGraph(graphState.master);
@@ -2367,11 +2547,19 @@ if (shareGraphBtn) {
 
       metricNodes.textContent = filtered.nodes.length;
       metricLinks.textContent = filtered.links.length;
-      metricScenes.textContent = new Set(filtered.nodes.map(d => d.scene)).size;
+      metricScenes.textContent = new Set(filtered.nodes.map(d => locationKey(d)).filter(Boolean)).size;
       if (graphTotalChip && graphState?.master?.nodes) { graphTotalChip.textContent = `${graphState.master.nodes.length} nodes in tree`; }
       const badgeParts = [];
       if (currentFilter !== 'all') badgeParts.push(currentFilter === 'band' ? 'Bands only' : 'Musicians only');
-      if (currentScene !== 'all') badgeParts.push(currentScene);
+      if (currentScene !== 'all') {
+        if (currentScene.startsWith('country:')) {
+          badgeParts.push(`All ${currentScene.slice('country:'.length)}`);
+        } else {
+          const sceneSelectEl = document.getElementById('scene-filter');
+          const selectedOption = sceneSelectEl && [...sceneSelectEl.options].find(opt => opt.value === currentScene);
+          badgeParts.push(selectedOption ? selectedOption.textContent : currentScene);
+        }
+      }
       if (currentSearch) badgeParts.push(`Search: ${currentSearch}`);
       graphBadge.textContent = badgeParts.length ? badgeParts.join(' · ') : 'Full graph';
       noteLeft.textContent = filtered.nodes.length ? `Showing ${filtered.links.length} relationships from your uploaded CSV.` : 'No matches yet. Try clearing or relaxing the filters.';
@@ -2488,7 +2676,7 @@ if (shareGraphBtn) {
         .attr('x', d => getNodeOuterRadius(d) + 6)
         .attr('y', 4)
         .text(d => {
-          if (d.type === 'band') return d.id;
+          if (d.type === 'band') return bandNodeLabel(d);
           const instruments = [d.instrument1, d.instrument2].filter(Boolean).join(', ');
           return instruments ? `${d.id} — ${instruments}` : d.id;
         })
@@ -2590,7 +2778,7 @@ if (shareGraphBtn) {
         .filter(link => {
           const sourceNode = graphState.master.nodes.find(node => node.id === link.source);
           const targetNode = graphState.master.nodes.find(node => node.id === link.target);
-          return sourceNode && targetNode && sourceNode.type === 'band' && targetNode.type === 'person' && normalizeKey(sourceNode.id) === normalizeKey(band) && normalizeKey(sourceNode.scene || '') === normalizeKey(scene);
+          return sourceNode && targetNode && sourceNode.type === 'band' && targetNode.type === 'person' && normalizeKey(sourceNode.id) === normalizeKey(band) && normalizeKey(locationLabel(sourceNode) || '') === normalizeKey(scene);
         })
         .map(link => link.target)
         .filter((value, index, array) => array.indexOf(value) === index)
@@ -2607,7 +2795,7 @@ if (shareGraphBtn) {
         })
         .map(link => {
           const bandNode = graphState.master.nodes.find(node => node.id === link.source);
-          return bandNode ? { name: bandNode.id, scene: bandNode.scene || 'Unknown scene' } : null;
+          return bandNode ? { name: bandNode.id, scene: locationLabel(bandNode) || 'Unknown scene' } : null;
         })
         .filter(Boolean)
         .filter((value, index, array) => index === array.findIndex(item => normalizeKey(item.name) === normalizeKey(value.name) && normalizeKey(item.scene) === normalizeKey(value.scene)))
@@ -2745,18 +2933,31 @@ if (shareGraphBtn) {
       field.value = canonicalName;
     }
 
+    // Reads the three submission-form location fields and returns both the
+    // normalized { city, state, country } and a human-readable label (via
+    // locationLabel) for use in validation/preview copy that used to read a
+    // single free-text 'scene' string.
+    function readSubmissionLocation() {
+      const city = normalizeLocationField(document.getElementById('submission-city').value);
+      const country = normalizeCountry(document.getElementById('submission-country').value) || 'USA';
+      const state = normalizeState(document.getElementById('submission-state').value, country);
+      const label = locationLabel({ city, state, country }) || city;
+      return { city, state, country, label };
+    }
+
     function validateSubmissionForm() {
       const bandField = document.getElementById('band-name');
-      const sceneField = document.getElementById('submission-scene');
+      const cityField = document.getElementById('submission-city');
       const memberField = document.getElementById('member-name');
       const bioField = document.getElementById('member-bio');
       const validation = document.getElementById('submission-validation');
       const band = bandField.value.trim();
-      const scene = sceneField.value.trim();
+      const location = readSubmissionLocation();
+      const scene = location.label;
       const member = memberField.value.trim();
       const bio = bioField.value.trim();
       bandField.classList.remove('field-error');
-      sceneField.classList.remove('field-error');
+      cityField.classList.remove('field-error');
       memberField.classList.remove('field-error');
       bioField.classList.remove('field-error');
       validation.classList.remove('is-warning', 'is-success');
@@ -2800,7 +3001,7 @@ if (shareGraphBtn) {
         bandField.classList.add('field-error');
         // Only flag the scene field when the user actually gave a scene that
         // conflicts — not just because a band matched.
-        if (scene) sceneField.classList.add('field-error');
+        if (scene) cityField.classList.add('field-error');
         validation.classList.add('is-warning');
         setSubmissionMode(true);
         const memberState = renderExistingBandMembers(bandNow, scene, true);
@@ -2832,7 +3033,7 @@ if (shareGraphBtn) {
       if (!graphState || !graphState.master) return;
       const band = document.getElementById('band-name').value.trim();
       const member = document.getElementById('member-name').value.trim();
-      const scene = document.getElementById('submission-scene').value.trim();
+      const scene = readSubmissionLocation().label;
       const previewName = document.getElementById('submission-preview-name');
       const previewCopy = document.getElementById('submission-preview-copy');
       const previewSource = document.getElementById('submission-preview-source');
@@ -2849,7 +3050,7 @@ if (shareGraphBtn) {
         matchedNode = graphState.master.nodes.find(node => node.type === 'person' && normalizeKey(node.id) === normalizeKey(member));
       }
       if (!matchedNode && band) {
-        matchedNode = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(node.id) === normalizeKey(band) && (!scene || normalizeKey(node.scene || '') === normalizeKey(scene)));
+        matchedNode = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(node.id) === normalizeKey(band) && (!scene || normalizeKey(locationLabel(node) || '') === normalizeKey(scene)));
       }
 
       if (!matchedNode) {
@@ -2873,7 +3074,7 @@ if (shareGraphBtn) {
         ? `Existing member found in the tree. Connected bands: ${connections.join(', ') || 'none yet'}.`
         : `Existing band found in the tree. Connected members: ${connections.join(', ') || 'none yet'}.`;
       previewSource.textContent = `Pulled from current tree · ${matchedNode.type}`;
-      previewScene.textContent = matchedNode.scene || previewScene.textContent || '—';
+      previewScene.textContent = locationLabel(matchedNode) || previewScene.textContent || '—';
       previewInstrument.textContent = [matchedNode.instrument1, matchedNode.instrument2].filter(Boolean).join(', ') || previewInstrument.textContent || '—';
       if (matchedNode.type === 'person') {
         selectedBio.textContent = typedBio || matchedNode.bio || '—';
@@ -2888,7 +3089,7 @@ if (shareGraphBtn) {
       const band = document.getElementById('band-name').value.trim();
       const member = document.getElementById('member-name').value.trim();
       const relation = document.getElementById('relation-type').value.trim();
-      const scene = document.getElementById('submission-scene').value.trim();
+      const scene = readSubmissionLocation().label;
       const instrument = document.getElementById('instrument-name').value.trim();
       const years = document.getElementById('years-active').value.trim();
       const label = document.getElementById('band-label').value.trim();
@@ -2917,6 +3118,57 @@ if (shareGraphBtn) {
       });
     }
 
+    // Country quick-filter chips: one-click filter to every scene in a given
+    // country (e.g. "All USA"), plus an "All" chip that clears the location
+    // filter entirely. Uses the same currentScene variable as the scene
+    // dropdown, distinguished by a 'country:XXX' prefix (see getFilteredGraph).
+    function selectCountryFilter(countryCode) {
+      currentScene = countryCode ? `country:${countryCode}` : 'all';
+      const sceneSelect = document.getElementById('scene-filter');
+      if (sceneSelect) sceneSelect.value = 'all'; // dropdown has no matching option for a country chip
+      const mobileSceneSelect = document.getElementById('mobile-scene-filter');
+      if (mobileSceneSelect) mobileSceneSelect.value = 'all';
+      syncCountryChipButtons();
+      renderGraph();
+    }
+
+    function syncCountryChipButtons() {
+      document.querySelectorAll('.country-chip').forEach(btn => {
+        const isAll = btn.dataset.country === 'all';
+        const active = isAll ? currentScene === 'all' : currentScene === `country:${btn.dataset.country}`;
+        btn.classList.toggle('active', active);
+      });
+    }
+
+    function renderCountryChips() {
+      if (!graphState || !graphState.master) return;
+      const countries = Array.from(new Set(
+        graphState.master.nodes.map(node => normalizeCountry(node.country)).filter(Boolean)
+      )).sort();
+
+      [document.getElementById('country-chip-row'), document.getElementById('mobile-country-chip-row')].forEach(row => {
+        if (!row) return;
+        row.innerHTML = '';
+        const allChip = document.createElement('button');
+        allChip.type = 'button';
+        allChip.className = 'tool-chip country-chip active';
+        allChip.dataset.country = 'all';
+        allChip.textContent = 'All';
+        allChip.addEventListener('click', () => selectCountryFilter(null));
+        row.appendChild(allChip);
+
+        countries.forEach(code => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'tool-chip country-chip';
+          chip.dataset.country = code;
+          chip.textContent = `All ${code}`;
+          chip.addEventListener('click', () => selectCountryFilter(code));
+          row.appendChild(chip);
+        });
+      });
+    }
+
     toolChips.forEach(chip => {
       chip.addEventListener('click', () => {
         if (chip.dataset.action === 'fit') {
@@ -2930,6 +3182,7 @@ if (shareGraphBtn) {
           document.getElementById('scene-filter').value = 'all';
           document.getElementById('node-search').value = '';
           syncFilterButtons();
+          syncCountryChipButtons();
           renderGraph();
           return;
         }
@@ -2940,9 +3193,17 @@ if (shareGraphBtn) {
     });
 
     document.getElementById('focus-seattle').addEventListener('click', () => {
-      currentScene = 'Seattle';
+      // Find the Seattle, WA locationKey dynamically -- it's not a fixed
+      // string anymore, but derived from whatever city/state/country data
+      // actually loaded.
+      const seattleNode = graphState && graphState.master
+        ? graphState.master.nodes.find(node => node.city === 'Seattle' && node.state === 'WA' && node.country === 'USA')
+        : null;
+      if (!seattleNode) return;
+      currentScene = locationKey(seattleNode);
       const sceneSelect = document.getElementById('scene-filter');
-      if (sceneSelect) sceneSelect.value = 'Seattle';
+      if (sceneSelect) sceneSelect.value = currentScene;
+      syncCountryChipButtons();
       renderGraph();
       document.getElementById('graph-workspace').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -2954,8 +3215,57 @@ if (shareGraphBtn) {
 
     document.getElementById('scene-filter').addEventListener('change', event => {
       currentScene = event.target.value;
+      syncCountryChipButtons();
       renderGraph();
     });
+
+    // Populate the State <select> with USPS codes. Disabled entirely (with a
+    // blank selection) for any non-US country, since the schema only stores
+    // state for US rows.
+    function populateStateOptions(country) {
+      const stateSelect = document.getElementById('submission-state');
+      if (!stateSelect) return;
+      const isUS = country === 'USA';
+      const previousValue = stateSelect.value;
+      stateSelect.innerHTML = '';
+      const blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = isUS ? 'Select a state…' : '—';
+      stateSelect.appendChild(blank);
+      USPS_STATE_CODES.forEach(code => {
+        const option = document.createElement('option');
+        option.value = code;
+        option.textContent = code;
+        stateSelect.appendChild(option);
+      });
+      stateSelect.disabled = !isUS;
+      if (isUS && USPS_STATE_CODES.includes(previousValue)) {
+        stateSelect.value = previousValue;
+      } else {
+        stateSelect.value = '';
+      }
+    }
+
+    // Populate the Country <select> with the ISO-3 list, USA first/default.
+    (function initSubmissionLocationFields() {
+      const countrySelect = document.getElementById('submission-country');
+      if (!countrySelect) return;
+      ISO3_COUNTRIES.forEach(({ code, name }) => {
+        const option = document.createElement('option');
+        option.value = code;
+        option.textContent = `${name} (${code})`;
+        countrySelect.appendChild(option);
+      });
+      countrySelect.value = 'USA';
+      populateStateOptions('USA');
+      document.getElementById('submission-city').value = 'Seattle';
+      document.getElementById('submission-state').value = 'WA';
+
+      countrySelect.addEventListener('change', () => {
+        populateStateOptions(countrySelect.value);
+        updateSubmissionPreview();
+      });
+    })();
 
     document.querySelectorAll('#submission-form input, #submission-form select, #submission-form textarea').forEach(el => {
       el.addEventListener('input', updateSubmissionPreview);
@@ -3046,7 +3356,13 @@ if (shareGraphBtn) {
         return;
       }
 
-      const scene = document.getElementById('submission-scene').value.trim() || 'Seattle';
+      const location = readSubmissionLocation();
+      if (!location.city) {
+        document.getElementById('submission-city').classList.add('field-error');
+        showSubmissionFeedback('Enter a city before saving.', true);
+        return;
+      }
+      const scene = location.label;
       const bio = document.getElementById('member-bio').value.trim();
       if (bio && bioContainsBlockedLink(bio)) {
         document.getElementById('member-bio').classList.add('field-error');
@@ -3096,12 +3412,14 @@ if (shareGraphBtn) {
 
       const bandExisted = !!master && master.nodes.some(node => node.type === 'band'
         && normalizeKey(node.id) === normalizeKey(band)
-        && normalizeKey(node.scene || '') === normalizeKey(scene));
+        && normalizeKey(locationLabel(node) || '') === normalizeKey(scene));
 
       const draft = {
         band,
         members,
-        scene,
+        city: location.city,
+        state: location.state,
+        country: location.country,
         yearsActive: bandExisted ? '' : document.getElementById('years-active').value.trim(),
         label: bandExisted ? '' : document.getElementById('band-label').value.trim(),
         albums: bandExisted ? '' : document.getElementById('albums-released').value.trim(),
@@ -3118,21 +3436,25 @@ if (shareGraphBtn) {
         if (!applied.added) return applied;
         currentFilter = 'all';
         currentSearch = '';
-        if (currentScene !== 'all' && normalizeKey(currentScene) !== normalizeKey(draftToApply.scene)) {
-          currentScene = draftToApply.scene;
+        const draftKey = locationKey({ city: draftToApply.city, state: draftToApply.state, country: draftToApply.country });
+        const draftLabel = locationLabel({ city: draftToApply.city, state: draftToApply.state, country: draftToApply.country });
+        if (currentScene !== 'all' && !currentScene.startsWith('country:') && normalizeKey(currentScene) !== normalizeKey(draftKey)) {
+          currentScene = draftKey;
         }
         document.getElementById('node-search').value = '';
         const sceneSelect = document.getElementById('scene-filter');
         if (sceneSelect) {
-          if (![...sceneSelect.options].some(opt => opt.value === draftToApply.scene)) {
+          if (draftKey && ![...sceneSelect.options].some(opt => opt.value === draftKey)) {
             const option = document.createElement('option');
-            option.value = draftToApply.scene;
-            option.textContent = draftToApply.scene;
+            option.value = draftKey;
+            option.textContent = draftLabel;
             sceneSelect.appendChild(option);
           }
           sceneSelect.value = currentScene;
         }
         syncFilterButtons();
+        renderCountryChips();
+        syncCountryChipButtons();
         renderGraph();
         return applied;
       };
@@ -3160,7 +3482,10 @@ if (shareGraphBtn) {
         showSubmissionFeedback(message, !wasShared);
         document.getElementById('submission-form').reset();
         resetMemberRows();
-        document.getElementById('submission-scene').value = 'Seattle';
+        document.getElementById('submission-city').value = 'Seattle';
+        document.getElementById('submission-country').value = 'USA';
+        populateStateOptions('USA');
+        document.getElementById('submission-state').value = 'WA';
         updateSubmissionPreview();
         setSubmissionMode(false);
       };
@@ -3257,14 +3582,26 @@ if (shareGraphBtn) {
       rebuildInstrumentDatalist();
       graphState = { master };
       const sceneSelect = document.getElementById('scene-filter');
-      const scenes = Array.from(new Set(master.nodes.map(node => node.scene).filter(Boolean))).sort();
+      // Build the location dropdown from locationKey/locationLabel, deduped by
+      // key and sorted alphabetically by the human-readable label (not the
+      // pipe-delimited key) so the dropdown reads naturally.
+      const seenLocationKeys = new Set();
+      const scenes = [];
+      master.nodes.forEach(node => {
+        const key = locationKey(node);
+        if (!key || seenLocationKeys.has(key)) return;
+        seenLocationKeys.add(key);
+        scenes.push({ key, label: locationLabel(node) });
+      });
+      scenes.sort((a, b) => a.label.localeCompare(b.label));
       scenes.forEach(scene => {
         const option = document.createElement('option');
-        option.value = scene;
-        option.textContent = scene;
+        option.value = scene.key;
+        option.textContent = scene.label;
         sceneSelect.appendChild(option);
       });
       syncFilterButtons();
+      renderCountryChips();
 
       // ============================================================
       // MOBILE-FIRST: wire the hamburger + bottom sheet + Seattle default.
@@ -3281,7 +3618,7 @@ if (shareGraphBtn) {
         const mobileScenePickerWrap = document.getElementById('mobile-scene-picker-wrap');
         const desktopSearch = document.getElementById('node-search');
         const desktopSceneSelect = document.getElementById('scene-filter');
-        const segments = document.querySelectorAll('.mobile-scene-segment');
+        const segmentsContainer = document.getElementById('mobile-scene-segments');
 
         if (!menuBtn || !menuSheet || !desktopSceneSelect) return;
 
@@ -3304,26 +3641,62 @@ if (shareGraphBtn) {
         }
         syncMobileSceneOptions();
 
-        // Find the canonical "Seattle" scene option — the CSV uses e.g. "Seattle, WA",
-        // not the bare string. Prefer exact/starts-with match on "Seattle".
-        function findSeattleSceneValue() {
-          const opts = [...desktopSceneSelect.options].map(o => o.value);
-          const exact = opts.find(v => v === 'Seattle');
-          if (exact) return exact;
-          const startsWith = opts.find(v => /^Seattle\b/i.test(v));
-          if (startsWith) return startsWith;
-          const anyMatch = opts.find(v => /seattle/i.test(v));
-          return anyMatch || null;
+        // Build the top 2-3 most populous locations (by node count) from the
+        // live graph, rather than hardcoding 'Seattle, WA'. Ties broken by
+        // locationLabel alphabetically for stable ordering.
+        function computeTopLocations(limit = 3) {
+          if (!graphState || !graphState.master) return [];
+          const counts = new Map();
+          graphState.master.nodes.forEach(node => {
+            const key = locationKey(node);
+            if (!key) return;
+            if (!counts.has(key)) counts.set(key, { key, label: locationLabel(node), count: 0 });
+            counts.get(key).count += 1;
+          });
+          return Array.from(counts.values())
+            .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+            .slice(0, limit);
         }
-        const SEATTLE_SCENE = findSeattleSceneValue();
+        const TOP_LOCATIONS = computeTopLocations(3);
+        const TOP_LOCATION_KEYS = new Set(TOP_LOCATIONS.map(loc => loc.key));
 
-        // On mobile page load, default the scene to Seattle if that scene exists.
+        // Build the segmented control: top locations, then "All", then "Other…".
+        if (segmentsContainer) {
+          segmentsContainer.innerHTML = '';
+          TOP_LOCATIONS.forEach((loc, index) => {
+            const btn = document.createElement('button');
+            btn.className = 'mobile-scene-segment' + (index === 0 ? ' is-active' : '');
+            btn.type = 'button';
+            btn.dataset.locationKey = loc.key;
+            btn.setAttribute('role', 'tab');
+            btn.textContent = loc.label;
+            segmentsContainer.appendChild(btn);
+          });
+          const allBtn = document.createElement('button');
+          allBtn.className = 'mobile-scene-segment';
+          allBtn.type = 'button';
+          allBtn.dataset.locationKey = 'all';
+          allBtn.setAttribute('role', 'tab');
+          allBtn.textContent = 'All scenes';
+          segmentsContainer.appendChild(allBtn);
+          const otherBtn = document.createElement('button');
+          otherBtn.className = 'mobile-scene-segment';
+          otherBtn.type = 'button';
+          otherBtn.dataset.locationKey = '__other';
+          otherBtn.setAttribute('role', 'tab');
+          otherBtn.textContent = 'Other…';
+          segmentsContainer.appendChild(otherBtn);
+        }
+        const segments = document.querySelectorAll('.mobile-scene-segment');
+        const DEFAULT_LOCATION = TOP_LOCATIONS[0] ? TOP_LOCATIONS[0].key : null;
+
+        // On mobile page load, default to the single most populous location.
         if (MOBILE_QUERY.matches) {
-          if (SEATTLE_SCENE) {
-            currentScene = SEATTLE_SCENE;
-            desktopSceneSelect.value = SEATTLE_SCENE;
-            if (mobileSceneSelect) mobileSceneSelect.value = SEATTLE_SCENE;
-            updateSegmentActive(SEATTLE_SCENE);
+          if (DEFAULT_LOCATION) {
+            currentScene = DEFAULT_LOCATION;
+            desktopSceneSelect.value = DEFAULT_LOCATION;
+            if (mobileSceneSelect) mobileSceneSelect.value = DEFAULT_LOCATION;
+            updateSegmentActive(DEFAULT_LOCATION);
           }
           menuBtn.hidden = false;
         }
@@ -3363,54 +3736,58 @@ if (shareGraphBtn) {
         menuClose.addEventListener('click', closeSheet);
         menuBackdrop.addEventListener('click', closeSheet);
 
-        // Segmented scene control: Seattle / All / Other (opens dropdown).
-        // data-scene values: "__seattle" (canonical Seattle scene), "all", "__other"
+        // Segmented scene control: top locations / All / Other (opens dropdown).
+        // data-location-key values: a real locationKey for each top-location
+        // segment, "all", or the sentinel "__other".
         function updateSegmentActive(sceneValue) {
-          const isSeattle = SEATTLE_SCENE && sceneValue === SEATTLE_SCENE;
+          const isTop = TOP_LOCATION_KEYS.has(sceneValue);
           const isAll = sceneValue === 'all';
           segments.forEach(seg => {
-            const target = seg.dataset.scene;
+            const target = seg.dataset.locationKey;
             const isActive =
-              (target === '__seattle' && isSeattle) ||
+              (isTop && target === sceneValue) ||
               (target === 'all' && isAll) ||
-              (target === '__other' && !isSeattle && !isAll);
+              (target === '__other' && !isTop && !isAll);
             seg.classList.toggle('is-active', isActive);
           });
           if (mobileScenePickerWrap) {
-            mobileScenePickerWrap.style.display = (!isSeattle && !isAll) ? '' : 'none';
+            mobileScenePickerWrap.style.display = (!isTop && !isAll) ? '' : 'none';
           }
         }
 
         segments.forEach(seg => {
           seg.addEventListener('click', () => {
-            const target = seg.dataset.scene;
-            if (target === '__seattle') {
-              if (!SEATTLE_SCENE) return; // no Seattle scene in data — skip
-              currentScene = SEATTLE_SCENE;
-              desktopSceneSelect.value = SEATTLE_SCENE;
-              if (mobileSceneSelect) mobileSceneSelect.value = SEATTLE_SCENE;
-              updateSegmentActive(SEATTLE_SCENE);
-              renderGraph();
-            } else if (target === 'all') {
+            const target = seg.dataset.locationKey;
+            if (target === 'all') {
               currentScene = 'all';
               desktopSceneSelect.value = 'all';
               if (mobileSceneSelect) mobileSceneSelect.value = 'all';
               updateSegmentActive('all');
+              syncCountryChipButtons();
               renderGraph();
             } else if (target === '__other') {
               if (mobileScenePickerWrap) mobileScenePickerWrap.style.display = '';
               if (mobileSceneSelect) {
                 const firstOther = [...mobileSceneSelect.options].find(o =>
-                  o.value !== 'all' && o.value !== SEATTLE_SCENE
+                  o.value !== 'all' && !TOP_LOCATION_KEYS.has(o.value)
                 );
                 if (firstOther) {
                   currentScene = firstOther.value;
                   mobileSceneSelect.value = currentScene;
                   desktopSceneSelect.value = currentScene;
+                  syncCountryChipButtons();
                   renderGraph();
                 }
               }
               segments.forEach(s => s.classList.toggle('is-active', s === seg));
+            } else if (target) {
+              // One of the dynamic top-location segments.
+              currentScene = target;
+              desktopSceneSelect.value = target;
+              if (mobileSceneSelect) mobileSceneSelect.value = target;
+              updateSegmentActive(target);
+              syncCountryChipButtons();
+              renderGraph();
             }
           });
         });
@@ -3428,6 +3805,7 @@ if (shareGraphBtn) {
             currentScene = ev.target.value;
             desktopSceneSelect.value = ev.target.value;
             updateSegmentActive(ev.target.value);
+            syncCountryChipButtons();
             renderGraph();
           });
         }

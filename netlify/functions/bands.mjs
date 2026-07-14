@@ -73,7 +73,9 @@ function getSubmissionsStore() {
 // mirroring the client validation.
 const LIMITS = {
   band: 120,
-  scene: 80,
+  city: 80,
+  state: 2,
+  country: 3,
   member: 120,
   instrument: 120,
   bio: 2000,
@@ -81,6 +83,126 @@ const LIMITS = {
   maxMembers: 50,
   maxBodyBytes: 64 * 1024 // 64 KB is far more than a legitimate submission needs
 };
+
+// ---------------------------------------------------------------------------
+// Location schema helpers (server-side mirror of the client's helpers in
+// index.html). Nodes/drafts carry city (plain text), state (USPS 2-letter,
+// US only), and country (ISO 3166-1 alpha-3). Kept in sync by hand with the
+// client copy until the shared scripts/location-helpers.mjs module lands.
+// ---------------------------------------------------------------------------
+
+function normalizeCountryCode(rawCountry) {
+  const country = asTrimmedString(rawCountry).toUpperCase();
+  if (!country) return '';
+  return country.slice(0, 3);
+}
+
+function normalizeStateCode(rawState, country) {
+  const state = asTrimmedString(rawState).toUpperCase();
+  if (!state) return '';
+  if (country && country !== 'USA') return ''; // discard non-US state values
+  return state.slice(0, 2);
+}
+
+// Old-shape submissions (pre-refactor) stored a single 'scene' string, e.g.
+// 'Seattle, WA' or bare 'Seattle'. This is Option A from the brief: legacy
+// blobs are migrated lazily at READ time, not via a one-off data migration
+// script, so the 14 pre-refactor submissions keep rendering correctly
+// without ever being rewritten in storage.
+const LEGACY_COUNTRY_ALIASES = {
+  NZ: 'NZL',
+  AU: 'AUS',
+  EN: 'GBR',
+  SCT: 'GBR',
+  UK: 'GBR',
+};
+// Known-city lookup for bare-city legacy inputs (e.g. 'Parc Boys' was
+// submitted with scene: 'Seattle' before this refactor; without this table,
+// its locationKey would be 'USA||Seattle' and wouldn't match the CSV's
+// 'USA|WA|Seattle'). Keep in sync with scripts/location-helpers.mjs.
+const KNOWN_CITY_LOCATIONS = {
+  seattle:       { state: 'WA', country: 'USA' },
+  tacoma:        { state: 'WA', country: 'USA' },
+  issaquah:      { state: 'WA', country: 'USA' },
+  portland:      { state: 'OR', country: 'USA' },
+  'los angeles': { state: 'CA', country: 'USA' },
+  venice:        { state: 'CA', country: 'USA' },
+  'palm desert': { state: 'CA', country: 'USA' },
+  'san francisco': { state: 'CA', country: 'USA' },
+  'new york':    { state: 'NY', country: 'USA' },
+  'berkeley heights': { state: 'NJ', country: 'USA' },
+  chicago:       { state: 'IL', country: 'USA' },
+  champaign:     { state: 'IL', country: 'USA' },
+  rockford:      { state: 'IL', country: 'USA' },
+  cleveland:     { state: 'OH', country: 'USA' },
+  'coral springs': { state: 'FL', country: 'USA' },
+  'kansas city': { state: 'MO', country: 'USA' },
+  'oklahoma city': { state: 'OK', country: 'USA' },
+  auckland:      { state: '', country: 'NZL' },
+  sydney:        { state: '', country: 'AUS' },
+  melbourne:     { state: '', country: 'AUS' },
+  london:        { state: '', country: 'GBR' },
+  birmingham:    { state: '', country: 'GBR' },
+  manchester:    { state: '', country: 'GBR' },
+  glasgow:       { state: '', country: 'GBR' },
+};
+function parseLegacyScene(raw) {
+  const trimmed = asTrimmedString(raw);
+  if (!trimmed) return { city: '', state: '', country: '' };
+  const parts = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const city = parts[0];
+    const suffix = parts[1].toUpperCase();
+    if (LEGACY_COUNTRY_ALIASES[suffix]) {
+      return { city, state: '', country: LEGACY_COUNTRY_ALIASES[suffix] };
+    }
+    if (suffix.length === 3) {
+      return { city, state: '', country: suffix };
+    }
+    if (suffix.length === 2) {
+      return { city, state: suffix, country: 'USA' };
+    }
+    return { city: trimmed, state: '', country: 'USA' };
+  }
+  // Single-part bare-city input: look up the known-city table so the
+  // resulting locationKey matches the CSV rows for the same scene.
+  const rawCity = parts[0] || '';
+  const known = KNOWN_CITY_LOCATIONS[rawCity.toLowerCase()];
+  if (known) {
+    return { city: rawCity, state: known.state, country: known.country };
+  }
+  return { city: rawCity, state: '', country: 'USA' };
+}
+
+// Given a raw submission record (either new-shape with city/state/country,
+// or old-shape with a single scene string), returns the normalized
+// { city, state, country } this record should be treated as having. Applied
+// at read time so every GET response is already in the new shape regardless
+// of how it's stored on disk.
+function resolveSubmissionLocation(record) {
+  if (!record || typeof record !== 'object') return { city: '', state: '', country: '' };
+  let city = asTrimmedString(record.city);
+  let country = normalizeCountryCode(record.country);
+  let state = normalizeStateCode(record.state, country);
+  if (!city && !country && record.scene) {
+    const legacy = parseLegacyScene(record.scene);
+    city = legacy.city;
+    country = legacy.country;
+    state = legacy.state;
+  }
+  if (!country && city) country = 'USA';
+  return { city, state, country };
+}
+
+// Migrate a stored submission (as read from the blob) to the new shape for
+// the response payload. Leaves the underlying blob untouched — the lazy
+// migration only ever happens in memory, on read.
+function migrateSubmissionForRead(record) {
+  if (!record || typeof record !== 'object') return record;
+  const location = resolveSubmissionLocation(record);
+  const { scene, ...rest } = record;
+  return { ...rest, ...location };
+}
 
 // Mirror of the client's bioContainsBlockedLink() so link spam is rejected
 // even if a caller bypasses the browser form.
@@ -112,8 +234,23 @@ function validateSubmission(payload) {
   if (!band) return { ok: false, error: 'A band name is required.' };
   if (band.length > LIMITS.band) return { ok: false, error: 'Band name is too long.' };
 
-  const scene = asTrimmedString(payload.scene) || 'Seattle';
-  if (scene.length > LIMITS.scene) return { ok: false, error: 'Scene name is too long.' };
+  // Accept the new city/state/country shape, or fall back to splitting a
+  // legacy 'scene' string (a caller on old client code, or a hand-built
+  // request). Mirrors applyDraftToMaster()'s same fallback on the client.
+  let city = asTrimmedString(payload.city);
+  let country = normalizeCountryCode(payload.country);
+  let state = normalizeStateCode(payload.state, country);
+  if (!city && !country && payload.scene) {
+    const legacy = parseLegacyScene(payload.scene);
+    city = legacy.city;
+    country = legacy.country;
+    state = legacy.state;
+  }
+  if (!city) city = 'Seattle';
+  if (!country) country = 'USA';
+  if (city.length > LIMITS.city) return { ok: false, error: 'City name is too long.' };
+  if (state.length > LIMITS.state) return { ok: false, error: 'State must be a 2-letter USPS code.' };
+  if (country.length > LIMITS.country) return { ok: false, error: 'Country must be a 3-letter ISO code.' };
 
   const bio = asTrimmedString(payload.bio);
   if (bio.length > LIMITS.bio) return { ok: false, error: 'Bio is too long.' };
@@ -156,7 +293,9 @@ function validateSubmission(payload) {
     id: (globalThis.crypto?.randomUUID?.() || `sub_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`),
     band,
     members,
-    scene,
+    city,
+    state,
+    country,
     yearsActive: clampMeta(payload.yearsActive),
     label: clampMeta(payload.label),
     albums: clampMeta(payload.albums),
@@ -179,7 +318,11 @@ export default async function handler(req) {
   if (req.method === 'GET') {
     try {
       const submissions = await readSubmissions(store);
-      return jsonResponse({ submissions });
+      // Option A lazy migration: any stored submission still in the old
+      // { scene: 'Seattle, WA' } shape (the 14 pre-refactor entries) is
+      // migrated to { city, state, country } here, in memory, on every read.
+      // The blob itself is never rewritten by this path.
+      return jsonResponse({ submissions: submissions.map(migrateSubmissionForRead) });
     } catch (error) {
       return jsonResponse({ error: 'Could not read submissions.' }, 500);
     }
@@ -243,4 +386,15 @@ export default async function handler(req) {
 }
 
 // Exported for isolated unit testing of the validation logic (see repo verify step).
-export { validateSubmission, LIMITS, isAdminAuthorized, removeSubmissionById, FALLBACK_ADMIN_TOKEN };
+export {
+  validateSubmission,
+  LIMITS,
+  isAdminAuthorized,
+  removeSubmissionById,
+  FALLBACK_ADMIN_TOKEN,
+  parseLegacyScene,
+  resolveSubmissionLocation,
+  migrateSubmissionForRead,
+  normalizeCountryCode,
+  normalizeStateCode
+};
