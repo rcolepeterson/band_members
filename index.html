@@ -71,17 +71,23 @@
     .toolbar{display:flex;flex-wrap:wrap;gap:var(--space-3)}.graph-toolbar{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--space-3);row-gap:var(--space-3)}.graph-toolbar-left{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;min-width:0}.graph-version-pill{justify-self:end;white-space:nowrap}.tool-chip{min-height:40px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);background:rgba(255,255,255,0.02);font-size:var(--text-sm)}.tool-chip.active{background:rgba(82,174,182,0.12);border-color:rgba(82,174,182,0.35);color:var(--color-primary-hover)}.graph-status-chip{display:inline-flex;align-items:center;justify-content:center;cursor:default;pointer-events:none;opacity:.9;color:var(--color-text-muted)}.country-chip-row{margin-top:var(--space-2)}.country-chip{min-height:32px;padding:0 var(--space-3);font-size:var(--text-xs)}
     .graph-stage{position:relative;border-radius:calc(var(--radius-xl) + var(--space-2));overflow:hidden;background:radial-gradient(circle at top, rgba(82,174,182,0.08), transparent 34%),linear-gradient(180deg, rgba(10,14,20,0.92), rgba(8,11,17,0.98));border:none;min-height:720px;box-shadow:0 30px 80px rgba(0,0,0,0.34)}
     #graph-svg{width:100%;height:100%;min-height:520px}
-    .graph-badge{position:absolute;right:var(--space-5);bottom:var(--space-5);padding:0.5rem 0.8rem;border-radius:var(--radius-full);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;background:rgba(9,11,17,0.72);border:1px solid rgba(255,255,255,0.08);color:var(--color-text-muted)}
-    /* Always-on graph stats badge, top-right of the stage. Replaces the old
-       Project Pulse popover — same numbers, no toggle. */
-    .graph-stats-badge{position:absolute;right:var(--space-5);top:var(--space-5);padding:0.45rem 0.75rem;border-radius:var(--radius-full);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;background:rgba(9,11,17,0.72);border:1px solid rgba(255,255,255,0.08);color:var(--color-text-muted);pointer-events:none;display:inline-flex;gap:0.55rem;align-items:center;z-index:9;white-space:nowrap;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+    /* Legacy .graph-badge kept invisible: some JS still writes to
+       #graph-badge which is now nested inside .graph-stats-badge as the
+       status line, but any older selector matching .graph-badge as a
+       standalone pill in the corner would just render nothing. */
+    .graph-badge{display:none}
+    /* Always-on graph stats badge, top-right of the stage. Two lines:
+       counts on top, filter-status readout below. */
+    .graph-stats-badge{position:absolute;right:var(--space-5);top:var(--space-5);padding:0.5rem 0.85rem;border-radius:var(--radius-xl);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;background:rgba(9,11,17,0.72);border:1px solid rgba(255,255,255,0.08);color:var(--color-text-muted);pointer-events:none;display:flex;flex-direction:column;gap:0.22rem;align-items:flex-end;z-index:9;white-space:nowrap;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);text-align:right}
+    .graph-stats-badge__counts{display:inline-flex;align-items:center;gap:0.55rem}
     .graph-stats-badge__group{display:inline-flex;align-items:baseline;gap:0.3rem}
     .graph-stats-badge__value{color:#d4e8f4;font-weight:600;letter-spacing:0;text-transform:none}
     .graph-stats-badge__sep{opacity:0.35}
+    .graph-stats-badge__status{font-size:10px;color:rgba(212,232,244,0.72);letter-spacing:.09em}
     /* Mobile: hamburger lives top-right so drop the badge to the top-left
        instead. Keep it compact so it can't collide with the ROCK BAND
        FAMILY TREE title on very small phones. */
-    @media (max-width:720px){.graph-stats-badge{right:auto;top:var(--space-3);left:var(--space-3);padding:0.3rem 0.55rem;font-size:10px;gap:0.35rem}.graph-stats-badge__group{gap:0.22rem}}
+    @media (max-width:720px){.graph-stats-badge{right:auto;top:var(--space-3);left:var(--space-3);padding:0.35rem 0.6rem;font-size:10px;gap:0.15rem;align-items:flex-start;text-align:left}.graph-stats-badge__counts{gap:0.35rem}.graph-stats-badge__group{gap:0.22rem}.graph-stats-badge__status{font-size:9px}}
     .graph-note{display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--space-3);font-size:var(--text-sm);color:var(--color-text-muted)}
     .sidebar{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-5)}.stack{padding:var(--space-5);display:grid;gap:var(--space-4)}.section-label{font-size:var(--text-xs);letter-spacing:.18em;text-transform:uppercase;color:var(--color-text-muted)}
     .metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2)}.metric-card{padding:0.45rem var(--space-3);border-radius:var(--radius-md);background:linear-gradient(180deg, rgba(86,109,128,0.38), rgba(43,57,71,0.46));border:1px solid rgba(159,187,204,0.16);min-height:42px;display:grid;align-content:center;gap:0.08rem}.metric-value{font-size:var(--text-sm);font-weight:700;line-height:1.05}.metric-label{font-size:0.68rem;line-height:1;color:rgba(237,241,247,0.72);text-transform:uppercase;letter-spacing:.08em}
@@ -338,6 +344,123 @@ body {
 .tool-chip:hover {
   transform: translateY(-1px);
 }
+
+/* ---- Unified top toolbar (added in feat/unified-top-toolbar) ----
+   Layout: left cluster (view chips + Fit/Clear) — center cluster (three
+   filter buttons with popovers) — right cluster (Share, Add-your-band,
+   Version pill). Falls back to wrapping on narrow desktops. */
+.graph-overlay-top .graph-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.6rem;
+  width: 100%;
+}
+.graph-toolbar-center {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin-inline: auto; /* pushes right cluster to the far right when space allows */
+}
+.graph-toolbar-right {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.toolbar-divider {
+  display: inline-block;
+  width: 1px;
+  height: 1.1rem;
+  background: rgba(225, 244, 255, 0.24);
+  margin: 0 0.15rem;
+  align-self: center;
+}
+/* Filter buttons — same chip look as .tool-chip but with an inline value
+   pill that appears when the filter is active. */
+.filter-btn { display: inline-flex; align-items: center; gap: 0.35rem; }
+.filter-btn__icon { opacity: 0.85; font-size: 0.95em; line-height: 1; }
+.filter-btn__label { font-weight: inherit; }
+.filter-btn__value {
+  display: inline-block;
+  margin-left: 0.15rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(143, 232, 246, 0.18);
+  color: #effcff;
+  font-size: 0.85em;
+  line-height: 1.5;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.filter-btn__value[hidden] { display: none; }
+.filter-btn--active {
+  background: linear-gradient(180deg, rgba(143,232,246,0.14), rgba(91,168,187,0.08));
+  border-color: rgba(143,232,246,0.30);
+}
+/* Give the Add-your-band button the same emphasis as Share */
+.primary-btn.add-band-btn {
+  position: relative;
+  border-radius: 0;
+  clip-path: polygon(0 7px, 7px 0, calc(100% - 7px) 0, 100% 7px, 100% calc(100% - 7px), calc(100% - 7px) 100%, 7px 100%, 0 calc(100% - 7px));
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12);
+  background: linear-gradient(180deg, rgba(150,233,246,0.28), rgba(93,180,197,0.18));
+  border: 1px solid rgba(225, 244, 255, 0.24);
+  color: #effcff;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+}
+.primary-btn.add-band-btn:hover { transform: translateY(-1px); }
+/* Downward-opening popovers (mirror of .popover-up used elsewhere). */
+.popover-down {
+  position: absolute;
+  left: 0;
+  right: auto;
+  top: calc(100% + 0.55rem);
+  bottom: auto;
+  width: min(320px, calc(100vw - 2rem));
+  max-height: min(70vh, 620px);
+  overflow-y: auto;
+  z-index: 15;
+}
+.popover-down.popover-wide { width: min(460px, calc(100vw - 2rem)); }
+.filter-popover__label {
+  display: block;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  opacity: 0.75;
+  margin: 0.4rem 0 0.35rem;
+}
+#search-popover input[type="search"],
+#scene-popover select,
+#genre-popover select {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  background: rgba(7,12,18,0.55);
+  border: 1px solid rgba(225,244,255,0.24);
+  color: var(--color-text);
+  border-radius: 0;
+  clip-path: polygon(0 6px, 6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px));
+}
+@media (max-width: 900px) {
+  /* Hide the desktop toolbar entirely on mobile — mobile users go through
+     the hamburger sheet. Keeps the graph-overlay-top from stealing space. */
+  .graph-overlay-top { display: none; }
+}
+.mobile-sheet-theme {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.4rem 0 0.6rem;
+  border-top: 1px solid rgba(225, 244, 255, 0.14);
+  margin-top: 0.6rem;
+}
+.mobile-sheet-theme .mobile-theme-toggle { min-width: 8rem; }
 
 .tool-chip::before,
 .tool-chip::after,
@@ -1437,14 +1560,15 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   <a class="skip-link" href="#main-content">Skip to content</a>
   <div class="page-shell">
     <div class="grid-lines" aria-hidden="true"></div>
-    <header class="site-header">
-      <div class="header-inner">
-        <div class="header-right">
-          <button class="header-btn" id="focus-seattle" type="button">Focus Seattle</button>
-          <button class="header-btn" type="button" data-theme-toggle aria-label="Switch theme">Theme</button>
-        </div>
-      </div>
-    </header>
+    <!--
+      Site header retired as part of the unified top-toolbar refactor.
+      • Focus Seattle: its behavior is available via Scene → Seattle.
+      • Theme toggle: only exposed on mobile now via the hamburger sheet;
+        desktop follows prefers-color-scheme (see script tag near bottom).
+      Leaving an empty <header> in place keeps the .site-header CSS layout
+      slot but renders nothing.
+    -->
+    <header class="site-header" aria-hidden="true"></header>
 
     <main id="main-content" class="layout">
       <section class="hero" aria-labelledby="hero-title">
@@ -1504,46 +1628,182 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       <div class="toolbar country-chip-row" id="mobile-country-chip-row" aria-label="Country quick filters">
         <!-- Populated dynamically, mirrors #country-chip-row. -->
       </div>
+      <!--
+        Mobile-only theme toggle. Desktop honors prefers-color-scheme and
+        doesn't need a manual switch; mobile users often want a quick
+        override in dark environments, so we keep the button here inside
+        the hamburger sheet only.
+      -->
+      <div class="mobile-sheet-theme">
+        <button class="tool-chip mobile-theme-toggle" type="button" data-theme-toggle id="mobile-theme-toggle">Light mode</button>
+      </div>
     </aside>
-    <div class="graph-overlay">
-      <div class="panel-head graph-panel-head">
-        <div>
-          <h2 class="panel-title">Explore the tree</h2>
+    <div hidden aria-hidden="true" id="legacy-selection-stubs">
+      <span id="selected-node-name"></span>
+      <span id="selected-node-copy"></span>
+      <span id="selected-node-connections"></span>
+      <span id="selected-band-members"></span>
+      <span id="selected-node-type"></span>
+      <span id="selected-node-scene"></span>
+      <span id="selected-node-genre-row"><span id="selected-node-genre"></span></span>
+      <span id="selected-node-degree"></span>
+      <span id="selected-node-instrument"></span>
+      <span id="selected-node-bio"></span>
+    </div>
+
+    <!--
+      Unified top toolbar. One row of controls across the top of the stage,
+      followed by a thin secondary row of country chips. Replaces the old
+      "Explore the tree" panel head + filter-row form. Search / Scene /
+      Genre are collapsed into three narrow popovers each opened by a
+      button; when a filter is active the button shows the value inline
+      (e.g. "Genre: Grunge"). The Add-your-band and Share popovers used to
+      live in a separate bottom-overlay bar; they now anchor to buttons in
+      this same row.
+    -->
+    <div class="graph-overlay graph-overlay-top">
+      <div class="toolbar graph-toolbar" aria-label="Graph controls">
+        <div class="graph-toolbar-left">
+          <span class="tool-chip graph-status-chip" id="graph-total-chip" aria-hidden="true">Loading tree…</span>
+          <button class="tool-chip active" type="button" data-filter="all">All nodes</button>
+          <button class="tool-chip" type="button" data-filter="band">Bands only</button>
+          <button class="tool-chip" type="button" data-filter="person">Musicians only</button>
+          <span class="toolbar-divider" aria-hidden="true"></span>
+          <button class="tool-chip" type="button" data-action="fit">Fit graph</button>
+          <button class="tool-chip" type="button" data-action="clear">Clear filters</button>
         </div>
 
-        <div class="toolbar graph-toolbar" aria-label="Graph filters">
-          <div class="graph-toolbar-left">
-            <span class="tool-chip graph-status-chip" id="graph-total-chip" aria-hidden="true">Loading tree…</span>
-            <button class="tool-chip active" type="button" data-filter="all">All nodes</button>
-            <button class="tool-chip" type="button" data-filter="band">Bands only</button>
-            <button class="tool-chip" type="button" data-filter="person">Musicians only</button>
-            <button class="tool-chip" type="button" data-action="fit">Fit graph</button>
-            <button class="tool-chip" type="button" data-action="clear">Clear filters</button>
-            <button class="primary-btn share-btn" type="button" id="share-graph-btn">Share this graph</button>
+        <div class="graph-toolbar-center">
+          <div class="popover-anchor">
+            <button class="tool-chip filter-btn" type="button" id="search-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="search-popover">
+              <span class="filter-btn__icon" aria-hidden="true">⌕</span>
+              <span class="filter-btn__label">Search</span>
+              <span class="filter-btn__value" id="search-btn-value" hidden></span>
+            </button>
+            <div class="share-popover popover-down" id="search-popover" role="dialog" aria-label="Search band or musician" hidden>
+              <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
+              <div class="share-popover-title">Search band or musician</div>
+              <label class="filter-popover__label" for="node-search">Type a name to filter the tree</label>
+              <input id="node-search" type="search" placeholder="Search for Heart, Dave Grohl, Pearl Jam" />
+            </div>
           </div>
 
+          <div class="popover-anchor">
+            <button class="tool-chip filter-btn" type="button" id="scene-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="scene-popover">
+              <span class="filter-btn__label">Scene</span>
+              <span class="filter-btn__value" id="scene-btn-value" hidden></span>
+            </button>
+            <div class="share-popover popover-down" id="scene-popover" role="dialog" aria-label="Filter by scene" hidden>
+              <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
+              <div class="share-popover-title">Scene</div>
+              <label class="filter-popover__label" for="scene-filter">Focus the graph on a city or region</label>
+              <select id="scene-filter">
+                <option value="all">All scenes</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="popover-anchor">
+            <button class="tool-chip filter-btn" type="button" id="genre-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="genre-popover">
+              <span class="filter-btn__label">Genre</span>
+              <span class="filter-btn__value" id="genre-btn-value" hidden></span>
+            </button>
+            <div class="share-popover popover-down" id="genre-popover" role="dialog" aria-label="Filter by genre" hidden>
+              <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
+              <div class="share-popover-title">Genre</div>
+              <label class="filter-popover__label" for="genre-filter">Filter by musical genre</label>
+              <select id="genre-filter">
+                <option value="all">All genres</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="graph-toolbar-right">
+          <div class="popover-anchor">
+            <button class="primary-btn share-btn" type="button" id="share-graph-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="share-popover">Share this graph</button>
+            <div class="share-popover popover-down" id="share-popover" hidden>
+              <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
+              <div class="share-popover-title">Share this graph</div>
+              <p class="share-popover-copy">
+                Download the current graph view as a PNG or copy the main site link so people land on the full tree.
+              </p>
+              <div class="share-popover-actions">
+                <button class="primary-btn share-popover-btn" type="button" id="download-png-btn">Download PNG</button>
+                <button class="primary-btn share-popover-btn" type="button" id="copy-site-link-btn">Copy site link</button>
+              </div>
+              <div class="share-popover-feedback" id="share-popover-feedback" aria-live="polite">
+                Prepare a view you like, then share it.
+              </div>
+            </div>
+          </div>
+          <div class="popover-anchor">
+            <button class="primary-btn add-band-btn" type="button" id="add-band-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="add-band-popover">Add your band</button>
+            <div class="share-popover popover-down popover-wide" id="add-band-popover" role="dialog" aria-label="Add your band" hidden>
+              <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
+              <div class="share-popover-title">Add your band</div>
+              <p class="share-popover-copy">Drop a new branch into the tree. Plain text only — links and promo URLs are not allowed.</p>
+              <form class="form-grid form-grid-expanded" id="submission-form">
+                <div><label for="band-name">Band name</label><input id="band-name" name="band-name" type="text" placeholder="Temple of the Dog" /></div>
+                <div class="form-span-2 location-fields">
+                  <label class="members-block-label">Location</label>
+                  <div class="location-fields-row">
+                    <div><label for="submission-city">City</label><input id="submission-city" name="submission-city" type="text" placeholder="Seattle" /></div>
+                    <div><label for="submission-state">State</label><select id="submission-state" name="submission-state"><option value="">—</option></select></div>
+                    <div><label for="submission-country">Country</label><select id="submission-country" name="submission-country"></select></div>
+                  </div>
+                  <div class="field-note">State applies to US locations only and is disabled for other countries.</div>
+                </div>
+                <div class="form-span-2 members-block">
+                  <label class="members-block-label">Band members</label>
+                  <div id="members-container">
+                    <div class="member-row" data-member-row>
+                      <button type="button" class="member-row-remove" data-remove-row aria-label="Remove this member" tabindex="-1" hidden>&times;</button>
+                      <div class="member-row-fields">
+                        <div class="form-span-2"><label for="member-name">Member name</label><input id="member-name" class="member-name-input" name="member-name" type="text" placeholder="Jeff Ament" /></div>
+                        <div><label for="instrument-name">Instrument</label><input id="instrument-name" class="instrument-input" name="instrument-name" type="text" list="instrument-suggestions" placeholder="Bass, vocals, drums…" /></div>
+                        <div><label for="relation-type">Member weight</label><select id="relation-type" class="relation-input" name="relation-type"><option value="1">1 — Founder / core member</option><option value="2" selected>2 — Member</option><option value="3">3 — Touring member</option></select></div>
+                      </div>
+                    </div>
+                  </div>
+                  <button type="button" class="member-add-btn" id="add-member-row-btn">+ Add another member</button>
+                  <datalist id="instrument-suggestions"></datalist>
+                </div>
+                <div><label for="years-active">Years active</label><input id="years-active" name="years-active" type="text" placeholder="1990–1993" /></div>
+                <div><label for="band-label">Label</label><input id="band-label" name="band-label" type="text" placeholder="Sub Pop, Epic, SST…" /></div>
+                <div class="form-span-2"><label for="band-genre">Genre</label><input id="band-genre" name="band-genre" type="text" list="genre-suggestions" placeholder="Grunge, Alternative Rock, Punk Rock…" autocapitalize="words" /><datalist id="genre-suggestions"></datalist><div class="field-note">Optional. Free text — pick from the suggestions or type your own.</div></div>
+                <div class="form-span-2"><label for="albums-released">Albums released</label><input id="albums-released" name="albums-released" type="text" placeholder="Ten; Vs.; Vitalogy" /></div>
+                <div class="form-span-2"><label for="member-bio">Bio</label><textarea id="member-bio" name="member-bio" type="text" autocapitalize="sentences" autocomplete="off" spellcheck="true" placeholder="Optional member bio, personal context, side projects, influences, or anything you want to say about this musician."></textarea><div class="field-note">Plain text only. Links and promo URLs are not allowed.</div></div>
+                <div id="existing-band-members" class="detail-card submission-preview" style="display:none">
+                  <div class="detail-title">Existing members in this band</div>
+                  <p id="existing-band-copy" class="detail-copy">These members are already connected to this band in the current graph.</p>
+                  <div id="existing-band-member-list" class="footer-strip"></div>
+                </div>
+                <div id="existing-member-bands" class="detail-card submission-preview" style="display:none">
+                  <div class="detail-title">Bands already linked to this member</div>
+                  <p id="existing-member-copy" class="detail-copy">This helps you avoid adding the same member-band relationship twice.</p>
+                  <div id="existing-member-band-list" class="footer-strip"></div>
+                </div>
+                
+              </form>
+              <div class="detail-card submission-preview">
+                <div class="detail-title">Submission preview</div>
+                <div id="submission-preview-name" class="panel-title" style="font-size:var(--text-base)">Nothing entered yet</div>
+                <p id="submission-preview-copy" class="detail-copy">As you type, this card previews how a member/band view could summarize the information.</p>
+                <div id="submission-preview-source" class="section-label">Awaiting input</div>
+                <div class="detail-stat"><span>Location</span><span id="preview-scene">—</span></div>
+                <div class="detail-stat"><span>Instrument</span><span id="preview-instrument">—</span></div>
+                <div class="detail-stat"><span>Years active</span><span id="preview-years">—</span></div>
+                <div class="detail-stat"><span>Label</span><span id="preview-label">—</span></div>
+                <div class="detail-stat"><span>Albums</span><span id="preview-albums">—</span></div>
+              </div>
+              <div id="submission-validation" class="validation-message" aria-live="polite">Bands are unique within a scene. Members can appear in multiple bands.</div>
+              <div id="submission-mode" class="validation-message" aria-live="polite">Mode: Create a new band entry.</div>
+              <div id="submission-feedback" class="validation-message submission-feedback" aria-live="polite"></div>
+              <div class="footer-strip"><button class="submit-btn" type="button" id="save-draft-btn">Save draft band</button></div>
+            </div>
+          </div>
           <span class="version-pill graph-version-pill" aria-label="Current version">Version 0.3</span>
-        </div>
-      </div>
-
-      <div class="filter-row" aria-label="Advanced graph filters">
-        <div class="filter-field">
-          <label for="node-search">Search band or musician</label>
-          <input id="node-search" type="search" placeholder="Search for Heart, Dave Grohl, Pearl Jam" />
-        </div>
-
-        <div class="filter-field">
-          <label for="scene-filter">Scene</label>
-          <select id="scene-filter">
-            <option value="all">All scenes</option>
-          </select>
-        </div>
-
-        <div class="filter-field">
-          <label for="genre-filter">Genre</label>
-          <select id="genre-filter">
-            <option value="all">All genres</option>
-          </select>
         </div>
       </div>
 
@@ -1551,20 +1811,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         <!-- Populated dynamically: an "All" chip plus one chip per distinct
              country in the graph (e.g. "All USA", "All GBR"). See
              renderCountryChips(). -->
-      </div>
-
-      <div class="share-popover" id="share-popover" hidden>
-        <div class="share-popover-title">Share this graph</div>
-        <p class="share-popover-copy">
-          Download the current graph view as a PNG or copy the main site link so people land on the full tree.
-        </p>
-        <div class="share-popover-actions">
-          <button class="primary-btn share-popover-btn" type="button" id="download-png-btn">Download PNG</button>
-          <button class="primary-btn share-popover-btn" type="button" id="copy-site-link-btn">Copy site link</button>
-        </div>
-        <div class="share-popover-feedback" id="share-popover-feedback" aria-live="polite">
-          Prepare a view you like, then share it.
-        </div>
       </div>
     </div>
 
@@ -1577,19 +1823,25 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       Graph data could not load in this tab. Use the same folder with the HTML, CSV, and logo together for local viewing.
     </div>
 
-    <div class="graph-badge" id="graph-badge">Preparing graph</div>
     <!--
-      Always-on graph stats badge (top-right of the stage). Replaces the old
-      Project Pulse popover — same three numbers, no toggle. Purely
+      Always-on graph stats badge (top-right of the stage). Two lines: the
+      first is Nodes / Links / Scenes counts, the second is a live filter
+      status readout ("Full graph" when no filters, e.g. "Bands only ·
+      Grunge · Seattle" when filters are applied). The status line used to
+      live in a separate #graph-badge pill in the bottom-right corner —
+      merged in here so the stage only has one summary badge. Purely
       informational: pointer-events disabled so it never intercepts clicks
       on nodes underneath.
     -->
     <div class="graph-stats-badge" id="graph-stats-badge" role="status" aria-live="polite" aria-label="Graph stats">
-      <span class="graph-stats-badge__group"><span class="graph-stats-badge__value" id="metric-nodes">0</span> Nodes</span>
-      <span class="graph-stats-badge__sep" aria-hidden="true">·</span>
-      <span class="graph-stats-badge__group"><span class="graph-stats-badge__value" id="metric-links">0</span> Links</span>
-      <span class="graph-stats-badge__sep" aria-hidden="true">·</span>
-      <span class="graph-stats-badge__group"><span class="graph-stats-badge__value" id="metric-scenes">0</span> Scenes</span>
+      <div class="graph-stats-badge__counts">
+        <span class="graph-stats-badge__group"><span class="graph-stats-badge__value" id="metric-nodes">0</span> Nodes</span>
+        <span class="graph-stats-badge__sep" aria-hidden="true">·</span>
+        <span class="graph-stats-badge__group"><span class="graph-stats-badge__value" id="metric-links">0</span> Links</span>
+        <span class="graph-stats-badge__sep" aria-hidden="true">·</span>
+        <span class="graph-stats-badge__group"><span class="graph-stats-badge__value" id="metric-scenes">0</span> Scenes</span>
+      </div>
+      <div class="graph-stats-badge__status" id="graph-badge">Full graph</div>
     </div>
 
     <!--
@@ -1615,97 +1867,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       <div class="node-card__tail" aria-hidden="true"></div>
     </div>
 
-    <div class="graph-overlay graph-overlay-bottom">
-      <div class="toolbar graph-toolbar-bottom" aria-label="Panel toggles">
-        <!--
-          Hidden compatibility stubs for updateSelection(). Node detail
-          lives in the floating #node-card element now; updateSelection()
-          still writes into these fields so downstream helpers like
-          getBandMembers()/renderBandMemberButtons() don't need
-          conditional null-checks. Previously nested inside the Project
-          Pulse popover — moved here so the popover could be retired.
-        -->
-        <div hidden aria-hidden="true" id="legacy-selection-stubs">
-          <span id="selected-node-name"></span>
-          <span id="selected-node-copy"></span>
-          <span id="selected-node-connections"></span>
-          <span id="selected-band-members"></span>
-          <span id="selected-node-type"></span>
-          <span id="selected-node-scene"></span>
-          <span id="selected-node-genre-row"><span id="selected-node-genre"></span></span>
-          <span id="selected-node-degree"></span>
-          <span id="selected-node-instrument"></span>
-          <span id="selected-node-bio"></span>
-        </div>
-
-        <div class="popover-anchor">
-          <button class="tool-chip panel-toggle-btn" type="button" id="add-band-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="add-band-popover">Add your band</button>
-          <div class="share-popover popover-up popover-wide" id="add-band-popover" role="dialog" aria-label="Add your band" hidden>
-            <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
-            <div class="share-popover-title">Add your band</div>
-            <p class="share-popover-copy">Drop a new branch into the tree. Plain text only — links and promo URLs are not allowed.</p>
-            <form class="form-grid form-grid-expanded" id="submission-form">
-              <div><label for="band-name">Band name</label><input id="band-name" name="band-name" type="text" placeholder="Temple of the Dog" /></div>
-              <div class="form-span-2 location-fields">
-                <label class="members-block-label">Location</label>
-                <div class="location-fields-row">
-                  <div><label for="submission-city">City</label><input id="submission-city" name="submission-city" type="text" placeholder="Seattle" /></div>
-                  <div><label for="submission-state">State</label><select id="submission-state" name="submission-state"><option value="">—</option></select></div>
-                  <div><label for="submission-country">Country</label><select id="submission-country" name="submission-country"></select></div>
-                </div>
-                <div class="field-note">State applies to US locations only and is disabled for other countries.</div>
-              </div>
-              <div class="form-span-2 members-block">
-                <label class="members-block-label">Band members</label>
-                <div id="members-container">
-                  <div class="member-row" data-member-row>
-                    <button type="button" class="member-row-remove" data-remove-row aria-label="Remove this member" tabindex="-1" hidden>&times;</button>
-                    <div class="member-row-fields">
-                      <div class="form-span-2"><label for="member-name">Member name</label><input id="member-name" class="member-name-input" name="member-name" type="text" placeholder="Jeff Ament" /></div>
-                      <div><label for="instrument-name">Instrument</label><input id="instrument-name" class="instrument-input" name="instrument-name" type="text" list="instrument-suggestions" placeholder="Bass, vocals, drums…" /></div>
-                      <div><label for="relation-type">Member weight</label><select id="relation-type" class="relation-input" name="relation-type"><option value="1">1 — Founder / core member</option><option value="2" selected>2 — Member</option><option value="3">3 — Touring member</option></select></div>
-                    </div>
-                  </div>
-                </div>
-                <button type="button" class="member-add-btn" id="add-member-row-btn">+ Add another member</button>
-                <datalist id="instrument-suggestions"></datalist>
-              </div>
-              <div><label for="years-active">Years active</label><input id="years-active" name="years-active" type="text" placeholder="1990–1993" /></div>
-              <div><label for="band-label">Label</label><input id="band-label" name="band-label" type="text" placeholder="Sub Pop, Epic, SST…" /></div>
-              <div class="form-span-2"><label for="band-genre">Genre</label><input id="band-genre" name="band-genre" type="text" list="genre-suggestions" placeholder="Grunge, Alternative Rock, Punk Rock…" autocapitalize="words" /><datalist id="genre-suggestions"></datalist><div class="field-note">Optional. Free text — pick from the suggestions or type your own.</div></div>
-              <div class="form-span-2"><label for="albums-released">Albums released</label><input id="albums-released" name="albums-released" type="text" placeholder="Ten; Vs.; Vitalogy" /></div>
-              <div class="form-span-2"><label for="member-bio">Bio</label><textarea id="member-bio" name="member-bio" type="text" autocapitalize="sentences" autocomplete="off" spellcheck="true" placeholder="Optional member bio, personal context, side projects, influences, or anything you want to say about this musician."></textarea><div class="field-note">Plain text only. Links and promo URLs are not allowed.</div></div>
-              <div id="existing-band-members" class="detail-card submission-preview" style="display:none">
-                <div class="detail-title">Existing members in this band</div>
-                <p id="existing-band-copy" class="detail-copy">These members are already connected to this band in the current graph.</p>
-                <div id="existing-band-member-list" class="footer-strip"></div>
-              </div>
-              <div id="existing-member-bands" class="detail-card submission-preview" style="display:none">
-                <div class="detail-title">Bands already linked to this member</div>
-                <p id="existing-member-copy" class="detail-copy">This helps you avoid adding the same member-band relationship twice.</p>
-                <div id="existing-member-band-list" class="footer-strip"></div>
-              </div>
-              
-            </form>
-            <div class="detail-card submission-preview">
-              <div class="detail-title">Submission preview</div>
-              <div id="submission-preview-name" class="panel-title" style="font-size:var(--text-base)">Nothing entered yet</div>
-              <p id="submission-preview-copy" class="detail-copy">As you type, this card previews how a member/band view could summarize the information.</p>
-              <div id="submission-preview-source" class="section-label">Awaiting input</div>
-              <div class="detail-stat"><span>Location</span><span id="preview-scene">—</span></div>
-              <div class="detail-stat"><span>Instrument</span><span id="preview-instrument">—</span></div>
-              <div class="detail-stat"><span>Years active</span><span id="preview-years">—</span></div>
-              <div class="detail-stat"><span>Label</span><span id="preview-label">—</span></div>
-              <div class="detail-stat"><span>Albums</span><span id="preview-albums">—</span></div>
-            </div>
-            <div id="submission-validation" class="validation-message" aria-live="polite">Bands are unique within a scene. Members can appear in multiple bands.</div>
-            <div id="submission-mode" class="validation-message" aria-live="polite">Mode: Create a new band entry.</div>
-            <div id="submission-feedback" class="validation-message submission-feedback" aria-live="polite"></div>
-            <div class="footer-strip"><button class="submit-btn" type="button" id="save-draft-btn">Save draft band</button></div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 
   <div class="graph-shell-footer">
@@ -1857,8 +2018,17 @@ if (shareGraphBtn) {
     // click-outside-to-close pattern as the share popover. Project Pulse
     // used to live here alongside — replaced by the always-on
     // #graph-stats-badge in the top-right of the stage.
+    // All click-open / click-outside-to-close popovers on the top toolbar
+    // share one registry. Add-band still uses the same button+popover pair;
+    // the three filter popovers (Search/Scene/Genre) piggy-back on the same
+    // open/close machinery. Naming kept as "bottomPopovers" for backward-
+    // compatibility across the file even though everything now anchors up
+    // top after the unified-toolbar refactor.
     const bottomPopovers = [
       { btn: document.getElementById('add-band-btn'), pop: document.getElementById('add-band-popover') },
+      { btn: document.getElementById('search-btn'), pop: document.getElementById('search-popover') },
+      { btn: document.getElementById('scene-btn'),  pop: document.getElementById('scene-popover') },
+      { btn: document.getElementById('genre-btn'),  pop: document.getElementById('genre-popover') },
     ].filter(entry => entry.btn && entry.pop);
 
     function closeBottomPopovers(except) {
@@ -3135,8 +3305,38 @@ if (shareGraphBtn) {
           badgeParts.push(selectedOption ? selectedOption.textContent : currentScene);
         }
       }
+      if (currentGenre && currentGenre !== 'all') badgeParts.push(currentGenre);
       if (currentSearch) badgeParts.push(`Search: ${currentSearch}`);
       graphBadge.textContent = badgeParts.length ? badgeParts.join(' · ') : 'Full graph';
+
+      // Sync inline active-value pills on the top-toolbar filter buttons.
+      // A helper: show the chosen value beside the button label whenever
+      // the filter is not at its default, hide the value span otherwise.
+      // Also tag the button with .filter-btn--active for visual emphasis.
+      const syncFilterBtn = (btnId, valueId, isActive, valueText) => {
+        const btn = document.getElementById(btnId);
+        const val = document.getElementById(valueId);
+        if (!btn || !val) return;
+        if (isActive) {
+          val.textContent = valueText;
+          val.hidden = false;
+          btn.classList.add('filter-btn--active');
+        } else {
+          val.textContent = '';
+          val.hidden = true;
+          btn.classList.remove('filter-btn--active');
+        }
+      };
+      syncFilterBtn('search-btn', 'search-btn-value', !!currentSearch, currentSearch);
+      const sceneLabel = (() => {
+        if (currentScene === 'all') return '';
+        if (currentScene.startsWith('country:')) return `All ${currentScene.slice('country:'.length)}`;
+        const sceneSelectEl = document.getElementById('scene-filter');
+        const selectedOption = sceneSelectEl && [...sceneSelectEl.options].find(opt => opt.value === currentScene);
+        return selectedOption ? selectedOption.textContent : currentScene;
+      })();
+      syncFilterBtn('scene-btn', 'scene-btn-value', currentScene !== 'all', sceneLabel);
+      syncFilterBtn('genre-btn', 'genre-btn-value', currentGenre && currentGenre !== 'all', currentGenre);
       noteLeft.textContent = filtered.nodes.length ? `Showing ${filtered.links.length} relationships from your uploaded CSV.` : 'No matches yet. Try clearing or relaxing the filters.';
 
       graphGroup.selectAll('*').remove();
@@ -3781,7 +3981,11 @@ if (shareGraphBtn) {
       });
     });
 
-    document.getElementById('focus-seattle').addEventListener('click', () => {
+    // Focus Seattle used to be a page-header button; retired as part of
+    // the unified top-toolbar refactor. The Scene popover → Seattle option
+    // does the same thing. Any code that references this listener should
+    // no-op safely because the button element no longer exists.
+    document.getElementById('focus-seattle')?.addEventListener('click', () => {
       // Find the Seattle, WA locationKey dynamically -- it's not a fixed
       // string anymore, but derived from whatever city/state/country data
       // actually loaded.
@@ -4138,16 +4342,31 @@ if (shareGraphBtn) {
           logoNote.style.display = 'block';
         });
       }
-      const toggle = document.querySelector('[data-theme-toggle]');
-      if (!toggle) return;
-      let currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+      // Theme handling. The desktop toolbar no longer surfaces a theme
+      // toggle — that job belongs to the OS via prefers-color-scheme.
+      // Only mobile still exposes a manual toggle inside the hamburger
+      // sheet (see #mobile-theme-toggle below). We keep the querySelectorAll
+      // so any [data-theme-toggle] button anywhere in the DOM stays in sync.
+      const toggles = document.querySelectorAll('[data-theme-toggle]');
+      const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)');
+      const initialTheme = document.documentElement.getAttribute('data-theme')
+        || (prefersLight && prefersLight.matches ? 'light' : 'dark');
+      let currentTheme = initialTheme;
       const applyTheme = theme => {
         currentTheme = theme;
         document.documentElement.setAttribute('data-theme', theme);
-        toggle.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+        toggles.forEach(btn => { btn.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode'; });
       };
       applyTheme(currentTheme);
-      toggle.addEventListener('click', () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark'));
+      toggles.forEach(btn => btn.addEventListener('click', () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark')));
+      // Follow OS preference until the user overrides with the manual toggle.
+      if (prefersLight && !document.documentElement.hasAttribute('data-theme-user-override')) {
+        try {
+          prefersLight.addEventListener('change', ev => applyTheme(ev.matches ? 'light' : 'dark'));
+        } catch (_) { /* older Safari uses addListener */
+          try { prefersLight.addListener(ev => applyTheme(ev.matches ? 'light' : 'dark')); } catch (_) {}
+        }
+      }
     })();
 
     updateHeroState();
