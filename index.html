@@ -2457,6 +2457,23 @@ if (shareGraphBtn) {
       svgSelection.transition().duration(750).call(zoomBehavior.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
     }
 
+    // Flavor C node labels: when viewing multiple scenes at once, band node
+    // labels append a location suffix so it's clear which scene each band
+    // belongs to -- bare city for US bands ("Sweet Water · Seattle"), city +
+    // country for non-US bands ("Bee Gees · London, GBR"). When the graph is
+    // filtered down to a single scene (a specific locationKey selected, not
+    // 'all' and not a country chip), the suffix is redundant and dropped.
+    // Person nodes never get this suffix.
+    function bandNodeLabel(d) {
+      const isSingleSceneView = currentScene && currentScene !== 'all' && !currentScene.startsWith('country:');
+      if (isSingleSceneView) return d.id;
+      const country = normalizeCountry(d.country);
+      const city = normalizeLocationField(d.city);
+      if (!city) return d.id;
+      const suffix = country && country !== 'USA' ? `${city}, ${country}` : city;
+      return `${d.id} · ${suffix}`;
+    }
+
     function renderGraph() {
       if (!graphState || !svgSelection) return;
       const filtered = getFilteredGraph(graphState.master);
@@ -2594,7 +2611,7 @@ if (shareGraphBtn) {
         .attr('x', d => getNodeOuterRadius(d) + 6)
         .attr('y', 4)
         .text(d => {
-          if (d.type === 'band') return d.id;
+          if (d.type === 'band') return bandNodeLabel(d);
           const instruments = [d.instrument1, d.instrument2].filter(Boolean).join(', ');
           return instruments ? `${d.id} — ${instruments}` : d.id;
         })
