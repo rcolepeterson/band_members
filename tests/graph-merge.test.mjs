@@ -45,15 +45,20 @@ const LOCATION_HELPERS = [
   'parseLegacyScene',
 ];
 
+// Helper to extract a `const NAME = { ... };` declaration from index.html.
+function extractConstObject(name) {
+  const start = html.indexOf(`const ${name}`);
+  assert.ok(start >= 0, `${name} not found in index.html`);
+  const end = html.indexOf('};', start) + 2;
+  return html.slice(start, end);
+}
+
 const factory = new Function(
   [
-    // LEGACY_COUNTRY_ALIASES is a const, not a function — extract it directly.
-    (() => {
-      const start = html.indexOf('const LEGACY_COUNTRY_ALIASES');
-      assert.ok(start >= 0, 'LEGACY_COUNTRY_ALIASES not found');
-      const end = html.indexOf('};', start) + 2;
-      return html.slice(start, end);
-    })(),
+    // LEGACY_COUNTRY_ALIASES and KNOWN_CITY_LOCATIONS are consts referenced
+    // by parseLegacyScene — extract them directly.
+    extractConstObject('LEGACY_COUNTRY_ALIASES'),
+    extractConstObject('KNOWN_CITY_LOCATIONS'),
     ...LOCATION_HELPERS.map(extract),
     extract('normalizeKey'),
     extract('applyDraftToMaster'),

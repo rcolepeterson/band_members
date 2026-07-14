@@ -116,6 +116,36 @@ const LEGACY_COUNTRY_ALIASES = {
   SCT: 'GBR',
   UK: 'GBR',
 };
+// Known-city lookup for bare-city legacy inputs (e.g. 'Parc Boys' was
+// submitted with scene: 'Seattle' before this refactor; without this table,
+// its locationKey would be 'USA||Seattle' and wouldn't match the CSV's
+// 'USA|WA|Seattle'). Keep in sync with scripts/location-helpers.mjs.
+const KNOWN_CITY_LOCATIONS = {
+  seattle:       { state: 'WA', country: 'USA' },
+  tacoma:        { state: 'WA', country: 'USA' },
+  issaquah:      { state: 'WA', country: 'USA' },
+  portland:      { state: 'OR', country: 'USA' },
+  'los angeles': { state: 'CA', country: 'USA' },
+  venice:        { state: 'CA', country: 'USA' },
+  'palm desert': { state: 'CA', country: 'USA' },
+  'san francisco': { state: 'CA', country: 'USA' },
+  'new york':    { state: 'NY', country: 'USA' },
+  'berkeley heights': { state: 'NJ', country: 'USA' },
+  chicago:       { state: 'IL', country: 'USA' },
+  champaign:     { state: 'IL', country: 'USA' },
+  rockford:      { state: 'IL', country: 'USA' },
+  cleveland:     { state: 'OH', country: 'USA' },
+  'coral springs': { state: 'FL', country: 'USA' },
+  'kansas city': { state: 'MO', country: 'USA' },
+  'oklahoma city': { state: 'OK', country: 'USA' },
+  auckland:      { state: '', country: 'NZL' },
+  sydney:        { state: '', country: 'AUS' },
+  melbourne:     { state: '', country: 'AUS' },
+  london:        { state: '', country: 'GBR' },
+  birmingham:    { state: '', country: 'GBR' },
+  manchester:    { state: '', country: 'GBR' },
+  glasgow:       { state: '', country: 'GBR' },
+};
 function parseLegacyScene(raw) {
   const trimmed = asTrimmedString(raw);
   if (!trimmed) return { city: '', state: '', country: '' };
@@ -134,7 +164,14 @@ function parseLegacyScene(raw) {
     }
     return { city: trimmed, state: '', country: 'USA' };
   }
-  return { city: parts[0] || '', state: '', country: 'USA' };
+  // Single-part bare-city input: look up the known-city table so the
+  // resulting locationKey matches the CSV rows for the same scene.
+  const rawCity = parts[0] || '';
+  const known = KNOWN_CITY_LOCATIONS[rawCity.toLowerCase()];
+  if (known) {
+    return { city: rawCity, state: known.state, country: known.country };
+  }
+  return { city: rawCity, state: '', country: 'USA' };
 }
 
 // Given a raw submission record (either new-shape with city/state/country,

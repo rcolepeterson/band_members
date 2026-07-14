@@ -95,6 +95,45 @@ export const LEGACY_COUNTRY_ALIASES = {
   'SCT': 'GBR', // Scotland -> UK
   'UK': 'GBR',
 };
+
+// Known-city lookup: for pre-refactor submissions where the user typed just
+// a bare city name ('Seattle' rather than 'Seattle, WA'), fill in the correct
+// state and country so their locationKey matches the CSV rows for the same
+// scene. This is what makes Parc Boys ('scene: "Seattle"' in Netlify Blobs)
+// show up when the mobile default filter is 'USA|WA|Seattle'.
+//
+// City name lookup is case-insensitive. Only cities that appear in the CSV
+// are listed; typing an unknown city still returns { city, state: '',
+// country: 'USA' } as a safe default.
+export const KNOWN_CITY_LOCATIONS = {
+  // US cities
+  'seattle':       { state: 'WA', country: 'USA' },
+  'tacoma':        { state: 'WA', country: 'USA' },
+  'issaquah':      { state: 'WA', country: 'USA' },
+  'portland':      { state: 'OR', country: 'USA' },
+  'los angeles':   { state: 'CA', country: 'USA' },
+  'venice':        { state: 'CA', country: 'USA' },
+  'palm desert':   { state: 'CA', country: 'USA' },
+  'san francisco': { state: 'CA', country: 'USA' },
+  'new york':      { state: 'NY', country: 'USA' },
+  'berkeley heights': { state: 'NJ', country: 'USA' },
+  'chicago':       { state: 'IL', country: 'USA' },
+  'champaign':     { state: 'IL', country: 'USA' },
+  'rockford':      { state: 'IL', country: 'USA' },
+  'cleveland':     { state: 'OH', country: 'USA' },
+  'coral springs': { state: 'FL', country: 'USA' },
+  'kansas city':   { state: 'MO', country: 'USA' },
+  'oklahoma city': { state: 'OK', country: 'USA' },
+  // Non-US cities (state is always blank)
+  'auckland':      { state: '', country: 'NZL' },
+  'sydney':        { state: '', country: 'AUS' },
+  'melbourne':     { state: '', country: 'AUS' },
+  'london':        { state: '', country: 'GBR' },
+  'birmingham':    { state: '', country: 'GBR' },
+  'manchester':    { state: '', country: 'GBR' },
+  'glasgow':       { state: '', country: 'GBR' },
+};
+
 export function parseLegacyScene(raw) {
   const trimmed = normalizeLocationField(raw);
   if (!trimmed) return { city: '', state: '', country: '' };
@@ -117,6 +156,12 @@ export function parseLegacyScene(raw) {
     // Anything else -> keep the whole thing as city, default country USA.
     return { city: trimmed, state: '', country: 'USA' };
   }
-  // Single part: default to US city with unknown state.
-  return { city: parts[0] || '', state: '', country: 'USA' };
+  // Single part: look up the city in the known-city table so the resulting
+  // locationKey matches the CSV. Falls back to city-only + USA if unknown.
+  const rawCity = parts[0] || '';
+  const known = KNOWN_CITY_LOCATIONS[rawCity.toLowerCase()];
+  if (known) {
+    return { city: rawCity, state: known.state, country: known.country };
+  }
+  return { city: rawCity, state: '', country: 'USA' };
 }

@@ -15,6 +15,7 @@ import {
   locationLabel,
   parseLegacyScene,
   LEGACY_COUNTRY_ALIASES,
+  KNOWN_CITY_LOCATIONS,
 } from '../scripts/location-helpers.mjs';
 
 test('normalizeLocationField trims and coerces to string', () => {
@@ -98,8 +99,24 @@ test('parseLegacyScene recognizes already-ISO-3 country suffixes', () => {
   assert.deepEqual(parseLegacyScene('Tokyo, JPN'), { city: 'Tokyo', state: '', country: 'JPN' });
 });
 
-test('parseLegacyScene falls back to US city for bare inputs', () => {
-  assert.deepEqual(parseLegacyScene('Seattle'), { city: 'Seattle', state: '', country: 'USA' });
+test('parseLegacyScene fills in state/country from known-city table for bare inputs', () => {
+  // Regression: the bare-'Seattle' Parc Boys blob needs to normalize to
+  // { city: 'Seattle', state: 'WA', country: 'USA' } so its locationKey
+  // matches the CSV's 'USA|WA|Seattle' and it shows up under Seattle filters.
+  assert.deepEqual(parseLegacyScene('Seattle'), { city: 'Seattle', state: 'WA', country: 'USA' });
+  assert.deepEqual(parseLegacyScene('Portland'), { city: 'Portland', state: 'OR', country: 'USA' });
+  assert.deepEqual(parseLegacyScene('Venice'), { city: 'Venice', state: 'CA', country: 'USA' });
+  assert.deepEqual(parseLegacyScene('Berkeley Heights'), { city: 'Berkeley Heights', state: 'NJ', country: 'USA' });
+  // Non-US known cities: state stays blank
+  assert.deepEqual(parseLegacyScene('London'), { city: 'London', state: '', country: 'GBR' });
+  assert.deepEqual(parseLegacyScene('Sydney'), { city: 'Sydney', state: '', country: 'AUS' });
+  // Case-insensitive lookup
+  assert.deepEqual(parseLegacyScene('seattle'), { city: 'seattle', state: 'WA', country: 'USA' });
+  assert.deepEqual(parseLegacyScene('SEATTLE'), { city: 'SEATTLE', state: 'WA', country: 'USA' });
+});
+
+test('parseLegacyScene falls back to city-only + USA for unknown bare inputs', () => {
+  assert.deepEqual(parseLegacyScene('Somewhere Else'), { city: 'Somewhere Else', state: '', country: 'USA' });
   assert.deepEqual(parseLegacyScene(''), { city: '', state: '', country: '' });
   assert.deepEqual(parseLegacyScene(null), { city: '', state: '', country: '' });
 });
