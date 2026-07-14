@@ -200,6 +200,79 @@ test('applyDraftToMaster preserves an existing genre when a later submission omi
   assert.equal(bandNodes(master, 'Pearl Jam')[0].genre, 'Grunge');
 });
 
+// -----------------------------------------------------------------------
+// yearsActive / label / albums: long-form band metadata collected only from
+// submissions (CSV rows don't carry these). Same merge rule as genre — first
+// non-blank value wins so a later submission that leaves the field blank
+// never wipes out an earlier value.
+// -----------------------------------------------------------------------
+
+test('applyDraftToMaster stores yearsActive / label / albums on a brand-new band node', () => {
+  const master = emptyMaster();
+  applyDraftToMaster(master, {
+    band: 'Alice in Chains',
+    city: 'Seattle', state: 'WA', country: 'USA',
+    genre: 'Grunge',
+    yearsActive: '1987–present',
+    label: 'Columbia',
+    albums: 'Facelift; Dirt; Alice in Chains',
+    members: [{ member: 'Layne Staley', instrument: 'vocals', relation: '1' }],
+    mode: 'new-band-entry'
+  });
+  const band = bandNodes(master, 'Alice in Chains')[0];
+  assert.ok(band, 'band node exists');
+  assert.equal(band.yearsActive, '1987–present');
+  assert.equal(band.label, 'Columbia');
+  assert.equal(band.albums, 'Facelift; Dirt; Alice in Chains');
+});
+
+test('applyDraftToMaster fills in blank existing yearsActive / label / albums from a later submission', () => {
+  const master = emptyMaster();
+  // First submission omits the metadata (blank strings).
+  applyDraftToMaster(master, {
+    band: 'Mad Season', city: 'Seattle', state: 'WA', country: 'USA',
+    genre: 'Grunge',
+    yearsActive: '', label: '', albums: '',
+    members: [{ member: 'Mike McCready', relation: '1' }],
+    mode: 'new-band-entry'
+  });
+  // Second submission carries values — they should flow onto the existing node.
+  applyDraftToMaster(master, {
+    band: 'Mad Season', city: 'Seattle', state: 'WA', country: 'USA',
+    yearsActive: '1994–1999',
+    label: 'Columbia',
+    albums: 'Above',
+    members: [{ member: 'Layne Staley', relation: '1' }],
+    mode: 'existing-band-connection'
+  });
+  const band = bandNodes(master, 'Mad Season')[0];
+  assert.equal(band.yearsActive, '1994–1999');
+  assert.equal(band.label, 'Columbia');
+  assert.equal(band.albums, 'Above');
+});
+
+test('applyDraftToMaster preserves existing yearsActive / label / albums when a later submission omits them', () => {
+  const master = emptyMaster();
+  applyDraftToMaster(master, {
+    band: 'Temple of the Dog', city: 'Seattle', state: 'WA', country: 'USA',
+    yearsActive: '1990–1991',
+    label: 'A&M',
+    albums: 'Temple of the Dog',
+    members: [{ member: 'Chris Cornell', relation: '1' }],
+    mode: 'new-band-entry'
+  });
+  applyDraftToMaster(master, {
+    band: 'Temple of the Dog', city: 'Seattle', state: 'WA', country: 'USA',
+    yearsActive: '', label: '', albums: '',
+    members: [{ member: 'Jeff Ament', relation: '1' }],
+    mode: 'existing-band-connection'
+  });
+  const band = bandNodes(master, 'Temple of the Dog')[0];
+  assert.equal(band.yearsActive, '1990–1991');
+  assert.equal(band.label, 'A&M');
+  assert.equal(band.albums, 'Temple of the Dog');
+});
+
 test('reproduces the production snapshot: single Metallica node with all members', () => {
   const master = emptyMaster();
   const submissions = [

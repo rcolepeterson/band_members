@@ -1248,6 +1248,172 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   .hero .hero-title-clean { font-size: 0.82rem !important; }
 }
 
+/* -------------------------------------------------------------------------
+ * Floating node info card (Zillow/Redfin-style tooltip anchored to node)
+ *
+ * Positioning strategy:
+ *  - Card lives inside .graph-stage (position:relative). JS sets
+ *    left/top in stage-local pixels every tick + zoom event.
+ *  - transform:translate(-50%,-100%) then shifts the card so its
+ *    horizontal midpoint sits directly above the node coordinate.
+ *  - When the card would overflow the top edge, JS adds
+ *    .node-card--below which flips translateY to 0 (card sits
+ *    below the node instead).
+ *  - Pointer events pass through the card's outer positioning space
+ *    only when hidden. When visible the card intercepts clicks.
+ * ---------------------------------------------------------------------- */
+.node-card {
+  position: absolute;
+  z-index: 12;
+  min-width: 260px;
+  max-width: 320px;
+  padding: 14px 16px 14px 16px;
+  background: rgba(11, 15, 22, 0.96);
+  color: var(--color-text, #e6ecf3);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 12px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  transform: translate(-50%, calc(-100% - 18px));
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+  pointer-events: none;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.node-card.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.node-card.node-card--below {
+  /* Flip so the card sits below the node instead of above it. */
+  transform: translate(-50%, 18px);
+}
+.node-card__close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.node-card__close:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.node-card__header {
+  margin-bottom: 10px;
+  padding-right: 22px;   /* leave room for the close button */
+}
+.node-card__name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+.node-card__sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(230, 236, 243, 0.72);
+  overflow-wrap: anywhere;
+}
+.node-card__sub:empty { display: none; }
+.node-card__rows {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+.node-card__rows > .k {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(230, 236, 243, 0.55);
+}
+.node-card__rows > .v {
+  font-size: 13px;
+  color: rgba(230, 236, 243, 0.92);
+  overflow-wrap: anywhere;
+}
+.node-card__connections {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.node-card__row-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(230, 236, 243, 0.55);
+  margin-bottom: 6px;
+}
+.node-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 130px;
+  overflow-y: auto;
+}
+.node-card__chip {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: #e6ecf3;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1.1;
+}
+.node-card__chip:hover { background: rgba(82, 174, 182, 0.16); border-color: rgba(82, 174, 182, 0.4); }
+
+/* Tail / pointer that visually connects the card to the node. Rotated square,
+   half-hidden behind the card body. Position flips with --below variant. */
+.node-card__tail {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translateX(-50%) rotate(45deg);
+  background: rgba(11, 15, 22, 0.96);
+  border-right: 1px solid rgba(255, 255, 255, 0.10);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+.node-card.node-card--below .node-card__tail {
+  bottom: auto;
+  top: -6px;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.10);
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+/* --- Mobile fallback: fixed bottom sheet, not anchored to the node ---
+   On narrow screens the anchored card is impractical (thumb blocks the
+   node, screen is narrow). We turn the same card into a bottom-anchored
+   sheet spanning the width of the graph stage. JS still updates the
+   contents on selection; it just skips the per-tick positioning. */
+@media (max-width: 700px) {
+  .node-card {
+    left: 8px !important;
+    right: 8px !important;
+    top: auto !important;
+    bottom: 12px !important;
+    max-width: none;
+    min-width: 0;
+    width: auto;
+    transform: translateY(120%);
+    transition: transform 200ms ease-out, opacity 120ms ease-out;
+  }
+  .node-card.is-open {
+    transform: translateY(0);
+  }
+  .node-card__tail { display: none; }
+}
+
   </style>
 </head>
 <body>
@@ -1404,6 +1570,29 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 
     <div class="graph-badge" id="graph-badge">Preparing graph</div>
 
+    <!--
+      Floating node info card. Anchored to the currently selected node in
+      graph-space and repositioned every tick / zoom event by the JS below.
+      Rendered inside .graph-stage (position:relative) so top/left offsets
+      map to the stage bounding box. Hidden by default; the JS toggles
+      .is-open when a node is selected. Two internal variants (band vs
+      person) share the same shell but populate different rows via
+      .node-card--band / .node-card--person class hooks.
+    -->
+    <div id="node-card" class="node-card" role="dialog" aria-label="Selected node details" aria-hidden="true" hidden>
+      <button type="button" class="node-card__close" id="node-card-close" aria-label="Close details">&times;</button>
+      <div class="node-card__header">
+        <div class="node-card__name" id="node-card-name">—</div>
+        <div class="node-card__sub" id="node-card-sub"></div>
+      </div>
+      <div class="node-card__rows" id="node-card-rows"></div>
+      <div class="node-card__connections" id="node-card-connections-wrap" hidden>
+        <div class="node-card__row-label" id="node-card-connections-label">Members</div>
+        <div class="node-card__chips" id="node-card-connections"></div>
+      </div>
+      <div class="node-card__tail" aria-hidden="true"></div>
+    </div>
+
     <div class="graph-overlay graph-overlay-bottom">
       <div class="toolbar graph-toolbar-bottom" aria-label="Panel toggles">
         <div class="popover-anchor">
@@ -1411,32 +1600,31 @@ main.layout { padding: 0 !important; gap: 0 !important; }
           <div class="share-popover popover-up" id="project-pulse-popover" role="dialog" aria-label="Project pulse" hidden>
             <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
             <div class="share-popover-title">Project pulse</div>
-            <p class="share-popover-copy">Live data, cleaner shell.</p>
+            <p class="share-popover-copy">Live graph stats. Click any node in the graph to see band or musician details in a floating card.</p>
             <div class="metric-grid">
               <div class="metric-card"><div class="metric-value" id="metric-nodes">0</div><div class="metric-label">Nodes</div></div>
               <div class="metric-card"><div class="metric-value" id="metric-links">0</div><div class="metric-label">Links</div></div>
               <div class="metric-card"><div class="metric-value" id="metric-scenes">0</div><div class="metric-label">Scenes</div></div>
             </div>
-            <div class="detail-card">
-              <div class="detail-title">Selected node</div>
-              <div id="selected-node-name" class="panel-title" style="font-size:var(--text-base)">Waiting for selection</div>
-              <p id="selected-node-copy" class="detail-copy">Click any band or musician in the graph to inspect details here.</p>
-            </div>
-            <div class="detail-card">
-              <div class="detail-title">Connections</div>
-              <div id="selected-node-connections" class="footer-strip" style="justify-content:flex-start"></div>
-            </div>
-            <div class="detail-card">
-              <div class="detail-title">Band members</div>
-              <div id="selected-band-members" class="footer-strip" style="justify-content:flex-start"></div>
-            </div>
-            <div class="detail-card" id="selected-node-stats">
-              <div class="detail-stat"><span>Type</span><span id="selected-node-type">—</span></div>
-              <div class="detail-stat"><span>Location</span><span id="selected-node-scene">—</span></div>
-              <div class="detail-stat" id="selected-node-genre-row"><span>Genre</span><span id="selected-node-genre">—</span></div>
-              <div class="detail-stat"><span>Connections</span><span id="selected-node-degree">—</span></div>
-              <div class="detail-stat"><span>Instrument</span><span id="selected-node-instrument">—</span></div>
-              <div class="detail-stat"><span>Bio</span><span id="selected-node-bio">—</span></div>
+            <!--
+              Hidden compatibility stubs for updateSelection(). Node detail
+              lives in the floating #node-card element now (see JS above);
+              updateSelection() still writes into these fields so downstream
+              helpers like getBandMembers()/renderBandMemberButtons() don't
+              need conditional null-checks. Hidden via inline style so no
+              layout impact when the popover opens.
+            -->
+            <div hidden aria-hidden="true">
+              <span id="selected-node-name"></span>
+              <span id="selected-node-copy"></span>
+              <span id="selected-node-connections"></span>
+              <span id="selected-band-members"></span>
+              <span id="selected-node-type"></span>
+              <span id="selected-node-scene"></span>
+              <span id="selected-node-genre-row"><span id="selected-node-genre"></span></span>
+              <span id="selected-node-degree"></span>
+              <span id="selected-node-instrument"></span>
+              <span id="selected-node-bio"></span>
             </div>
           </div>
         </div>
@@ -2227,6 +2415,12 @@ if (shareGraphBtn) {
       let country = normalizeCountry(draft.country);
       let state = normalizeState(draft.state, country);
       const genre = normalizeGenre(draft.genre);
+      // Long-form band metadata. These come only from submissions (the CSV
+      // does not carry them), so applyDraftToMaster is their only writer.
+      // Casing is preserved; we only trim.
+      const yearsActive = String(draft.yearsActive || '').trim();
+      const bandLabel = String(draft.label || '').trim();
+      const albums = String(draft.albums || '').trim();
       if (!city && !country && draft.scene) {
         const legacy = parseLegacyScene(draft.scene);
         city = legacy.city;
@@ -2257,7 +2451,7 @@ if (shareGraphBtn) {
       let bandNode = master.nodes.find(node => node.type === 'band'
         && normalizeKey(node.id) === normalizeKey(band));
       if (!bandNode) {
-        master.nodes.push({ id: band, type: 'band', city, state, country, genre });
+        master.nodes.push({ id: band, type: 'band', city, state, country, genre, yearsActive, label: bandLabel, albums });
         changed = true;
       } else {
         if (!bandNode.city && city) {
@@ -2266,10 +2460,24 @@ if (shareGraphBtn) {
           bandNode.country = country;
           changed = true;
         }
-        // Genre is a separate soft attribute: fill in from a new submission
-        // if the existing band node had none.
+        // Genre / yearsActive / label / albums are separate soft attributes:
+        // fill in from a new submission only when the existing band node had
+        // none. This mirrors the location merge rule (first non-blank wins)
+        // so a later submission that omits a field never wipes it out.
         if (!bandNode.genre && genre) {
           bandNode.genre = genre;
+          changed = true;
+        }
+        if (!bandNode.yearsActive && yearsActive) {
+          bandNode.yearsActive = yearsActive;
+          changed = true;
+        }
+        if (!bandNode.label && bandLabel) {
+          bandNode.label = bandLabel;
+          changed = true;
+        }
+        if (!bandNode.albums && albums) {
+          bandNode.albums = albums;
           changed = true;
         }
       }
@@ -2609,6 +2817,213 @@ if (shareGraphBtn) {
       });
     }
 
+    // ---------------------------------------------------------------------
+    // Floating node info card (Zillow/Redfin-style).
+    //
+    // We keep a single card element (#node-card) and reposition it in
+    // .graph-stage-local pixels on every simulation tick and every zoom
+    // event. Populating happens once per selection change; only the
+    // transform gets touched during motion (cheap).
+    //
+    // Selection lifecycle:
+    //  - openNodeCard(node) sets nodeCard.node, populates content, snaps
+    //    the card into position, and reveals it.
+    //  - closeNodeCard() clears state and hides.
+    //  - positionNodeCard() is called from the tick handler and from the
+    //    zoom handler. It reads d.x/d.y (graph coords), applies the current
+    //    zoom transform, and writes .graph-stage-local left/top.
+    // ---------------------------------------------------------------------
+    const nodeCardState = {
+      node: null,          // the currently anchored graph node (has .x/.y)
+    };
+    const nodeCardEl = document.getElementById('node-card');
+    const nodeCardName = document.getElementById('node-card-name');
+    const nodeCardSub = document.getElementById('node-card-sub');
+    const nodeCardRows = document.getElementById('node-card-rows');
+    const nodeCardConnWrap = document.getElementById('node-card-connections-wrap');
+    const nodeCardConnLabel = document.getElementById('node-card-connections-label');
+    const nodeCardConn = document.getElementById('node-card-connections');
+    const nodeCardCloseBtn = document.getElementById('node-card-close');
+
+    function makeCardRow(key, value) {
+      // Row is emitted only when value is non-empty (keeps the card tight
+      // for legacy submissions missing years / label / albums).
+      if (!value) return;
+      const k = document.createElement('div');
+      k.className = 'k';
+      k.textContent = key;
+      const v = document.createElement('div');
+      v.className = 'v';
+      v.textContent = value;
+      nodeCardRows.appendChild(k);
+      nodeCardRows.appendChild(v);
+    }
+
+    function populateNodeCard(node) {
+      // Header: name + secondary line ("Genre · Location" for band, primary
+      // instruments for musician). Genre lives here — as plain text next to /
+      // under the band name — not as a pill, per design.
+      nodeCardName.textContent = node.id;
+      nodeCardSub.textContent = '';
+      nodeCardRows.innerHTML = '';
+      nodeCardConn.innerHTML = '';
+      nodeCardConnWrap.hidden = true;
+
+      if (node.type === 'band') {
+        const subParts = [];
+        if (node.genre) subParts.push(node.genre);
+        const loc = locationLabel(node);
+        if (loc) subParts.push(loc);
+        nodeCardSub.textContent = subParts.join(' · ');
+
+        makeCardRow('Years', node.yearsActive || '');
+        makeCardRow('Label', node.label || '');
+        makeCardRow('Albums', node.albums || '');
+
+        const members = getBandMembers(node.id);
+        if (members.length) {
+          nodeCardConnLabel.textContent = members.length === 1 ? 'Member' : 'Members';
+          members.forEach(person => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'node-card__chip';
+            chip.textContent = person.id;
+            chip.addEventListener('click', ev => {
+              ev.stopPropagation();
+              openNodeCard(person);
+            });
+            nodeCardConn.appendChild(chip);
+          });
+          nodeCardConnWrap.hidden = false;
+        }
+      } else {
+        // Musician: instruments + location. Bands (their connections) go
+        // into the chips row so the user can jump laterally.
+        const instruments = [node.instrument1, node.instrument2].filter(Boolean).join(', ');
+        const loc = locationLabel(node);
+        const subParts = [];
+        if (instruments) subParts.push(instruments);
+        if (loc) subParts.push(loc);
+        nodeCardSub.textContent = subParts.join(' · ');
+
+        makeCardRow('Bio', node.bio || '');
+
+        // Connected band nodes — clickable chips that reopen the card on
+        // the target band. getNodeConnections returns IDs, so we resolve
+        // each to a full node record to know its type.
+        const conns = getNodeConnections(node.id)
+          .map(id => graphState && graphState.master ? graphState.master.nodes.find(n => n.id === id) : null)
+          .filter(Boolean);
+        const connBands = conns.filter(n => n.type === 'band');
+        if (connBands.length) {
+          nodeCardConnLabel.textContent = connBands.length === 1 ? 'Band' : 'Bands';
+          connBands.forEach(band => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'node-card__chip';
+            chip.textContent = band.id;
+            chip.addEventListener('click', ev => {
+              ev.stopPropagation();
+              openNodeCard(band);
+            });
+            nodeCardConn.appendChild(chip);
+          });
+          nodeCardConnWrap.hidden = false;
+        }
+      }
+    }
+
+    function positionNodeCard() {
+      // Skip the geometry work on mobile — CSS turns the card into a
+      // fixed-position bottom sheet there, so left/top from JS would
+      // conflict with the media-query rules (!important overrides them).
+      if (window.matchMedia('(max-width: 700px)').matches) return;
+      const node = nodeCardState.node;
+      if (!node || nodeCardEl.hidden) return;
+      const stage = document.querySelector('.graph-stage');
+      if (!stage || !svgSelection || !graphGroup) return;
+
+      // graph coords → zoomed coords via the group's current d3.zoomTransform
+      const t = d3.zoomTransform(svgSelection.node());
+      const sx = t.applyX(node.x || 0);
+      const sy = t.applyY(node.y || 0);
+
+      // Clamp inside the stage so the card never floats off-screen. The
+      // card's box is roughly 300×cardHeight; assume ~180px height budget.
+      const stageRect = stage.getBoundingClientRect();
+      const cardW = nodeCardEl.offsetWidth || 300;
+      const cardH = nodeCardEl.offsetHeight || 180;
+      const gutter = 8;
+
+      // Flip below the node if the card would go above the stage top.
+      const spaceAbove = sy - 18;
+      const shouldFlip = spaceAbove < cardH + gutter;
+      nodeCardEl.classList.toggle('node-card--below', shouldFlip);
+
+      // Clamp horizontally so the card body stays within [gutter, W - gutter].
+      const halfW = cardW / 2;
+      const minCx = gutter + halfW;
+      const maxCx = stageRect.width - gutter - halfW;
+      const clampedX = Math.max(minCx, Math.min(maxCx, sx));
+
+      // Clamp vertically. The card is placed with its top (or bottom) at
+      // `sy` and CSS shifts by -100% / 0 depending on the below flag, so
+      // we need to keep `sy` inside the stage plus enough room for the
+      // card body to sit on the correct side of the anchor.
+      let clampedY = sy;
+      if (shouldFlip) {
+        // Card sits below: sy is the anchor top, card body extends downward.
+        clampedY = Math.max(gutter, Math.min(stageRect.height - cardH - gutter, sy));
+      } else {
+        // Card sits above: sy is the anchor top, card body extends upward.
+        clampedY = Math.max(gutter + cardH, Math.min(stageRect.height - gutter, sy));
+      }
+      nodeCardEl.style.left = clampedX + 'px';
+      nodeCardEl.style.top = clampedY + 'px';
+    }
+
+    function openNodeCard(node) {
+      if (!node) return;
+      nodeCardState.node = node;
+      populateNodeCard(node);
+      nodeCardEl.hidden = false;
+      // Force a reflow so the transition from opacity 0 → 1 fires reliably.
+      // eslint-disable-next-line no-unused-expressions
+      nodeCardEl.offsetWidth;
+      nodeCardEl.classList.add('is-open');
+      nodeCardEl.setAttribute('aria-hidden', 'false');
+      positionNodeCard();
+    }
+
+    function closeNodeCard() {
+      nodeCardState.node = null;
+      nodeCardEl.classList.remove('is-open');
+      nodeCardEl.setAttribute('aria-hidden', 'true');
+      // Hide after the fade so it doesn't intercept clicks during animation.
+      setTimeout(() => {
+        if (!nodeCardState.node) nodeCardEl.hidden = true;
+      }, 160);
+    }
+
+    if (nodeCardCloseBtn) nodeCardCloseBtn.addEventListener('click', closeNodeCard);
+    // ESC key closes the card, matching the popover convention already used
+    // for Project Pulse and Add-Your-Band.
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && nodeCardState.node) closeNodeCard();
+    });
+    // Click on empty SVG background closes the card. Node clicks bubble
+    // from a <g> inside the SVG and are handled by the node.on('click')
+    // handler which stops propagation via .raise() semantics; here we
+    // catch the outer SVG only.
+    document.addEventListener('click', e => {
+      if (!nodeCardState.node) return;
+      const svg = document.getElementById('graph-svg');
+      if (!svg) return;
+      // Close only if the click landed on the bare SVG background (not on
+      // a node <g>, and not on the card itself).
+      if (e.target === svg) closeNodeCard();
+    });
+
     function updateSelection(node, degree = 0) {
       if (!node) {
         selectedName.textContent = 'Waiting for selection';
@@ -2686,6 +3101,11 @@ if (shareGraphBtn) {
 
     function renderGraph() {
       if (!graphState || !svgSelection) return;
+      // Any pending anchored node card is now stale (we're about to build a
+      // brand new nodes/links copy). Close it before the DOM under it is
+      // rebuilt so users don't see a card hovering over a node that no
+      // longer exists.
+      if (typeof closeNodeCard === 'function' && nodeCardState.node) closeNodeCard();
       const filtered = getFilteredGraph(graphState.master);
       const nodes = filtered.nodes.map(d => ({ ...d }));
       const links = filtered.links.map(d => ({ ...d }));
@@ -2858,6 +3278,11 @@ if (shareGraphBtn) {
               .filter(Boolean)
           : [];
         updateSelection(d, linkedNames.length, linkedNames, bandMembers);
+        // The floating card is the primary detail surface (Zillow/Redfin
+        // pattern). updateSelection() still populates the Pulse panel's
+        // now-hidden detail rows as a harmless side-effect until it's
+        // simplified further; that's tracked separately from this feature.
+        openNodeCard(d);
       });
 
       // Count connections per node so bands with many members can push those
@@ -2911,6 +3336,9 @@ if (shareGraphBtn) {
           .attr('x2', d => d.target.x)
           .attr('y2', d => d.target.y);
         node.attr('transform', d => `translate(${d.x},${d.y})`);
+        // Keep the anchored node card glued to its node while the sim runs.
+        // Cheap: only touches left/top on one DOM element per tick.
+        positionNodeCard();
       });
 
       simulation.on('end', () => fitGraph(60));
@@ -3719,7 +4147,12 @@ if (shareGraphBtn) {
 
     svgSelection = d3.select('#graph-svg');
     graphGroup = svgSelection.append('g');
-    zoomBehavior = d3.zoom().scaleExtent([0.25, 3]).on('zoom', event => graphGroup.attr('transform', event.transform));
+    zoomBehavior = d3.zoom().scaleExtent([0.25, 3]).on('zoom', event => {
+      graphGroup.attr('transform', event.transform);
+      // Reposition the anchored node card so it tracks the node under the
+      // new zoom transform. Called on every wheel/pan event.
+      positionNodeCard();
+    });
     svgSelection.call(zoomBehavior);
 
     d3.csv('seattle_band_members-2-2.csv?v=6').then(async rows => {

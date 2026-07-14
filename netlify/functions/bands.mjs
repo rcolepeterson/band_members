@@ -213,6 +213,18 @@ function resolveSubmissionGenre(record) {
   return normalizeGenre(record.genre);
 }
 
+// Long-form band metadata (yearsActive / label / albums). Pre-metadata
+// submissions have no such fields; they surface as ''. Read-time lazy
+// migration in memory only.
+function resolveSubmissionMeta(record) {
+  if (!record || typeof record !== 'object') return { yearsActive: '', label: '', albums: '' };
+  return {
+    yearsActive: asTrimmedString(record.yearsActive),
+    label: asTrimmedString(record.label),
+    albums: asTrimmedString(record.albums),
+  };
+}
+
 // Migrate a stored submission (as read from the blob) to the new shape for
 // the response payload. Leaves the underlying blob untouched — the lazy
 // migration only ever happens in memory, on read.
@@ -220,8 +232,9 @@ function migrateSubmissionForRead(record) {
   if (!record || typeof record !== 'object') return record;
   const location = resolveSubmissionLocation(record);
   const genre = resolveSubmissionGenre(record);
+  const meta = resolveSubmissionMeta(record);
   const { scene, ...rest } = record;
-  return { ...rest, ...location, genre };
+  return { ...rest, ...location, genre, ...meta };
 }
 
 // Mirror of the client's bioContainsBlockedLink() so link spam is rejected
@@ -419,6 +432,7 @@ export {
   parseLegacyScene,
   resolveSubmissionLocation,
   resolveSubmissionGenre,
+  resolveSubmissionMeta,
   migrateSubmissionForRead,
   normalizeCountryCode,
   normalizeStateCode,
