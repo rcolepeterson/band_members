@@ -1,0 +1,31 @@
+{
+  "_comment": "PR 2 phase A batch — 20 hand-picked persons whose 'other bands' will bridge-fill the graph, plus 4 direct-ingest bands (Oasis, Blur, Motorhead, Iron Maiden) that add new nodes with all their members. The persons were selected by combining top-connected members from the existing graph (Duff McKagan is in 7 seed bands, so his MB entry will pull in his GnR/Velvet Revolver/Loaded/etc. connections) with iconic Seattle-scene figures whose careers span many projects (Grohl, Cornell, Staley, Vedder). Direct-ingest bands are notable UK acts requested for scene diversity.",
+  "persons": [
+    "Duff McKagan",
+    "Matt Cameron",
+    "Stone Gossard",
+    "Jeff Ament",
+    "Mike McCready",
+    "Eddie Vedder",
+    "Kurt Cobain",
+    "Krist Novoselic",
+    "Dave Grohl",
+    "Chris Cornell",
+    "Layne Staley",
+    "Jerry Cantrell",
+    "Mark Arm",
+    "Steve Turner",
+    "Mark Lanegan",
+    "Barrett Martin",
+    "Nate Mendel",
+    "Taylor Hawkins",
+    "Ben Shepherd",
+    "Kim Thayil"
+  ],
+  "bands": [
+    "Oasis",
+    "Blur",
+    "Motörhead",
+    "Iron Maiden"
+  ]
+}

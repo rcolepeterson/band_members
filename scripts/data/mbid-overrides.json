@@ -14,5 +14,25 @@
     "mbid": "4d5f891d-9bce-45ae-ad86-912dd27252fa",
     "source": "manual",
     "note": "Verified 2026-07-14 — the Foo Fighters/Nirvana drummer, born 1969-01-14. Has 23 member-of-band relations. Common name; verify MBID with `curl mb/artist/<id>` before adding new pins."
+  },
+  "Oasis": {
+    "mbid": "39ab1aed-75e0-4140-bd47-540276886b60",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — Noel & Liam Gallagher's Manchester band, begin=1991."
+  },
+  "Blur": {
+    "mbid": "ba853904-ae25-4ebb-89d6-c44cfbd71bd2",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — London alt-rock band, begin=1990. Not the Christian band or the 2023 project."
+  },
+  "Motörhead": {
+    "mbid": "57961a97-3796-4bf7-9f02-a985a8979ae9",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — Lemmy's London metal band, begin=1975-06. Multiple tribute-band namesakes exist."
+  },
+  "Iron Maiden": {
+    "mbid": "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — the English heavy metal band, formed 1975-12-25 in Leyton, London."
   }
 }
