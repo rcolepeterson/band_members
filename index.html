@@ -1501,6 +1501,32 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 }
 .node-card__chip:hover { background: rgba(82, 174, 182, 0.16); border-color: rgba(82, 174, 182, 0.4); }
 
+/* Tenure-aware chip: name on the left, subdued years pill on the right.
+   Keeps the pill shape but adds a soft internal divider so it reads as
+   "Kurt Cobain · 1987–1994" instead of a single wall of text. */
+.node-card__chip--with-tenure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding-right: 8px;
+}
+.node-card__chip-name {
+  font-weight: 500;
+}
+.node-card__chip-years {
+  font-size: 11px;
+  color: rgba(230, 236, 243, 0.60);
+  padding-left: 6px;
+  border-left: 1px solid rgba(255, 255, 255, 0.10);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.node-card__chip-years--empty { color: rgba(230, 236, 243, 0.30); }
+
+/* Em-dash rendering for always-shown years-active row when data is
+   missing — more muted than a real value so it reads as "empty field". */
+.node-card__rows > .v.v--empty { color: rgba(230, 236, 243, 0.40); }
+
 /* Tail / pointer that visually connects the card to the node. Rotated square,
    half-hidden behind the card body. Position flips with --below variant. */
 .node-card__tail {
@@ -2344,28 +2370,48 @@ if (shareGraphBtn) {
         const instrument1 = (row['Instrument 1'] || row['Intrument 1'] || '').trim();
         const instrument2 = (row['Instrument 2'] || row['Intrument 2'] || '').trim();
         const bio = (row.bio || row.Bio || row.notes || row.Notes || '').trim();
+        // Band lifespan (goes on the band node) vs. member tenure at this
+        // specific band (goes on the link). Both are optional. Accept a few
+        // common column-name variants so hand-edited CSVs keep working.
+        const bandYearsActive = (row.yearsActive || row['Years Active'] || row.years_active || '').trim();
+        const memberYearsActive = (
+          row.memberYearsActive || row['Member Years Active'] || row.member_years_active ||
+          row.tenure || row.Tenure || ''
+        ).trim();
+        // Person's overall career span (independent of any single band).
+        const personYearsActive = (
+          row.personYearsActive || row['Person Years Active'] || row.person_years_active || ''
+        ).trim();
 
         if (!nodeMap.has(source)) {
           // Genre lives on the band node only. If any row for this band has
           // a non-empty genre it wins over rows that leave the field blank.
-          nodeMap.set(source, { id: source, type: 'band', city, state, country, genre });
-        } else if (genre && !nodeMap.get(source).genre) {
-          nodeMap.get(source).genre = genre;
+          nodeMap.set(source, { id: source, type: 'band', city, state, country, genre, yearsActive: bandYearsActive });
+        } else {
+          const existingBand = nodeMap.get(source);
+          if (genre && !existingBand.genre) existingBand.genre = genre;
+          // First non-empty band yearsActive wins; later rows don't overwrite.
+          if (bandYearsActive && !existingBand.yearsActive) existingBand.yearsActive = bandYearsActive;
         }
         if (!nodeMap.has(target)) {
-          nodeMap.set(target, { id: target, type: 'person', city, state, country, instrument1, instrument2, bio });
+          nodeMap.set(target, { id: target, type: 'person', city, state, country, instrument1, instrument2, bio, yearsActive: personYearsActive });
         } else {
           const existing = nodeMap.get(target);
           if (!existing.instrument1 && instrument1) existing.instrument1 = instrument1;
           if (!existing.instrument2 && instrument2) existing.instrument2 = instrument2;
           if (!existing.bio && bio) existing.bio = bio;
+          if (personYearsActive && !existing.yearsActive) existing.yearsActive = personYearsActive;
         }
 
         links.push({
           source,
           target,
           relation: (row.relation_type || row.relationship || 'member').trim(),
-          weight: Number(row.weight || 1)
+          weight: Number(row.weight || 1),
+          // Member's tenure at THIS specific band. Optional — renders as
+          // em-dash in the UI when absent so the row still surfaces the
+          // field to invite backfill.
+          yearsActive: memberYearsActive
         });
       });
 
@@ -3007,6 +3053,70 @@ if (shareGraphBtn) {
     }
 
     // ---------------------------------------------------------------------
+    // Years-active helpers (band lifespan vs. per-tenure at each band).
+    //
+    // Person node card renders "resume" style: overall years-active on top,
+    // then a chronologically sorted list of bands with the tenure years
+    // pulled from the specific membership link. Band card mirrors this:
+    // band's overall years-active on top, members below with their tenure.
+    // Missing values render as em-dash — the row/column stays so users
+    // see the field exists and can contribute data via a future edit form.
+    // ---------------------------------------------------------------------
+    const EM_DASH = '\u2014';
+    function displayYears(value) {
+      const v = (value == null ? '' : String(value)).trim();
+      return v || EM_DASH;
+    }
+    // Parse the first 4-digit year from a range like "1990-1994" or
+    // "1994-present". Infinity for missing/unparseable so unknown tenures
+    // sort to the end (better than mis-slotting them at position 0).
+    function yearsActiveStart(range) {
+      const m = /(\d{4})/.exec(String(range || ''));
+      return m ? parseInt(m[1], 10) : Infinity;
+    }
+    function getPersonBandsWithTenure(personId) {
+      if (!graphState || !graphState.master) return [];
+      const rows = [];
+      graphState.master.links.forEach(link => {
+        const s = typeof link.source === 'object' ? link.source.id : link.source;
+        const t = typeof link.target === 'object' ? link.target.id : link.target;
+        let bandId = null;
+        if (t === personId) bandId = s;
+        else if (s === personId) bandId = t;
+        if (!bandId) return;
+        const band = graphState.master.nodes.find(n => n.id === bandId && n.type === 'band');
+        if (!band) return;
+        rows.push({ band, tenure: (link.yearsActive || '').trim() });
+      });
+      rows.sort((a, b) => {
+        const ay = yearsActiveStart(a.tenure);
+        const by = yearsActiveStart(b.tenure);
+        if (ay !== by) return ay - by;
+        return a.band.id.localeCompare(b.band.id);
+      });
+      return rows;
+    }
+    function getBandMembersWithTenure(bandId) {
+      if (!graphState || !graphState.master) return [];
+      const rows = [];
+      graphState.master.links.forEach(link => {
+        const s = typeof link.source === 'object' ? link.source.id : link.source;
+        const t = typeof link.target === 'object' ? link.target.id : link.target;
+        if (s !== bandId) return;
+        const person = graphState.master.nodes.find(n => n.id === t && n.type === 'person');
+        if (!person) return;
+        rows.push({ person, tenure: (link.yearsActive || '').trim() });
+      });
+      rows.sort((a, b) => {
+        const ay = yearsActiveStart(a.tenure);
+        const by = yearsActiveStart(b.tenure);
+        if (ay !== by) return ay - by;
+        return a.person.id.localeCompare(b.person.id);
+      });
+      return rows;
+    }
+
+    // ---------------------------------------------------------------------
     // Floating node info card (Zillow/Redfin-style).
     //
     // We keep a single card element (#node-card) and reposition it in
@@ -3034,16 +3144,20 @@ if (shareGraphBtn) {
     const nodeCardConn = document.getElementById('node-card-connections');
     const nodeCardCloseBtn = document.getElementById('node-card-close');
 
-    function makeCardRow(key, value) {
-      // Row is emitted only when value is non-empty (keeps the card tight
-      // for legacy submissions missing years / label / albums).
-      if (!value) return;
+    function makeCardRow(key, value, opts) {
+      // By default the row is emitted only when value is non-empty (keeps
+      // the card tight for legacy submissions missing label / albums).
+      // Pass { alwaysShow: true } to force the row and render em-dash for
+      // missing values — used for years-active so the field is discoverable.
+      const alwaysShow = opts && opts.alwaysShow;
+      if (!value && !alwaysShow) return;
       const k = document.createElement('div');
       k.className = 'k';
       k.textContent = key;
       const v = document.createElement('div');
       v.className = 'v';
-      v.textContent = value;
+      v.textContent = alwaysShow ? displayYears(value) : value;
+      if (alwaysShow && !value) v.classList.add('v--empty');
       nodeCardRows.appendChild(k);
       nodeCardRows.appendChild(v);
     }
@@ -3065,23 +3179,18 @@ if (shareGraphBtn) {
         if (loc) subParts.push(loc);
         nodeCardSub.textContent = subParts.join(' · ');
 
-        makeCardRow('Years', node.yearsActive || '');
+        // Band's overall lifespan — always show, em-dash when missing.
+        makeCardRow('Years active', node.yearsActive || '', { alwaysShow: true });
         makeCardRow('Label', node.label || '');
         makeCardRow('Albums', node.albums || '');
 
-        const members = getBandMembers(node.id);
-        if (members.length) {
-          nodeCardConnLabel.textContent = members.length === 1 ? 'Member' : 'Members';
-          members.forEach(person => {
-            const chip = document.createElement('button');
-            chip.type = 'button';
-            chip.className = 'node-card__chip';
-            chip.textContent = person.id;
-            chip.addEventListener('click', ev => {
-              ev.stopPropagation();
-              openNodeCard(person);
-            });
-            nodeCardConn.appendChild(chip);
+        // Members sorted by tenure start (earliest joiner first) with the
+        // tenure years shown next to each name inside the chip.
+        const memberRows = getBandMembersWithTenure(node.id);
+        if (memberRows.length) {
+          nodeCardConnLabel.textContent = memberRows.length === 1 ? 'Member' : 'Members';
+          memberRows.forEach(({ person, tenure }) => {
+            appendTenureChip(nodeCardConn, person.id, tenure, () => openNodeCard(person));
           });
           nodeCardConnWrap.hidden = false;
         }
@@ -3095,31 +3204,46 @@ if (shareGraphBtn) {
         if (loc) subParts.push(loc);
         nodeCardSub.textContent = subParts.join(' · ');
 
+        // Person's overall career — always show, em-dash when missing.
+        makeCardRow('Years active', node.yearsActive || '', { alwaysShow: true });
         makeCardRow('Bio', node.bio || '');
 
-        // Connected band nodes — clickable chips that reopen the card on
-        // the target band. getNodeConnections returns IDs, so we resolve
-        // each to a full node record to know its type.
-        const conns = getNodeConnections(node.id)
-          .map(id => graphState && graphState.master ? graphState.master.nodes.find(n => n.id === id) : null)
-          .filter(Boolean);
-        const connBands = conns.filter(n => n.type === 'band');
-        if (connBands.length) {
-          nodeCardConnLabel.textContent = connBands.length === 1 ? 'Band' : 'Bands';
-          connBands.forEach(band => {
-            const chip = document.createElement('button');
-            chip.type = 'button';
-            chip.className = 'node-card__chip';
-            chip.textContent = band.id;
-            chip.addEventListener('click', ev => {
-              ev.stopPropagation();
-              openNodeCard(band);
-            });
-            nodeCardConn.appendChild(chip);
+        // Resume-style band list: oldest tenure first, tenure years next
+        // to each band name so the user can see "joined Nirvana 1990,
+        // Foo Fighters 1994" at a glance.
+        const bandRows = getPersonBandsWithTenure(node.id);
+        if (bandRows.length) {
+          nodeCardConnLabel.textContent = bandRows.length === 1 ? 'Band' : 'Bands';
+          bandRows.forEach(({ band, tenure }) => {
+            appendTenureChip(nodeCardConn, band.id, tenure, () => openNodeCard(band));
           });
           nodeCardConnWrap.hidden = false;
         }
       }
+    }
+
+    // A connection chip that shows "Name · tenure" with the tenure years
+    // rendered as a subdued badge inside the same button. Missing tenure
+    // renders as em-dash so users see the field is trackable.
+    function appendTenureChip(container, name, tenure, onClick) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'node-card__chip node-card__chip--with-tenure';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'node-card__chip-name';
+      nameEl.textContent = name;
+      const yearsEl = document.createElement('span');
+      yearsEl.className = 'node-card__chip-years';
+      const yearsText = (tenure || '').trim();
+      yearsEl.textContent = yearsText || EM_DASH;
+      if (!yearsText) yearsEl.classList.add('node-card__chip-years--empty');
+      chip.appendChild(nameEl);
+      chip.appendChild(yearsEl);
+      chip.addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (typeof onClick === 'function') onClick();
+      });
+      container.appendChild(chip);
     }
 
     function positionNodeCard() {
