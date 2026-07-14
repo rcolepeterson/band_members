@@ -1129,12 +1129,13 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                     <button type="button" class="member-row-remove" data-remove-row aria-label="Remove this member" tabindex="-1" hidden>&times;</button>
                     <div class="member-row-fields">
                       <div class="form-span-2"><label for="member-name">Member name</label><input id="member-name" class="member-name-input" name="member-name" type="text" placeholder="Jeff Ament" /></div>
-                      <div><label for="instrument-name">Instrument</label><input id="instrument-name" class="instrument-input" name="instrument-name" type="text" placeholder="Bass, vocals, drums…" /></div>
+                      <div><label for="instrument-name">Instrument</label><input id="instrument-name" class="instrument-input" name="instrument-name" type="text" list="instrument-suggestions" placeholder="Bass, vocals, drums…" /></div>
                       <div><label for="relation-type">Member weight</label><select id="relation-type" class="relation-input" name="relation-type"><option value="1">1 — Founder / core member</option><option value="2" selected>2 — Member</option><option value="3">3 — Touring member</option></select></div>
                     </div>
                   </div>
                 </div>
                 <button type="button" class="member-add-btn" id="add-member-row-btn">+ Add another member</button>
+                <datalist id="instrument-suggestions"></datalist>
               </div>
               <div><label for="years-active">Years active</label><input id="years-active" name="years-active" type="text" placeholder="1990–1993" /></div>
               <div><label for="band-label">Label</label><input id="band-label" name="band-label" type="text" placeholder="Sub Pop, Epic, SST…" /></div>
@@ -1478,6 +1479,85 @@ if (shareGraphBtn) {
         links
       };
     }
+
+    // ---------------------------------------------------------------------
+    // Dynamic instrument suggestions.
+    //
+    // The instrument field stays free text (comma-separated for multiple
+    // instruments per member). To cut down on typos and keep naming
+    // consistent, its <datalist> is populated from every instrument value
+    // actually used across the base CSV and the fetched backend submissions,
+    // deduplicated case-insensitively and sorted alphabetically. Suggestions
+    // are a convenience only — anything can still be typed and submitted.
+    //
+    // Native <datalist> only matches from the start of the full input value,
+    // so once a user types a comma the browser stops suggesting the next
+    // instrument. That's an accepted native-HTML limitation; we intentionally
+    // don't build a custom per-token autocomplete widget for it.
+    // ---------------------------------------------------------------------
+
+    // normalized lower-case key -> chosen display casing.
+    const instrumentSuggestions = new Map();
+
+    // A small static baseline so the field is useful even before data loads
+    // or if the CSV/backend carry no instruments. Merged with, not instead of,
+    // the dynamic values below.
+    const STATIC_INSTRUMENTS = ['Vocals', 'Guitar', 'Bass', 'Drums', 'Keyboards', 'Piano', 'Synth', 'Saxophone', 'Trumpet', 'Violin', 'Percussion'];
+
+    // Split one raw field (possibly comma-separated) into individual instrument
+    // values and record each under its case-insensitive key. First-seen casing
+    // wins, so the static baseline provides tidy capitalization and later
+    // duplicates ("guitar" after "Guitar") collapse onto it.
+    function collectInstrumentValues(raw) {
+      if (!raw) return;
+      String(raw).split(',').forEach(part => {
+        const value = part.trim();
+        if (!value) return;
+        const key = value.toLowerCase();
+        if (!instrumentSuggestions.has(key)) instrumentSuggestions.set(key, value);
+      });
+    }
+
+    // Pull instruments from the raw CSV rows (all four instrument columns,
+    // tolerating the "Intrument" misspelling used by the source data).
+    function collectInstrumentsFromCsv(rows) {
+      (Array.isArray(rows) ? rows : []).forEach(row => {
+        for (let i = 1; i <= 4; i++) {
+          collectInstrumentValues(row[`Instrument ${i}`] || row[`Intrument ${i}`]);
+        }
+      });
+    }
+
+    // Pull instruments from submission drafts, supporting both the multi-member
+    // shape ({ members: [...] }) and the legacy single-member shape.
+    function collectInstrumentsFromDrafts(drafts) {
+      (Array.isArray(drafts) ? drafts : []).forEach(draft => {
+        if (!draft || typeof draft !== 'object') return;
+        const members = Array.isArray(draft.members) ? draft.members : [{ instrument: draft.instrument }];
+        members.forEach(entry => {
+          if (entry && typeof entry === 'object') collectInstrumentValues(entry.instrument);
+        });
+      });
+    }
+
+    // Rebuild the <datalist> from the current suggestion set, sorted
+    // alphabetically (case-insensitive). Safe to call repeatedly.
+    function rebuildInstrumentDatalist() {
+      const datalist = document.getElementById('instrument-suggestions');
+      if (!datalist) return;
+      const values = Array.from(instrumentSuggestions.values())
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+      datalist.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      values.forEach(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        frag.appendChild(option);
+      });
+      datalist.appendChild(frag);
+    }
+
+    STATIC_INSTRUMENTS.forEach(collectInstrumentValues);
 
     // ---------------------------------------------------------------------
     // User submissions ("Add your band") persistence.
@@ -2720,16 +2800,25 @@ if (shareGraphBtn) {
 
     d3.csv('seattle_band_members-2-2.csv?v=5').then(async rows => {
       const master = buildMasterGraph(rows);
+      // Seed instrument suggestions from the CSV and refresh the datalist so
+      // real values are suggestible as soon as the base data lands.
+      collectInstrumentsFromCsv(rows);
+      rebuildInstrumentDatalist();
       // Merge shared submissions from the backend (primary source of truth).
       // If the backend is unreachable, fall back to replaying this browser's
       // local-only copy so previously added bands still survive a refresh.
       try {
         const shared = await fetchSharedSubmissions();
         mergeSubmissionsIntoMaster(master, shared);
+        collectInstrumentsFromDrafts(shared);
       } catch (error) {
         console.warn('Could not load shared submissions; falling back to local copy.', error);
-        mergeSubmissionsIntoMaster(master, loadUserSubmissions());
+        const local = loadUserSubmissions();
+        mergeSubmissionsIntoMaster(master, local);
+        collectInstrumentsFromDrafts(local);
       }
+      // Rebuild once more so instruments from submissions become suggestible.
+      rebuildInstrumentDatalist();
       graphState = { master };
       const sceneSelect = document.getElementById('scene-filter');
       const scenes = Array.from(new Set(master.nodes.map(node => node.scene).filter(Boolean))).sort();
