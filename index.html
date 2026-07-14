@@ -72,6 +72,16 @@
     .graph-stage{position:relative;border-radius:calc(var(--radius-xl) + var(--space-2));overflow:hidden;background:radial-gradient(circle at top, rgba(82,174,182,0.08), transparent 34%),linear-gradient(180deg, rgba(10,14,20,0.92), rgba(8,11,17,0.98));border:none;min-height:720px;box-shadow:0 30px 80px rgba(0,0,0,0.34)}
     #graph-svg{width:100%;height:100%;min-height:520px}
     .graph-badge{position:absolute;right:var(--space-5);bottom:var(--space-5);padding:0.5rem 0.8rem;border-radius:var(--radius-full);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;background:rgba(9,11,17,0.72);border:1px solid rgba(255,255,255,0.08);color:var(--color-text-muted)}
+    /* Always-on graph stats badge, top-right of the stage. Replaces the old
+       Project Pulse popover — same numbers, no toggle. */
+    .graph-stats-badge{position:absolute;right:var(--space-5);top:var(--space-5);padding:0.45rem 0.75rem;border-radius:var(--radius-full);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;background:rgba(9,11,17,0.72);border:1px solid rgba(255,255,255,0.08);color:var(--color-text-muted);pointer-events:none;display:inline-flex;gap:0.55rem;align-items:center;z-index:9;white-space:nowrap;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+    .graph-stats-badge__group{display:inline-flex;align-items:baseline;gap:0.3rem}
+    .graph-stats-badge__value{color:#d4e8f4;font-weight:600;letter-spacing:0;text-transform:none}
+    .graph-stats-badge__sep{opacity:0.35}
+    /* Mobile: hamburger lives top-right so drop the badge to the top-left
+       instead. Keep it compact so it can't collide with the ROCK BAND
+       FAMILY TREE title on very small phones. */
+    @media (max-width:720px){.graph-stats-badge{right:auto;top:var(--space-3);left:var(--space-3);padding:0.3rem 0.55rem;font-size:10px;gap:0.35rem}.graph-stats-badge__group{gap:0.22rem}}
     .graph-note{display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--space-3);font-size:var(--text-sm);color:var(--color-text-muted)}
     .sidebar{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-5)}.stack{padding:var(--space-5);display:grid;gap:var(--space-4)}.section-label{font-size:var(--text-xs);letter-spacing:.18em;text-transform:uppercase;color:var(--color-text-muted)}
     .metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2)}.metric-card{padding:0.45rem var(--space-3);border-radius:var(--radius-md);background:linear-gradient(180deg, rgba(86,109,128,0.38), rgba(43,57,71,0.46));border:1px solid rgba(159,187,204,0.16);min-height:42px;display:grid;align-content:center;gap:0.08rem}.metric-value{font-size:var(--text-sm);font-weight:700;line-height:1.05}.metric-label{font-size:0.68rem;line-height:1;color:rgba(237,241,247,0.72);text-transform:uppercase;letter-spacing:.08em}
@@ -933,7 +943,6 @@ body {
 
   /* Node-details popover -> bottom sheet look. Reuse existing popover markup
      but reposition it as a full-width slide-up on mobile. */
-  #project-pulse-popover.is-open-mobile,
   #add-band-popover.is-open-mobile {
     position: fixed;
     left: 0;
@@ -1569,6 +1578,19 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     </div>
 
     <div class="graph-badge" id="graph-badge">Preparing graph</div>
+    <!--
+      Always-on graph stats badge (top-right of the stage). Replaces the old
+      Project Pulse popover — same three numbers, no toggle. Purely
+      informational: pointer-events disabled so it never intercepts clicks
+      on nodes underneath.
+    -->
+    <div class="graph-stats-badge" id="graph-stats-badge" role="status" aria-live="polite" aria-label="Graph stats">
+      <span class="graph-stats-badge__group"><span class="graph-stats-badge__value" id="metric-nodes">0</span> Nodes</span>
+      <span class="graph-stats-badge__sep" aria-hidden="true">·</span>
+      <span class="graph-stats-badge__group"><span class="graph-stats-badge__value" id="metric-links">0</span> Links</span>
+      <span class="graph-stats-badge__sep" aria-hidden="true">·</span>
+      <span class="graph-stats-badge__group"><span class="graph-stats-badge__value" id="metric-scenes">0</span> Scenes</span>
+    </div>
 
     <!--
       Floating node info card. Anchored to the currently selected node in
@@ -1595,38 +1617,25 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 
     <div class="graph-overlay graph-overlay-bottom">
       <div class="toolbar graph-toolbar-bottom" aria-label="Panel toggles">
-        <div class="popover-anchor">
-          <button class="tool-chip panel-toggle-btn" type="button" id="project-pulse-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="project-pulse-popover">Project pulse</button>
-          <div class="share-popover popover-up" id="project-pulse-popover" role="dialog" aria-label="Project pulse" hidden>
-            <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
-            <div class="share-popover-title">Project pulse</div>
-            <p class="share-popover-copy">Live graph stats. Click any node in the graph to see band or musician details in a floating card.</p>
-            <div class="metric-grid">
-              <div class="metric-card"><div class="metric-value" id="metric-nodes">0</div><div class="metric-label">Nodes</div></div>
-              <div class="metric-card"><div class="metric-value" id="metric-links">0</div><div class="metric-label">Links</div></div>
-              <div class="metric-card"><div class="metric-value" id="metric-scenes">0</div><div class="metric-label">Scenes</div></div>
-            </div>
-            <!--
-              Hidden compatibility stubs for updateSelection(). Node detail
-              lives in the floating #node-card element now (see JS above);
-              updateSelection() still writes into these fields so downstream
-              helpers like getBandMembers()/renderBandMemberButtons() don't
-              need conditional null-checks. Hidden via inline style so no
-              layout impact when the popover opens.
-            -->
-            <div hidden aria-hidden="true">
-              <span id="selected-node-name"></span>
-              <span id="selected-node-copy"></span>
-              <span id="selected-node-connections"></span>
-              <span id="selected-band-members"></span>
-              <span id="selected-node-type"></span>
-              <span id="selected-node-scene"></span>
-              <span id="selected-node-genre-row"><span id="selected-node-genre"></span></span>
-              <span id="selected-node-degree"></span>
-              <span id="selected-node-instrument"></span>
-              <span id="selected-node-bio"></span>
-            </div>
-          </div>
+        <!--
+          Hidden compatibility stubs for updateSelection(). Node detail
+          lives in the floating #node-card element now; updateSelection()
+          still writes into these fields so downstream helpers like
+          getBandMembers()/renderBandMemberButtons() don't need
+          conditional null-checks. Previously nested inside the Project
+          Pulse popover — moved here so the popover could be retired.
+        -->
+        <div hidden aria-hidden="true" id="legacy-selection-stubs">
+          <span id="selected-node-name"></span>
+          <span id="selected-node-copy"></span>
+          <span id="selected-node-connections"></span>
+          <span id="selected-band-members"></span>
+          <span id="selected-node-type"></span>
+          <span id="selected-node-scene"></span>
+          <span id="selected-node-genre-row"><span id="selected-node-genre"></span></span>
+          <span id="selected-node-degree"></span>
+          <span id="selected-node-instrument"></span>
+          <span id="selected-node-bio"></span>
         </div>
 
         <div class="popover-anchor">
@@ -1844,10 +1853,11 @@ if (shareGraphBtn) {
   });
 }
 
-    // Bottom-floating panel toggles (Project pulse / Add your band). Same
-    // click-to-open, click-outside-to-close pattern as the share popover.
+    // Bottom-floating panel toggles (Add your band). Same click-to-open,
+    // click-outside-to-close pattern as the share popover. Project Pulse
+    // used to live here alongside — replaced by the always-on
+    // #graph-stats-badge in the top-right of the stage.
     const bottomPopovers = [
-      { btn: document.getElementById('project-pulse-btn'), pop: document.getElementById('project-pulse-popover') },
       { btn: document.getElementById('add-band-btn'), pop: document.getElementById('add-band-popover') },
     ].filter(entry => entry.btn && entry.pop);
 
@@ -3007,7 +3017,7 @@ if (shareGraphBtn) {
 
     if (nodeCardCloseBtn) nodeCardCloseBtn.addEventListener('click', closeNodeCard);
     // ESC key closes the card, matching the popover convention already used
-    // for Project Pulse and Add-Your-Band.
+    // for Add-Your-Band.
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && nodeCardState.node) closeNodeCard();
     });
@@ -4492,8 +4502,9 @@ if (shareGraphBtn) {
           });
         });
 
-        // Convert existing popover panels (project-pulse + add-band) to bottom-sheet
-        // look on mobile by tagging them when they open.
+        // Convert the add-band popover to a bottom-sheet look on mobile by
+        // tagging it when it opens. (Project Pulse used to live here too;
+        // now replaced by the always-on #graph-stats-badge.)
         function hookPopoverForMobile(popoverId) {
           const popover = document.getElementById(popoverId);
           if (!popover) return;
@@ -4508,7 +4519,6 @@ if (shareGraphBtn) {
           });
           observer.observe(popover, { attributes: true, attributeFilter: ['hidden'] });
         }
-        hookPopoverForMobile('project-pulse-popover');
         hookPopoverForMobile('add-band-popover');
 
         // Escape key closes the menu sheet on mobile.
