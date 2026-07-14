@@ -1853,48 +1853,6 @@ if (shareGraphBtn) {
       return { city: parts[0] || '', state: '', country: 'USA' };
     }
 
-    // Legacy shim: the old canonicalizeScene helper is kept here temporarily
-    // so this commit is pure scaffolding — nothing that already worked breaks.
-    // Its call sites in buildMasterGraph / applyDraftToMaster will be swapped
-    // over to the new city/state/country schema in the next commit, after
-    // which this shim will be removed.
-    const SCENE_CANONICAL_BY_CITY = {
-      'seattle':      'Seattle, WA',
-      'tacoma':       'Tacoma, WA',
-      'portland':     'Portland, OR',
-      'issaqua':      'Issaqua, WA',
-      'issaquah':     'Issaqua, WA',
-      'los angeles':  'Los Angeles',
-      'new york':     'New York, NY',
-      'chicago':      'Chicago, IL',
-      'cleveland':    'Cleveland, OH',
-      'coral springs':'Coral Springs, FL',
-      'champaign':    'Champaign, IL',
-      'kansas city':  'Kansas City, MO',
-      'oklahoma city':'Oklahoma City, OK',
-      'palm desert':  'Palm Desert, CA',
-      'rockford':     'Rockford, IL',
-      'venice':       'Venice, CA',
-      'new jersey':   'New Jersey',
-      'aukland':      'Aukland, NZ',
-      'auckland':     'Aukland, NZ',
-      'sydney':       'Sydney, AU',
-      'melbourne':    'Melbourne, AU',
-      'london':       'London, EN',
-      'birmingham':   'Birmingham, EN',
-      'manchester':   'Manchester, EN',
-      'glasgow':      'Glasgow, SCT',
-      'san francisco':'San Francisco',
-    };
-    function canonicalizeScene(raw) {
-      const trimmed = String(raw || '').trim();
-      if (!trimmed) return trimmed;
-      const city = trimmed.split(',')[0].trim().toLowerCase();
-      const canonical = SCENE_CANONICAL_BY_CITY[city];
-      return canonical || trimmed;
-    }
-
-
     function buildMasterGraph(rows) {
       const nodeMap = new Map();
       const links = [];
@@ -1903,16 +1861,18 @@ if (shareGraphBtn) {
         const source = (row.source || '').trim();
         const target = (row.target || '').trim();
         if (!source || !target) return;
-        const scene = canonicalizeScene(row.scene || 'Seattle');
+        const country = normalizeCountry(row.country);
+        const city = normalizeLocationField(row.city);
+        const state = normalizeState(row.state, country);
         const instrument1 = (row['Instrument 1'] || row['Intrument 1'] || '').trim();
         const instrument2 = (row['Instrument 2'] || row['Intrument 2'] || '').trim();
         const bio = (row.bio || row.Bio || row.notes || row.Notes || '').trim();
 
         if (!nodeMap.has(source)) {
-          nodeMap.set(source, { id: source, type: 'band', scene });
+          nodeMap.set(source, { id: source, type: 'band', city, state, country });
         }
         if (!nodeMap.has(target)) {
-          nodeMap.set(target, { id: target, type: 'person', scene, instrument1, instrument2, bio });
+          nodeMap.set(target, { id: target, type: 'person', city, state, country, instrument1, instrument2, bio });
         } else {
           const existing = nodeMap.get(target);
           if (!existing.instrument1 && instrument1) existing.instrument1 = instrument1;
@@ -2106,7 +2066,19 @@ if (shareGraphBtn) {
     function applyDraftToMaster(master, draft) {
       if (!master || !draft || typeof draft !== 'object') return { added: false, reason: 'No graph data available yet.' };
       const band = String(draft.band || '').trim();
-      const scene = canonicalizeScene(String(draft.scene || '').trim() || 'Seattle');
+      // Accept the new city/state/country shape, or fall back to splitting a
+      // legacy `draft.scene` string (old-shape submissions, e.g. from the 14
+      // pre-refactor Netlify Blob entries or older client code paths).
+      let city = normalizeLocationField(draft.city);
+      let country = normalizeCountry(draft.country);
+      let state = normalizeState(draft.state, country);
+      if (!city && !country && draft.scene) {
+        const legacy = parseLegacyScene(draft.scene);
+        city = legacy.city;
+        country = legacy.country;
+        state = legacy.state;
+      }
+      if (!country && city) country = 'USA';
       if (!band) return { added: false, reason: 'A band name is required.' };
 
       // Support both the multi-member shape ({ members: [...] }) and the legacy
@@ -2121,18 +2093,21 @@ if (shareGraphBtn) {
       let changed = false;
       let membersAdded = 0;
 
-      // Band node — dedup by NAME ONLY (case-insensitive). Scene is a soft
+      // Band node — dedup by NAME ONLY (case-insensitive). Location is a soft
       // attribute, not part of identity: users often type 'Seattle' when the
       // CSV has 'Seattle, WA' (or vice versa), and treating those as different
       // bands creates duplicate nodes on the graph. If an existing band node
-      // matches by name, we reuse it and only fill in scene if it was blank.
+      // matches by name, we reuse it and only fill in city/state/country if
+      // it was blank.
       let bandNode = master.nodes.find(node => node.type === 'band'
         && normalizeKey(node.id) === normalizeKey(band));
       if (!bandNode) {
-        master.nodes.push({ id: band, type: 'band', scene });
+        master.nodes.push({ id: band, type: 'band', city, state, country });
         changed = true;
-      } else if (!bandNode.scene && scene) {
-        bandNode.scene = scene;
+      } else if (!bandNode.city && city) {
+        bandNode.city = city;
+        bandNode.state = state;
+        bandNode.country = country;
         changed = true;
       }
 
@@ -2151,7 +2126,9 @@ if (shareGraphBtn) {
           master.nodes.push({
             id: member,
             type: 'person',
-            scene,
+            city,
+            state,
+            country,
             instrument1: instrument,
             instrument2: '',
             bio,
