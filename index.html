@@ -1319,6 +1319,12 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <option value="all">All scenes</option>
           </select>
         </div>
+        <div id="mobile-genre-picker-wrap" style="display:none">
+          <label for="mobile-genre-filter">Genre</label>
+          <select id="mobile-genre-filter">
+            <option value="all">All genres</option>
+          </select>
+        </div>
       </div>
       <div class="toolbar country-chip-row" id="mobile-country-chip-row" aria-label="Country quick filters">
         <!-- Populated dynamically, mirrors #country-chip-row. -->
@@ -1355,6 +1361,13 @@ main.layout { padding: 0 !important; gap: 0 !important; }
           <label for="scene-filter">Scene</label>
           <select id="scene-filter">
             <option value="all">All scenes</option>
+          </select>
+        </div>
+
+        <div class="filter-field">
+          <label for="genre-filter">Genre</label>
+          <select id="genre-filter">
+            <option value="all">All genres</option>
           </select>
         </div>
       </div>
@@ -1420,6 +1433,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <div class="detail-card" id="selected-node-stats">
               <div class="detail-stat"><span>Type</span><span id="selected-node-type">—</span></div>
               <div class="detail-stat"><span>Location</span><span id="selected-node-scene">—</span></div>
+              <div class="detail-stat" id="selected-node-genre-row"><span>Genre</span><span id="selected-node-genre">—</span></div>
               <div class="detail-stat"><span>Connections</span><span id="selected-node-degree">—</span></div>
               <div class="detail-stat"><span>Instrument</span><span id="selected-node-instrument">—</span></div>
               <div class="detail-stat"><span>Bio</span><span id="selected-node-bio">—</span></div>
@@ -1461,6 +1475,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
               </div>
               <div><label for="years-active">Years active</label><input id="years-active" name="years-active" type="text" placeholder="1990–1993" /></div>
               <div><label for="band-label">Label</label><input id="band-label" name="band-label" type="text" placeholder="Sub Pop, Epic, SST…" /></div>
+              <div class="form-span-2"><label for="band-genre">Genre</label><input id="band-genre" name="band-genre" type="text" list="genre-suggestions" placeholder="Grunge, Alternative Rock, Punk Rock…" autocapitalize="words" /><datalist id="genre-suggestions"></datalist><div class="field-note">Optional. Free text — pick from the suggestions or type your own.</div></div>
               <div class="form-span-2"><label for="albums-released">Albums released</label><input id="albums-released" name="albums-released" type="text" placeholder="Ten; Vs.; Vitalogy" /></div>
               <div class="form-span-2"><label for="member-bio">Bio</label><textarea id="member-bio" name="member-bio" type="text" autocapitalize="sentences" autocomplete="off" spellcheck="true" placeholder="Optional member bio, personal context, side projects, influences, or anything you want to say about this musician."></textarea><div class="field-note">Plain text only. Links and promo URLs are not allowed.</div></div>
               <div id="existing-band-members" class="detail-card submission-preview" style="display:none">
@@ -1536,6 +1551,8 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     const selectedScene = document.getElementById('selected-node-scene');
     const selectedDegree = document.getElementById('selected-node-degree');
     const selectedInstrument = document.getElementById('selected-node-instrument');
+    const selectedGenre = document.getElementById('selected-node-genre');
+    const selectedGenreRow = document.getElementById('selected-node-genre-row');
     const selectedBio = document.getElementById('selected-node-bio');
     const metricNodes = document.getElementById('metric-nodes');
     const metricLinks = document.getElementById('metric-links');
@@ -1560,6 +1577,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     let graphState = null;
     let currentFilter = 'all';
     let currentScene = 'all';
+    let currentGenre = 'all';
     let currentSearch = '';
 
     function updateHeroState() {
@@ -1788,6 +1806,14 @@ if (shareGraphBtn) {
       return String(raw || '').trim();
     }
 
+    // Genre normalization: trim + title-case each word. Empty -> ''.
+    // Keep in sync with scripts/location-helpers.mjs::normalizeGenre.
+    function normalizeGenre(raw) {
+      const trimmed = String(raw || '').trim();
+      if (!trimmed) return '';
+      return trimmed.replace(/(^|[\s\-\/])(\p{L})/gu, (m, sep, ch) => sep + ch.toUpperCase());
+    }
+
     function normalizeState(rawState, country) {
       const state = normalizeLocationField(rawState).toUpperCase();
       if (!state) return '';
@@ -1937,12 +1963,17 @@ if (shareGraphBtn) {
         const country = normalizeCountry(row.country);
         const city = normalizeLocationField(row.city);
         const state = normalizeState(row.state, country);
+        const genre = normalizeGenre(row.genre);
         const instrument1 = (row['Instrument 1'] || row['Intrument 1'] || '').trim();
         const instrument2 = (row['Instrument 2'] || row['Intrument 2'] || '').trim();
         const bio = (row.bio || row.Bio || row.notes || row.Notes || '').trim();
 
         if (!nodeMap.has(source)) {
-          nodeMap.set(source, { id: source, type: 'band', city, state, country });
+          // Genre lives on the band node only. If any row for this band has
+          // a non-empty genre it wins over rows that leave the field blank.
+          nodeMap.set(source, { id: source, type: 'band', city, state, country, genre });
+        } else if (genre && !nodeMap.get(source).genre) {
+          nodeMap.get(source).genre = genre;
         }
         if (!nodeMap.has(target)) {
           nodeMap.set(target, { id: target, type: 'person', city, state, country, instrument1, instrument2, bio });
@@ -2059,6 +2090,56 @@ if (shareGraphBtn) {
     STATIC_INSTRUMENTS.forEach(collectInstrumentValues);
 
     // ---------------------------------------------------------------------
+    // Dynamic genre suggestions (mirrors the instrument-suggestion mechanism).
+    //
+    // The Genre field on the submission form is free text with a <datalist>.
+    // Suggestions come from every genre value seen in the base CSV and any
+    // fetched backend submissions, deduplicated case-insensitively. First-seen
+    // casing wins. The static baseline covers the most common broad buckets in
+    // case data hasn't loaded yet.
+    // ---------------------------------------------------------------------
+
+    // normalized lower-case key -> chosen display casing.
+    const genreSuggestions = new Map();
+    const STATIC_GENRES = [
+      'Alternative Rock', 'Grunge', 'Punk Rock', 'Indie Rock', 'Hard Rock',
+      'Heavy Metal', 'Rock', 'Pop', 'Pop Rock', 'Post-Punk', 'Post-Hardcore',
+      'Progressive Rock', 'Progressive Metal', 'New Wave', 'Alternative Metal',
+      'Emo', 'Hardcore Punk', 'Sludge Metal', 'Thrash Metal', 'Metalcore',
+      'Shoegaze', 'Psychedelic Rock', 'Stoner Rock', 'Post-Grunge', 'Post-Rock',
+      'Folk', 'Folk Punk', 'Pop Punk', 'Blues', 'Funk Metal'
+    ];
+    function collectGenreValue(raw) {
+      const value = normalizeGenre(raw);
+      if (!value) return;
+      const key = value.toLowerCase();
+      if (!genreSuggestions.has(key)) genreSuggestions.set(key, value);
+    }
+    function collectGenresFromCsv(rows) {
+      (Array.isArray(rows) ? rows : []).forEach(row => collectGenreValue(row?.genre));
+    }
+    function collectGenresFromDrafts(drafts) {
+      (Array.isArray(drafts) ? drafts : []).forEach(draft => {
+        if (draft && typeof draft === 'object') collectGenreValue(draft.genre);
+      });
+    }
+    function rebuildGenreDatalist() {
+      const datalist = document.getElementById('genre-suggestions');
+      if (!datalist) return;
+      const values = Array.from(genreSuggestions.values())
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+      datalist.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      values.forEach(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        frag.appendChild(option);
+      });
+      datalist.appendChild(frag);
+    }
+    STATIC_GENRES.forEach(collectGenreValue);
+
+    // ---------------------------------------------------------------------
     // User submissions ("Add your band") persistence.
     //
     // PRIMARY source of truth: a shared backend (Netlify Function backed by
@@ -2145,6 +2226,7 @@ if (shareGraphBtn) {
       let city = normalizeLocationField(draft.city);
       let country = normalizeCountry(draft.country);
       let state = normalizeState(draft.state, country);
+      const genre = normalizeGenre(draft.genre);
       if (!city && !country && draft.scene) {
         const legacy = parseLegacyScene(draft.scene);
         city = legacy.city;
@@ -2175,13 +2257,21 @@ if (shareGraphBtn) {
       let bandNode = master.nodes.find(node => node.type === 'band'
         && normalizeKey(node.id) === normalizeKey(band));
       if (!bandNode) {
-        master.nodes.push({ id: band, type: 'band', city, state, country });
+        master.nodes.push({ id: band, type: 'band', city, state, country, genre });
         changed = true;
-      } else if (!bandNode.city && city) {
-        bandNode.city = city;
-        bandNode.state = state;
-        bandNode.country = country;
-        changed = true;
+      } else {
+        if (!bandNode.city && city) {
+          bandNode.city = city;
+          bandNode.state = state;
+          bandNode.country = country;
+          changed = true;
+        }
+        // Genre is a separate soft attribute: fill in from a new submission
+        // if the existing band node had none.
+        if (!bandNode.genre && genre) {
+          bandNode.genre = genre;
+          changed = true;
+        }
       }
 
       members.forEach((entry, index) => {
@@ -2266,6 +2356,34 @@ if (shareGraphBtn) {
         }
         nodes = nodes.filter(node => sceneIds.has(node.id));
         links = links.filter(link => sceneIds.has(link.source) && sceneIds.has(link.target));
+      }
+
+      // Genre filter (AND-combined with the location filter above). Genre is
+      // stored only on band nodes; a person is kept if they're linked to a
+      // band whose normalized genre matches. Case-insensitive equality on the
+      // normalized value avoids the 'Alternative rock' vs 'Alternative Rock'
+      // trap without depending on the CSV being pre-normalized.
+      if (currentGenre !== 'all') {
+        const targetGenre = normalizeGenre(currentGenre).toLowerCase();
+        const matchingBandIds = new Set(
+          nodes
+            .filter(node => node.type === 'band' && (node.genre || '').toLowerCase() === targetGenre)
+            .map(node => node.id)
+        );
+        // Collect persons connected to a matching band.
+        const keepIds = new Set(matchingBandIds);
+        links.forEach(link => {
+          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+          if (matchingBandIds.has(sourceId)) keepIds.add(targetId);
+          if (matchingBandIds.has(targetId)) keepIds.add(sourceId);
+        });
+        nodes = nodes.filter(node => keepIds.has(node.id));
+        links = links.filter(link => {
+          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+          return keepIds.has(sourceId) && keepIds.has(targetId);
+        });
       }
 
       if (currentSearch) {
@@ -2389,6 +2507,13 @@ if (shareGraphBtn) {
       });
     }
 
+    // Hide vs. show the Genre row in the detail panel. Genre is a per-band
+    // attribute, so we only surface it for band nodes and hide the whole row
+    // for musicians / empty state to keep the panel tidy.
+    function setSelectedGenreVisible(visible) {
+      if (selectedGenreRow) selectedGenreRow.style.display = visible ? '' : 'none';
+    }
+
     function updateSelection(node, degree = 0, linkedNames = null, bandMembers = null) {
       if (!node) {
         selectedName.textContent = 'Waiting for selection';
@@ -2397,6 +2522,8 @@ if (shareGraphBtn) {
         selectedScene.textContent = '—';
         selectedDegree.textContent = '—';
         selectedInstrument.textContent = '—';
+        if (selectedGenre) selectedGenre.textContent = '—';
+        setSelectedGenreVisible(false);
         if (selectedBio) selectedBio.textContent = '—';
         renderConnectionChips('selected-node-connections', [], 'No connections selected');
         renderBandMemberButtons([]);
@@ -2408,6 +2535,14 @@ if (shareGraphBtn) {
         : 'Musician node selected. This is a good place for bio details, instruments, and future profile notes.';
       selectedType.textContent = node.type;
       selectedScene.textContent = locationLabel(node) || '—';
+      // Genre row: bands only. For musicians we hide the row so the panel
+      // doesn't display an always-blank field for every person clicked.
+      if (node.type === 'band') {
+        setSelectedGenreVisible(true);
+        if (selectedGenre) selectedGenre.textContent = node.genre || '—';
+      } else {
+        setSelectedGenreVisible(false);
+      }
       selectedDegree.textContent = degree;
       selectedInstrument.textContent = [node.instrument1, node.instrument2].filter(Boolean).join(', ') || '—';
       if (selectedBio) selectedBio.textContent = node.bio || '—';
@@ -2482,6 +2617,8 @@ if (shareGraphBtn) {
         selectedScene.textContent = '—';
         selectedDegree.textContent = '—';
         selectedInstrument.textContent = '—';
+        if (selectedGenre) selectedGenre.textContent = '—';
+        setSelectedGenreVisible(false);
         selectedBio.textContent = '—';
         renderConnectionChips('selected-node-connections', [], 'No connections selected');
     renderBandMemberButtons([]);
@@ -2494,6 +2631,14 @@ if (shareGraphBtn) {
         : 'Musician node selected. This is a good place for bio details, instruments, and future profile notes.';
       selectedType.textContent = node.type;
       selectedScene.textContent = locationLabel(node) || '—';
+      // Genre row: bands only. Hidden for musicians so the panel doesn't show
+      // an always-blank field for every person clicked.
+      if (node.type === 'band') {
+        setSelectedGenreVisible(true);
+        if (selectedGenre) selectedGenre.textContent = node.genre || '—';
+      } else {
+        setSelectedGenreVisible(false);
+      }
       selectedDegree.textContent = degree;
       selectedInstrument.textContent = [node.instrument1, node.instrument2].filter(Boolean).join(', ') || '—';
       selectedBio.textContent = node.bio || '—';
@@ -2865,7 +3010,8 @@ if (shareGraphBtn) {
       const ghostTargets = [
         document.getElementById('years-active')?.closest('div'),
         document.getElementById('band-label')?.closest('div'),
-        document.getElementById('albums-released')?.closest('div')
+        document.getElementById('albums-released')?.closest('div'),
+        document.getElementById('band-genre')?.closest('div')
       ].filter(Boolean);
 
       ghostTargets.forEach(el => el.classList.toggle('is-ghosted', duplicate));
@@ -3178,8 +3324,13 @@ if (shareGraphBtn) {
         if (chip.dataset.action === 'clear') {
           currentFilter = 'all';
           currentScene = 'all';
+          currentGenre = 'all';
           currentSearch = '';
           document.getElementById('scene-filter').value = 'all';
+          const genreSel = document.getElementById('genre-filter');
+          if (genreSel) genreSel.value = 'all';
+          const mobileGenreSel = document.getElementById('mobile-genre-filter');
+          if (mobileGenreSel) mobileGenreSel.value = 'all';
           document.getElementById('node-search').value = '';
           syncFilterButtons();
           syncCountryChipButtons();
@@ -3414,12 +3565,19 @@ if (shareGraphBtn) {
         && normalizeKey(node.id) === normalizeKey(band)
         && normalizeKey(locationLabel(node) || '') === normalizeKey(scene));
 
+      // Genre is a per-band attribute: only send it if this submission is
+      // introducing a brand-new band. For an existing-band-connection
+      // submission we don't overwrite the band's already-stored genre.
+      const genreInput = document.getElementById('band-genre');
+      const genre = bandExisted ? '' : normalizeGenre(genreInput ? genreInput.value : '');
+
       const draft = {
         band,
         members,
         city: location.city,
         state: location.state,
         country: location.country,
+        genre,
         yearsActive: bandExisted ? '' : document.getElementById('years-active').value.trim(),
         label: bandExisted ? '' : document.getElementById('band-label').value.trim(),
         albums: bandExisted ? '' : document.getElementById('albums-released').value.trim(),
@@ -3435,7 +3593,12 @@ if (shareGraphBtn) {
         const applied = applyDraftToMaster(master, draftToApply);
         if (!applied.added) return applied;
         currentFilter = 'all';
+        currentGenre = 'all';
         currentSearch = '';
+        const genreSel = document.getElementById('genre-filter');
+        if (genreSel) genreSel.value = 'all';
+        const mobileGenreSel = document.getElementById('mobile-genre-filter');
+        if (mobileGenreSel) mobileGenreSel.value = 'all';
         const draftKey = locationKey({ city: draftToApply.city, state: draftToApply.state, country: draftToApply.country });
         const draftLabel = locationLabel({ city: draftToApply.city, state: draftToApply.state, country: draftToApply.country });
         if (currentScene !== 'all' && !currentScene.startsWith('country:') && normalizeKey(currentScene) !== normalizeKey(draftKey)) {
@@ -3559,12 +3722,14 @@ if (shareGraphBtn) {
     zoomBehavior = d3.zoom().scaleExtent([0.25, 3]).on('zoom', event => graphGroup.attr('transform', event.transform));
     svgSelection.call(zoomBehavior);
 
-    d3.csv('seattle_band_members-2-2.csv?v=5').then(async rows => {
+    d3.csv('seattle_band_members-2-2.csv?v=6').then(async rows => {
       const master = buildMasterGraph(rows);
       // Seed instrument suggestions from the CSV and refresh the datalist so
       // real values are suggestible as soon as the base data lands.
       collectInstrumentsFromCsv(rows);
+      collectGenresFromCsv(rows);
       rebuildInstrumentDatalist();
+      rebuildGenreDatalist();
       // Merge shared submissions from the backend (primary source of truth).
       // If the backend is unreachable, fall back to replaying this browser's
       // local-only copy so previously added bands still survive a refresh.
@@ -3572,14 +3737,17 @@ if (shareGraphBtn) {
         const shared = await fetchSharedSubmissions();
         mergeSubmissionsIntoMaster(master, shared);
         collectInstrumentsFromDrafts(shared);
+        collectGenresFromDrafts(shared);
       } catch (error) {
         console.warn('Could not load shared submissions; falling back to local copy.', error);
         const local = loadUserSubmissions();
         mergeSubmissionsIntoMaster(master, local);
         collectInstrumentsFromDrafts(local);
+        collectGenresFromDrafts(local);
       }
-      // Rebuild once more so instruments from submissions become suggestible.
+      // Rebuild once more so instruments/genres from submissions become suggestible.
       rebuildInstrumentDatalist();
+      rebuildGenreDatalist();
       graphState = { master };
       const sceneSelect = document.getElementById('scene-filter');
       // Build the location dropdown from locationKey/locationLabel, deduped by
@@ -3600,6 +3768,33 @@ if (shareGraphBtn) {
         option.textContent = scene.label;
         sceneSelect.appendChild(option);
       });
+
+      // Populate the desktop Genre filter dropdown from every distinct band
+      // genre in the merged master graph. Sorted case-insensitively so it
+      // reads naturally. The 'All genres' baseline option is already in the
+      // static HTML; we append the rest.
+      const genreSelect = document.getElementById('genre-filter');
+      if (genreSelect) {
+        const genres = new Set();
+        master.nodes.forEach(node => {
+          if (node.type === 'band' && node.genre) genres.add(node.genre);
+        });
+        Array.from(genres)
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+          .forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g;
+            opt.textContent = g;
+            genreSelect.appendChild(opt);
+          });
+        genreSelect.addEventListener('change', ev => {
+          currentGenre = ev.target.value;
+          const mobileGenre = document.getElementById('mobile-genre-filter');
+          if (mobileGenre) mobileGenre.value = currentGenre;
+          renderGraph();
+        });
+      }
+
       syncFilterButtons();
       renderCountryChips();
 
@@ -3616,8 +3811,11 @@ if (shareGraphBtn) {
         const mobileSearch = document.getElementById('mobile-node-search');
         const mobileSceneSelect = document.getElementById('mobile-scene-filter');
         const mobileScenePickerWrap = document.getElementById('mobile-scene-picker-wrap');
+        const mobileGenreSelect = document.getElementById('mobile-genre-filter');
+        const mobileGenrePickerWrap = document.getElementById('mobile-genre-picker-wrap');
         const desktopSearch = document.getElementById('node-search');
         const desktopSceneSelect = document.getElementById('scene-filter');
+        const desktopGenreSelect = document.getElementById('genre-filter');
         const segmentsContainer = document.getElementById('mobile-scene-segments');
 
         if (!menuBtn || !menuSheet || !desktopSceneSelect) return;
@@ -3806,6 +4004,37 @@ if (shareGraphBtn) {
             desktopSceneSelect.value = ev.target.value;
             updateSegmentActive(ev.target.value);
             syncCountryChipButtons();
+            renderGraph();
+          });
+        }
+
+        // Genre filter: mirror desktop options into mobile, show the picker on
+        // mobile whenever any genres exist, and keep both dropdowns in sync.
+        if (mobileGenreSelect && desktopGenreSelect) {
+          function syncMobileGenreOptions() {
+            const current = mobileGenreSelect.value;
+            mobileGenreSelect.innerHTML = '';
+            Array.from(desktopGenreSelect.options).forEach(opt => {
+              const clone = document.createElement('option');
+              clone.value = opt.value;
+              clone.textContent = opt.textContent;
+              mobileGenreSelect.appendChild(clone);
+            });
+            if (current && [...mobileGenreSelect.options].some(o => o.value === current)) {
+              mobileGenreSelect.value = current;
+            } else {
+              mobileGenreSelect.value = desktopGenreSelect.value;
+            }
+          }
+          syncMobileGenreOptions();
+          // Show the mobile picker whenever the desktop dropdown has real
+          // options (i.e. more than just the 'All genres' baseline).
+          if (mobileGenrePickerWrap && desktopGenreSelect.options.length > 1) {
+            mobileGenrePickerWrap.style.display = '';
+          }
+          mobileGenreSelect.addEventListener('change', ev => {
+            currentGenre = ev.target.value;
+            desktopGenreSelect.value = ev.target.value;
             renderGraph();
           });
         }

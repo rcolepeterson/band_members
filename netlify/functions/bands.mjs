@@ -76,6 +76,7 @@ const LIMITS = {
   city: 80,
   state: 2,
   country: 3,
+  genre: 80,
   member: 120,
   instrument: 120,
   bio: 2000,
@@ -102,6 +103,15 @@ function normalizeStateCode(rawState, country) {
   if (!state) return '';
   if (country && country !== 'USA') return ''; // discard non-US state values
   return state.slice(0, 2);
+}
+
+// Genre normalization: trim + title-case each word. Keep in sync with
+// scripts/location-helpers.mjs::normalizeGenre and the client-side inline
+// copy in index.html.
+function normalizeGenre(raw) {
+  const trimmed = asTrimmedString(raw);
+  if (!trimmed) return '';
+  return trimmed.replace(/(^|[\s\-\/])(\p{L})/gu, (m, sep, ch) => sep + ch.toUpperCase());
 }
 
 // Old-shape submissions (pre-refactor) stored a single 'scene' string, e.g.
@@ -194,14 +204,24 @@ function resolveSubmissionLocation(record) {
   return { city, state, country };
 }
 
+// Given a raw stored submission, return its normalized genre value. Pre-genre
+// submissions have no `genre` field at all; they surface as ''. Kept alongside
+// resolveSubmissionLocation so the read path handles every soft attribute the
+// same way (lazy migration in memory, blob left untouched on disk).
+function resolveSubmissionGenre(record) {
+  if (!record || typeof record !== 'object') return '';
+  return normalizeGenre(record.genre);
+}
+
 // Migrate a stored submission (as read from the blob) to the new shape for
 // the response payload. Leaves the underlying blob untouched — the lazy
 // migration only ever happens in memory, on read.
 function migrateSubmissionForRead(record) {
   if (!record || typeof record !== 'object') return record;
   const location = resolveSubmissionLocation(record);
+  const genre = resolveSubmissionGenre(record);
   const { scene, ...rest } = record;
-  return { ...rest, ...location };
+  return { ...rest, ...location, genre };
 }
 
 // Mirror of the client's bioContainsBlockedLink() so link spam is rejected
@@ -252,6 +272,9 @@ function validateSubmission(payload) {
   if (state.length > LIMITS.state) return { ok: false, error: 'State must be a 2-letter USPS code.' };
   if (country.length > LIMITS.country) return { ok: false, error: 'Country must be a 3-letter ISO code.' };
 
+  const genre = normalizeGenre(payload.genre);
+  if (genre.length > LIMITS.genre) return { ok: false, error: 'Genre is too long.' };
+
   const bio = asTrimmedString(payload.bio);
   if (bio.length > LIMITS.bio) return { ok: false, error: 'Bio is too long.' };
   if (bio && BLOCKED_LINK_RE.test(bio)) {
@@ -296,6 +319,7 @@ function validateSubmission(payload) {
     city,
     state,
     country,
+    genre,
     yearsActive: clampMeta(payload.yearsActive),
     label: clampMeta(payload.label),
     albums: clampMeta(payload.albums),
@@ -394,7 +418,9 @@ export {
   FALLBACK_ADMIN_TOKEN,
   parseLegacyScene,
   resolveSubmissionLocation,
+  resolveSubmissionGenre,
   migrateSubmissionForRead,
   normalizeCountryCode,
-  normalizeStateCode
+  normalizeStateCode,
+  normalizeGenre
 };

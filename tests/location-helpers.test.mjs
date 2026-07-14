@@ -11,6 +11,7 @@ import {
   normalizeLocationField,
   normalizeState,
   normalizeCountry,
+  normalizeGenre,
   locationKey,
   locationLabel,
   parseLegacyScene,
@@ -127,4 +128,21 @@ test('LEGACY_COUNTRY_ALIASES covers the known pre-refactor suffixes', () => {
   assert.equal(LEGACY_COUNTRY_ALIASES.EN, 'GBR');
   assert.equal(LEGACY_COUNTRY_ALIASES.SCT, 'GBR');
   assert.equal(LEGACY_COUNTRY_ALIASES.UK, 'GBR');
+});
+
+test('normalizeGenre title-cases each word', () => {
+  assert.equal(normalizeGenre('grunge'), 'Grunge');
+  assert.equal(normalizeGenre('alternative rock'), 'Alternative Rock');
+  assert.equal(normalizeGenre('HARD ROCK'), 'HARD ROCK'); // preserves existing capitals; only inserts them.
+  assert.equal(normalizeGenre('post-punk'), 'Post-Punk');
+  assert.equal(normalizeGenre('post-hardcore'), 'Post-Hardcore');
+  assert.equal(normalizeGenre('pop/rock'), 'Pop/Rock');
+});
+
+test('normalizeGenre coerces empty / non-string input to empty string', () => {
+  assert.equal(normalizeGenre(''), '');
+  assert.equal(normalizeGenre('   '), '');
+  assert.equal(normalizeGenre(null), '');
+  assert.equal(normalizeGenre(undefined), '');
+  assert.equal(normalizeGenre(42), '42'); // asTrimmedString style: coerce then title-case, matches the location helpers' philosophy.
 });

@@ -13,7 +13,9 @@ import {
   LIMITS,
   isAdminAuthorized,
   removeSubmissionById,
-  FALLBACK_ADMIN_TOKEN
+  FALLBACK_ADMIN_TOKEN,
+  normalizeGenre,
+  migrateSubmissionForRead
 } from '../netlify/functions/bands.mjs';
 
 // Build a minimal request-like object exposing headers.get, matching what the
@@ -107,6 +109,70 @@ test('env ADMIN_TOKEN takes precedence over the hardcoded fallback', () => {
   // The old fallback must no longer authorize once a real env token is set.
   assert.equal(isAdminAuthorized(fakeReq(FALLBACK_ADMIN_TOKEN)), false);
   delete process.env.ADMIN_TOKEN;
+});
+
+// --- Genre field (added alongside city/state/country) -----------------------
+// Genre is a soft, per-band attribute stored via free text with client-side
+// datalist autocomplete. These tests pin down the same three guarantees we
+// give city/state/country: it's normalized, it's length-capped, and legacy
+// blobs without the field are backfilled to '' on read.
+
+test('validateSubmission normalizes genre casing and passes it through', () => {
+  const result = validateSubmission({
+    band: 'Nirvana',
+    city: 'Aberdeen',
+    state: 'WA',
+    country: 'USA',
+    genre: 'grunge'
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.draft.genre, 'Grunge');
+});
+
+test('validateSubmission trims blank genre to empty string', () => {
+  const result = validateSubmission({
+    band: 'Nirvana',
+    city: 'Aberdeen',
+    state: 'WA',
+    country: 'USA',
+    genre: '   '
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.draft.genre, '');
+});
+
+test('validateSubmission rejects an over-long genre string', () => {
+  const tooLong = 'x'.repeat(LIMITS.genre + 1);
+  const result = validateSubmission({
+    band: 'Nirvana',
+    city: 'Aberdeen',
+    state: 'WA',
+    country: 'USA',
+    genre: tooLong
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /genre is too long/i);
+});
+
+test('normalizeGenre matches the location-helpers version (server copy)', () => {
+  assert.equal(normalizeGenre('grunge'), 'Grunge');
+  assert.equal(normalizeGenre('alternative rock'), 'Alternative Rock');
+  assert.equal(normalizeGenre('post-punk'), 'Post-Punk');
+  assert.equal(normalizeGenre(''), '');
+  assert.equal(normalizeGenre(null), '');
+});
+
+test('migrateSubmissionForRead lazily backfills genre for legacy blobs', () => {
+  // A pre-genre submission has no `genre` key at all. On read, the migration
+  // shim should surface it as '' so the client can render a consistent shape.
+  const legacy = { id: 'x', band: 'Nirvana', city: 'Aberdeen', state: 'WA', country: 'USA' };
+  const migrated = migrateSubmissionForRead(legacy);
+  assert.equal(migrated.genre, '');
+
+  // A submission that already has a genre gets normalized on read, so a blob
+  // saved as 'grunge' still renders as 'Grunge' in the UI.
+  const modern = { id: 'y', band: 'Nirvana', city: 'Aberdeen', state: 'WA', country: 'USA', genre: 'grunge' };
+  assert.equal(migrateSubmissionForRead(modern).genre, 'Grunge');
 });
 
 test('deleting a non-existent id is reported as not found', () => {

@@ -40,6 +40,7 @@ const LOCATION_HELPERS = [
   'normalizeLocationField',
   'normalizeState',
   'normalizeCountry',
+  'normalizeGenre',
   'locationKey',
   'locationLabel',
   'parseLegacyScene',
@@ -141,6 +142,62 @@ test('one malformed record does NOT abort merging of the others', () => {
   } finally {
     console.warn = originalWarn;
   }
+});
+
+// --- Genre threading through applyDraftToMaster -----------------------------
+// Genre is a per-band soft attribute. Merge policy: first non-blank value wins
+// (mirrors how city/state/country behave for existing bands), so a legacy
+// submission missing a genre never wipes out a genre that arrived on an
+// earlier submission for the same band.
+
+test('applyDraftToMaster stores a normalized genre on a brand-new band node', () => {
+  const master = emptyMaster();
+  applyDraftToMaster(master, {
+    band: 'Nirvana',
+    city: 'Aberdeen',
+    state: 'WA',
+    country: 'USA',
+    genre: 'grunge',
+    members: [{ member: 'Kurt Cobain', instrument: 'vocals, guitar', relation: '1' }],
+    mode: 'new-band-entry'
+  });
+  const band = bandNodes(master, 'Nirvana')[0];
+  assert.ok(band, 'band node exists');
+  assert.equal(band.genre, 'Grunge');
+});
+
+test('applyDraftToMaster fills in a blank existing genre from a later submission', () => {
+  const master = emptyMaster();
+  applyDraftToMaster(master, {
+    band: 'Soundgarden', city: 'Seattle', state: 'WA', country: 'USA',
+    genre: '',
+    members: [{ member: 'Chris Cornell', relation: '1' }],
+    mode: 'new-band-entry'
+  });
+  applyDraftToMaster(master, {
+    band: 'Soundgarden', city: 'Seattle', state: 'WA', country: 'USA',
+    genre: 'grunge',
+    members: [{ member: 'Kim Thayil', relation: '1' }],
+    mode: 'existing-band-connection'
+  });
+  assert.equal(bandNodes(master, 'Soundgarden')[0].genre, 'Grunge');
+});
+
+test('applyDraftToMaster preserves an existing genre when a later submission omits it', () => {
+  const master = emptyMaster();
+  applyDraftToMaster(master, {
+    band: 'Pearl Jam', city: 'Seattle', state: 'WA', country: 'USA',
+    genre: 'Grunge',
+    members: [{ member: 'Eddie Vedder', relation: '1' }],
+    mode: 'new-band-entry'
+  });
+  applyDraftToMaster(master, {
+    band: 'Pearl Jam', city: 'Seattle', state: 'WA', country: 'USA',
+    genre: '',
+    members: [{ member: 'Stone Gossard', relation: '1' }],
+    mode: 'existing-band-connection'
+  });
+  assert.equal(bandNodes(master, 'Pearl Jam')[0].genre, 'Grunge');
 });
 
 test('reproduces the production snapshot: single Metallica node with all members', () => {
