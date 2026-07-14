@@ -1533,10 +1533,19 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     left: 8px !important;
     right: 8px !important;
     top: auto !important;
-    bottom: 12px !important;
+    /* Lift the mobile card up off the very bottom edge so the last row
+       of member chips is fully visible — the previous 12px hugged the
+       viewport bottom and clipped the last row of chips. Also cap the
+       card's max-height so long member lists scroll internally instead
+       of extending upward off-screen. */
+    bottom: 72px !important;
     max-width: none;
     min-width: 0;
     width: auto;
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     transform: translateY(120%);
     transition: transform 200ms ease-out, opacity 120ms ease-out;
   }
