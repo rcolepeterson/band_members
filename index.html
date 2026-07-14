@@ -68,7 +68,7 @@
     .graph-panel{padding:0;min-height:780px;display:grid;grid-template-rows:auto 1fr auto;gap:var(--space-4);background:transparent;border:none;box-shadow:none}
     .panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4)}.graph-panel-head{margin-bottom:var(--space-3)}.graph-toolbar{align-items:center}.graph-version-pill{margin-left:auto;min-height:40px;display:inline-flex;align-items:center}.panel-title{font-size:var(--text-lg);font-weight:700}.panel-copy{font-size:var(--text-sm);color:var(--color-text-muted);max-width:56ch}
     .status-pill{padding:0.4rem 0.8rem;border-radius:var(--radius-full);background:rgba(82,174,182,0.12);color:var(--color-primary-hover);font-size:var(--text-xs);letter-spacing:.1em;text-transform:uppercase}
-    .toolbar{display:flex;flex-wrap:wrap;gap:var(--space-3)}.graph-toolbar{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--space-3);row-gap:var(--space-3)}.graph-toolbar-left{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;min-width:0}.graph-version-pill{justify-self:end;white-space:nowrap}.tool-chip{min-height:40px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);background:rgba(255,255,255,0.02);font-size:var(--text-sm)}.tool-chip.active{background:rgba(82,174,182,0.12);border-color:rgba(82,174,182,0.35);color:var(--color-primary-hover)}.graph-status-chip{display:inline-flex;align-items:center;justify-content:center;cursor:default;pointer-events:none;opacity:.9;color:var(--color-text-muted)}
+    .toolbar{display:flex;flex-wrap:wrap;gap:var(--space-3)}.graph-toolbar{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--space-3);row-gap:var(--space-3)}.graph-toolbar-left{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;min-width:0}.graph-version-pill{justify-self:end;white-space:nowrap}.tool-chip{min-height:40px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);background:rgba(255,255,255,0.02);font-size:var(--text-sm)}.tool-chip.active{background:rgba(82,174,182,0.12);border-color:rgba(82,174,182,0.35);color:var(--color-primary-hover)}.graph-status-chip{display:inline-flex;align-items:center;justify-content:center;cursor:default;pointer-events:none;opacity:.9;color:var(--color-text-muted)}.country-chip-row{margin-top:var(--space-2)}.country-chip{min-height:32px;padding:0 var(--space-3);font-size:var(--text-xs)}
     .graph-stage{position:relative;border-radius:calc(var(--radius-xl) + var(--space-2));overflow:hidden;background:radial-gradient(circle at top, rgba(82,174,182,0.08), transparent 34%),linear-gradient(180deg, rgba(10,14,20,0.92), rgba(8,11,17,0.98));border:none;min-height:720px;box-shadow:0 30px 80px rgba(0,0,0,0.34)}
     #graph-svg{width:100%;height:100%;min-height:520px}
     .graph-badge{position:absolute;right:var(--space-5);bottom:var(--space-5);padding:0.5rem 0.8rem;border-radius:var(--radius-full);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;background:rgba(9,11,17,0.72);border:1px solid rgba(255,255,255,0.08);color:var(--color-text-muted)}
@@ -1318,6 +1318,9 @@ main.layout { padding: 0 !important; gap: 0 !important; }
           </select>
         </div>
       </div>
+      <div class="toolbar country-chip-row" id="mobile-country-chip-row" aria-label="Country quick filters">
+        <!-- Populated dynamically, mirrors #country-chip-row. -->
+      </div>
     </aside>
     <div class="graph-overlay">
       <div class="panel-head graph-panel-head">
@@ -1352,6 +1355,12 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <option value="all">All scenes</option>
           </select>
         </div>
+      </div>
+
+      <div class="toolbar country-chip-row" id="country-chip-row" aria-label="Country quick filters">
+        <!-- Populated dynamically: an "All" chip plus one chip per distinct
+             country in the graph (e.g. "All USA", "All GBR"). See
+             renderCountryChips(). -->
       </div>
 
       <div class="share-popover" id="share-popover" hidden>
@@ -3014,6 +3023,57 @@ if (shareGraphBtn) {
       });
     }
 
+    // Country quick-filter chips: one-click filter to every scene in a given
+    // country (e.g. "All USA"), plus an "All" chip that clears the location
+    // filter entirely. Uses the same currentScene variable as the scene
+    // dropdown, distinguished by a 'country:XXX' prefix (see getFilteredGraph).
+    function selectCountryFilter(countryCode) {
+      currentScene = countryCode ? `country:${countryCode}` : 'all';
+      const sceneSelect = document.getElementById('scene-filter');
+      if (sceneSelect) sceneSelect.value = 'all'; // dropdown has no matching option for a country chip
+      const mobileSceneSelect = document.getElementById('mobile-scene-filter');
+      if (mobileSceneSelect) mobileSceneSelect.value = 'all';
+      syncCountryChipButtons();
+      renderGraph();
+    }
+
+    function syncCountryChipButtons() {
+      document.querySelectorAll('.country-chip').forEach(btn => {
+        const isAll = btn.dataset.country === 'all';
+        const active = isAll ? currentScene === 'all' : currentScene === `country:${btn.dataset.country}`;
+        btn.classList.toggle('active', active);
+      });
+    }
+
+    function renderCountryChips() {
+      if (!graphState || !graphState.master) return;
+      const countries = Array.from(new Set(
+        graphState.master.nodes.map(node => normalizeCountry(node.country)).filter(Boolean)
+      )).sort();
+
+      [document.getElementById('country-chip-row'), document.getElementById('mobile-country-chip-row')].forEach(row => {
+        if (!row) return;
+        row.innerHTML = '';
+        const allChip = document.createElement('button');
+        allChip.type = 'button';
+        allChip.className = 'tool-chip country-chip active';
+        allChip.dataset.country = 'all';
+        allChip.textContent = 'All';
+        allChip.addEventListener('click', () => selectCountryFilter(null));
+        row.appendChild(allChip);
+
+        countries.forEach(code => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'tool-chip country-chip';
+          chip.dataset.country = code;
+          chip.textContent = `All ${code}`;
+          chip.addEventListener('click', () => selectCountryFilter(code));
+          row.appendChild(chip);
+        });
+      });
+    }
+
     toolChips.forEach(chip => {
       chip.addEventListener('click', () => {
         if (chip.dataset.action === 'fit') {
@@ -3027,6 +3087,7 @@ if (shareGraphBtn) {
           document.getElementById('scene-filter').value = 'all';
           document.getElementById('node-search').value = '';
           syncFilterButtons();
+          syncCountryChipButtons();
           renderGraph();
           return;
         }
@@ -3047,6 +3108,7 @@ if (shareGraphBtn) {
       currentScene = locationKey(seattleNode);
       const sceneSelect = document.getElementById('scene-filter');
       if (sceneSelect) sceneSelect.value = currentScene;
+      syncCountryChipButtons();
       renderGraph();
       document.getElementById('graph-workspace').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -3058,6 +3120,7 @@ if (shareGraphBtn) {
 
     document.getElementById('scene-filter').addEventListener('change', event => {
       currentScene = event.target.value;
+      syncCountryChipButtons();
       renderGraph();
     });
 
@@ -3380,6 +3443,7 @@ if (shareGraphBtn) {
         sceneSelect.appendChild(option);
       });
       syncFilterButtons();
+      renderCountryChips();
 
       // ============================================================
       // MOBILE-FIRST: wire the hamburger + bottom sheet + Seattle default.
@@ -3541,6 +3605,7 @@ if (shareGraphBtn) {
               desktopSceneSelect.value = 'all';
               if (mobileSceneSelect) mobileSceneSelect.value = 'all';
               updateSegmentActive('all');
+              syncCountryChipButtons();
               renderGraph();
             } else if (target === '__other') {
               if (mobileScenePickerWrap) mobileScenePickerWrap.style.display = '';
@@ -3552,6 +3617,7 @@ if (shareGraphBtn) {
                   currentScene = firstOther.value;
                   mobileSceneSelect.value = currentScene;
                   desktopSceneSelect.value = currentScene;
+                  syncCountryChipButtons();
                   renderGraph();
                 }
               }
@@ -3562,6 +3628,7 @@ if (shareGraphBtn) {
               desktopSceneSelect.value = target;
               if (mobileSceneSelect) mobileSceneSelect.value = target;
               updateSegmentActive(target);
+              syncCountryChipButtons();
               renderGraph();
             }
           });
@@ -3580,6 +3647,7 @@ if (shareGraphBtn) {
             currentScene = ev.target.value;
             desktopSceneSelect.value = ev.target.value;
             updateSegmentActive(ev.target.value);
+            syncCountryChipButtons();
             renderGraph();
           });
         }
