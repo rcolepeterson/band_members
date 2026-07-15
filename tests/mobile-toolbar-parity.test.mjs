@@ -164,3 +164,154 @@ test('regression: mobile Add-your-band entry point exists (PR #42)', () => {
     'Expected the #mobile-add-band-btn handler to trigger the desktop #add-band-btn.'
   );
 });
+
+// Regression test for PR #44. The global toolChips forEach click
+// handler used to run on every .tool-chip in the document, including
+// popover triggers (#search-btn, #scene-btn, #genre-btn) and the
+// primary mobile actions (#mobile-share-btn, #mobile-add-band-btn).
+// For any chip without data-filter/data-action it would reset
+// currentFilter to 'all' and call renderGraph(), so clicking
+// Add-your-band or Share on mobile just re-rendered the graph
+// instead of opening the intended sheet. The fix in PR #44 adds an
+// early-return guard. This test locks the guard in place.
+// Strip // line comments and /* block comments */ from a JS snippet.
+// The regression tests below inspect handler bodies with regex, and
+// comment text (which often narrates the very behavior we're checking
+// against) would otherwise produce false-positive matches.
+function stripJsComments(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
+test('regression: global toolChips handler ignores chips without data-filter/action (PR #44)', () => {
+  // The handler must call toolChips.forEach + addEventListener. We
+  // anchor on the exact forEach signature so we don't accidentally
+  // match some other tool-chip loop elsewhere in the file.
+  const handlerMatch = INDEX_HTML.match(
+    /toolChips\.forEach\(chip => \{\s*chip\.addEventListener\('click', \(\) => \{([\s\S]*?)\}\);\s*\}\);/
+  );
+  assert.ok(
+    handlerMatch,
+    'Expected the global `toolChips.forEach(chip => chip.addEventListener("click", ...))` block to exist.'
+  );
+  const handlerBody = stripJsComments(handlerMatch[1]);
+  // The guard must appear BEFORE any read of chip.dataset.action /
+  // .filter or any state mutation — otherwise a non-filter chip
+  // still triggers renderGraph() on click.
+  const guardIdx = handlerBody.search(
+    /if\s*\(\s*!\s*\(['"]filter['"]\s+in\s+chip\.dataset\s*\)\s*&&\s*!\s*\(['"]action['"]\s+in\s+chip\.dataset\s*\)\s*\)\s*return\s*;?/
+  );
+  assert.ok(
+    guardIdx !== -1,
+    'Expected the toolChips handler to bail early on chips that have neither ' +
+      'data-filter nor data-action. Missing this guard means clicks on popover ' +
+      "triggers (#search-btn/#scene-btn/#genre-btn) and mobile primary actions " +
+      '(#mobile-share-btn/#mobile-add-band-btn) reset the filter and re-render ' +
+      'the graph instead of doing their intended thing. See PR #44.'
+  );
+  const firstStateTouch = handlerBody.search(
+    /(chip\.dataset\.(action|filter)|currentFilter\s*=|renderGraph\(|fitGraph\()/
+  );
+  assert.ok(
+    firstStateTouch === -1 || guardIdx < firstStateTouch,
+    'The tool-chip guard must run before any dataset read, state mutation, or render call. ' +
+      'If the guard is placed after those, non-filter chips still cause a re-render.'
+  );
+});
+
+// Complementary check: for every .tool-chip that is NOT a filter or
+// action chip, it must have its own dedicated click handler wired
+// up by id somewhere in index.html. Without this, the guard above
+// silently turns those chips into no-ops. Together the two tests
+// guarantee: (a) the global handler doesn't hijack them, and
+// (b) something else does handle them.
+test('every non-filter tool-chip with an id has a dedicated click handler', () => {
+  // Pull every <tag class="...tool-chip..." ... id="..." ...> without
+  // data-filter/data-action. Regex is intentionally simple; we're
+  // grepping index.html, not parsing HTML.
+  const chipTagPattern = /<[^>]*class="[^"]*\btool-chip\b[^"]*"[^>]*>/g;
+  const scriptSource = stripJsComments(INDEX_HTML);
+  const missingHandlers = [];
+  for (const match of INDEX_HTML.matchAll(chipTagPattern)) {
+    const tag = match[0];
+    if (tag.includes('data-filter=') || tag.includes('data-action=')) continue;
+    if (tag.includes('aria-hidden="true"')) continue; // status pill etc.
+    const idMatch = tag.match(/\sid="([^"]+)"/);
+    if (!idMatch) continue;
+    const id = idMatch[1];
+    const escapedId = id.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    // Popover triggers (#search-btn/#scene-btn/#genre-btn) are wired
+    // up via an array of {btn, pop} pairs rather than a dedicated
+    // addEventListener block, so accept either shape:
+    //   1. getElementById('<id>') ... addEventListener   (direct)
+    //   2. btn: document.getElementById('<id>')          (popover pair array)
+    const directHandler = new RegExp(
+      `getElementById\\(['"]${escapedId}['"]\\)[\\s\\S]{0,600}addEventListener`
+    );
+    const popoverPairHandler = new RegExp(
+      `btn:\\s*document\\.getElementById\\(['"]${escapedId}['"]\\)`
+    );
+    if (!directHandler.test(scriptSource) && !popoverPairHandler.test(scriptSource)) {
+      missingHandlers.push(id);
+    }
+  }
+  assert.deepEqual(
+    missingHandlers,
+    [],
+    `The following .tool-chip elements have no dedicated click handler ` +
+      `and (since PR #44) are no longer picked up by the global toolChips ` +
+      `handler either:\n  - ${missingHandlers.join('\n  - ')}\n\n` +
+      `Add a getElementById(...).addEventListener('click', ...) for each, ` +
+      `or give the chip a data-filter/data-action attribute if it really ` +
+      `is a filter/action chip.`
+  );
+});
+
+test('regression: hookPopoverForMobile detaches add-band-popover to <body> on mobile-open (PR #44)', () => {
+  // The add-band popover markup lives inside .graph-overlay-top,
+  // which the mobile stylesheet forces to display:none. Without
+  // moving the panel out of that subtree on mobile-open, no amount
+  // of position:fixed on the panel itself makes it paint — the
+  // ancestor's display:none removes the whole subtree from the
+  // render tree. This test locks in the "detach to <body>" rescue
+  // introduced in PR #44 so a future refactor of hookPopoverForMobile
+  // doesn't quietly re-break the mobile Add-your-band form.
+  const hookMatch = INDEX_HTML.match(
+    /function\s+hookPopoverForMobile\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{8}\}\s*\n/
+  );
+  assert.ok(hookMatch, 'Expected to find function hookPopoverForMobile in index.html.');
+  const body = stripJsComments(hookMatch[1]);
+
+  assert.ok(
+    /document\.body\.appendChild\s*\(\s*popover\s*\)/.test(body),
+    'hookPopoverForMobile must move the popover to <body> on mobile-open ' +
+      '(document.body.appendChild(popover)). Otherwise the ancestor ' +
+      '.graph-overlay-top display:none keeps the panel from rendering.'
+  );
+
+  // And it must be able to put it back so desktop popover machinery
+  // (bottomPopovers array, clampPopover, close buttons) still finds
+  // it in place when the viewport resizes above 900px.
+  assert.ok(
+    /insertBefore\s*\(\s*popover\s*,/.test(body) || /appendChild\s*\(\s*popover\s*\)/.test(body.replace('document.body.appendChild(popover)', '')),
+    'hookPopoverForMobile must restore the popover to its original ' +
+      'parent on close / viewport-resize, otherwise the desktop popover ' +
+      'machinery loses track of it.'
+  );
+});
+
+test('regression: mobile add-band bottom-sheet CSS is not the only defense', () => {
+  // Cross-check the CSS: the mobile #add-band-popover.is-open-mobile
+  // rules must exist AND the code comment should acknowledge that
+  // the panel has to be moved out of .graph-overlay-top for those
+  // rules to apply. This exists so if someone deletes the JS rescue
+  // and thinks the CSS alone is enough, the test fires with an
+  // explanation.
+  const cssMatch = INDEX_HTML.match(/#add-band-popover\.is-open-mobile\s*\{[^}]+\}/);
+  assert.ok(cssMatch, 'Expected #add-band-popover.is-open-mobile ruleset in index.html.');
+  assert.ok(
+    /position:\s*fixed/.test(cssMatch[0]) && /bottom:\s*0/.test(cssMatch[0]),
+    'Mobile add-band bottom-sheet must be position:fixed + bottom:0.'
+  );
+});
