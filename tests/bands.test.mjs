@@ -13,6 +13,7 @@ import {
   LIMITS,
   isAdminAuthorized,
   removeSubmissionById,
+  extractClientMeta,
   FALLBACK_ADMIN_TOKEN,
   normalizeGenre,
   migrateSubmissionForRead
@@ -229,4 +230,42 @@ test('getStore is site-wide and deploy-agnostic; getDeployStore is deploy-scoped
   assert.throws(() => getDeployStore(), /deployID/i);
 
   delete globalThis.netlifyBlobsContext;
+});
+
+// --- extractClientMeta (audit log helper, PR 16) ----------------------------
+// Small pure helper that pulls the client IP + UA off the request. We test it
+// directly rather than end-to-end because the full audit path hits a Netlify
+// Blobs store; the store-writing itself is exercised by the Netlify preview
+// smoke test in scripts/test-audit-log.mjs.
+
+function reqWithHeaders(map) {
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(map)) headers.set(k, v);
+  return { headers };
+}
+
+test('extractClientMeta prefers x-nf-client-connection-ip over x-forwarded-for', () => {
+  const req = reqWithHeaders({
+    'x-nf-client-connection-ip': '203.0.113.7',
+    'x-forwarded-for': '10.0.0.1, 10.0.0.2',
+    'user-agent': 'Mozilla/5.0 test'
+  });
+  assert.deepEqual(extractClientMeta(req), { ip: '203.0.113.7', userAgent: 'Mozilla/5.0 test' });
+});
+
+test('extractClientMeta falls back to the first x-forwarded-for hop', () => {
+  const req = reqWithHeaders({
+    'x-forwarded-for': '198.51.100.4, 10.0.0.1',
+    'user-agent': 'curl/8'
+  });
+  assert.deepEqual(extractClientMeta(req), { ip: '198.51.100.4', userAgent: 'curl/8' });
+});
+
+test('extractClientMeta returns empty strings when no IP or UA headers are present', () => {
+  assert.deepEqual(extractClientMeta(reqWithHeaders({})), { ip: '', userAgent: '' });
+});
+
+test('extractClientMeta trims whitespace around forwarded IPs', () => {
+  const req = reqWithHeaders({ 'x-forwarded-for': '   198.51.100.4   , 10.0.0.1' });
+  assert.equal(extractClientMeta(req).ip, '198.51.100.4');
 });

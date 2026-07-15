@@ -15,6 +15,69 @@ import { getStore } from '@netlify/blobs';
 const STORE_NAME = 'band-submissions';
 const BLOB_KEY = 'submissions';
 
+// --- Audit log (PR 16 - 2026-07-14) -----------------------------------------
+//
+// Every accepted POST and every admin DELETE writes a one-shot record to a
+// SEPARATE Netlify Blobs store, using a UNIQUE per-event key. This is
+// deliberately NOT the same read-modify-write pattern as the main submissions
+// blob: because each audit event lives at its own key, two concurrent
+// submissions cannot silently overwrite each other's audit entries the way
+// they could theoretically overwrite each other's submissions.
+//
+// Purpose: give us an independent record of every write so that if a user
+// reports "I submitted my band and it disappeared", we can compare the audit
+// store against the main submissions blob and detect a lost write. The audit
+// store is APPEND-ONLY from the app's perspective (no code path here mutates
+// an existing key).
+//
+// Failure policy: audit writes are fire-and-forget. If the audit store errors,
+// we log to console.error (which surfaces in Netlify function logs) and
+// continue - a failed audit write must never break a legitimate submission or
+// deletion.
+//
+// Key format: `{isoTimestamp}-{submissionId}` - sorted alphabetically =
+// sorted chronologically, so `store.list()` yields a natural timeline.
+const AUDIT_STORE_NAME = 'band-submissions-audit';
+function getAuditStore() {
+  return getStore({ name: AUDIT_STORE_NAME, consistency: 'strong' });
+}
+
+// Best-effort audit-log write. Never throws; failure is logged and swallowed.
+// `event` is a short string tag ('submission_accepted' | 'submission_deleted').
+// `submissionId` is the id of the submission being acted on.
+// `draft` is the full submission object (or the deleted one) for forensics.
+// `req` is the incoming Request, used to record IP/User-Agent for spam triage.
+// Split out purely so we can unit-test it without a Netlify Blobs mock.
+// Reads the client IP + user-agent off the request, applying the standard
+// Netlify precedence: x-nf-client-connection-ip is authoritative when
+// present; x-forwarded-for is the fallback for proxy chains.
+function extractClientMeta(req) {
+  const ip =
+    req.headers?.get?.('x-nf-client-connection-ip') ||
+    (req.headers?.get?.('x-forwarded-for') || '').split(',')[0].trim() ||
+    '';
+  const userAgent = req.headers?.get?.('user-agent') || '';
+  return { ip, userAgent };
+}
+
+async function writeAuditEntry(event, submissionId, draft, req) {
+  try {
+    const now = new Date().toISOString();
+    const { ip, userAgent } = extractClientMeta(req);
+    const entry = { event, at: now, submissionId, ip, userAgent, draft };
+    const store = getAuditStore();
+    // Randomize the tail so two events with the same submissionId in the same
+    // millisecond (highly unlikely, but theoretically possible on POST retry)
+    // still land at different keys.
+    const rand = Math.random().toString(36).slice(2, 8);
+    const key = `${now}-${submissionId || 'noid'}-${rand}`;
+    await store.setJSON(key, entry);
+  } catch (err) {
+    // Never surface audit failures to the caller. Log for later investigation.
+    console.error('audit-log write failed', { event, submissionId, err: String(err) });
+  }
+}
+
 // Admin auth for the DELETE handler. The real secret should live in a Netlify
 // environment variable (process.env.ADMIN_TOKEN). The constant below is a
 // TEMPORARY fallback for a repo with no Netlify env vars configured yet — move
@@ -353,6 +416,37 @@ export default async function handler(req) {
   const store = getSubmissionsStore();
 
   if (req.method === 'GET') {
+    // Admin-only audit-log browse mode. Returns the raw stream of
+    // submission_accepted / submission_deleted events, newest first, so we
+    // can reconcile the audit trail against the main submissions blob and
+    // catch lost writes. Keyed off the same x-admin-token header the DELETE
+    // handler uses. Public GETs (no header) fall through to the normal
+    // submissions list.
+    const url = new URL(req.url);
+    if (url.searchParams.get('audit') === '1') {
+      if (!isAdminAuthorized(req)) {
+        return jsonResponse({ error: 'Unauthorized.' }, 401);
+      }
+      try {
+        const auditStore = getAuditStore();
+        const listing = await auditStore.list();
+        // Fetch every event body in parallel. At current scale (event count ==
+        // submission count, ~hundreds) this is trivially cheap; if the audit
+        // store ever grows past ~10k entries, add ?limit / ?since filters.
+        const entries = await Promise.all(
+          (listing.blobs || []).map(async b => {
+            try { return await auditStore.get(b.key, { type: 'json' }); }
+            catch { return null; }
+          })
+        );
+        // ISO timestamp prefix on each key => reverse-lexicographic sort is
+        // newest-first without parsing dates.
+        const sorted = entries.filter(Boolean).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+        return jsonResponse({ events: sorted, count: sorted.length });
+      } catch (error) {
+        return jsonResponse({ error: 'Could not read audit log.' }, 500);
+      }
+    }
     try {
       const submissions = await readSubmissions(store);
       // Option A lazy migration: any stored submission still in the old
@@ -391,6 +485,12 @@ export default async function handler(req) {
       return jsonResponse({ error: 'Could not save submission.' }, 500);
     }
 
+    // Fire-and-forget audit log. Awaited (not orphaned as a floating promise)
+    // so that in the Netlify Functions runtime the write completes before the
+    // function exits; Functions v2 does not wait for orphan promises after the
+    // response returns. writeAuditEntry() swallows its own errors.
+    await writeAuditEntry('submission_accepted', result.draft.id, result.draft, req);
+
     return jsonResponse({ submission: result.draft }, 201);
   }
 
@@ -412,7 +512,13 @@ export default async function handler(req) {
       if (!found) {
         return jsonResponse({ error: 'No submission with that id.' }, 404);
       }
+      // Grab the doomed draft for the audit record before we drop it.
+      const deleted = submissions.find(s => s?.id === id) || null;
       await store.setJSON(BLOB_KEY, remaining);
+      // Audit AFTER the persistent write, same reasoning as POST: writing to
+      // the audit store before the main store means a partial failure could
+      // record a deletion that never actually happened.
+      await writeAuditEntry('submission_deleted', id, deleted, req);
       return jsonResponse({ submissions: remaining });
     } catch (error) {
       return jsonResponse({ error: 'Could not delete submission.' }, 500);
@@ -428,6 +534,7 @@ export {
   LIMITS,
   isAdminAuthorized,
   removeSubmissionById,
+  extractClientMeta,
   FALLBACK_ADMIN_TOKEN,
   parseLegacyScene,
   resolveSubmissionLocation,
