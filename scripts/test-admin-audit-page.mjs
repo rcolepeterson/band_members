@@ -14,11 +14,19 @@
 //
 // Default BASE_URL is https://bandmembers.netlify.app.
 // Requires playwright (already a repo dev dep for other smoke tests).
+//
+// ADMIN_TOKEN is required; there is no baked-in fallback anymore (see PR #46).
+// Grab the current value from the Netlify site's env vars.
 
 import { chromium } from 'playwright';
 
 const BASE = process.argv[2] || 'https://bandmembers.netlify.app';
-const ADMIN = process.env.ADMIN_TOKEN || 'wuMexYAcvCf4EMEjuey666YAGWLZ6Joq';
+const ADMIN = process.env.ADMIN_TOKEN;
+if (!ADMIN) {
+  console.error('ADMIN_TOKEN env var is required. Get it from Netlify site settings > Environment variables and re-run:');
+  console.error('  ADMIN_TOKEN=... node scripts/test-admin-audit-page.mjs [BASE_URL]');
+  process.exit(2);
+}
 const URL = `${BASE}/admin/audit.html`;
 
 function log(step, msg) { console.log(`[${step}] ${msg}`); }

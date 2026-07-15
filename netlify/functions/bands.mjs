@@ -78,19 +78,26 @@ async function writeAuditEntry(event, submissionId, draft, req) {
   }
 }
 
-// Admin auth for the DELETE handler. The real secret should live in a Netlify
-// environment variable (process.env.ADMIN_TOKEN). The constant below is a
-// TEMPORARY fallback for a repo with no Netlify env vars configured yet — move
-// ADMIN_TOKEN to a real Netlify environment variable (Site settings >
-// Environment variables) for real security, then delete this fallback constant.
-const FALLBACK_ADMIN_TOKEN = 'wuMexYAcvCf4EMEjuey666YAGWLZ6Joq';
+// Admin auth for the DELETE handler. The secret lives in a Netlify
+// environment variable (process.env.ADMIN_TOKEN); there is no fallback in
+// source. If ADMIN_TOKEN is unset in a given deploy, this function fails
+// closed and every DELETE request is rejected as unauthorized — that is the
+// intended behavior. Set ADMIN_TOKEN under Site settings > Environment
+// variables and redeploy to enable admin operations.
+//
+// Rotation: to invalidate an old token, update the value in Netlify env vars
+// and redeploy. The old value (if any) becomes immediately non-authoritative
+// because nothing else in the codebase compares against it.
+//
+// History note (PR #46): a hardcoded fallback token used to live here for
+// bootstrapping. It was removed after being leaked-by-design into every clone
+// of the repo; a fresh token was provisioned in Netlify and the old one
+// rotated out. Don't reintroduce a fallback -- doing so re-broadcasts a
+// permanent secret via git history the moment it lands.
 const ADMIN_TOKEN_HEADER = 'x-admin-token';
 
-// Fail closed: authorize only when a non-empty expected token exists AND the
-// caller presents exactly that token. env ADMIN_TOKEN takes precedence; the
-// hardcoded fallback is used only when the env var is unset.
 function isAdminAuthorized(req) {
-  const expected = process.env.ADMIN_TOKEN || FALLBACK_ADMIN_TOKEN;
+  const expected = process.env.ADMIN_TOKEN;
   if (!expected) return false;
   const provided = req.headers?.get?.(ADMIN_TOKEN_HEADER) || '';
   return provided === expected;
@@ -535,7 +542,6 @@ export {
   isAdminAuthorized,
   removeSubmissionById,
   extractClientMeta,
-  FALLBACK_ADMIN_TOKEN,
   parseLegacyScene,
   resolveSubmissionLocation,
   resolveSubmissionGenre,

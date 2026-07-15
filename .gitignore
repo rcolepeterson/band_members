@@ -6,3 +6,4 @@ package-lock.json
 # The output directory holds proposed-candidate CSVs; nothing here belongs on main.
 .cache/
 scripts/output/
+.pr_body.md
