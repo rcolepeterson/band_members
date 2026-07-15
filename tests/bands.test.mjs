@@ -14,7 +14,6 @@ import {
   isAdminAuthorized,
   removeSubmissionById,
   extractClientMeta,
-  FALLBACK_ADMIN_TOKEN,
   normalizeGenre,
   migrateSubmissionForRead
 } from '../netlify/functions/bands.mjs';
@@ -76,40 +75,63 @@ test('validateSubmission enforces the member cap', () => {
 // These cover the DELETE handler's two decision points without network I/O:
 // isAdminAuthorized() gates the request, removeSubmissionById() does the work.
 
-test('delete with the correct token is authorized and removes only the target', () => {
-  // With ADMIN_TOKEN unset, the hardcoded fallback is the expected secret.
-  delete process.env.ADMIN_TOKEN;
-  assert.equal(isAdminAuthorized(fakeReq(FALLBACK_ADMIN_TOKEN)), true);
+test('delete with the correct env-configured token is authorized and removes only the target', () => {
+  process.env.ADMIN_TOKEN = 'test-env-secret';
+  try {
+    assert.equal(isAdminAuthorized(fakeReq('test-env-secret')), true);
 
-  const submissions = [
-    { id: 'keep-1', band: 'Soundgarden' },
-    { id: 'target', band: 'Diagnostic Test Band' },
-    { id: 'keep-2', band: 'Pearl Jam' }
-  ];
-  const { found, submissions: remaining } = removeSubmissionById(submissions, 'target');
-  assert.equal(found, true);
-  assert.deepEqual(remaining.map(s => s.id), ['keep-1', 'keep-2']);
+    const submissions = [
+      { id: 'keep-1', band: 'Soundgarden' },
+      { id: 'target', band: 'Diagnostic Test Band' },
+      { id: 'keep-2', band: 'Pearl Jam' }
+    ];
+    const { found, submissions: remaining } = removeSubmissionById(submissions, 'target');
+    assert.equal(found, true);
+    assert.deepEqual(remaining.map(s => s.id), ['keep-1', 'keep-2']);
+  } finally {
+    delete process.env.ADMIN_TOKEN;
+  }
 });
 
 test('delete with a wrong or missing token is rejected and nothing is removed', () => {
-  delete process.env.ADMIN_TOKEN;
-  assert.equal(isAdminAuthorized(fakeReq('not-the-token')), false);
-  assert.equal(isAdminAuthorized(fakeReq('')), false);
-  assert.equal(isAdminAuthorized(fakeReq(undefined)), false);
+  process.env.ADMIN_TOKEN = 'test-env-secret';
+  try {
+    assert.equal(isAdminAuthorized(fakeReq('not-the-token')), false);
+    assert.equal(isAdminAuthorized(fakeReq('')), false);
+    assert.equal(isAdminAuthorized(fakeReq(undefined)), false);
 
-  // The handler returns before touching storage, so the list is untouched. We
-  // assert removal is never invoked by proving the guard fails above; the list
-  // stays intact as a belt-and-suspenders check.
-  const submissions = [{ id: 'target', band: 'Diagnostic Test Band' }];
-  assert.deepEqual(submissions.map(s => s.id), ['target']);
+    // The handler returns before touching storage, so the list is untouched. We
+    // assert removal is never invoked by proving the guard fails above; the list
+    // stays intact as a belt-and-suspenders check.
+    const submissions = [{ id: 'target', band: 'Diagnostic Test Band' }];
+    assert.deepEqual(submissions.map(s => s.id), ['target']);
+  } finally {
+    delete process.env.ADMIN_TOKEN;
+  }
 });
 
-test('env ADMIN_TOKEN takes precedence over the hardcoded fallback', () => {
-  process.env.ADMIN_TOKEN = 'env-secret';
-  assert.equal(isAdminAuthorized(fakeReq('env-secret')), true);
-  // The old fallback must no longer authorize once a real env token is set.
-  assert.equal(isAdminAuthorized(fakeReq(FALLBACK_ADMIN_TOKEN)), false);
+test('regression: fail closed when ADMIN_TOKEN env var is unset (PR #46)', () => {
+  // PR #46 removed the FALLBACK_ADMIN_TOKEN constant that used to let
+  // the DELETE handler authorize even when no env var was configured.
+  // The intended behavior is now: no env var -> every DELETE is
+  // unauthorized, no matter what token the caller presents. If a
+  // future refactor reintroduces a fallback, this test fires with a
+  // pointer to the PR so the reviewer sees the security tradeoff.
   delete process.env.ADMIN_TOKEN;
+  // Try a variety of shapes a caller might present, plus values that
+  // used to authorize under the old fallback logic. All must fail.
+  assert.equal(isAdminAuthorized(fakeReq('anything')), false);
+  assert.equal(isAdminAuthorized(fakeReq('')), false);
+  assert.equal(isAdminAuthorized(fakeReq(undefined)), false);
+  // Even a truthy but empty-string env var must not accidentally
+  // authorize (belt-and-suspenders against `process.env.ADMIN_TOKEN = ''`).
+  process.env.ADMIN_TOKEN = '';
+  try {
+    assert.equal(isAdminAuthorized(fakeReq('')), false);
+    assert.equal(isAdminAuthorized(fakeReq('anything')), false);
+  } finally {
+    delete process.env.ADMIN_TOKEN;
+  }
 });
 
 // --- Genre field (added alongside city/state/country) -----------------------
