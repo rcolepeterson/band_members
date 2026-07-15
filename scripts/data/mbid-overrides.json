@@ -114,5 +114,40 @@
     "mbid": "5ecc3f72-20a6-47a0-8dc5-fb0b3dadeea0",
     "source": "manual",
     "note": "Verified 2026-07-14 — Queens hip-hop pioneers (Rev Run / DMC / Jam Master Jay), formed 1981. Canonical MB name uses U+2010 hyphens."
+  },
+  "Rancid": {
+    "mbid": "24f8d8a5-269b-475c-a1cb-792990b0b2ee",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — Berkeley, California punk band (Tim Armstrong / Matt Freeman / Lars Frederiksen / Brett Reed), formed 1991 post-Operation Ivy. Namesake collisions with Oklahoma death metal and hardcore techno acts."
+  },
+  "Belly": {
+    "mbid": "c118bc97-11a7-41dc-a55e-48c3bcf22ac2",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — US pop-rock band (Tanya Donelly, ex-Throwing Muses / ex-Breeders). Critical: MB search returns Lead Belly at score 100 first; this band scores 97. Also a Palestinian-Canadian rapper with the same name."
+  },
+  "Cake": {
+    "mbid": "fa7b9055-3703-473a-8a09-adf2fe031a24",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — US alt-rock band from Sacramento (John McCrea). Multiple 'Cake' namesakes: Bristol UK band, Cake on Cake, etc."
+  },
+  "Pavement": {
+    "mbid": "36bfa85f-737b-41db-a8fc-b8825850ffc3",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — US indie rock band (Stephen Malkmus), Stockton CA, 1989–1999. NOT the UK reggae-ska band Pavement."
+  },
+  "The Lemonheads": {
+    "mbid": "58a53082-a629-4ff1-a44d-7492d6f6e8fb",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — US alternative rock band from Boston (Evan Dando). NOT the Toledo, OH punk band of the same name."
+  },
+  "NOFX": {
+    "mbid": "dcaa4f81-bfb7-44eb-8594-4e74f004b6e4",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — Los Angeles/SF punk band (Fat Mike / Eric Melvin / El Hefe / Erik Sandin), formed 1983. Belgian cover band 'NØFX' scores 74."
+  },
+  "Faith No More": {
+    "mbid": "b15ebd71-a252-417d-9e1c-3e6863da68f8",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — San Francisco alt-metal band (Mike Patton / Bill Gould / Mike Bordin / Roddy Bottum), formed 1979 as Faith No Man. Distinct pin because 'Faith No Man' is the pre-band project."
   }
 }
