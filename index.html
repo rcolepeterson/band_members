@@ -4721,6 +4721,19 @@ function downloadPngBlob(blob) {
 
     toolChips.forEach(chip => {
       chip.addEventListener('click', () => {
+        // Guard: this handler is meant only for filter/action chips.
+        // Other .tool-chip elements exist in the page (popover
+        // triggers like #search-btn/#scene-btn/#genre-btn, primary
+        // mobile actions like #mobile-share-btn/#mobile-add-band-btn,
+        // and the aria-hidden #graph-total-chip status pill) and they
+        // all have their own click handlers registered elsewhere.
+        // Without this guard we'd reset currentFilter to 'all' and
+        // call renderGraph() on every one of their clicks, which was
+        // the root cause of the "mobile Share and Add-your-band
+        // buttons just refresh the graph" bug (see PR #44). It was
+        // also silently double-rendering the graph on every popover
+        // open (Search / Scene / Genre) prior to this fix.
+        if (!('filter' in chip.dataset) && !('action' in chip.dataset)) return;
         if (chip.dataset.action === 'fit') {
           fitGraph(60);
           return;
