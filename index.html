@@ -2233,9 +2233,15 @@ async function tryNativeShare() {
     return false;
   }
   try {
+    // Do NOT include the URL inside the `text` field. navigator.share
+    // passes both `text` and `url` to the receiving app, and apps like
+    // Facebook, Messenger, and iMessage concatenate them naively -
+    // resulting in the link appearing twice above the image (once from
+    // text, once from url unfurl). Keep `text` as pure caption prose
+    // and let `url` handle the link.
     await navigator.share({
       title: 'Rock Band Family Tree',
-      text: `Explore how bands and musicians connect: ${siteUrl}`,
+      text: 'Explore how bands and musicians connect across scenes and decades.',
       url: siteUrl,
       files: [file],
     });
@@ -2644,9 +2650,12 @@ function downloadPngBlob(blob) {
       //   gate the share-sheet path on a coarse mobile heuristic and
       //   fall through to plain download on desktop.
       const file = new File([pngBlob], 'rock-band-family-tree.png', { type: 'image/png' });
+      // See tryNativeShare() for why `text` omits the URL: Facebook,
+      // Messenger, and iMessage concatenate `text` + `url` and would
+      // otherwise show the link twice above the shared image.
       const shareData = {
         title: 'Rock Band Family Tree',
-        text: `Explore how bands and musicians connect: ${siteUrl}`,
+        text: 'Explore how bands and musicians connect across scenes and decades.',
         url: siteUrl,
         files: [file],
       };
