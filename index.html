@@ -1771,10 +1771,10 @@ main.layout { padding: 0 !important; gap: 0 !important; }
               <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
               <div class="share-popover-title">Share this graph</div>
               <p class="share-popover-copy">
-                Download the current graph view as a PNG or copy the main site link so people land on the full tree.
+                Share the current view as a PNG (with a header + site URL baked in) or copy the main site link. Recipients always land on the full tree so they can start exploring right away.
               </p>
               <div class="share-popover-actions">
-                <button class="primary-btn share-popover-btn" type="button" id="download-png-btn">Download PNG</button>
+                <button class="primary-btn share-popover-btn" type="button" id="download-png-btn">Share PNG</button>
                 <button class="primary-btn share-popover-btn" type="button" id="copy-site-link-btn">Copy site link</button>
               </div>
               <div class="share-popover-feedback" id="share-popover-feedback" aria-live="polite">
@@ -2055,6 +2055,24 @@ if (shareGraphBtn) {
   });
 }
 
+// Wire the two share-popover action buttons. These were declared above
+// but previously had no click handlers, which meant the popover was
+// visible but non-functional. Both handlers stopPropagation so the
+// document-level 'click outside to close' listener doesn't slam the
+// popover shut mid-action.
+if (downloadPngBtn) {
+  downloadPngBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    exportCurrentGraphPng();
+  });
+}
+if (copySiteLinkBtn) {
+  copySiteLinkBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    copySiteLink();
+  });
+}
+
     // Bottom-floating panel toggles (Add your band). Same click-to-open,
     // click-outside-to-close pattern as the share popover. Project Pulse
     // used to live here alongside — replaced by the always-on
@@ -2143,47 +2161,177 @@ if (shareGraphBtn) {
       toggleSharePopover(false);
     });
 
-    function exportCurrentGraphPng() {
+    // Render the current graph SVG to a PNG canvas with a branded header
+    // strip so the exported image is self-explanatory when it lands on
+    // Facebook, Twitter, iMessage, etc. Header shows the app name; footer
+    // shows the site URL so viewers know where to click. On mobile we
+    // hand the resulting Blob to navigator.share() (native share sheet
+    // with WhatsApp / Messages / Instagram / etc); on desktop we fall
+    // back to a plain <a download> trigger. The link that accompanies
+    // the image is always the bare main-site URL — no filter state — so
+    // the recipient lands on the full graph and can start exploring.
+    async function exportCurrentGraphPng() {
       const svg = document.getElementById('graph-svg');
       if (!svg) {
         setShareFeedback('Graph preview is not available yet.');
         return;
       }
+      const siteUrl = window.location.origin + window.location.pathname;
+      const rect = svg.getBoundingClientRect();
+      const scale = 2; // 2x for retina-quality output
+      const graphW = Math.max(1200, Math.floor(rect.width * scale));
+      const graphH = Math.max(900, Math.floor(rect.height * scale));
+      const headerH = Math.round(120 * scale / 2); // ~120px at 1x
+      const footerH = Math.round(72 * scale / 2);  // ~72px at 1x
+      const canvas = document.createElement('canvas');
+      canvas.width = graphW;
+      canvas.height = graphH + headerH + footerH;
+      const ctx = canvas.getContext('2d');
+
+      // Solid background matches the app's stage color.
+      ctx.fillStyle = '#0b1118';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // --- Header strip (top): app name + subtle divider
+      // Slight gradient so it reads as a banner, not a flat bar.
+      const headerGrad = ctx.createLinearGradient(0, 0, 0, headerH);
+      headerGrad.addColorStop(0, '#111b26');
+      headerGrad.addColorStop(1, '#0b1118');
+      ctx.fillStyle = headerGrad;
+      ctx.fillRect(0, 0, canvas.width, headerH);
+      // 1px divider between header and graph
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(0, headerH - 1, canvas.width, 1);
+      // Title, centered horizontally, vertically centered in the header.
+      ctx.fillStyle = '#e6eef7';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `600 ${Math.round(38 * scale / 2)}px "Inter", "Segoe UI", system-ui, sans-serif`;
+      ctx.fillText('Rock Band Family Tree', canvas.width / 2, headerH / 2);
+
+      // Serialize the live SVG and draw it into the middle band. We inject
+      // an inline <style> tag into the serialized copy because when the SVG
+      // is loaded back into an <img> for canvas.drawImage(), external CSS
+      // rules (like .link { stroke: ... } and .node.band circle { fill: ... })
+      // do NOT apply — the <img> renders the SVG in isolation. Without this,
+      // the exported PNG would show only default black lines and unstyled
+      // circles. Mirror the on-page CSS for these classes so the export
+      // looks like what the user sees on the stage.
       const serializer = new XMLSerializer();
-      const source = serializer.serializeToString(svg);
+      const inlineStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      inlineStyle.textContent = `
+        .link { stroke: rgba(161, 204, 228, 0.34); stroke-opacity: 0.75; }
+        .node.band circle { fill: #f7fbff; stroke: #8fe8f6; stroke-width: 2.1; }
+        .node.person circle { fill: #0b1722; stroke: #98aec0; stroke-width: 1.8; }
+        .node-label { fill: #e7f3fb; font-size: 11px; font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
+      `;
+      const svgClone = svg.cloneNode(true);
+      svgClone.insertBefore(inlineStyle, svgClone.firstChild);
+      const source = serializer.serializeToString(svgClone);
       const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(svgBlob);
-      const img = new Image();
-      img.onload = () => {
-        const rect = svg.getBoundingClientRect();
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1200, Math.floor(rect.width * 2));
-        canvas.height = Math.max(900, Math.floor(rect.height * 2));
-        const ctx = canvas.getContext('2d');
+      const svgUrl = URL.createObjectURL(svgBlob);
+
+      let pngBlob;
+      try {
+        await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            ctx.drawImage(img, 0, headerH, graphW, graphH);
+            URL.revokeObjectURL(svgUrl);
+            resolve();
+          };
+          img.onerror = (e) => {
+            URL.revokeObjectURL(svgUrl);
+            reject(e);
+          };
+          img.src = svgUrl;
+        });
+
+        // --- Footer strip (bottom): site URL so viewers know where to go.
+        const footerY = headerH + graphH;
+        // 1px divider between graph and footer
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(0, footerY, canvas.width, 1);
         ctx.fillStyle = '#0b1118';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        URL.revokeObjectURL(url);
-        const link = document.createElement('a');
-        link.download = 'rock-band-family-tree.png';
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-        setShareFeedback('PNG downloaded. Share it with your main site link.');
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
+        ctx.fillRect(0, footerY + 1, canvas.width, footerH - 1);
+        ctx.fillStyle = '#a3b3c6';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `500 ${Math.round(20 * scale / 2)}px "Inter", "Segoe UI", system-ui, sans-serif`;
+        // Strip protocol for a cleaner display; the actual shared link is
+        // always the full URL, sent alongside the image on mobile share.
+        const displayUrl = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        ctx.fillText(displayUrl, canvas.width / 2, footerY + footerH / 2);
+
+        // Convert canvas -> Blob (needed for navigator.share on mobile).
+        pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      } catch (err) {
         setShareFeedback('Could not generate PNG in this browser view.');
+        return;
+      }
+      if (!pngBlob) {
+        setShareFeedback('Could not generate PNG in this browser view.');
+        return;
+      }
+
+      // Try the native mobile share sheet first (iOS Safari / Android
+      // Chrome). It bundles the image + link + a short caption into one
+      // gesture: user picks Messages / WhatsApp / Instagram / etc and
+      // the recipient sees the tree PNG with the site URL attached.
+      const file = new File([pngBlob], 'rock-band-family-tree.png', { type: 'image/png' });
+      const shareData = {
+        title: 'Rock Band Family Tree',
+        text: `Explore how bands and musicians connect: ${siteUrl}`,
+        url: siteUrl,
+        files: [file],
       };
-      img.src = url;
+      const canShareFile =
+        typeof navigator !== 'undefined' &&
+        typeof navigator.canShare === 'function' &&
+        navigator.canShare({ files: [file] }) &&
+        typeof navigator.share === 'function';
+      if (canShareFile) {
+        try {
+          await navigator.share(shareData);
+          setShareFeedback('Shared! The link goes to the full tree.');
+          return;
+        } catch (err) {
+          // User cancelled the share sheet, or the platform rejected the
+          // payload — fall through to the download path so they still
+          // get the image.
+          if (err && err.name === 'AbortError') {
+            setShareFeedback('Share cancelled. You can also download the PNG.');
+            return;
+          }
+        }
+      }
+
+      // Desktop / no share-sheet path: plain download.
+      const objectUrl = URL.createObjectURL(pngBlob);
+      const link = document.createElement('a');
+      link.download = 'rock-band-family-tree.png';
+      link.href = objectUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      setShareFeedback('PNG downloaded. Share it — the link goes to the full tree.');
     }
 
     function copySiteLink() {
+      // Always the bare main-site URL (no filter/hash state) so the
+      // recipient lands on the full graph and can start exploring, not
+      // stuck in someone else's filter.
       const siteUrl = window.location.origin + window.location.pathname;
-      navigator.clipboard.writeText(siteUrl).then(() => {
-        setShareFeedback('Main site link copied to your clipboard.');
-      }).catch(() => {
-        setShareFeedback('Could not copy the link automatically.');
-      });
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(siteUrl).then(() => {
+          setShareFeedback('Main site link copied to your clipboard.');
+        }).catch(() => {
+          setShareFeedback('Could not copy the link automatically.');
+        });
+      } else {
+        setShareFeedback('Clipboard is not available in this browser.');
+      }
     }
 
     // ---------------------------------------------------------------------
