@@ -78,19 +78,26 @@ async function writeAuditEntry(event, submissionId, draft, req) {
   }
 }
 
-// Admin auth for the DELETE handler. The real secret should live in a Netlify
-// environment variable (process.env.ADMIN_TOKEN). The constant below is a
-// TEMPORARY fallback for a repo with no Netlify env vars configured yet — move
-// ADMIN_TOKEN to a real Netlify environment variable (Site settings >
-// Environment variables) for real security, then delete this fallback constant.
-const FALLBACK_ADMIN_TOKEN = 'wuMexYAcvCf4EMEjuey666YAGWLZ6Joq';
+// Admin auth for the DELETE handler and the ?audit=1 GET path. The admin
+// secret lives EXCLUSIVELY in the ADMIN_TOKEN environment variable
+// (Site settings > Environment variables in the Netlify dashboard). There
+// is no hardcoded fallback: if the env var is unset, every admin request
+// fails with 401 and no code path can rescue that. This is intentional -
+// a hardcoded fallback that ships in the public git history of the repo
+// (rcolepeterson/band_members) would be equivalent to no auth at all.
+//
+// Rotating the token: set a new value in the Netlify UI, wait for the next
+// deploy to pick it up, then update whoever holds the old token. The env
+// var is available to the function at process.env.ADMIN_TOKEN without any
+// code change needed.
 const ADMIN_TOKEN_HEADER = 'x-admin-token';
 
-// Fail closed: authorize only when a non-empty expected token exists AND the
-// caller presents exactly that token. env ADMIN_TOKEN takes precedence; the
-// hardcoded fallback is used only when the env var is unset.
+// Fail closed: authorize only when a non-empty ADMIN_TOKEN env var exists
+// AND the caller presents exactly that token. Empty env var -> refuse
+// everything, on the theory that a misconfigured deploy should not silently
+// grant admin access.
 function isAdminAuthorized(req) {
-  const expected = process.env.ADMIN_TOKEN || FALLBACK_ADMIN_TOKEN;
+  const expected = process.env.ADMIN_TOKEN || '';
   if (!expected) return false;
   const provided = req.headers?.get?.(ADMIN_TOKEN_HEADER) || '';
   return provided === expected;
@@ -535,7 +542,6 @@ export {
   isAdminAuthorized,
   removeSubmissionById,
   extractClientMeta,
-  FALLBACK_ADMIN_TOKEN,
   parseLegacyScene,
   resolveSubmissionLocation,
   resolveSubmissionGenre,

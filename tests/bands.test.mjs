@@ -14,7 +14,6 @@ import {
   isAdminAuthorized,
   removeSubmissionById,
   extractClientMeta,
-  FALLBACK_ADMIN_TOKEN,
   normalizeGenre,
   migrateSubmissionForRead
 } from '../netlify/functions/bands.mjs';
@@ -76,10 +75,9 @@ test('validateSubmission enforces the member cap', () => {
 // These cover the DELETE handler's two decision points without network I/O:
 // isAdminAuthorized() gates the request, removeSubmissionById() does the work.
 
-test('delete with the correct token is authorized and removes only the target', () => {
-  // With ADMIN_TOKEN unset, the hardcoded fallback is the expected secret.
-  delete process.env.ADMIN_TOKEN;
-  assert.equal(isAdminAuthorized(fakeReq(FALLBACK_ADMIN_TOKEN)), true);
+test('delete with the correct env-var token is authorized and removes only the target', () => {
+  process.env.ADMIN_TOKEN = 'env-secret-value';
+  assert.equal(isAdminAuthorized(fakeReq('env-secret-value')), true);
 
   const submissions = [
     { id: 'keep-1', band: 'Soundgarden' },
@@ -89,10 +87,11 @@ test('delete with the correct token is authorized and removes only the target', 
   const { found, submissions: remaining } = removeSubmissionById(submissions, 'target');
   assert.equal(found, true);
   assert.deepEqual(remaining.map(s => s.id), ['keep-1', 'keep-2']);
+  delete process.env.ADMIN_TOKEN;
 });
 
 test('delete with a wrong or missing token is rejected and nothing is removed', () => {
-  delete process.env.ADMIN_TOKEN;
+  process.env.ADMIN_TOKEN = 'env-secret-value';
   assert.equal(isAdminAuthorized(fakeReq('not-the-token')), false);
   assert.equal(isAdminAuthorized(fakeReq('')), false);
   assert.equal(isAdminAuthorized(fakeReq(undefined)), false);
@@ -102,13 +101,22 @@ test('delete with a wrong or missing token is rejected and nothing is removed', 
   // stays intact as a belt-and-suspenders check.
   const submissions = [{ id: 'target', band: 'Diagnostic Test Band' }];
   assert.deepEqual(submissions.map(s => s.id), ['target']);
+  delete process.env.ADMIN_TOKEN;
 });
 
-test('env ADMIN_TOKEN takes precedence over the hardcoded fallback', () => {
-  process.env.ADMIN_TOKEN = 'env-secret';
-  assert.equal(isAdminAuthorized(fakeReq('env-secret')), true);
-  // The old fallback must no longer authorize once a real env token is set.
-  assert.equal(isAdminAuthorized(fakeReq(FALLBACK_ADMIN_TOKEN)), false);
+test('with no ADMIN_TOKEN env var set, no token authorizes - fail closed', () => {
+  // PR 19: the hardcoded FALLBACK_ADMIN_TOKEN was removed. When ADMIN_TOKEN
+  // is unset (misconfigured deploy) the guard MUST refuse everything rather
+  // than silently letting requests through. This test pins down that
+  // fail-closed contract.
+  delete process.env.ADMIN_TOKEN;
+  assert.equal(isAdminAuthorized(fakeReq('anything')), false);
+  assert.equal(isAdminAuthorized(fakeReq('')), false);
+  assert.equal(isAdminAuthorized(fakeReq(undefined)), false);
+  // Also reject an empty-string env var (Netlify UI sometimes lets you save
+  // one accidentally).
+  process.env.ADMIN_TOKEN = '';
+  assert.equal(isAdminAuthorized(fakeReq('anything')), false);
   delete process.env.ADMIN_TOKEN;
 });
 

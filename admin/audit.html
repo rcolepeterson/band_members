@@ -301,8 +301,8 @@
   <!-- Auth gate: shown until the token is verified against the API -->
   <section id="gate" class="gate">
     <h2>Admin sign-in</h2>
-    <p>Paste the <code>ADMIN_TOKEN</code> value from Netlify env vars (or the
-      fallback baked into <code>bands.mjs</code>). The token is stored in
+    <p>Paste the <code>ADMIN_TOKEN</code> value from Netlify (Site settings
+      &rarr; Environment variables). The token is stored in
       <code>sessionStorage</code> and cleared when the tab closes.</p>
     <label for="token-input">Admin token</label>
     <input id="token-input" type="password" autocomplete="off" spellcheck="false"

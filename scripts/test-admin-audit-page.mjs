@@ -18,7 +18,12 @@
 import { chromium } from 'playwright';
 
 const BASE = process.argv[2] || 'https://bandmembers.netlify.app';
-const ADMIN = process.env.ADMIN_TOKEN || 'wuMexYAcvCf4EMEjuey666YAGWLZ6Joq';
+// PR 19: ADMIN_TOKEN env var is the only source. No hardcoded fallback.
+const ADMIN = process.env.ADMIN_TOKEN;
+if (!ADMIN) {
+  console.error('ADMIN_TOKEN env var is required. Get the value from Netlify UI (Site settings > Environment variables) and export it before running this script.');
+  process.exit(1);
+}
 const URL = `${BASE}/admin/audit.html`;
 
 function log(step, msg) { console.log(`[${step}] ${msg}`); }

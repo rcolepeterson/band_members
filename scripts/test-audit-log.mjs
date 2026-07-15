@@ -6,8 +6,8 @@
 // Usage:
 //   ADMIN_TOKEN=... node scripts/test-audit-log.mjs https://deploy-preview-N--bandmembers.netlify.app
 //
-// If ADMIN_TOKEN is unset, we fall back to the FALLBACK_ADMIN_TOKEN baked into
-// netlify/functions/bands.mjs (fine for smoke-testing a preview).
+// Requires ADMIN_TOKEN set in the shell env (same value as the Netlify env var).
+// The script exits early with an error if the env var is unset.
 //
 // The script:
 //   1. GETs /api/bands?audit=1 without a token -> expects 401
@@ -22,7 +22,15 @@
 // Exits nonzero on any failure with a human-readable message.
 
 const BASE = process.argv[2] || 'https://bandmembers.netlify.app';
-const ADMIN = process.env.ADMIN_TOKEN || 'wuMexYAcvCf4EMEjuey666YAGWLZ6Joq';
+// PR 19: the ADMIN_TOKEN env var is now the ONLY source of truth for the
+// admin secret. No hardcoded fallback here either - if you're running this
+// script, you must set ADMIN_TOKEN in your shell environment to the same
+// value that's configured in Netlify.
+const ADMIN = process.env.ADMIN_TOKEN;
+if (!ADMIN) {
+  console.error('ADMIN_TOKEN env var is required. Get the value from Netlify UI (Site settings > Environment variables) and export it before running this script.');
+  process.exit(1);
+}
 // The frontend calls the bands function at its Netlify Functions v2 URL,
 // not at /api/bands. Keep this in sync with BANDS_ENDPOINT in index.html.
 const ENDPOINT = '/.netlify/functions/bands';
