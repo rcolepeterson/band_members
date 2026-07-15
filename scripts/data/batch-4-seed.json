@@ -1,0 +1,25 @@
+{
+  "_description": "PR 6 seed. UK post-punk scene + hip-hop crossover. Direct-ingest bands: 4 UK post-punk (Joy Division, New Order, The Fall, Gang of Four) + 6 hip-hop (Beastie Boys, LL Cool J, Sir Mix-a-Lot, Run-DMC, RATM, Public Enemy). Anthrax already in graph from PR 3 (metal cluster) so its hip-hop collabs (I'm the Man, Bring the Noise, Judgment Night soundtrack) will bridge naturally via Chuck D and Public Enemy. Note: 7 new common-name overrides added since JD/NO/Fall/GoF/PE/Run-DMC all have MB namesakes.",
+  "persons": [
+    "Ian Curtis",
+    "Bernard Sumner",
+    "Peter Hook",
+    "Mark E. Smith",
+    "Andy Gill",
+    "Chuck D",
+    "Flavor Flav",
+    "Zack de la Rocha"
+  ],
+  "bands": [
+    "Joy Division",
+    "New Order",
+    "The Fall",
+    "Gang of Four",
+    "Beastie Boys",
+    "LL Cool J",
+    "Sir Mix-a-Lot",
+    "Run-D.M.C.",
+    "Rage Against the Machine",
+    "Public Enemy"
+  ]
+}

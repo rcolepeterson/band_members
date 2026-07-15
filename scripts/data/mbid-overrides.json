@@ -84,5 +84,35 @@
     "mbid": "3ae2fb37-8a23-429d-9920-bac811c4fc22",
     "source": "manual",
     "note": "Verified 2026-07-14 — The White Stripes / Third Man / Raconteurs multi-instrumentalist. NOT the German producer Horst Nußbaum or the electronic musician."
+  },
+  "Joy Division": {
+    "mbid": "9a58fda3-f4ed-4080-a3a5-f457aac9fcdd",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — Manchester post-punk band (Curtis/Sumner/Hook/Morris), 1976–1980."
+  },
+  "New Order": {
+    "mbid": "f1106b17-dcbb-45f6-b938-199ccfab50cc",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — UK synth pop / post-punk (Joy Division continuation), Manchester, formed 1980. MB has a distinct cover band listed with score 84."
+  },
+  "The Fall": {
+    "mbid": "d5da1841-9bc8-4813-9f89-11098090148e",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — Mark E. Smith's English post-punk group, Manchester, 1976–2018. Multiple namesakes including a Polish metal musician."
+  },
+  "Gang of Four": {
+    "mbid": "d8661c02-f423-4d72-8044-40ff05daf7a1",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — English post-punk band from Leeds, formed 1976 (King/Gill/Allen/Burnham)."
+  },
+  "Public Enemy": {
+    "mbid": "bf2e15d0-4b77-469e-bfb4-f8414415baca",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — US rap group (Chuck D / Flavor Flav / Terminator X). MB has 3 identical-name entries: this one, a British fascist Oi! band, and a pro-wrestling tag team. Critical override."
+  },
+  "Run-D.M.C.": {
+    "mbid": "5ecc3f72-20a6-47a0-8dc5-fb0b3dadeea0",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — Queens hip-hop pioneers (Rev Run / DMC / Jam Master Jay), formed 1981. Canonical MB name uses U+2010 hyphens."
   }
 }
