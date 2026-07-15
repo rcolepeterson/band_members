@@ -184,6 +184,15 @@ function stripJsComments(src) {
     .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }
 
+// Strip HTML comments from an index.html-shaped string. Some HTML
+// comments in this file span multiple lines and casually reference
+// JS function names (e.g. `<!-- The existing hookPopoverForMobile
+// converts the popover panel... -->`), which otherwise produces a
+// false-positive registration hit for the mobile-hook guard test.
+function stripHtmlComments(src) {
+  return src.replace(/<!--[\s\S]*?-->/g, '');
+}
+
 test('regression: global toolChips handler ignores chips without data-filter/action (PR #44)', () => {
   // The handler must call toolChips.forEach + addEventListener. We
   // anchor on the exact forEach signature so we don't accidentally
@@ -313,5 +322,136 @@ test('regression: mobile add-band bottom-sheet CSS is not the only defense', () 
   assert.ok(
     /position:\s*fixed/.test(cssMatch[0]) && /bottom:\s*0/.test(cssMatch[0]),
     'Mobile add-band bottom-sheet must be position:fixed + bottom:0.'
+  );
+});
+
+test('every popover inside .graph-overlay-top is either hookPopoverForMobile-registered or explicitly exempt', () => {
+  // PR #44 fixed a latent class of bug: any popover that lives inside
+  // .graph-overlay-top (which is display:none on mobile) will refuse to
+  // paint on mobile even with position:fixed, unless hookPopoverForMobile
+  // detaches it to <body> on open. Today only #add-band-popover has a
+  // mobile trigger and needs the rescue. But the other four popovers in
+  // that container (search / scene / genre / share) are one refactor
+  // away from the same failure -- specifically, the day someone adds a
+  // mobile-only chip that programmatically clicks their desktop trigger
+  // (the pattern PR #42 used for Add-your-band).
+  //
+  // This test enforces: every popover inside .graph-overlay-top must be
+  // EITHER (a) registered with hookPopoverForMobile('<id>'), OR (b) in
+  // KNOWN_NO_MOBILE_TRIGGER below. Adding a new popover to that
+  // container without doing one of the two fails this test with a clear
+  // pointer to PR #44.
+  //
+  // If you're adding a new mobile trigger for a popover currently in
+  // KNOWN_NO_MOBILE_TRIGGER: remove it from this set AND register it
+  // with hookPopoverForMobile in the mobile IIFE. Do not just remove
+  // it from the set and assume position:fixed will save you -- that's
+  // exactly the bug PR #44 fixed.
+  const KNOWN_NO_MOBILE_TRIGGER = new Set([
+    // Filter popovers have separate mobile equivalents in the hamburger
+    // sheet (#mobile-search-input, #mobile-scene-select,
+    // #mobile-genre-select). No mobile UI ever asks the desktop popover
+    // panel itself to open, so the display:none-ancestor bug is
+    // dormant. If that changes, wire hookPopoverForMobile('<id>') and
+    // drop the id from this set.
+    'search-popover',
+    'scene-popover',
+    'genre-popover',
+    // Share popover has a known workaround rather than a fix:
+    // #mobile-share-btn (hamburger sheet) explicitly avoids opening
+    // the popover on native-share failure because "it's anchored to a
+    // hidden toolbar" (see comment near mobileShareBtn handler). The
+    // desktop shareGraphBtn does still fall through to toggleSharePopover()
+    // on mobile if tryNativeShare() returns false, which would hit the
+    // same display:none-ancestor bug -- but that path is extremely rare
+    // on real phones (iOS Safari + Chrome Android both support Web Share
+    // API with files). Left exempt to avoid PR #44's scope creep;
+    // register with hookPopoverForMobile('share-popover') if you want
+    // to close that gap.
+    'share-popover',
+  ]);
+
+  // Find the .graph-overlay-top block. Anchor on the exact class so
+  // this doesn't accidentally match sibling containers.
+  const overlayMatch = INDEX_HTML.match(
+    /<div class="graph-overlay graph-overlay-top">([\s\S]*?)<\/main>/
+  );
+  assert.ok(overlayMatch, 'Expected <div class="graph-overlay graph-overlay-top"> block in index.html.');
+
+  // Extract every popover id inside that block. Popovers here use the
+  // .share-popover class combined with .popover-down / .popover-up (a
+  // naming holdover -- see comment at line ~2465). Anchor on that
+  // combination so we don't also match child buttons like
+  // .share-popover-btn or the feedback pane .share-popover-feedback.
+  const overlayHtml = overlayMatch[1];
+  const overlayPopoverIds = [];
+  const popoverTagPattern = /<div\s+class="[^"]*\bshare-popover\b[^"]*\bpopover-(?:down|up)\b[^"]*"[^>]*\sid="([^"]+)"/g;
+  for (const m of overlayHtml.matchAll(popoverTagPattern)) {
+    overlayPopoverIds.push(m[1]);
+  }
+  assert.ok(
+    overlayPopoverIds.length >= 1,
+    'Expected at least one .share-popover inside .graph-overlay-top; regex may be stale.'
+  );
+
+  // Which popovers does the code actually register with
+  // hookPopoverForMobile? Strip JS *and* HTML comments first so a
+  // stale mention of the function inside either flavor of comment
+  // doesn't count as a real registration.
+  const registeredIds = new Set();
+  const scriptSource = stripJsComments(stripHtmlComments(INDEX_HTML));
+  for (const m of scriptSource.matchAll(/hookPopoverForMobile\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+    registeredIds.add(m[1]);
+  }
+
+  const unaccountedFor = overlayPopoverIds.filter(
+    (id) => !registeredIds.has(id) && !KNOWN_NO_MOBILE_TRIGGER.has(id)
+  );
+  assert.deepEqual(
+    unaccountedFor,
+    [],
+    `The following popovers live inside .graph-overlay-top but are ` +
+      `neither registered with hookPopoverForMobile('<id>') nor listed ` +
+      `in KNOWN_NO_MOBILE_TRIGGER:\n  - ${unaccountedFor.join('\n  - ')}\n\n` +
+      `On mobile, .graph-overlay-top is display:none, which removes the ` +
+      `entire subtree from the render tree regardless of descendants' ` +
+      `own position:fixed. See PR #44 for the trace. Either:\n` +
+      `  1. If this popover HAS a mobile trigger, register it with ` +
+      `hookPopoverForMobile('<id>') in the mobile IIFE so it detaches ` +
+      `to <body> on open.\n` +
+      `  2. If this popover has NO mobile trigger, add its id to the ` +
+      `KNOWN_NO_MOBILE_TRIGGER set at the top of this test with a ` +
+      `one-line comment explaining why.`
+  );
+
+  // Symmetric direction: catch dead entries in the exemption set. If a
+  // popover leaves .graph-overlay-top (or is deleted), it shouldn't
+  // stay in the exemption set silently.
+  const staleExemptions = [...KNOWN_NO_MOBILE_TRIGGER].filter(
+    (id) => !overlayPopoverIds.includes(id)
+  );
+  assert.deepEqual(
+    staleExemptions,
+    [],
+    `KNOWN_NO_MOBILE_TRIGGER lists popover ids that no longer live inside ` +
+      `.graph-overlay-top (or no longer exist at all):\n  - ${staleExemptions.join('\n  - ')}\n\n` +
+      `Remove them from the set.`
+  );
+
+  // Symmetric direction #2: catch registered popovers that don't live
+  // in .graph-overlay-top. Not strictly wrong, but usually means either
+  // the popover was moved out (great, in which case the hook isn't
+  // needed) or the registration is aimed at the wrong id.
+  const strandedRegistrations = [...registeredIds].filter(
+    (id) => !overlayPopoverIds.includes(id)
+  );
+  assert.deepEqual(
+    strandedRegistrations,
+    [],
+    `hookPopoverForMobile is registered for popover ids that don't live ` +
+      `inside .graph-overlay-top:\n  - ${strandedRegistrations.join('\n  - ')}\n\n` +
+      `The hook exists specifically to rescue popovers from that ` +
+      `display:none ancestor. If the target no longer lives there, ` +
+      `remove the hookPopoverForMobile call.`
   );
 });
