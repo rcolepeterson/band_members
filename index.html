@@ -453,14 +453,36 @@ body {
      the hamburger sheet. Keeps the graph-overlay-top from stealing space. */
   .graph-overlay-top { display: none; }
 }
-.mobile-sheet-theme {
+/* Mobile-only Share button strip. Full-width primary action pinned to
+   the bottom of the hamburger sheet. Replaced the old 'Light mode'
+   toggle strip — mobile now follows system theme like desktop, and
+   sharing was the bigger missing feature on mobile. */
+.mobile-sheet-share {
   display: flex;
-  justify-content: flex-end;
-  padding: 0.4rem 0 0.6rem;
+  padding: 0.6rem 0 0.4rem;
   border-top: 1px solid rgba(225, 244, 255, 0.14);
-  margin-top: 0.6rem;
+  margin-top: 0.8rem;
 }
-.mobile-sheet-theme .mobile-theme-toggle { min-width: 8rem; }
+.mobile-sheet-share .mobile-share-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  padding: 0.7rem 1rem;
+  /* Slightly brighter than a regular tool-chip so it reads as the
+     primary action of the sheet. */
+  background: linear-gradient(180deg, rgba(143,232,246,0.20), rgba(143,232,246,0.08));
+  border-color: rgba(143, 232, 246, 0.55);
+  color: #f0fbff;
+}
+.mobile-sheet-share .mobile-share-btn:hover,
+.mobile-sheet-share .mobile-share-btn:focus-visible {
+  background: linear-gradient(180deg, rgba(143,232,246,0.30), rgba(143,232,246,0.14));
+  border-color: rgba(143, 232, 246, 0.85);
+}
+.mobile-sheet-share .mobile-share-btn svg { flex-shrink: 0; }
 
 .tool-chip::before,
 .tool-chip::after,
@@ -1643,8 +1665,9 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     <!--
       Site header retired as part of the unified top-toolbar refactor.
       • Focus Seattle: its behavior is available via Scene → Seattle.
-      • Theme toggle: only exposed on mobile now via the hamburger sheet;
-        desktop follows prefers-color-scheme (see script tag near bottom).
+      • Theme toggle: no longer exposed in the UI on either platform;
+        both desktop and mobile follow prefers-color-scheme now
+        (see script tag near bottom).
       Leaving an empty <header> in place keeps the .site-header CSS layout
       slot but renders nothing.
     -->
@@ -1712,13 +1735,27 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       </div>
       <!-- Country chips are populated inside the mobile Scene picker (see #mobile-country-chip-row below inside the scene picker wrapper). -->
       <!--
-        Mobile-only theme toggle. Desktop honors prefers-color-scheme and
-        doesn't need a manual switch; mobile users often want a quick
-        override in dark environments, so we keep the button here inside
-        the hamburger sheet only.
+        Mobile share button. Lives at the bottom of the sheet so a user
+        who's just explored a scene / found a band they love can share
+        it in one thumb-reach action. Clicking this closes the sheet and
+        triggers the same tryNativeShare() flow the top-level 'Share
+        this graph' button uses on mobile — opening the OS share sheet
+        with the branded PNG + link as a real file attachment.
+
+        Replaced the old mobile-only 'Light mode' toggle. Mobile theme
+        continues to follow the phone's system dark/light setting via
+        prefers-color-scheme (same as desktop). Users who want a manual
+        override can still change it in their OS settings.
       -->
-      <div class="mobile-sheet-theme">
-        <button class="tool-chip mobile-theme-toggle" type="button" data-theme-toggle id="mobile-theme-toggle">Light mode</button>
+      <div class="mobile-sheet-share">
+        <button class="tool-chip mobile-share-btn" type="button" id="mobile-share-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/>
+            <polyline points="16 6 12 2 8 6"/>
+            <line x1="12" y1="2" x2="12" y2="15"/>
+          </svg>
+          Share this graph
+        </button>
       </div>
     </aside>
     <div hidden aria-hidden="true" id="legacy-selection-stubs">
@@ -5061,11 +5098,14 @@ async function shareToSocial(platform) {
           logoNote.style.display = 'block';
         });
       }
-      // Theme handling. The desktop toolbar no longer surfaces a theme
-      // toggle — that job belongs to the OS via prefers-color-scheme.
-      // Only mobile still exposes a manual toggle inside the hamburger
-      // sheet (see #mobile-theme-toggle below). We keep the querySelectorAll
-      // so any [data-theme-toggle] button anywhere in the DOM stays in sync.
+      // Theme handling. Neither desktop nor mobile surface a manual
+      // theme toggle anymore — both platforms follow the OS setting via
+      // prefers-color-scheme (mobile previously had a manual 'Light mode'
+      // chip inside the hamburger sheet; that was replaced by the Share
+      // button in PR 12). The [data-theme-toggle] selector is kept in
+      // case we resurrect a manual override later; today it matches
+      // nothing and applyTheme() only updates the <html data-theme>
+      // attribute.
       const toggles = document.querySelectorAll('[data-theme-toggle]');
       const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)');
       const initialTheme = document.documentElement.getAttribute('data-theme')
@@ -5315,6 +5355,55 @@ async function shareToSocial(platform) {
         });
         menuClose.addEventListener('click', closeSheet);
         menuBackdrop.addEventListener('click', closeSheet);
+
+        // Mobile Share button (inside the hamburger sheet). Closes the
+        // sheet first so the OS share overlay isn't fighting our own
+        // bottom sheet for the same real estate, then attempts the
+        // native OS share sheet with the branded PNG + link. If native
+        // share isn't available (or fails), fall back to opening the
+        // web share popover so the user still has options.
+        const mobileShareBtn = document.getElementById('mobile-share-btn');
+        if (mobileShareBtn) {
+          mobileShareBtn.addEventListener('click', async (event) => {
+            // Stop the click from bubbling to the document-level
+            // 'click outside → close popovers' handler. Without this, if
+            // we fall back to opening the share popover below, it'd be
+            // slammed shut in the same event loop tick.
+            event.stopPropagation();
+            closeSheet();
+            // Wait for the sheet close animation so the OS share sheet
+            // (or fallback popover) doesn't fight our own bottom sheet
+            // for the same real estate.
+            await new Promise(r => setTimeout(r, 300));
+            let opened = false;
+            if (typeof tryNativeShare === 'function') {
+              opened = await tryNativeShare();
+            }
+            if (!opened) {
+              // Native share unavailable on this device — extremely rare
+              // on real phones (iOS Safari and Chrome Android both
+              // support Web Share API with files), but can happen in
+              // desktop-mobile-emulation, some older WebViews, or
+              // privacy-hardened browsers. Fall back to copying the
+              // site link + downloading the branded PNG so the user
+              // still has both assets in hand. We can't cleanly open
+              // the desktop share popover on mobile because it's
+              // anchored to a hidden toolbar.
+              try {
+                const siteUrl = window.location.origin + window.location.pathname;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  await navigator.clipboard.writeText(siteUrl);
+                }
+                if (typeof exportCurrentGraphPng === 'function') {
+                  await exportCurrentGraphPng();
+                }
+                alert('Link copied and image downloaded. Paste the link and attach the image in your app of choice.');
+              } catch (_) {
+                alert('Sharing isn’t supported in this browser. Try a different browser to share directly.');
+              }
+            }
+          });
+        }
 
         // Segmented scene control: top locations / All / Other (opens dropdown).
         // data-location-key values: a real locationKey for each top-location
