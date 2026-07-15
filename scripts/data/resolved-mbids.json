@@ -1114,6 +1114,36 @@
       "name": "They Might Be Giants",
       "score": 100,
       "resolvedAt": "2026-07-15T01:26:56.277Z"
+    },
+    "tea party": {
+      "mbid": "7ebc552b-71b2-47b7-9dc8-31ef08e20aec",
+      "name": "The Tea Party",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:52:43.581Z"
+    },
+    "dillinger escape plan": {
+      "mbid": "1bc41dff-5397-4c53-bb50-469d2c277197",
+      "name": "The Dillinger Escape Plan",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:52:44.720Z"
+    },
+    "sick puppies": {
+      "mbid": "86f78011-5087-48d2-8922-c381d2eb0c40",
+      "name": "Sick Puppies",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:52:45.678Z"
+    },
+    "evanescence": {
+      "mbid": "f4a31f0a-51dd-4fa7-986d-3095c40c5ed9",
+      "name": "Evanescence",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:52:46.528Z"
+    },
+    "pigeonhed": {
+      "mbid": "fb79f6c3-1dfc-43d5-8598-2f0a5a0ebaec",
+      "name": "Pigeonhed",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:52:47.603Z"
     }
   },
   "persons": {
@@ -1620,7 +1650,49 @@
       "name": "Lou Barlow",
       "score": 100,
       "resolvedAt": "2026-07-15T01:26:44.751Z"
+    },
+    "jon crosby": {
+      "mbid": "2266295d-a99c-4833-86d9-58054c785f39",
+      "name": "Jon Crosby",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:52:28.967Z"
+    },
+    "jeff martin": {
+      "mbid": "03c91737-0d38-497c-9efb-e62de7f81714",
+      "name": "Jeff Martin",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:52:31.201Z"
+    },
+    "tobias forge": {
+      "mbid": "3a93c5e6-9b84-4ec8-bbb0-0d399342512e",
+      "name": "Tobias Forge",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:52:33.046Z"
+    },
+    "ben weinman": {
+      "mbid": "7593a11b-e2bd-40f9-aaf0-6cbe4740d87c",
+      "name": "Ben Weinman",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:52:35.224Z"
+    },
+    "greg puciato": {
+      "mbid": "2785a0d1-2abb-4d2e-baa6-1be39f55a54a",
+      "name": "Greg Puciato",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:52:37.121Z"
+    },
+    "amy lee": {
+      "mbid": "7ee89158-3446-4044-bb88-0dcc4d4cd6c0",
+      "name": "Amy Lee",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:52:39.631Z"
+    },
+    "shim moore": {
+      "mbid": "f90c9062-b2fd-4b18-ad9e-cc922094ac7a",
+      "name": "Shim Moore",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:52:41.452Z"
     }
   },
-  "generatedAt": "2026-07-15T01:29:03.601Z"
+  "generatedAt": "2026-07-15T01:53:08.769Z"
 }

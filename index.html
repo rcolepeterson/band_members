@@ -68,7 +68,7 @@
     .graph-panel{padding:0;min-height:780px;display:grid;grid-template-rows:auto 1fr auto;gap:var(--space-4);background:transparent;border:none;box-shadow:none}
     .panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4)}.graph-panel-head{margin-bottom:var(--space-3)}.graph-toolbar{align-items:center}.graph-version-pill{margin-left:auto;min-height:40px;display:inline-flex;align-items:center}.panel-title{font-size:var(--text-lg);font-weight:700}.panel-copy{font-size:var(--text-sm);color:var(--color-text-muted);max-width:56ch}
     .status-pill{padding:0.4rem 0.8rem;border-radius:var(--radius-full);background:rgba(82,174,182,0.12);color:var(--color-primary-hover);font-size:var(--text-xs);letter-spacing:.1em;text-transform:uppercase}
-    .toolbar{display:flex;flex-wrap:wrap;gap:var(--space-3)}.graph-toolbar{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--space-3);row-gap:var(--space-3)}.graph-toolbar-left{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;min-width:0}.graph-version-pill{justify-self:end;white-space:nowrap}.tool-chip{min-height:40px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);background:rgba(255,255,255,0.02);font-size:var(--text-sm)}.tool-chip.active{background:rgba(82,174,182,0.12);border-color:rgba(82,174,182,0.35);color:var(--color-primary-hover)}.graph-status-chip{display:inline-flex;align-items:center;justify-content:center;cursor:default;pointer-events:none;opacity:.9;color:var(--color-text-muted)}.country-chip-row{margin-top:var(--space-2)}.country-chip{min-height:32px;padding:0 var(--space-3);font-size:var(--text-xs)}
+    .toolbar{display:flex;flex-wrap:wrap;gap:var(--space-3)}.graph-toolbar{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--space-3);row-gap:var(--space-3)}.graph-toolbar-left{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;min-width:0}.graph-version-pill{justify-self:end;white-space:nowrap}.tool-chip{min-height:40px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);background:rgba(255,255,255,0.02);font-size:var(--text-sm)}.tool-chip.active{background:rgba(82,174,182,0.12);border-color:rgba(82,174,182,0.35);color:var(--color-primary-hover)}.graph-status-chip{display:inline-flex;align-items:center;justify-content:center;cursor:default;pointer-events:none;opacity:.9;color:var(--color-text-muted)}.country-chip-row{margin-top:var(--space-2)}.country-chip{min-height:32px;padding:0 var(--space-3);font-size:var(--text-xs)}.scene-popover-divider{height:1px;background:var(--color-border);margin:var(--space-3) 0;opacity:.5}#scene-popover .country-chip-row{max-height:200px;overflow-y:auto}
     .graph-stage{position:relative;border-radius:calc(var(--radius-xl) + var(--space-2));overflow:hidden;background:radial-gradient(circle at top, rgba(82,174,182,0.08), transparent 34%),linear-gradient(180deg, rgba(10,14,20,0.92), rgba(8,11,17,0.98));border:none;min-height:720px;box-shadow:0 30px 80px rgba(0,0,0,0.34)}
     #graph-svg{width:100%;height:100%;min-height:520px}
     /* Legacy .graph-badge kept invisible: some JS still writes to
@@ -1648,6 +1648,11 @@ main.layout { padding: 0 !important; gap: 0 !important; }
           <input id="mobile-node-search" type="search" placeholder="Search for Heart, Dave Grohl, Pearl Jam" />
         </div>
         <div id="mobile-scene-picker-wrap" style="display:none">
+          <div class="filter-popover__label" style="margin-top:0">Filter by country</div>
+          <div class="toolbar country-chip-row" id="mobile-country-chip-row" aria-label="Country quick filters" style="margin-top:0">
+            <!-- Populated dynamically, mirrors #country-chip-row. -->
+          </div>
+          <div class="scene-popover-divider" aria-hidden="true"></div>
           <label for="mobile-scene-filter">Scene</label>
           <select id="mobile-scene-filter">
             <option value="all">All scenes</option>
@@ -1660,9 +1665,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
           </select>
         </div>
       </div>
-      <div class="toolbar country-chip-row" id="mobile-country-chip-row" aria-label="Country quick filters">
-        <!-- Populated dynamically, mirrors #country-chip-row. -->
-      </div>
+      <!-- Country chips are populated inside the mobile Scene picker (see #mobile-country-chip-row below inside the scene picker wrapper). -->
       <!--
         Mobile-only theme toggle. Desktop honors prefers-color-scheme and
         doesn't need a manual switch; mobile users often want a quick
@@ -1731,6 +1734,13 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <div class="share-popover popover-down" id="scene-popover" role="dialog" aria-label="Filter by scene" hidden>
               <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
               <div class="share-popover-title">Scene</div>
+              <div class="filter-popover__label">Filter by country</div>
+              <div class="toolbar country-chip-row" id="country-chip-row" aria-label="Country quick filters" style="margin-top:0">
+                <!-- Populated dynamically: an "All" chip plus one chip per distinct
+                     country in the graph (e.g. "All USA", "All GBR"). See
+                     renderCountryChips(). -->
+              </div>
+              <div class="scene-popover-divider" aria-hidden="true"></div>
               <label class="filter-popover__label" for="scene-filter">Focus the graph on a city or region</label>
               <select id="scene-filter">
                 <option value="all">All scenes</option>
@@ -1842,11 +1852,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         </div>
       </div>
 
-      <div class="toolbar country-chip-row" id="country-chip-row" aria-label="Country quick filters">
-        <!-- Populated dynamically: an "All" chip plus one chip per distinct
-             country in the graph (e.g. "All USA", "All GBR"). See
-             renderCountryChips(). -->
-      </div>
+      <!-- Country chips moved into the Scene popover (see #country-chip-row inside #scene-popover). -->
     </div>
 
     <svg id="graph-svg" role="img" aria-label="Interactive Seattle band family tree graph"></svg>
