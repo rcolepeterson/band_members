@@ -1030,6 +1030,18 @@
       "name": "Rush",
       "score": 100,
       "resolvedAt": "2026-07-15T00:46:05.983Z"
+    },
+    "beastie boys": {
+      "mbid": "9beb62b2-88db-4cea-801e-162cd344ee53",
+      "name": "Beastie Boys",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:00:58.614Z"
+    },
+    "rage against the machine": {
+      "mbid": "3798b104-01cb-484c-a3b0-56adc6399b80",
+      "name": "Rage Against the Machine",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:01:02.434Z"
     }
   },
   "persons": {
@@ -1410,7 +1422,55 @@
       "name": "Mikael Åkerfeldt",
       "score": 100,
       "resolvedAt": "2026-07-15T00:42:36.261Z"
+    },
+    "ian curtis": {
+      "mbid": "10ae1bf6-88b2-4fb4-8fbe-8227a49803d3",
+      "name": "Ian Curtis",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:00:15.091Z"
+    },
+    "bernard sumner": {
+      "mbid": "6fa2e161-200e-475a-8492-3755594581f9",
+      "name": "Bernard Sumner",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:00:17.502Z"
+    },
+    "peter hook": {
+      "mbid": "73e7c483-9f3e-4a72-a359-582452fbaeac",
+      "name": "Peter Hook",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:00:19.317Z"
+    },
+    "mark e smith": {
+      "mbid": "35e5ce55-486d-40a4-9ab5-08de9be70d33",
+      "name": "Mark E. Smith",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:00:45.196Z"
+    },
+    "andy gill": {
+      "mbid": "eb3f978d-272a-460d-bc3e-a1a82ecb8147",
+      "name": "Andy Gill",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:00:48.835Z"
+    },
+    "chuck d": {
+      "mbid": "88633ac3-c8e2-420f-8415-77ac56b3105f",
+      "name": "Chuck D",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:00:51.570Z"
+    },
+    "flavor flav": {
+      "mbid": "813c1586-f7d5-42d1-94bb-cd2abb42f507",
+      "name": "Flavor Flav",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:00:53.222Z"
+    },
+    "zack de la rocha": {
+      "mbid": "aa659468-db56-41c9-b6fe-61f4bb2ef1a6",
+      "name": "Zack de la Rocha",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:00:56.351Z"
     }
   },
-  "generatedAt": "2026-07-15T00:47:00.366Z"
+  "generatedAt": "2026-07-15T01:01:25.953Z"
 }
