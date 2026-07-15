@@ -1,0 +1,1338 @@
+{
+  "bands": {
+    "velvetrevolver": {
+      "mbid": "3a528006-1429-47f4-ae9b-2ea95343e16a",
+      "name": "Velvet Revolver",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "madfortheracket": {
+      "mbid": "477490d6-3e98-41b2-9c24-b465e8ee74dc",
+      "name": "Mad for the Racket",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "neuroticoutsiders": {
+      "mbid": "897dc9d4-f6ca-4646-8a74-e8ef08aa0fb5",
+      "name": "Neurotic Outsiders",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "thegentlemen": {
+      "mbid": "946202eb-2207-4d63-9ef3-69bb1ea4a199",
+      "name": "The Gentlemen",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "duffmckagansloaded": {
+      "mbid": "85382364-e2bc-4803-90b4-29bb3da200ce",
+      "name": "Duff McKagan’s Loaded",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "kingsofchaos": {
+      "mbid": "56396fbe-e455-4526-a5e4-2a8f9b01c435",
+      "name": "Kings of Chaos",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "leveewalkers": {
+      "mbid": "d4123128-b8a7-4b1d-8ae9-2943ed867c8c",
+      "name": "Levee Walkers",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "rawpower": {
+      "mbid": "f84963fa-d168-4700-abe0-7f3a9657bde4",
+      "name": "Raw Power",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "gak": {
+      "mbid": "dea553aa-cd46-4054-8f5b-3c3d473a8cbb",
+      "name": "GAK",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "theliving": {
+      "mbid": "7824301d-e6dd-4d4b-8179-d1def5dddf72",
+      "name": "The Living",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "crisisparty": {
+      "mbid": "72d2d3a9-c370-4329-9191-bfbb1da64fb4",
+      "name": "Crisis Party",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "smithwattsteakhouse": {
+      "mbid": "72adc07d-7018-4776-8cca-0624f785bbd1",
+      "name": "Smith & Watt Steakhouse",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "tonedogs": {
+      "mbid": "beacb6ea-a477-4f2f-935a-550faccb2c13",
+      "name": "Tone Dogs",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "wellwaterconspiracy": {
+      "mbid": "e3304cba-b983-4cdf-a083-37f54f27cc1d",
+      "name": "Wellwater Conspiracy",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "gossmanproject": {
+      "mbid": "47a4728c-1016-4e7f-996e-6e182ede7fa0",
+      "name": "Gossman Project",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "harrybumccage": {
+      "mbid": "5b429ba8-8868-408e-b170-496b99f993de",
+      "name": "Harrybu McCage",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "tencommandos": {
+      "mbid": "40b12b19-ffab-41b4-90dd-67a1b0c7b637",
+      "name": "Ten Commandos",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "bambam": {
+      "mbid": "42f6cb9b-ffa3-43ae-8cc5-75ff2a5d10a4",
+      "name": "Bam Bam",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "3rdsecret": {
+      "mbid": "257f77a9-d394-48c3-ba87-05bce2d60199",
+      "name": "3rd Secret",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "mc50": {
+      "mbid": "3255235c-ede0-40d7-b671-cdd7751e6d58",
+      "name": "MC50",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "nighttimeboogieassociation": {
+      "mbid": "02318007-b827-4e70-83d9-8965ad143c4b",
+      "name": "Nighttime Boogie Association",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "couchofsound": {
+      "mbid": "228e6569-9620-48be-9a42-51c3a225a1cd",
+      "name": "Couch of Sound",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "citizendick": {
+      "mbid": "7cad2a31-aaf7-4e9d-966d-770976ab9003",
+      "name": "Citizen Dick",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "paintedshield": {
+      "mbid": "bfbb5e65-bbff-4a4e-962d-9d0f76079078",
+      "name": "Painted Shield",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "rndm": {
+      "mbid": "d03a0c90-a6fd-40fc-b2db-4279c8dd2887",
+      "name": "RNDM",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "threefish": {
+      "mbid": "5cf17a36-08e6-4054-bf00-8868438d33d3",
+      "name": "Three Fish",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "tresmts": {
+      "mbid": "9d6413e9-8ea0-4a39-aa4d-b9d12de7a1e9",
+      "name": "Tres Mts.",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "deafcharlie": {
+      "mbid": "9ab4fd74-3209-46c3-b71e-2216a70ef18a",
+      "name": "Deaf Charlie",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "therockfords": {
+      "mbid": "f40ce3f1-9dcf-41c9-89ca-3bf25bd629e3",
+      "name": "The Rockfords",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "shadow": {
+      "mbid": "c4912151-d34c-45e0-8bf6-a7aa8dfc6a89",
+      "name": "Shadow",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "badradio": {
+      "mbid": "b53189cc-4f2d-4100-8603-ea390fe3f3e3",
+      "name": "Bad Radio",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "hovercraft": {
+      "mbid": "78db6e8b-7284-4b9a-8964-c735116a671b",
+      "name": "Hovercraft",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "eddievedderandtheearthlings": {
+      "mbid": "e7b83eb6-d0bc-4966-82db-eb1c1872352c",
+      "name": "Eddie Vedder and the Earthlings",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "browntowel": {
+      "mbid": "0f8e6822-3672-400c-a87c-792c7a293544",
+      "name": "Brown Towel",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "fecalmatter": {
+      "mbid": "552f7965-a23a-4e2f-9ef2-ac2989dea9f0",
+      "name": "Fecal Matter",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "stiffwoodies": {
+      "mbid": "b12602a1-77c4-4d5f-8c5e-9e4b2fa2e812",
+      "name": "Stiff Woodies",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "thesellouts": {
+      "mbid": "a599c70e-1bea-4fcc-a110-446c38427b1f",
+      "name": "The Sellouts",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "skidrow": {
+      "mbid": "6d797b95-2011-4859-91ab-9284d1e1f472",
+      "name": "Skid Row",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "throatoyster": {
+      "mbid": "b239ca22-ce18-4e7c-a272-e9ca195e1026",
+      "name": "Throat Oyster",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "pencapchew": {
+      "mbid": "33abc5cd-1e91-417d-9c8f-8296be818df9",
+      "name": "Pen Cap Chew",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "bliss": {
+      "mbid": "b6d94c23-7046-477d-bbea-07bcd247e99d",
+      "name": "Bliss",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "eyesadrift": {
+      "mbid": "3b70e3f4-72ec-43bd-852e-e67240d43b08",
+      "name": "Eyes Adrift",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "flipper": {
+      "mbid": "4e99b3a5-654b-43ee-a9bf-c55c155c0495",
+      "name": "Flipper",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "melvana": {
+      "mbid": "4c21807a-a8a1-4e71-a7ad-633120487ad8",
+      "name": "Melvana",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "thestinkypuffs": {
+      "mbid": "bca09023-f68f-4c6c-812f-8881b9b37a49",
+      "name": "The Stinky Puffs",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "thenowtocombo": {
+      "mbid": "a9208290-48fe-49fb-876c-6b8a18654bc7",
+      "name": "The No W.T.O. Combo",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "sweet75": {
+      "mbid": "0882763d-d200-4422-b962-6023a5c0fc54",
+      "name": "Sweet 75",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "giantsinthetrees": {
+      "mbid": "3b9d785f-8188-4397-9f7b-5ed3828cb32e",
+      "name": "Giants in the Trees",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "soundcityplayers": {
+      "mbid": "b9a9487b-abf6-4a95-a8fd-238cc093e99b",
+      "name": "Sound City Players",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "anywhere": {
+      "mbid": "54bfa733-5012-4aae-b24f-fc9e36cf4ddf",
+      "name": "Anywhere",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "filthyfriends": {
+      "mbid": "f319b299-2d27-4b47-af56-a5747d7ac0f3",
+      "name": "Filthy Friends",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "butterflylaunchesfromsparpole": {
+      "mbid": "1e33e92d-956e-4623-8b19-96f2cfdbd559",
+      "name": "Butterfly Launches From Spar Pole",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "thebonafideband": {
+      "mbid": "843db60f-56ec-44a6-8805-27a1ec077bbb",
+      "name": "The Bona Fide Band",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "dainbramage": {
+      "mbid": "61de09bc-78ad-45cf-a551-aa1f916a2790",
+      "name": "Dain Bramage",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "scream": {
+      "mbid": "b9f52132-28af-4cea-9558-165cd125f9b7",
+      "name": "Scream",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "themcrookedvultures": {
+      "mbid": "4bc09c51-5d42-4c93-9ba6-8cc21a0edb8d",
+      "name": "Them Crooked Vultures",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "tenaciousd": {
+      "mbid": "148ddea2-6839-4354-8e2c-5dfadf136b7f",
+      "name": "Tenacious D",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "thebackbeatband": {
+      "mbid": "9fc6c5d5-295d-433b-a960-ef7a4469d4de",
+      "name": "The Backbeat Band",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "probot": {
+      "mbid": "e61baf26-04fe-4f07-8f2a-c1ecbf7ca4c1",
+      "name": "Probot",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "harlingtoxad": {
+      "mbid": "b6aebd2e-6a59-43a6-8252-514ba90cebf3",
+      "name": "Harlingtox A.D.",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "deegees": {
+      "mbid": "d4bac396-867c-431d-8cec-ef508eee0204",
+      "name": "Dee Gees",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "dreamwidow": {
+      "mbid": "abe48328-8b0b-43bf-ada9-0603644b2142",
+      "name": "Dream Widow",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "liveloungeallstars": {
+      "mbid": "b2da3820-3d19-4817-b370-0c89042ce870",
+      "name": "Live Lounge Allstars",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "crisisofconformity": {
+      "mbid": "73af3107-e5a4-43bd-9914-951ec15fcfdb",
+      "name": "Crisis of Conformity",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "chevymetal": {
+      "mbid": "dcff5ed6-17c3-4dee-8e47-0b0f9ca19d36",
+      "name": "Chevy Metal",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "gbi": {
+      "mbid": "86b6338e-55c7-45e5-ad91-61d30073ecab",
+      "name": "G.B.I",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "kidsforcash": {
+      "mbid": "8fb21048-1442-42b2-84ab-fae18f48a253",
+      "name": "Kids for Cash",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "churn": {
+      "mbid": "63d26065-2133-4385-b87e-167c9bd593d4",
+      "name": "Churn",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "late": {
+      "mbid": "2486bb60-2ccd-4792-bdd4-4c760d610616",
+      "name": "Late!",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "audioslave": {
+      "mbid": "020bfbb4-05c3-4c86-b372-17825c262094",
+      "name": "Audioslave",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "alicemudgarden": {
+      "mbid": "06932306-df61-4d21-8f47-916d55e417ee",
+      "name": "Alice Mudgarden",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "thecenterfordiseasecontrolboys": {
+      "mbid": "92430c43-2f5a-4e22-b36c-122cb3dc9a6d",
+      "name": "The Center for Disease Control Boys",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "aliceinchainsthequintessential": {
+      "mbid": "f6813736-daa3-44b7-bfee-828a7bdf404e",
+      "name": "Alice in Chains, The Quintessential",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "classof99": {
+      "mbid": "8f697772-5c60-499d-96dd-c609c10bb538",
+      "name": "Class of ’99",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "diamondlie": {
+      "mbid": "cf1928ca-bc80-4ca2-a7d8-8476f46321ab",
+      "name": "Diamond Lie",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "alicenchains": {
+      "mbid": "5b47f93e-bae5-4c6a-b1c7-fe0abd65fcd0",
+      "name": "Alice n’ Chains",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "sleze": {
+      "mbid": "43dfafbd-ab0d-4705-ae33-03ec330847cc",
+      "name": "Sleze",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "cardboardvampyres": {
+      "mbid": "97fcf76d-87a1-4612-ae49-f1d2c2365c10",
+      "name": "Cardboard Vampyres",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "gypsyrose": {
+      "mbid": "d982bf9f-0ed5-4697-a7de-c96cef29f70d",
+      "name": "Gypsy Rose",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "thesaints7378": {
+      "mbid": "906b71de-60b0-4620-bfc5-ef5d72da0b87",
+      "name": "The Saints '73-'78",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "mreppthecalculations": {
+      "mbid": "ddab4f5f-d1bd-4149-a3f9-c1e90424fd76",
+      "name": "Mr. Epp & the Calculations",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "wylderatttz": {
+      "mbid": "e6d8c1dd-e7bc-4e44-87ad-66aa2d3e6580",
+      "name": "Wylde Ratttz",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "thethrownups": {
+      "mbid": "0cb413ff-c09b-421b-b9c3-9bb7f02b7b52",
+      "name": "The Thrown Ups",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "themonkeywrench": {
+      "mbid": "e8d203c9-4882-4cdc-ab10-e41e556828b2",
+      "name": "The Monkeywrench",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "bloodloss": {
+      "mbid": "b85b2314-264e-435d-9576-1c8c43606fa6",
+      "name": "Bloodloss",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "bushpig": {
+      "mbid": "441e55d7-f3b4-4501-b5c7-a49b8ff31262",
+      "name": "Bush Pig",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "limpricherds": {
+      "mbid": "be2b268d-9c96-4055-9b06-e9e92fcf56f2",
+      "name": "Limp Richerds",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "theneworiginalsonicsound": {
+      "mbid": "dd39c0c6-454e-4000-99b3-d53eedcee641",
+      "name": "The New Original Sonic Sound",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "viciousfence": {
+      "mbid": "98cddff0-726e-427c-a590-9ed0f6e8887a",
+      "name": "Vicious Fence",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "brianconnollyssweet": {
+      "mbid": "0b4f563c-454c-4528-960a-97f27623ce4a",
+      "name": "Brian Connolly’s Sweet",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "welshmanshill": {
+      "mbid": "02abb291-f52a-411b-a91a-a819c5d7afaa",
+      "name": "WelshMansHill",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "desertsessions": {
+      "mbid": "7a2e6b55-f149-4e74-be6a-30a1b1a387bb",
+      "name": "Desert Sessions",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "marklaneganband": {
+      "mbid": "19f40952-e3ba-44ba-87b2-218e2744fb58",
+      "name": "Mark Lanegan Band",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "blackphoebe": {
+      "mbid": "8e4f1308-a1f5-4934-a584-b1b087c587ca",
+      "name": "Black Phoebe",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "tuatara": {
+      "mbid": "3630613f-b325-4c7c-8036-f029358a4106",
+      "name": "Tuatara",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "endinosearthworm": {
+      "mbid": "03d150e8-d905-4167-9035-76b2ec4d30ec",
+      "name": "Endino's Earthworm",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "barrettmartingroup": {
+      "mbid": "0bf9501f-6d9d-4c08-a886-382d7cd99a3b",
+      "name": "Barrett Martin Group",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "silverlites": {
+      "mbid": "d60cc200-2ec4-43ae-98b2-5d3bd599ce87",
+      "name": "Silverlites",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "drinkthesea": {
+      "mbid": "9532a91c-a499-46d6-b2d6-1b5f21a77f18",
+      "name": "Drink the Sea",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "juno": {
+      "mbid": "6c0994fb-382e-4510-8e26-56709afaf190",
+      "name": "Juno",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "taylorhawkinsthecoattailriders": {
+      "mbid": "397cd952-ae9c-40cb-a504-fd0ef47ec120",
+      "name": "Taylor Hawkins & The Coattail Riders",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "thebirdsofsatan": {
+      "mbid": "93557aa9-1ced-421a-b026-5a0aee62fa75",
+      "name": "The Birds of Satan",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "anyone": {
+      "mbid": "caa4a732-32cf-42a0-9516-61dfdb758f1c",
+      "name": "Anyone",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "kindheavenorchestra": {
+      "mbid": "18fa73af-3b36-408b-a0eb-68e0375d48d3",
+      "name": "Kind Heaven Orchestra",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "nhc": {
+      "mbid": "bc4922a9-a305-4741-be94-ccdc1d752e43",
+      "name": "NHC",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "ganninarnoldproject": {
+      "mbid": "b1bf128a-0806-420d-817b-e8e29e4b8262",
+      "name": "Gannin Arnold Project",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "theimpostors6": {
+      "mbid": "6a2159a7-e6ee-4d12-b950-3e7ad8faa870",
+      "name": "The Impostors 6",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "darkload": {
+      "mbid": "7bd9660d-d72e-408e-93b8-4354caa8a57a",
+      "name": "Dark Load",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "identitycrisis": {
+      "mbid": "ae32eb44-da46-4450-b9dc-ebb03164f6db",
+      "name": "Identity Crisis",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "oasis": {
+      "mbid": "39ab1aed-75e0-4140-bd47-540276886b60",
+      "name": "Oasis",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "blur": {
+      "mbid": "ba853904-ae25-4ebb-89d6-c44cfbd71bd2",
+      "name": "Blur",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "motrhead": {
+      "mbid": "57961a97-3796-4bf7-9f02-a985a8979ae9",
+      "name": "Motörhead",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "ironmaiden": {
+      "mbid": "ca891d65-d9b0-4258-89f7-e6ba29d83767",
+      "name": "Iron Maiden",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z",
+      "via": "relation"
+    },
+    "sonic youth": {
+      "mbid": "5cbef01b-cc35-4f52-af7b-d0df0c4f61b9",
+      "name": "Sonic Youth",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:57:29.309Z"
+    },
+    "pixies": {
+      "mbid": "b6b2bb8d-54a9-491f-9607-7b546023b433",
+      "name": "Pixies",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:57:30.474Z"
+    },
+    "hüsker dü": {
+      "mbid": "5c4c90a4-539f-4101-83cf-301bc6a94e06",
+      "name": "Hüsker Dü",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:57:31.423Z"
+    },
+    "ramones": {
+      "mbid": "d6ed7887-a401-47a8-893c-34b967444d26",
+      "name": "Ramones",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:38.727Z"
+    },
+    "clash": {
+      "mbid": "8f92558c-2baa-4758-8c38-615519e9deda",
+      "name": "The Clash",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:40.006Z"
+    },
+    "sex pistols": {
+      "mbid": "e5db18cb-4b1f-496d-a308-548b611090d3",
+      "name": "Sex Pistols",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:40.845Z"
+    },
+    "dead kennedys": {
+      "mbid": "37c78aeb-d196-42b5-b991-6afb4fc9bc2e",
+      "name": "Dead Kennedys",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:41.766Z"
+    },
+    "black flag": {
+      "mbid": "9941a936-196a-4a62-ae53-a69cbc33f20e",
+      "name": "Black Flag",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:42.861Z"
+    },
+    "bad brains": {
+      "mbid": "e919b253-da5b-4aae-a444-6a368376a2d6",
+      "name": "Bad Brains",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:43.943Z"
+    },
+    "fugazi": {
+      "mbid": "233fc3f3-6de2-465c-985e-e721dbabbace",
+      "name": "Fugazi",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:44.868Z"
+    },
+    "minor threat": {
+      "mbid": "09037f07-42bc-46ac-a1ee-37f834451fee",
+      "name": "Minor Threat",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:46.031Z"
+    },
+    "metallica": {
+      "mbid": "65f4f0c5-ef9e-490c-aee3-909e7ae6b2ab",
+      "name": "Metallica",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:47.120Z"
+    },
+    "slayer": {
+      "mbid": "bdacc37b-8633-4bf8-9dd5-4662ee651aec",
+      "name": "Slayer",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:48.034Z"
+    },
+    "megadeth": {
+      "mbid": "a9044915-8be3-4c7e-b11f-9e2d2ea0a91e",
+      "name": "Megadeth",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:49.172Z"
+    },
+    "anthrax": {
+      "mbid": "b616d6f0-ec1f-4c69-8a79-12a97ece7372",
+      "name": "Anthrax",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:50.325Z"
+    },
+    "judas priest": {
+      "mbid": "6b335658-22c8-485d-93de-0bc29a1d0349",
+      "name": "Judas Priest",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:51.453Z"
+    },
+    "black sabbath": {
+      "mbid": "5182c1d9-c7d2-4dad-afa0-ccfeada921a8",
+      "name": "Black Sabbath",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:52.706Z"
+    },
+    "deep purple": {
+      "mbid": "79491354-3d83-40e3-9d8e-7592d58d790a",
+      "name": "Deep Purple",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:53.490Z"
+    },
+    "led zeppelin": {
+      "mbid": "678d88b2-87b0-403b-b63d-5da7465aecc3",
+      "name": "Led Zeppelin",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:54.566Z"
+    },
+    "who": {
+      "mbid": "9fdaa16b-a6c4-4831-b87c-bc9ca8ce7eaa",
+      "name": "The Who",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:55.653Z"
+    },
+    "beatles": {
+      "mbid": "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d",
+      "name": "The Beatles",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:56.622Z"
+    },
+    "kinks": {
+      "mbid": "17b53d9f-5c63-4a09-a593-dde4608e0db9",
+      "name": "The Kinks",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:57.538Z"
+    },
+    "genesis": {
+      "mbid": "8e3fcd7d-bda1-4ca0-b987-b8528d2ee74e",
+      "name": "Genesis",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:58.680Z"
+    },
+    "fleetwood mac": {
+      "mbid": "bd13909f-1c29-4c27-a874-d4aaf27c5b1a",
+      "name": "Fleetwood Mac",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:59.996Z"
+    },
+    "rem": {
+      "mbid": "ea4dfa26-f633-4da6-a52a-f49ea4897b58",
+      "name": "R.E.M.",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:00:00.832Z"
+    },
+    "smashing pumpkins": {
+      "mbid": "ba0d6274-db14-4ef5-b28d-657ebde1a396",
+      "name": "Smashing Pumpkins",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:00:02.348Z"
+    },
+    "radiohead": {
+      "mbid": "a74b1b7f-71a5-4011-9441-d0b5e4122711",
+      "name": "Radiohead",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:00:02.768Z"
+    },
+    "smiths": {
+      "mbid": "40f5d9e4-2de7-4f2d-ad41-e31a9a9fea27",
+      "name": "The Smiths",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:00:04.090Z"
+    }
+  },
+  "persons": {
+    "duffmckagan": {
+      "mbid": "f2da4752-8db0-4e54-8f30-680acaa8e1cf",
+      "name": "Duff McKagan",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "mattcameron": {
+      "mbid": "07e93890-46a1-4ebd-9a70-3988a2135d87",
+      "name": "Matt Cameron",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "stonegossard": {
+      "mbid": "ca7e6e03-4973-45ef-8833-98774a2d4138",
+      "name": "Stone Gossard",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "jeffament": {
+      "mbid": "2781b946-104c-47d3-a573-2eade82f68cd",
+      "name": "Jeff Ament",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "mikemccready": {
+      "mbid": "16cb4a74-225a-4262-a885-628083f12460",
+      "name": "Mike McCready",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "eddievedder": {
+      "mbid": "1a60d6dd-9d3e-40fc-a66d-3184f9ee0d61",
+      "name": "Eddie Vedder",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "kurtcobain": {
+      "mbid": "3c9b356d-d1db-4f4e-a7a3-2d00c1d70255",
+      "name": "Kurt Cobain",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "kristnovoselic": {
+      "mbid": "ac05e29f-0561-4445-bb26-5562d2389531",
+      "name": "Krist Novoselic",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "chriscornell": {
+      "mbid": "cbf9738d-8f81-4a92-bc64-ede09341652d",
+      "name": "Chris Cornell",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "laynestaley": {
+      "mbid": "ddf488d8-f809-47a0-adb3-95bbc7aa20f0",
+      "name": "Layne Staley",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "jerrycantrell": {
+      "mbid": "960eb93f-e73c-4df8-864d-08a06c2dcc11",
+      "name": "Jerry Cantrell",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "markarm": {
+      "mbid": "3f99d2df-8859-4249-8a70-84fe04c5a096",
+      "name": "Mark Arm",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "steveturner": {
+      "mbid": "7ef50407-3a77-44e7-bc39-ad1f85f7ff87",
+      "name": "Steve Turner",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "marklanegan": {
+      "mbid": "a9126556-f555-4920-9617-6e013f8228a7",
+      "name": "Mark Lanegan",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "barrettmartin": {
+      "mbid": "2faf3b65-f4fa-4465-b0b7-c06370f0a63e",
+      "name": "Barrett Martin",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "natemendel": {
+      "mbid": "ba510f8c-f19d-41a2-921a-53afd27cfcbd",
+      "name": "Nate Mendel",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "taylorhawkins": {
+      "mbid": "f0d35e7c-bbda-4063-a07b-0aa044fa5c8a",
+      "name": "Taylor Hawkins",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "benshepherd": {
+      "mbid": "0bd73a25-9156-4c0a-aa17-90d06b9275ad",
+      "name": "Ben Shepherd",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "kimthayil": {
+      "mbid": "dd676aae-658e-42f3-b3d9-8660ea29198d",
+      "name": "Kim Thayil",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:54:23.026101Z"
+    },
+    "richard stuverud": {
+      "mbid": "32032d14-de4c-4d5a-8482-bac40d3fedd4",
+      "name": "Richard Stuverud",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:57:25.436Z"
+    },
+    "josh homme": {
+      "mbid": "dbecd515-aac9-4e7b-808e-bca22809c316",
+      "name": "Josh Homme",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:57:26.062Z"
+    },
+    "alain johannes": {
+      "mbid": "89df2e69-b89b-410d-b792-00898f4e5abc",
+      "name": "Alain Johannes",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:57:27.131Z"
+    },
+    "mike starr": {
+      "mbid": "820e1505-8173-4c7e-a286-0a146917460b",
+      "name": "Mike Starr",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:17.445Z"
+    },
+    "dave krusen": {
+      "mbid": "e31955f8-989c-454a-a22f-a812ca1d2827",
+      "name": "Dave Krusen",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:18.810Z"
+    },
+    "pat smear": {
+      "mbid": "3da65013-dfdd-40c7-b9c7-e4c829862c66",
+      "name": "Pat Smear",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:19.881Z"
+    },
+    "chris friel": {
+      "mbid": "8c8ec0c5-bd2b-4d93-bf10-2989cfff11e8",
+      "name": "Chris Friel",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:22.147Z"
+    },
+    "mike squires": {
+      "mbid": "ec276029-0efb-4762-9ce8-147be1734b86",
+      "name": "Mike Squires",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:24.288Z"
+    },
+    "slash": {
+      "mbid": "5e7a7026-dfc5-4aba-8496-95140716f3db",
+      "name": "Slash",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:24.991Z"
+    },
+    "ben verellen": {
+      "mbid": "15d611a9-28df-4042-a35d-12c6410cdd5b",
+      "name": "Ben Verellen",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:27.346Z"
+    },
+    "dale crover": {
+      "mbid": "9b93a71b-1484-4bea-b096-f660c1161f8a",
+      "name": "Dale Crover",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:29.353Z"
+    },
+    "peter buck": {
+      "mbid": "2bab20bf-8dab-4af8-b7b0-ba8e30860261",
+      "name": "Peter Buck",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:30.275Z"
+    },
+    "greg gilmore": {
+      "mbid": "f867dde5-a47a-49b5-bc34-31edaf6ef861",
+      "name": "Greg Gilmore",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:32.467Z"
+    },
+    "sean kinney": {
+      "mbid": "4c7df96e-d3d4-4618-b232-89c82050331a",
+      "name": "Sean Kinney",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:34.546Z"
+    },
+    "shawn smith": {
+      "mbid": "e3a5e014-fd72-40c2-9b00-7c70f382c431",
+      "name": "Shawn Smith",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:36.776Z"
+    },
+    "regan hagar": {
+      "mbid": "63f8b95d-5ef1-4779-a47e-d844713ae8ee",
+      "name": "Regan Hagar",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:38.948Z"
+    },
+    "peter klett": {
+      "mbid": "226ea68d-4052-436e-bfad-33f00ed9d140",
+      "name": "Peter Klett",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:40.968Z"
+    },
+    "scott mercado": {
+      "mbid": "5454d145-8cf3-41f4-8bc8-34fae3c84902",
+      "name": "Scott Mercado",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:42.970Z"
+    },
+    "dann gallucci": {
+      "mbid": "bedc8978-6b82-4afe-bee6-4b0a64d41b6e",
+      "name": "Dann Gallucci",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:45.082Z"
+    },
+    "skerik": {
+      "mbid": "01421e28-591a-4547-a9a4-64d29f789663",
+      "name": "Skerik",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:47.109Z"
+    },
+    "kurt bloch": {
+      "mbid": "936a1850-62ff-4cbe-8e10-ab115606a0b2",
+      "name": "Kurt Bloch",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:49.312Z"
+    },
+    "mike musburger": {
+      "mbid": "2c098d8b-7c6d-4196-ba18-7833dcd012bb",
+      "name": "Mike Musburger",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:51.333Z"
+    },
+    "chris shiflett": {
+      "mbid": "90e2c345-3fcc-4623-8cf8-80d206c01634",
+      "name": "Chris Shiflett",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:53.460Z"
+    },
+    "rami jaffee": {
+      "mbid": "f42080a1-0ebe-466d-9c2f-e27cc6f06709",
+      "name": "Rami Jaffee",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:55.490Z"
+    },
+    "william goldsmith": {
+      "mbid": "585256d1-d013-409e-824d-0e4d847d8016",
+      "name": "William Goldsmith",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:57.741Z"
+    },
+    "josh freese": {
+      "mbid": "1ba97964-8d70-4b33-a361-d1a4ed222672",
+      "name": "Josh Freese",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:58:59.764Z"
+    },
+    "carrie akre": {
+      "mbid": "d4b880f0-b815-4050-90c7-309ee3a7ee3b",
+      "name": "Carrie Akre",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:01.887Z"
+    },
+    "danny newcomb": {
+      "mbid": "2386286e-6fe0-498e-8e62-0d8d53f6fc78",
+      "name": "Danny Newcomb",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:04.181Z"
+    },
+    "geoff reading": {
+      "mbid": "61bc75ae-74f2-4567-9c2e-676f291f9549",
+      "name": "Geoff Reading",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:07.087Z"
+    },
+    "dave kushner": {
+      "mbid": "58bbe3cc-038c-4af3-b78c-ab180cffd10e",
+      "name": "Dave Kushner",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:09.388Z"
+    },
+    "brooks wackerman": {
+      "mbid": "422763c1-9762-4586-b2a4-0a6f54ed254e",
+      "name": "Brooks Wackerman",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:11.272Z"
+    },
+    "jeremy enigk": {
+      "mbid": "35058042-8310-4c5c-852c-f0ed011d77b0",
+      "name": "Jeremy Enigk",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:13.364Z"
+    },
+    "erin tate": {
+      "mbid": "25400c0b-d72d-4835-8afa-3c83f021d7a6",
+      "name": "Erin Tate",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:15.524Z"
+    },
+    "dave dederer": {
+      "mbid": "ea911686-4e83-4e93-a869-0061fcbe4402",
+      "name": "Dave Dederer",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:17.560Z"
+    },
+    "johnny bacolas": {
+      "mbid": "5d33fe0e-b5d3-4601-b1e4-114ea5ea6729",
+      "name": "Johnny Bacolas",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:19.758Z"
+    },
+    "jason finn": {
+      "mbid": "6aa87331-ebed-4d33-b723-2164277243a7",
+      "name": "Jason Finn",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:22.029Z"
+    },
+    "guy maddison": {
+      "mbid": "81e68e3f-23e1-432a-bdc0-112df4ed728e",
+      "name": "Guy Maddison",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:23.909Z"
+    },
+    "jon auer": {
+      "mbid": "12a9677f-d85b-45bd-ac62-a2cd74407b08",
+      "name": "Jon Auer",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:26.324Z"
+    },
+    "ken stringfellow": {
+      "mbid": "45f563aa-4601-4c6d-ab0d-a9f296eea71a",
+      "name": "Ken Stringfellow",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:28.219Z"
+    },
+    "bill rieflin": {
+      "mbid": "f40bf2d1-1da5-4146-96ab-865242554a66",
+      "name": "Bill Rieflin",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:30.199Z"
+    },
+    "buzz osborne": {
+      "mbid": "9a911b22-f972-44ee-b2d3-d41297fe96e9",
+      "name": "Buzz Osborne",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:32.375Z"
+    },
+    "thurston moore": {
+      "mbid": "8ba48525-d922-42ee-9775-97b7b8f9712e",
+      "name": "Thurston Moore",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:34.518Z"
+    },
+    "isaac brock": {
+      "mbid": "071d3d16-8ed7-4e06-be96-2c52defcf434",
+      "name": "Isaac Brock",
+      "score": 100,
+      "resolvedAt": "2026-07-14T23:59:36.574Z"
+    }
+  },
+  "generatedAt": "2026-07-15T00:04:24.339Z"
+}

@@ -63,6 +63,7 @@ function parseArgs(argv) {
     else if (a === '--seed') args.seed = argv[++i];
     else if (a === '--out') args.out = argv[++i];
     else if (a === '--enrich') args.enrich = true;
+    else if (a === '--limit') args.limit = parseInt(argv[++i], 10);
     else if (a === '--help' || a === '-h') {
       console.log('Usage: ingest-batch.mjs --config <path> [--seed <path>] [--out <dir>] [--enrich]');
       process.exit(0);
@@ -156,9 +157,81 @@ async function loadOverrides() {
   return out;
 }
 
-async function resolveMbid(name, overrides, { type, log }) {
+// ---------------------------------------------------------------------
+// Resolved-MBID cache: name -> MBID pairs learned during previous runs.
+// This lets us do MB detail fetches on future runs without redoing the
+// search step (which is ~180 requests for a full seed sweep).
+// The cache lives at scripts/data/resolved-mbids.json; it's committed
+// so all operators share the same resolution history.
+// ---------------------------------------------------------------------
+const RESOLVED_CACHE_PATH = join(__dirname, 'data', 'resolved-mbids.json');
+
+async function loadResolvedCache() {
+  if (!existsSync(RESOLVED_CACHE_PATH)) {
+    return { bands: {}, persons: {}, generatedAt: null };
+  }
+  try {
+    return JSON.parse(await readFile(RESOLVED_CACHE_PATH, 'utf8'));
+  } catch {
+    return { bands: {}, persons: {}, generatedAt: null };
+  }
+}
+
+async function saveResolvedCache(cache) {
+  cache.generatedAt = new Date().toISOString();
+  await writeFile(RESOLVED_CACHE_PATH, JSON.stringify(cache, null, 2) + '\n', 'utf8');
+}
+
+// Only cache high-confidence matches. Anything below the strong-match
+// threshold could be a genuine wrong artist (common name collisions,
+// disambiguation traps). Overrides are the only mechanism for those.
+const CACHE_MIN_SCORE = 95;
+
+function cachePersonResolution(cache, name, resolved, stats) {
+  if (!cache.persons) cache.persons = {};
+  if (resolved.source === 'override') return; // don't shadow overrides
+  if (resolved.source === 'cache') { stats.hits += 1; return; } // already cached
+  if (typeof resolved.score === 'number' && resolved.score < CACHE_MIN_SCORE) return;
+  const key = normalizeNameKey(name);
+  if (cache.persons[key]?.mbid === resolved.mbid) { stats.hits += 1; return; }
+  cache.persons[key] = {
+    mbid: resolved.mbid,
+    name,
+    score: resolved.score,
+    resolvedAt: new Date().toISOString(),
+  };
+  stats.additions += 1;
+}
+
+function cacheBandResolution(cache, name, resolved, stats) {
+  if (!cache.bands) cache.bands = {};
+  if (resolved.source === 'override') return;
+  if (resolved.source === 'cache') { stats.hits += 1; return; }
+  if (typeof resolved.score === 'number' && resolved.score < CACHE_MIN_SCORE) return;
+  const key = normalizeNameKey(name);
+  if (cache.bands[key]?.mbid === resolved.mbid) { stats.hits += 1; return; }
+  cache.bands[key] = {
+    mbid: resolved.mbid,
+    name,
+    score: resolved.score,
+    resolvedAt: new Date().toISOString(),
+  };
+  stats.additions += 1;
+}
+
+async function resolveMbid(name, overrides, { type, log, cache = null }) {
   if (overrides[name]) {
     return { mbid: overrides[name].mbid, source: 'override', score: 100 };
+  }
+  // Check the shared resolved-MBID cache before hitting MB search.
+  if (cache) {
+    const key = normalizeNameKey(name);
+    const bucket = type === 'Person' ? cache.persons : cache.bands;
+    const hit = bucket?.[key];
+    if (hit?.mbid) {
+      log(`  cache hit: ${hit.mbid} (score ${hit.score} @ ${hit.resolvedAt})`);
+      return { mbid: hit.mbid, source: 'cache', score: hit.score };
+    }
   }
   const hits = await searchArtist(name, { type, limit: 3, log });
   if (hits.length === 0) return null;
@@ -276,9 +349,17 @@ async function main() {
   log(`Seed:   ${args.seed}`);
   log(`Out:    ${args.out}`);
   log(`Enrich: ${args.enrich}`);
+  if (args.limit) log(`Limit:  ${args.limit} (dry-run subset)`);
   log('');
 
-  const config = JSON.parse(await readFile(args.config, 'utf8'));
+  const configRaw = JSON.parse(await readFile(args.config, 'utf8'));
+  // Apply --limit to both persons and bands lists for dry-run subsets.
+  const config = args.limit
+    ? { ...configRaw,
+        persons: (configRaw.persons || []).slice(0, args.limit),
+        bands:   (configRaw.bands   || []).slice(0, args.limit),
+      }
+    : configRaw;
   const seedText = await readFile(args.seed, 'utf8');
   const seedRows = parseCsv(seedText);
   const seed = buildSeedIndex(seedRows);
@@ -293,6 +374,12 @@ async function main() {
   const candidates = new Map(); // mbid -> aggregated candidate record
   const resolveLog = [];
 
+  // Load resolved-MBID cache. Any successful search-based resolution
+  // (source: 'search' or 'search-strong') that isn't already an override
+  // gets written back to the cache, so future runs skip the search step.
+  const resolvedCache = await loadResolvedCache();
+  const cacheHits = { hits: 0, additions: 0 };
+
   // -------------------------------------------------------------------
   // Phase 1: PERSONS (bridge-fill)
   // -------------------------------------------------------------------
@@ -300,7 +387,7 @@ async function main() {
     log(`\n[person] ${personName}`);
     let resolved;
     try {
-      resolved = await resolveMbid(personName, overrides, { type: 'Person', log });
+      resolved = await resolveMbid(personName, overrides, { type: 'Person', log, cache: resolvedCache });
     } catch (err) {
       log(`  ! resolve error: ${err.message}`);
       resolveLog.push({ name: personName, kind: 'person', status: 'error', error: err.message });
@@ -312,6 +399,7 @@ async function main() {
       continue;
     }
     resolveLog.push({ name: personName, kind: 'person', status: 'resolved', ...resolved });
+    cachePersonResolution(resolvedCache, personName, resolved, cacheHits);
 
     let personData;
     try {
@@ -357,7 +445,7 @@ async function main() {
     log(`\n[band] ${bandName}`);
     let resolved;
     try {
-      resolved = await resolveMbid(bandName, overrides, { type: 'Group', log });
+      resolved = await resolveMbid(bandName, overrides, { type: 'Group', log, cache: resolvedCache });
     } catch (err) {
       log(`  ! resolve error: ${err.message}`);
       resolveLog.push({ name: bandName, kind: 'band', status: 'error', error: err.message });
@@ -369,6 +457,7 @@ async function main() {
       continue;
     }
     resolveLog.push({ name: bandName, kind: 'band', status: 'resolved', ...resolved });
+    cacheBandResolution(resolvedCache, bandName, resolved, cacheHits);
 
     // Skip if already in graph — direct-ingest is only for NEW bands.
     if (seed.bands.has(normalizeNameKey(bandName))) {
@@ -427,6 +516,7 @@ async function main() {
       hasWikipediaArticle: !!(candidate.wikipedia?.exists && !candidate.wikipedia?.isDisambiguation),
       hasBeginArea: !!candidate.detail.self.beginArea,
       hasBeginYear: !!candidate.detail.self.begin,
+      origin: candidate.origin,
     });
 
     scored.push({
@@ -457,25 +547,37 @@ async function main() {
   const enrichments = [];
   if (args.enrich) {
     log(`\n=== Enrichment scan of existing bands ===`);
-    // Only enrich bands that already have a pinned MBID, to avoid
-    // burning ~200 more MB requests on ambiguous name resolutions.
-    // Future work: expand to a curated list of seed bands with resolved
-    // MBIDs cached from previous runs.
-    for (const [name, override] of Object.entries(overrides)) {
+    // The resolved-mbids cache is bootstrapped by earlier runs +
+    // in-run resolutions. We combine it with manual overrides to widen
+    // enrichment coverage without burning ~180 more MB search requests
+    // on every scan.
+    const bandMbids = new Map(); // seed band key -> mbid
+    // Pull from overrides first (they take precedence)
+    for (const [name, o] of Object.entries(overrides)) {
       const key = normalizeNameKey(name);
+      if (seed.bands.has(key)) bandMbids.set(key, { mbid: o.mbid, source: 'override' });
+    }
+    // Then pull from the resolved cache for bands not yet pinned
+    for (const [key, entry] of Object.entries(resolvedCache.bands || {})) {
+      if (seed.bands.has(key) && !bandMbids.has(key)) {
+        bandMbids.set(key, { mbid: entry.mbid, source: 'cache' });
+      }
+    }
+    log(`  seed bands with resolvable MBID: ${bandMbids.size}/${seed.bands.size}`);
+
+    for (const [key, { mbid, source }] of bandMbids) {
       const seedBand = seed.bands.get(key);
-      if (!seedBand) continue;
-      log(`\n[enrich] ${name}`);
+      log(`\n[enrich ${source}] ${seedBand.displayName}`);
       let detail;
       try {
-        detail = await getArtistMembers(override.mbid, { log });
+        detail = await getArtistMembers(mbid, { log });
       } catch (err) {
         log(`  ! detail failed: ${err.message}`);
         continue;
       }
       const proposals = proposeEnrichments(seedBand, detail);
       log(`  ${proposals.length} field-level enrichments proposed`);
-      for (const p of proposals) enrichments.push({ band: name, ...p });
+      for (const p of proposals) enrichments.push({ band: seedBand.displayName, ...p });
     }
   }
 
@@ -551,6 +653,13 @@ async function main() {
     }, null, 2),
     'utf8',
   );
+
+  // Persist the resolved-MBID cache: any new high-confidence matches
+  // learned during this run get shared with future runs.
+  if (cacheHits.additions > 0) {
+    await saveResolvedCache(resolvedCache);
+    log(`  cache:       +${cacheHits.additions} new entries (${cacheHits.hits} confirmed)`);
+  }
 
   log('\n=== Done ===');
   log(`  candidates:  ${scored.length}`);
