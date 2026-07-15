@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<!-- Deliberately noindex: this admin page should never appear in search
+     results even though it's served from the public origin. -->
+<title>RBFT · Audit log</title>
+<link rel="preconnect" href="https://api.fontshare.com">
+<link rel="stylesheet"
+      href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap">
+<style>
+  /* Reuse the same design tokens as index.html so the admin surface looks
+     and feels like part of the same app, without pulling in the whole
+     graph-view stylesheet. Values below are copied from :root/[data-theme]
+     in index.html - keep in sync if the tokens over there change. */
+  :root {
+    --font-body: 'Satoshi', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+    --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+    --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+    --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+    --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+    --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
+    --space-4: 1rem;    --space-5: 1.25rem; --space-6: 1.5rem;
+    --space-8: 2rem;    --space-10: 2.5rem;
+    --color-bg: #f7f6f2;
+    --color-surface: #f9f8f5;
+    --color-surface-2: #fbfbf9;
+    --color-surface-offset: #f3f0ec;
+    --color-border: #d4d1ca;
+    --color-divider: #dcd9d5;
+    --color-text: #28251d;
+    --color-text-muted: #6f6c66;
+    --color-text-faint: #a39f98;
+    --color-text-inverse: #f9f8f4;
+    --color-primary: #01696f;
+    --color-primary-hover: #0c4e54;
+    --color-accept: #1e6f3a;         /* green for submission_accepted */
+    --color-accept-bg: #e6f3ea;
+    --color-delete: #a02015;         /* red for submission_deleted */
+    --color-delete-bg: #f6e3e1;
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-full: 9999px;
+    --shadow-sm: 0 1px 2px rgba(10,10,10,0.08);
+    --shadow-md: 0 10px 30px rgba(10,10,10,0.12);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-body);
+    background: var(--color-bg);
+    color: var(--color-text);
+    min-height: 100dvh;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    padding: var(--space-6) var(--space-8);
+    border-bottom: 1px solid var(--color-divider);
+    background: color-mix(in srgb, var(--color-bg) 78%, transparent);
+    backdrop-filter: blur(14px);
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  }
+  header h1 {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  header .header-meta {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  main { padding: var(--space-8); max-width: 1200px; margin: 0 auto; }
+
+  /* Auth gate */
+  .gate {
+    max-width: 460px;
+    margin: var(--space-10) auto;
+    padding: var(--space-8);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+  .gate h2 { margin-top: 0; font-size: var(--text-lg); }
+  .gate p { color: var(--color-text-muted); font-size: var(--text-sm); }
+  .gate label { display: block; font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-2); }
+  .gate input[type="password"] {
+    width: 100%;
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    background: var(--color-surface-2);
+    color: var(--color-text);
+  }
+  .gate input[type="password"]:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-color: var(--color-primary);
+  }
+  .gate .error {
+    color: var(--color-delete);
+    font-size: var(--text-sm);
+    margin-top: var(--space-2);
+    min-height: 1.2em;
+  }
+  .btn-primary {
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-full);
+    background: var(--color-primary);
+    color: var(--color-text-inverse);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    border: none;
+    cursor: pointer;
+    min-height: 44px;
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-primary:hover { background: var(--color-primary-hover); }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-secondary {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    min-height: 36px;
+  }
+  .btn-secondary:hover { border-color: var(--color-primary); color: var(--color-primary-hover); }
+
+  /* Summary strip */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+  }
+  .stat {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+  }
+  .stat .label {
+    font-size: var(--text-xs);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-1);
+  }
+  .stat .value {
+    font-size: var(--text-xl);
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .stat .sub {
+    font-size: var(--text-xs);
+    color: var(--color-text-faint);
+    margin-top: var(--space-1);
+  }
+
+  /* Filter row */
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    align-items: center;
+    margin-bottom: var(--space-4);
+    padding: var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+  }
+  .filters label {
+    font-size: var(--text-xs);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin-right: var(--space-2);
+  }
+  .filters select, .filters input[type="search"] {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-2);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--color-text);
+  }
+  .filters input[type="search"] { min-width: 240px; }
+  .filters .spacer { flex: 1; }
+
+  /* Event table */
+  .events {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .event-row {
+    display: grid;
+    grid-template-columns: 180px 140px 1fr 120px;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-divider);
+    align-items: center;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+  .event-row:last-child { border-bottom: none; }
+  .event-row:hover { background: var(--color-surface-offset); }
+  .event-row .col { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .event-row .col-time { font-family: 'ui-monospace', 'SFMono-Regular', Menlo, monospace; font-size: var(--text-xs); color: var(--color-text-muted); }
+  .event-row .col-event { }
+  .event-row .col-band { font-weight: 500; }
+  .event-row .col-id { font-family: 'ui-monospace', 'SFMono-Regular', Menlo, monospace; font-size: var(--text-xs); color: var(--color-text-faint); text-align: right; }
+
+  .pill {
+    display: inline-block;
+    padding: 2px var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+  .pill.accept { background: var(--color-accept-bg); color: var(--color-accept); }
+  .pill.delete { background: var(--color-delete-bg); color: var(--color-delete); }
+
+  .event-detail {
+    display: none;
+    padding: var(--space-4);
+    background: var(--color-surface-offset);
+    border-bottom: 1px solid var(--color-divider);
+    font-family: 'ui-monospace', 'SFMono-Regular', Menlo, monospace;
+    font-size: var(--text-xs);
+    white-space: pre-wrap;
+    overflow-x: auto;
+    max-height: 480px;
+    overflow-y: auto;
+  }
+  .event-detail.open { display: block; }
+
+  .empty, .loading, .error-state {
+    padding: var(--space-8);
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+  }
+  .error-state { color: var(--color-delete); }
+
+  /* Mobile: collapse the four-column row to a stack of key/value */
+  @media (max-width: 720px) {
+    header { padding: var(--space-4); flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+    main { padding: var(--space-4); }
+    .event-row {
+      grid-template-columns: 1fr auto;
+      grid-template-areas:
+        'time event'
+        'band band'
+        'id   id';
+      gap: var(--space-1);
+    }
+    .event-row .col-time { grid-area: time; }
+    .event-row .col-event { grid-area: event; text-align: right; }
+    .event-row .col-band { grid-area: band; white-space: normal; }
+    .event-row .col-id { grid-area: id; text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>RBFT · Audit log</h1>
+  <div class="header-meta">
+    <span id="header-status">not signed in</span>
+    <button id="signout-btn" class="btn-secondary" style="display:none;margin-left:var(--space-3);">Sign out</button>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- Auth gate: shown until the token is verified against the API -->
+  <section id="gate" class="gate">
+    <h2>Admin sign-in</h2>
+    <p>Paste the <code>ADMIN_TOKEN</code> value from Netlify env vars (or the
+      fallback baked into <code>bands.mjs</code>). The token is stored in
+      <code>sessionStorage</code> and cleared when the tab closes.</p>
+    <label for="token-input">Admin token</label>
+    <input id="token-input" type="password" autocomplete="off" spellcheck="false"
+           placeholder="paste token here" />
+    <div id="gate-error" class="error" role="alert"></div>
+    <div style="margin-top:var(--space-4);display:flex;gap:var(--space-3);">
+      <button id="signin-btn" class="btn-primary" type="button">Sign in</button>
+    </div>
+  </section>
+
+  <!-- Dashboard: shown after successful auth -->
+  <section id="dashboard" style="display:none;">
+    <div id="summary" class="summary"></div>
+
+    <div class="filters">
+      <label for="filter-event">Event</label>
+      <select id="filter-event">
+        <option value="">All</option>
+        <option value="submission_accepted">Accepted</option>
+        <option value="submission_deleted">Deleted</option>
+      </select>
+      <label for="filter-search" style="margin-left:var(--space-3);">Search</label>
+      <input id="filter-search" type="search" placeholder="band, id, or IP" />
+      <span class="spacer"></span>
+      <button id="refresh-btn" class="btn-secondary" type="button">Refresh</button>
+    </div>
+
+    <div id="events" class="events">
+      <div class="loading">Loading audit log…</div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/* Admin audit-log viewer.
+ *
+ * Talks to the /.netlify/functions/bands endpoint with the x-admin-token
+ * header. The token is prompted for on page load and cached in
+ * sessionStorage so a refresh doesn't require re-entry (matches the
+ * existing rbft-unlocked session pattern on the main site). Any 401
+ * response clears the cached token and re-prompts.
+ *
+ * No token is baked into this file; nothing sensitive is exposed by
+ * serving it publicly (though we also set robots noindex above and
+ * don't link to it from anywhere).
+ */
+(() => {
+  'use strict';
+
+  const ENDPOINT = '/.netlify/functions/bands';
+  const TOKEN_KEY = 'rbft-admin-token';
+
+  const $ = (id) => document.getElementById(id);
+
+  // --- Auth state -----------------------------------------------------------
+
+  function getToken() {
+    try { return sessionStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; }
+  }
+  function setToken(t) {
+    try {
+      if (t) sessionStorage.setItem(TOKEN_KEY, t);
+      else sessionStorage.removeItem(TOKEN_KEY);
+    } catch {}
+  }
+
+  function showGate() {
+    $('gate').style.display = '';
+    $('dashboard').style.display = 'none';
+    $('header-status').textContent = 'not signed in';
+    $('signout-btn').style.display = 'none';
+  }
+  function showDashboard() {
+    $('gate').style.display = 'none';
+    $('dashboard').style.display = '';
+    $('header-status').textContent = 'signed in';
+    $('signout-btn').style.display = '';
+  }
+
+  // Verifies the token against a low-side-effect endpoint (GET ?audit=1).
+  // Returns true on 200, false on 401. Any other error is thrown so the
+  // caller can render a distinct "server error" message.
+  async function verifyToken(token) {
+    const r = await fetch(`${ENDPOINT}?audit=1`, { headers: { 'x-admin-token': token } });
+    if (r.status === 200) return true;
+    if (r.status === 401) return false;
+    throw new Error(`Unexpected status ${r.status}`);
+  }
+
+  async function handleSignIn() {
+    const btn = $('signin-btn');
+    const err = $('gate-error');
+    const token = ($('token-input').value || '').trim();
+    err.textContent = '';
+    if (!token) { err.textContent = 'Please paste the admin token.'; return; }
+    btn.disabled = true;
+    btn.textContent = 'Verifying…';
+    try {
+      const ok = await verifyToken(token);
+      if (!ok) {
+        err.textContent = 'That token was rejected (401).';
+      } else {
+        setToken(token);
+        $('token-input').value = '';
+        showDashboard();
+        await loadEvents();
+      }
+    } catch (e) {
+      err.textContent = `Sign-in failed: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Sign in';
+    }
+  }
+
+  function handleSignOut() {
+    setToken('');
+    showGate();
+    $('events').innerHTML = '<div class="loading">Loading audit log…</div>';
+    $('summary').innerHTML = '';
+  }
+
+  // --- Data + render --------------------------------------------------------
+
+  let allEvents = [];
+
+  async function loadEvents() {
+    const events = $('events');
+    events.innerHTML = '<div class="loading">Loading audit log…</div>';
+    const token = getToken();
+    if (!token) { showGate(); return; }
+    try {
+      const r = await fetch(`${ENDPOINT}?audit=1`, { headers: { 'x-admin-token': token } });
+      if (r.status === 401) {
+        // Token was invalidated (rotated env var, etc.) - drop it and re-prompt.
+        setToken('');
+        showGate();
+        $('gate-error').textContent = 'Session expired. Please sign in again.';
+        return;
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const json = await r.json();
+      allEvents = Array.isArray(json.events) ? json.events : [];
+      renderSummary();
+      renderEvents();
+    } catch (e) {
+      events.innerHTML = `<div class="error-state">Could not load audit log: ${e.message}</div>`;
+    }
+  }
+
+  function renderSummary() {
+    const total = allEvents.length;
+    const accepted = allEvents.filter(e => e.event === 'submission_accepted').length;
+    const deleted = allEvents.filter(e => e.event === 'submission_deleted').length;
+    const dates = allEvents.map(e => e.at).filter(Boolean).sort();
+    const first = dates[0];
+    const last = dates[dates.length - 1];
+    // Unique band names among accepted events (rough proxy for "distinct
+    // legitimate submissions" - doesn't dedupe re-submissions of the
+    // same band, but good enough for a quick eyeball).
+    const bands = new Set(
+      allEvents
+        .filter(e => e.event === 'submission_accepted' && e.draft?.band)
+        .map(e => e.draft.band.toLowerCase())
+    );
+    const fmt = (iso) => iso ? new Date(iso).toLocaleString() : '—';
+    $('summary').innerHTML = [
+      { label: 'Total events', value: total.toLocaleString() },
+      { label: 'Accepted',     value: accepted.toLocaleString(), sub: 'submission_accepted' },
+      { label: 'Deleted',      value: deleted.toLocaleString(),  sub: 'submission_deleted' },
+      { label: 'Unique bands', value: bands.size.toLocaleString(), sub: 'distinct band names' },
+      { label: 'First event',  value: fmt(first), sub: first ? '' : 'none yet' },
+      { label: 'Last event',   value: fmt(last),  sub: last ? '' : 'none yet' },
+    ].map(s => `
+      <div class="stat">
+        <div class="label">${escapeHtml(s.label)}</div>
+        <div class="value">${escapeHtml(s.value)}</div>
+        ${s.sub ? `<div class="sub">${escapeHtml(s.sub)}</div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  function renderEvents() {
+    const eventFilter = $('filter-event').value;
+    const search = ($('filter-search').value || '').trim().toLowerCase();
+    const filtered = allEvents.filter(e => {
+      if (eventFilter && e.event !== eventFilter) return false;
+      if (search) {
+        const hay = [
+          e.draft?.band,
+          e.submissionId,
+          e.ip,
+          e.draft?.city,
+          e.draft?.country
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      return true;
+    });
+    const container = $('events');
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty">No events match the current filters.</div>';
+      return;
+    }
+    container.innerHTML = filtered.map((e, i) => {
+      const pillClass = e.event === 'submission_accepted' ? 'accept' : 'delete';
+      const pillText = e.event === 'submission_accepted' ? 'Accepted' : 'Deleted';
+      const band = e.draft?.band || '(no band data)';
+      const idShort = (e.submissionId || '').slice(0, 8);
+      const when = e.at ? new Date(e.at).toLocaleString() : '—';
+      // Pretty-print the whole event as JSON in the drawer.
+      const detail = JSON.stringify(e, null, 2);
+      return `
+        <div class="event-row" data-idx="${i}" role="button" tabindex="0" aria-expanded="false">
+          <div class="col col-time" title="${escapeHtml(e.at || '')}">${escapeHtml(when)}</div>
+          <div class="col col-event"><span class="pill ${pillClass}">${escapeHtml(pillText)}</span></div>
+          <div class="col col-band" title="${escapeHtml(band)}">${escapeHtml(band)}</div>
+          <div class="col col-id" title="${escapeHtml(e.submissionId || '')}">${escapeHtml(idShort)}</div>
+        </div>
+        <div class="event-detail" data-idx="${i}">${escapeHtml(detail)}</div>
+      `;
+    }).join('');
+    // Wire click + keyboard to toggle detail drawers.
+    container.querySelectorAll('.event-row').forEach(row => {
+      const toggle = () => {
+        const idx = row.getAttribute('data-idx');
+        const detail = container.querySelector(`.event-detail[data-idx="${idx}"]`);
+        const wasOpen = detail.classList.contains('open');
+        // Close all other detail drawers so the page stays readable.
+        container.querySelectorAll('.event-detail.open').forEach(el => el.classList.remove('open'));
+        container.querySelectorAll('.event-row[aria-expanded="true"]').forEach(el => el.setAttribute('aria-expanded', 'false'));
+        if (!wasOpen) {
+          detail.classList.add('open');
+          row.setAttribute('aria-expanded', 'true');
+        }
+      };
+      row.addEventListener('click', toggle);
+      row.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); }
+      });
+    });
+  }
+
+  // Minimal HTML escape - never insert user-controlled data (band names, IPs,
+  // UAs) into innerHTML without going through this first.
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // --- Wire up --------------------------------------------------------------
+
+  $('signin-btn').addEventListener('click', handleSignIn);
+  $('token-input').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); handleSignIn(); }
+  });
+  $('signout-btn').addEventListener('click', handleSignOut);
+  $('refresh-btn').addEventListener('click', loadEvents);
+  $('filter-event').addEventListener('change', renderEvents);
+  $('filter-search').addEventListener('input', renderEvents);
+
+  // On boot: if we already have a token in sessionStorage, try to re-use it.
+  if (getToken()) {
+    showDashboard();
+    loadEvents();
+  } else {
+    showGate();
+    $('token-input').focus();
+  }
+})();
+</script>
+
+</body>
+</html>
