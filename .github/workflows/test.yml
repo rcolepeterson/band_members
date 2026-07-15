@@ -1,0 +1,43 @@
+# Runs the Node test suite on every push to main and every pull
+# request. Added so that regressions like the "Add your band button
+# stranded on mobile" bug (silently shipped in PR #18, only caught in
+# PR #42, ~24 PRs later) get caught at PR-review time instead of by
+# users. The mobile-toolbar-parity test added in PR #42 only protects
+# the project if it actually runs.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel in-progress runs for the same branch / PR when a new commit
+# lands, so we don't waste CI minutes on stale commits.
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: node --test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Netlify Functions currently run on Node 20; matching that
+          # here keeps local dev, CI, and production on the same major.
+          node-version: '20'
+
+      # 'npm install' rather than 'npm ci' because package-lock.json
+      # is gitignored in this repo (see .gitignore). If a lockfile is
+      # ever committed, switch this to 'npm ci' and add cache: 'npm'
+      # to setup-node above for faster runs.
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run tests
+        run: npm test
