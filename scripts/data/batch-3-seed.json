@@ -1,0 +1,27 @@
+{
+  "_description": "PR 5 seed. Focus: fill iconic-connector gaps + open prog-rock scene. 8 bridge-persons (Steven Wilson orbit, classic-rock icons whose bands weren't seeded yet). 12 direct-ingest bands (Porcupine Tree family, Stooges, Talking Heads, Bowie-adjacent, White Stripes, CSNY, Rush). King Crimson is already in graph (came via Bill Rieflin PR 3) — its extended catalog and Fripp collaborations will fill via Steven Wilson bridge. All 4 new common-name persons (Neil Young, David Byrne, Jack White, Steven Wilson) pinned in mbid-overrides.json.",
+  "persons": [
+    "Steven Wilson",
+    "Mikael Åkerfeldt",
+    "Iggy Pop",
+    "David Bowie",
+    "Jimi Hendrix",
+    "Neil Young",
+    "David Byrne",
+    "Jack White"
+  ],
+  "bands": [
+    "Porcupine Tree",
+    "Blackfield",
+    "Storm Corrosion",
+    "No-Man",
+    "Opeth",
+    "The Stooges",
+    "Talking Heads",
+    "The White Stripes",
+    "The Jimi Hendrix Experience",
+    "Buffalo Springfield",
+    "Crosby, Stills, Nash & Young",
+    "Rush"
+  ]
+}

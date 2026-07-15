@@ -958,6 +958,78 @@
       "name": "The Smiths",
       "score": 100,
       "resolvedAt": "2026-07-15T00:00:04.090Z"
+    },
+    "porcupine tree": {
+      "mbid": "169c4c28-858e-497b-81a4-8bc15e0026ea",
+      "name": "Porcupine Tree",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:42:45.994Z"
+    },
+    "blackfield": {
+      "mbid": "8e67406d-de61-4e6b-a2a1-5a3725484527",
+      "name": "Blackfield",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:42:46.652Z"
+    },
+    "storm corrosion": {
+      "mbid": "4f1f3fbc-a043-4280-9a42-f238f4740065",
+      "name": "Storm Corrosion",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:42:47.738Z"
+    },
+    "no-man": {
+      "mbid": "fb03e148-31c1-498c-bdf5-7e16750bad68",
+      "name": "No-Man",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:45:56.515Z"
+    },
+    "opeth": {
+      "mbid": "c14b4180-dc87-481e-b17a-64e4150f90f6",
+      "name": "Opeth",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:45:57.705Z"
+    },
+    "stooges": {
+      "mbid": "794c6bf2-3241-416f-9b8f-24e2d84a1c4b",
+      "name": "The Stooges",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:45:58.830Z"
+    },
+    "talking heads": {
+      "mbid": "a94a7155-c79d-4409-9fcf-220cb0e4dc3a",
+      "name": "Talking Heads",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:45:59.714Z"
+    },
+    "white stripes": {
+      "mbid": "11ae9fbb-f3d7-4a47-936f-4c0a04d3b3b5",
+      "name": "The White Stripes",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:46:00.894Z"
+    },
+    "jimi hendrix experience": {
+      "mbid": "33b3c323-77c2-417c-a5b4-af7e6a111cc9",
+      "name": "The Jimi Hendrix Experience",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:46:01.676Z"
+    },
+    "buffalo springfield": {
+      "mbid": "22dc19af-d085-4c9b-adfb-22ec256251f1",
+      "name": "Buffalo Springfield",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:46:02.819Z"
+    },
+    "crosby stills nash & young": {
+      "mbid": "46a782ea-4308-476b-abd1-a91b197f3037",
+      "name": "Crosby, Stills, Nash & Young",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:46:04.951Z"
+    },
+    "rush": {
+      "mbid": "534ee493-bfac-4575-a44a-0ae41e2c3fe4",
+      "name": "Rush",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:46:05.983Z"
     }
   },
   "persons": {
@@ -1332,7 +1404,13 @@
       "name": "Isaac Brock",
       "score": 100,
       "resolvedAt": "2026-07-14T23:59:36.574Z"
+    },
+    "mikael åkerfeldt": {
+      "mbid": "1a2b4f01-cdc8-406d-b34b-eef8603d104e",
+      "name": "Mikael Åkerfeldt",
+      "score": 100,
+      "resolvedAt": "2026-07-15T00:42:36.261Z"
     }
   },
-  "generatedAt": "2026-07-15T00:04:24.339Z"
+  "generatedAt": "2026-07-15T00:47:00.366Z"
 }

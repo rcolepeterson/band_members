@@ -49,5 +49,40 @@
     "mbid": "b9f52132-28af-4cea-9558-165cd125f9b7",
     "source": "manual",
     "note": "Verified 2026-07-14 — DC hardcore band (Franz Stahl / Pete Stahl / Dave Grohl), NOT Primal Scream which scores higher in fuzzy search. Critical override."
+  },
+  "Steven Wilson": {
+    "mbid": "3a51b862-0144-40f6-aa17-6aaeefea29d9",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — the Porcupine Tree/Blackfield/No-Man/Storm Corrosion multi-instrumentalist, born 1967-11-03 in Kingston upon Thames. NOT the Dead Kennedys drummer (who is 'Steve Wilson' in our graph via PR 3). Critical override to prevent name collision."
+  },
+  "Iggy Pop": {
+    "mbid": "f37b3f31-b1f8-4b88-8cb5-b34f709b17d7",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — Iggy Pop / Jim Osterberg, Stooges founder. Distinct pin recommended given multiple tribute-band namesakes."
+  },
+  "David Bowie": {
+    "mbid": "5441c29d-3602-4898-b1a1-b77fa23b8e50",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — David Bowie / David Robert Jones, 1947–2016. Iconic pin."
+  },
+  "Jimi Hendrix": {
+    "mbid": "06fb1c8b-566e-4cb2-985b-b467c90781d4",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — Johnny Allen Hendrix / James Marshall Hendrix, 1942–1970, Seattle-born."
+  },
+  "Neil Young": {
+    "mbid": "75167b8b-44e4-407b-9d35-effe87b223cf",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — the Canadian singer-songwriter (Buffalo Springfield, CSNY, Crazy Horse). MB has 3 different Neil Young entries so this pin is critical."
+  },
+  "David Byrne": {
+    "mbid": "d4659efb-b8eb-4f03-95e9-f69ce35967a9",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — Talking Heads frontman, Scottish-American. Distinct from the American poet of the same name."
+  },
+  "Jack White": {
+    "mbid": "3ae2fb37-8a23-429d-9920-bac811c4fc22",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — The White Stripes / Third Man / Raconteurs multi-instrumentalist. NOT the German producer Horst Nußbaum or the electronic musician."
   }
 }
