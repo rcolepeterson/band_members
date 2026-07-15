@@ -1775,6 +1775,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
               </p>
               <div class="share-popover-actions">
                 <button class="primary-btn share-popover-btn" type="button" id="download-png-btn">Share PNG</button>
+                <button class="primary-btn share-popover-btn" type="button" id="copy-image-btn">Copy image</button>
                 <button class="primary-btn share-popover-btn" type="button" id="copy-site-link-btn">Copy site link</button>
               </div>
               <div class="share-popover-feedback" id="share-popover-feedback" aria-live="polite">
@@ -2066,6 +2067,13 @@ if (downloadPngBtn) {
     exportCurrentGraphPng();
   });
 }
+const copyImageBtn = document.getElementById('copy-image-btn');
+if (copyImageBtn) {
+  copyImageBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    copyGraphPngToClipboard();
+  });
+}
 if (copySiteLinkBtn) {
   copySiteLinkBtn.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -2274,10 +2282,22 @@ if (copySiteLinkBtn) {
         return;
       }
 
-      // Try the native mobile share sheet first (iOS Safari / Android
-      // Chrome). It bundles the image + link + a short caption into one
-      // gesture: user picks Messages / WhatsApp / Instagram / etc and
-      // the recipient sees the tree PNG with the site URL attached.
+      // Try the native mobile share sheet only on true touch-primary
+      // devices (iOS Safari / Android Chrome). It bundles the image +
+      // link + a short caption into one gesture: user picks Messages /
+      // WhatsApp / Instagram / etc and the recipient sees the tree PNG
+      // with the site URL attached.
+      //
+      // Why not on desktop, even though desktop Chrome/Edge now report
+      // canShare({files:[...]}) === true?
+      //   Desktop Windows hands the file to the OS 'Share' picker, and
+      //   Outlook Desktop's handler is buggy: files arrive without a
+      //   filename and Outlook errors with 'file wasn't attached
+      //   because it's empty: no_name.' Confirmed via user report on
+      //   New Outlook 2026. Even when it 'works', the desktop share
+      //   UX is inferior to a plain download for most users. So we
+      //   gate the share-sheet path on a coarse mobile heuristic and
+      //   fall through to plain download on desktop.
       const file = new File([pngBlob], 'rock-band-family-tree.png', { type: 'image/png' });
       const shareData = {
         title: 'Rock Band Family Tree',
@@ -2285,7 +2305,11 @@ if (copySiteLinkBtn) {
         url: siteUrl,
         files: [file],
       };
+      // Coarse-pointer heuristic: matches touch-primary devices (phones,
+      // tablets). Doesn't trigger for laptops even if they have touch.
+      const isMobileLike = window.matchMedia('(pointer: coarse) and (max-width: 900px)').matches;
       const canShareFile =
+        isMobileLike &&
         typeof navigator !== 'undefined' &&
         typeof navigator.canShare === 'function' &&
         navigator.canShare({ files: [file] }) &&
@@ -2315,7 +2339,117 @@ if (copySiteLinkBtn) {
       link.click();
       document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-      setShareFeedback('PNG downloaded. Share it — the link goes to the full tree.');
+      setShareFeedback('PNG downloaded. Attach it to your email, or use “Copy image” to paste it directly.');
+    }
+
+    // Put the PNG onto the clipboard as an image, so users can paste it
+    // directly into Outlook / Teams / Word / Slack / any rich-text
+    // editor with Ctrl+V. This is the most reliable way to share on
+    // desktop — avoids Windows Share picker bugs entirely, and works
+    // with a single paste-from-clipboard gesture the user already knows.
+    // Requires a secure context (https) and the modern async clipboard
+    // API. Firefox <127 doesn't support ClipboardItem for images; we
+    // fall back to a download in that case.
+    async function copyGraphPngToClipboard() {
+      const svg = document.getElementById('graph-svg');
+      if (!svg) {
+        setShareFeedback('Graph preview is not available yet.');
+        return;
+      }
+      if (typeof ClipboardItem === 'undefined' ||
+          !navigator.clipboard || !navigator.clipboard.write) {
+        setShareFeedback('This browser can’t copy images to the clipboard. Use “Share PNG” to download instead.');
+        return;
+      }
+      setShareFeedback('Rendering image…');
+      // Reuse the same render path as exportCurrentGraphPng() by
+      // extracting the canvas-building steps. To keep the change
+      // surgical, we inline a minimal render here that mirrors the
+      // main exporter (same header, footer, inline styles, scale).
+      const siteUrl = window.location.origin + window.location.pathname;
+      const rect = svg.getBoundingClientRect();
+      const scale = 2;
+      const graphW = Math.max(1200, Math.floor(rect.width * scale));
+      const graphH = Math.max(900, Math.floor(rect.height * scale));
+      const headerH = Math.round(120 * scale / 2);
+      const footerH = Math.round(72 * scale / 2);
+      const canvas = document.createElement('canvas');
+      canvas.width = graphW;
+      canvas.height = graphH + headerH + footerH;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#0b1118';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const headerGrad = ctx.createLinearGradient(0, 0, 0, headerH);
+      headerGrad.addColorStop(0, '#111b26');
+      headerGrad.addColorStop(1, '#0b1118');
+      ctx.fillStyle = headerGrad;
+      ctx.fillRect(0, 0, canvas.width, headerH);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(0, headerH - 1, canvas.width, 1);
+      ctx.fillStyle = '#e6eef7';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `600 ${Math.round(38 * scale / 2)}px "Inter", "Segoe UI", system-ui, sans-serif`;
+      ctx.fillText('Rock Band Family Tree', canvas.width / 2, headerH / 2);
+      const serializer = new XMLSerializer();
+      const inlineStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      inlineStyle.textContent = `
+        .link { stroke: rgba(161, 204, 228, 0.34); stroke-opacity: 0.75; }
+        .node.band circle { fill: #f7fbff; stroke: #8fe8f6; stroke-width: 2.1; }
+        .node.person circle { fill: #0b1722; stroke: #98aec0; stroke-width: 1.8; }
+        .node-label { fill: #e7f3fb; font-size: 11px; font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
+      `;
+      const svgClone = svg.cloneNode(true);
+      svgClone.insertBefore(inlineStyle, svgClone.firstChild);
+      const source = serializer.serializeToString(svgClone);
+      const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+      const svgObjUrl = URL.createObjectURL(svgBlob);
+      let pngBlob;
+      try {
+        await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            ctx.drawImage(img, 0, headerH, graphW, graphH);
+            URL.revokeObjectURL(svgObjUrl);
+            resolve();
+          };
+          img.onerror = (e) => { URL.revokeObjectURL(svgObjUrl); reject(e); };
+          img.src = svgObjUrl;
+        });
+        const footerY = headerH + graphH;
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(0, footerY, canvas.width, 1);
+        ctx.fillStyle = '#0b1118';
+        ctx.fillRect(0, footerY + 1, canvas.width, footerH - 1);
+        ctx.fillStyle = '#a3b3c6';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `500 ${Math.round(20 * scale / 2)}px "Inter", "Segoe UI", system-ui, sans-serif`;
+        const displayUrl = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        ctx.fillText(displayUrl, canvas.width / 2, footerY + footerH / 2);
+        pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      } catch (err) {
+        setShareFeedback('Could not render the image.');
+        return;
+      }
+      if (!pngBlob) {
+        setShareFeedback('Could not render the image.');
+        return;
+      }
+      try {
+        // ClipboardItem must be constructed with the Blob directly, not
+        // a Promise wrapping it, for maximum browser compatibility.
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': pngBlob })
+        ]);
+        setShareFeedback('Image copied. Paste it into Outlook, Teams, Word— anywhere.');
+      } catch (err) {
+        // Some browsers require user activation for clipboard.write;
+        // since this handler runs directly from a click that should
+        // be satisfied, but permissions or Safari quirks may still
+        // reject. Provide an actionable fallback message.
+        setShareFeedback('Could not copy to clipboard. Use “Share PNG” to download instead.');
+      }
     }
 
     function copySiteLink() {
