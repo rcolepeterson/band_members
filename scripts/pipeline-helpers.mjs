@@ -51,6 +51,18 @@ function extractYear(v) {
 //   - hasBeginArea:               city known (scene filter works). +1
 //   - hasBeginYear:               band lifespan known. +1
 //
+// The `origin` parameter distinguishes two ingestion paths:
+//   - 'bridge-fill'   (default): candidate was discovered because an
+//                     existing seed person is a member. Requires >=1
+//                     bridge to score any bridge points — that's the
+//                     whole reason it was discovered.
+//   - 'direct-ingest': operator explicitly named this band in the
+//                      config. It's INCLUDED BY REQUEST, so it gets
+//                      the bridge points automatically (as an 'operator
+//                      bridge'). Otherwise obviously-wanted iconic bands
+//                      like Oasis/Blur would score lower than obscure
+//                      side projects.
+//
 // Total possible = 9. Tiers:
 //   >= 7  -> "high"    (auto-merge candidate)
 //   4-6   -> "medium"  (staging for human review)
@@ -62,10 +74,22 @@ export function scoreCandidate({
   hasWikipediaArticle = false,
   hasBeginArea = false,
   hasBeginYear = false,
+  origin = 'bridge-fill',
 } = {}) {
   const signals = {};
   let score = 0;
-  if (existingConnections >= 1) { signals.bridge = true; score += 2; }
+  // The operator explicitly asked for direct-ingest bands, so we treat
+  // the request itself as the "bridge" signal. A direct-ingest band with
+  // real graph overlap still gets the multi-bridge bonus if applicable.
+  const isDirectIngest = origin === 'direct-ingest' || origin === 'direct-ingest+bridge';
+  if (isDirectIngest) {
+    signals.bridge = true;
+    signals.operatorRequested = true;
+    score += 2;
+  } else if (existingConnections >= 1) {
+    signals.bridge = true;
+    score += 2;
+  }
   if (existingConnections >= 3) { signals.multiBridge = true; score += 1; }
   if (memberCount >= 3) { signals.notability = true; score += 2; }
   if (hasWikipediaArticle) { signals.wikipedia = true; score += 2; }

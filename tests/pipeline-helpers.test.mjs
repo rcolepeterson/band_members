@@ -157,6 +157,68 @@ test('scoreCandidate: memberCount < 3 loses notability signal', () => {
   assert.equal(three.signals.notability, true);
 });
 
+test('scoreCandidate: direct-ingest band with no bridges still gets bridge points', () => {
+  // Blur has 4 members, none in graph. Under bridge-fill scoring it
+  // would score 2 (notability) + 2 (wiki) + 1 (city) + 1 (year) = 6 (medium).
+  // Under direct-ingest scoring it gets +2 for operator-requested = 8 (high).
+  const bridgeFill = scoreCandidate({
+    existingConnections: 0,
+    memberCount: 4,
+    hasWikipediaArticle: true,
+    hasBeginArea: true,
+    hasBeginYear: true,
+    origin: 'bridge-fill',
+  });
+  const directIngest = scoreCandidate({
+    existingConnections: 0,
+    memberCount: 4,
+    hasWikipediaArticle: true,
+    hasBeginArea: true,
+    hasBeginYear: true,
+    origin: 'direct-ingest',
+  });
+  assert.equal(bridgeFill.score, 6);
+  assert.equal(bridgeFill.tier, 'medium');
+  assert.equal(directIngest.score, 8);
+  assert.equal(directIngest.tier, 'high');
+  assert.equal(directIngest.signals.operatorRequested, true);
+});
+
+test('scoreCandidate: direct-ingest+bridge tier still counts real bridges toward multi-bridge', () => {
+  // A direct-ingest band that ALSO happens to overlap the graph gets
+  // both the operator-requested bridge (+2) AND the multi-bridge bonus
+  // if >=3 members already exist in the graph (+1). Effectively the
+  // best of both worlds.
+  const result = scoreCandidate({
+    existingConnections: 5,
+    memberCount: 6,
+    hasWikipediaArticle: true,
+    hasBeginArea: true,
+    hasBeginYear: true,
+    origin: 'direct-ingest+bridge',
+  });
+  // 2 (operator bridge) + 1 (multi-bridge) + 2 (notability) + 2 (wiki) + 1 (city) + 1 (year) = 9
+  assert.equal(result.score, 9);
+  assert.equal(result.tier, 'high');
+  assert.equal(result.signals.operatorRequested, true);
+  assert.equal(result.signals.multiBridge, true);
+});
+
+test('scoreCandidate: default origin is bridge-fill (backward compat)', () => {
+  // Existing callers that don't pass origin keep the old behavior.
+  const withoutOrigin = scoreCandidate({
+    existingConnections: 1, memberCount: 3,
+    hasWikipediaArticle: false, hasBeginArea: false, hasBeginYear: false,
+  });
+  const withBridgeFill = scoreCandidate({
+    existingConnections: 1, memberCount: 3,
+    hasWikipediaArticle: false, hasBeginArea: false, hasBeginYear: false,
+    origin: 'bridge-fill',
+  });
+  assert.equal(withoutOrigin.score, withBridgeFill.score);
+  assert.equal(withoutOrigin.tier, withBridgeFill.tier);
+});
+
 test('CONFIDENCE_TIERS thresholds match scoreCandidate boundaries', () => {
   // Guard against silent drift between the score function and the
   // documented tier boundaries.

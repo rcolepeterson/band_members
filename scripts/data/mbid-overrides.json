@@ -34,5 +34,20 @@
     "mbid": "ca891d65-d9b0-4258-89f7-e6ba29d83767",
     "source": "manual",
     "note": "Verified 2026-07-14 — the English heavy metal band, formed 1975-12-25 in Leyton, London."
+  },
+  "Heart": {
+    "mbid": "bdbd48f5-abf3-4a4f-9a21-4551dbc3fde9",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — Ann & Nancy Wilson's Seattle rock band, begin=1967. Top-connected band in the graph with 42 members."
+  },
+  "Yes": {
+    "mbid": "c1d4f2ba-cf39-460c-9528-6b827d3417a1",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — the British prog-rock band (Anderson/Squire), begin=1968. 'Yes' is a common English word so pin is critical."
+  },
+  "Scream": {
+    "mbid": "b9f52132-28af-4cea-9558-165cd125f9b7",
+    "source": "manual",
+    "note": "Verified 2026-07-14 — DC hardcore band (Franz Stahl / Pete Stahl / Dave Grohl), NOT Primal Scream which scores higher in fuzzy search. Critical override."
   }
 }
