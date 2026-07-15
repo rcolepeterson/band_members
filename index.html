@@ -543,6 +543,51 @@ body {
   box-shadow: 0 16px 34px rgba(0,0,0,0.4);
 }
 
+/* Section labels inside the share popover: 'Send to' / 'Or use directly'.
+   Small caps, muted, tight tracking to visually separate the two groups
+   of buttons without adding heavy dividers. */
+.share-section-label {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(225, 244, 255, 0.6);
+  margin: 6px 0 6px 0;
+  font-weight: 600;
+}
+.share-section-label-secondary {
+  margin-top: 12px;
+}
+
+/* Social-share row: allow multiple lines if the popover is narrow.
+   Small gap between buttons matching the utility row. */
+.share-social-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Social-share buttons: icon + label with a tight layout. Reuses the
+   .share-popover-btn glass styling from earlier rules; adds icon layout,
+   platform-tinted hover, and better vertical alignment. */
+.share-social-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 10px;
+}
+.share-social-btn svg {
+  flex-shrink: 0;
+  color: rgba(225, 244, 255, 0.9);
+}
+.share-social-btn:hover svg {
+  color: #ffffff;
+}
+/* Subtle brand-tinted hover glow so each social feels distinct. */
+.share-social-btn[data-social="facebook"]:hover { box-shadow: 0 0 0 1px rgba(24,119,242,0.55) inset; }
+.share-social-btn[data-social="x"]:hover        { box-shadow: 0 0 0 1px rgba(255,255,255,0.55) inset; }
+.share-social-btn[data-social="reddit"]:hover   { box-shadow: 0 0 0 1px rgba(255,86,0,0.55) inset; }
+.share-social-btn[data-social="email"]:hover    { box-shadow: 0 0 0 1px rgba(143,232,246,0.55) inset; }
+
 .panel.stack,
 .detail-card,
 .metric-card {
@@ -1771,12 +1816,32 @@ main.layout { padding: 0 !important; gap: 0 !important; }
               <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
               <div class="share-popover-title">Share this graph</div>
               <p class="share-popover-copy">
-                Share the current view as a PNG (with a header + site URL baked in) or copy the main site link. Recipients always land on the full tree so they can start exploring right away.
+                Send it to your favorite platform. When you pick one, the image is copied to your clipboard so you can paste it into the post.
               </p>
+              <div class="share-section-label">Send to</div>
+              <div class="share-popover-actions share-social-row">
+                <button class="primary-btn share-popover-btn share-social-btn" type="button" id="share-facebook-btn" data-social="facebook" aria-label="Share to Facebook">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M13.5 21v-8h2.7l.4-3.2H13.5V7.7c0-.9.3-1.6 1.6-1.6h1.7V3.2C16.5 3.1 15.5 3 14.4 3c-2.4 0-4 1.4-4 4.1v2.7H7.6V13h2.7v8h3.2z"/></svg>
+                  Facebook
+                </button>
+                <button class="primary-btn share-popover-btn share-social-btn" type="button" id="share-x-btn" data-social="x" aria-label="Share to X">
+                  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                  X
+                </button>
+                <button class="primary-btn share-popover-btn share-social-btn" type="button" id="share-reddit-btn" data-social="reddit" aria-label="Share to Reddit">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M22 12.1a2.1 2.1 0 0 0-3.55-1.5c-1.4-.95-3.3-1.55-5.4-1.6L14.15 4l3 .65a1.5 1.5 0 1 0 .15-.95l-3.35-.72a.35.35 0 0 0-.4.25L12.4 8.95c-2.15.05-4.05.65-5.5 1.65a2.1 2.1 0 1 0-2.35 3.4 3.85 3.85 0 0 0-.05.6c0 3.2 3.6 5.8 8.05 5.8s8.05-2.6 8.05-5.8c0-.2-.02-.4-.05-.6A2.1 2.1 0 0 0 22 12.1zm-13 1.5a1.35 1.35 0 1 1 2.7 0 1.35 1.35 0 0 1-2.7 0zm7.2 3.9c-.85.85-2.5.95-3.2.95s-2.35-.1-3.2-.95a.35.35 0 0 1 .5-.5c.55.55 1.7.7 2.7.7s2.15-.15 2.7-.7a.35.35 0 1 1 .5.5zm-.2-2.5a1.35 1.35 0 1 1 0-2.7 1.35 1.35 0 0 1 0 2.7z"/></svg>
+                  Reddit
+                </button>
+                <button class="primary-btn share-popover-btn share-social-btn" type="button" id="share-email-btn" data-social="email" aria-label="Share by email">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 6h18v12H3z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 6l9 7 9-7"/></svg>
+                  Email
+                </button>
+              </div>
+              <div class="share-section-label share-section-label-secondary">Or use directly</div>
               <div class="share-popover-actions">
-                <button class="primary-btn share-popover-btn" type="button" id="download-png-btn">Share PNG</button>
                 <button class="primary-btn share-popover-btn" type="button" id="copy-image-btn">Copy image</button>
-                <button class="primary-btn share-popover-btn" type="button" id="copy-site-link-btn">Copy site link</button>
+                <button class="primary-btn share-popover-btn" type="button" id="download-png-btn">Download PNG</button>
+                <button class="primary-btn share-popover-btn" type="button" id="copy-site-link-btn">Copy link</button>
               </div>
               <div class="share-popover-feedback" id="share-popover-feedback" aria-live="polite">
                 Prepare a view you like, then share it.
@@ -2048,12 +2113,68 @@ function getNodeStrokeWidth(node) {
   if (shouldOpen) setShareFeedback('Prepare a view you like, then share it.');
 }
 
+// Mobile-primary heuristic: touch-primary (coarse pointer) AND narrow
+// viewport. Phones/tablets match; laptops don't. Used in two places:
+//   1. Top-level 'Share this graph' button — on mobile it bypasses the
+//      web popover entirely and opens the native OS share sheet, which
+//      exposes every messaging/social app installed on the device
+//      (Messages, WhatsApp, Instagram DM, Snapchat, Telegram, Reddit
+//      app, TikTok, AirDrop, etc.) with the image + link attached.
+//   2. exportCurrentGraphPng() — gates the navigator.share() path so
+//      it never fires on desktop Windows (Outlook 'no_name' bug).
+function isMobilePrimary() {
+  return window.matchMedia('(pointer: coarse) and (max-width: 900px)').matches;
+}
+
 if (shareGraphBtn) {
-  shareGraphBtn.addEventListener('click', (event) => {
+  shareGraphBtn.addEventListener('click', async (event) => {
     event.stopPropagation();
     closeBottomPopovers();
+    // Mobile shortcut: open the native OS share sheet directly. Way
+    // better than our web picker — shows every installed app.
+    if (isMobilePrimary()) {
+      const opened = await tryNativeShare();
+      if (opened) return; // user picked an app; done.
+      // If share() failed or was rejected before it could open (rare on
+      // mobile, but possible if canShare returns false), fall through
+      // to the web popover so they at least have options.
+    }
     toggleSharePopover();
   });
+}
+
+// Build the PNG blob + attempt navigator.share() with it. Returns
+// true if the OS share sheet was successfully opened (whether or
+// not the user picked an app — an AbortError from cancellation still
+// counts as success here because the flow completed as expected).
+// Returns false only when the platform can't share files at all, or
+// when the rendering itself failed.
+async function tryNativeShare() {
+  const svg = document.getElementById('graph-svg');
+  if (!svg) return false;
+  const siteUrl = window.location.origin + window.location.pathname;
+  const pngBlob = await renderGraphPngBlob();
+  if (!pngBlob) return false;
+  const file = new File([pngBlob], 'rock-band-family-tree.png', { type: 'image/png' });
+  if (typeof navigator.canShare !== 'function' ||
+      !navigator.canShare({ files: [file] }) ||
+      typeof navigator.share !== 'function') {
+    return false;
+  }
+  try {
+    await navigator.share({
+      title: 'Rock Band Family Tree',
+      text: `Explore how bands and musicians connect: ${siteUrl}`,
+      url: siteUrl,
+      files: [file],
+    });
+    return true;
+  } catch (err) {
+    // User cancelled the sheet — still 'opened successfully' from our
+    // perspective; no need to fall back to the popover.
+    if (err && err.name === 'AbortError') return true;
+    return false;
+  }
 }
 
 // Wire the two share-popover action buttons. These were declared above
@@ -2080,6 +2201,89 @@ if (copySiteLinkBtn) {
     copySiteLink();
   });
 }
+
+// --- Social share buttons ---
+//
+// Each button does two things simultaneously:
+//   1. Copy the branded PNG to the user's clipboard so they can paste
+//      it into the platform's compose window (image goes in the post).
+//   2. Open the platform's official share/compose window in a new tab,
+//      pre-filled with a caption + the main site URL.
+//
+// Why both? Because the major social platforms' public share endpoints
+// (Facebook sharer, X intent, Reddit submit, mailto) accept text/URL
+// pre-fill but NOT direct image upload from a URL. This is a platform
+// limitation, not a browser one. So the two-step 'clipboard + compose'
+// pattern is the closest thing to native 'share to Facebook' on the
+// desktop web. The caption+link go in automatically; the user pastes
+// the image with Ctrl+V. One click on our end.
+//
+// For each: intent URL uses the platform's documented endpoint format
+// (won't break — these have been stable for years).
+async function shareToSocial(platform) {
+  const siteUrl = window.location.origin + window.location.pathname;
+  const title = 'Rock Band Family Tree';
+  const caption = 'Explore how bands and musicians connect across scenes and decades.';
+
+  // Kick off image render + clipboard copy in parallel with opening the
+  // compose window. We open the window synchronously in the click handler
+  // so popup blockers don't block it — async paths that pop windows
+  // *after* an await are the ones that get killed.
+  let intentUrl;
+  switch (platform) {
+    case 'facebook':
+      intentUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(siteUrl)}`;
+      break;
+    case 'x':
+      intentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(caption)}&url=${encodeURIComponent(siteUrl)}`;
+      break;
+    case 'reddit':
+      intentUrl = `https://www.reddit.com/submit?url=${encodeURIComponent(siteUrl)}&title=${encodeURIComponent(title)}`;
+      break;
+    case 'email':
+      intentUrl = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(caption + '\n\n' + siteUrl + '\n\n(Tip: paste the graph image into the email body.)')}`;
+      break;
+    default:
+      return;
+  }
+
+  // Open the compose window *first* so it's inside the user-gesture
+  // window and won't be popup-blocked. For mailto:, use location=self
+  // since it hands off to the mail client, not a new tab.
+  if (platform === 'email') {
+    window.location.href = intentUrl;
+  } else {
+    window.open(intentUrl, '_blank', 'noopener,noreferrer');
+  }
+
+  // Now copy the branded PNG to the clipboard so the user can paste it
+  // into the compose window they just opened. Best-effort: if the
+  // browser can't (older Firefox), the compose window still gets the
+  // caption+link and we tell them to grab the image manually.
+  const platformName = platform === 'x' ? 'X' : platform.charAt(0).toUpperCase() + platform.slice(1);
+  if (typeof ClipboardItem === 'undefined' || !navigator.clipboard || !navigator.clipboard.write) {
+    setShareFeedback(`Opened ${platformName}. Use “Download PNG” to grab the image, then attach it.`);
+    return;
+  }
+  setShareFeedback(`Opening ${platformName}… rendering image…`);
+  try {
+    const pngBlob = await renderGraphPngBlob();
+    if (!pngBlob) throw new Error('render failed');
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+    setShareFeedback(`Opened ${platformName}. Image is on your clipboard — paste it into the post.`);
+  } catch (err) {
+    setShareFeedback(`Opened ${platformName}. Couldn’t auto-copy the image — use “Copy image” and try again.`);
+  }
+}
+
+['facebook', 'x', 'reddit', 'email'].forEach(platform => {
+  const btn = document.getElementById(`share-${platform}-btn`);
+  if (!btn) return;
+  btn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    shareToSocial(platform);
+  });
+});
 
     // Bottom-floating panel toggles (Add your band). Same click-to-open,
     // click-outside-to-close pattern as the share popover. Project Pulse
@@ -2178,6 +2382,93 @@ if (copySiteLinkBtn) {
     // back to a plain <a download> trigger. The link that accompanies
     // the image is always the bare main-site URL — no filter state — so
     // the recipient lands on the full graph and can start exploring.
+    // Shared PNG renderer used by exportCurrentGraphPng,
+    // copyGraphPngToClipboard, tryNativeShare, and shareToSocial. Renders
+    // the current SVG graph into a canvas with the branded header
+    // ('Rock Band Family Tree') and footer (site URL), converts to a
+    // PNG Blob, and returns it. Returns null on any failure. See the
+    // long comment in the old exporter for the rationale on inlining
+    // the SVG stylesheet before serialization — external CSS doesn't
+    // apply when an SVG is loaded back into an <img> for drawImage.
+    async function renderGraphPngBlob() {
+      const svg = document.getElementById('graph-svg');
+      if (!svg) return null;
+      const siteUrl = window.location.origin + window.location.pathname;
+      const rect = svg.getBoundingClientRect();
+      const scale = 2;
+      const graphW = Math.max(1200, Math.floor(rect.width * scale));
+      const graphH = Math.max(900, Math.floor(rect.height * scale));
+      const headerH = Math.round(120 * scale / 2);
+      const footerH = Math.round(72 * scale / 2);
+      const canvas = document.createElement('canvas');
+      canvas.width = graphW;
+      canvas.height = graphH + headerH + footerH;
+      const ctx = canvas.getContext('2d');
+
+      // Solid background matching the app's stage color.
+      ctx.fillStyle = '#0b1118';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Header strip (top): app name banner.
+      const headerGrad = ctx.createLinearGradient(0, 0, 0, headerH);
+      headerGrad.addColorStop(0, '#111b26');
+      headerGrad.addColorStop(1, '#0b1118');
+      ctx.fillStyle = headerGrad;
+      ctx.fillRect(0, 0, canvas.width, headerH);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(0, headerH - 1, canvas.width, 1);
+      ctx.fillStyle = '#e6eef7';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `600 ${Math.round(38 * scale / 2)}px "Inter", "Segoe UI", system-ui, sans-serif`;
+      ctx.fillText('Rock Band Family Tree', canvas.width / 2, headerH / 2);
+
+      // Serialize the live SVG with inline stylesheet.
+      const serializer = new XMLSerializer();
+      const inlineStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      inlineStyle.textContent = `
+        .link { stroke: rgba(161, 204, 228, 0.34); stroke-opacity: 0.75; }
+        .node.band circle { fill: #f7fbff; stroke: #8fe8f6; stroke-width: 2.1; }
+        .node.person circle { fill: #0b1722; stroke: #98aec0; stroke-width: 1.8; }
+        .node-label { fill: #e7f3fb; font-size: 11px; font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
+      `;
+      const svgClone = svg.cloneNode(true);
+      svgClone.insertBefore(inlineStyle, svgClone.firstChild);
+      const source = serializer.serializeToString(svgClone);
+      const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+      const svgObjUrl = URL.createObjectURL(svgBlob);
+
+      try {
+        await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            ctx.drawImage(img, 0, headerH, graphW, graphH);
+            URL.revokeObjectURL(svgObjUrl);
+            resolve();
+          };
+          img.onerror = (e) => { URL.revokeObjectURL(svgObjUrl); reject(e); };
+          img.src = svgObjUrl;
+        });
+
+        // Footer strip (bottom): site URL so viewers know where to go.
+        const footerY = headerH + graphH;
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(0, footerY, canvas.width, 1);
+        ctx.fillStyle = '#0b1118';
+        ctx.fillRect(0, footerY + 1, canvas.width, footerH - 1);
+        ctx.fillStyle = '#a3b3c6';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `500 ${Math.round(20 * scale / 2)}px "Inter", "Segoe UI", system-ui, sans-serif`;
+        const displayUrl = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        ctx.fillText(displayUrl, canvas.width / 2, footerY + footerH / 2);
+
+        return await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      } catch (err) {
+        return null;
+      }
+    }
+
     async function exportCurrentGraphPng() {
       const svg = document.getElementById('graph-svg');
       if (!svg) {
