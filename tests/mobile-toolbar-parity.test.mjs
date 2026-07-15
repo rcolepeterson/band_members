@@ -267,3 +267,51 @@ test('every non-filter tool-chip with an id has a dedicated click handler', () =
       `is a filter/action chip.`
   );
 });
+
+test('regression: hookPopoverForMobile detaches add-band-popover to <body> on mobile-open (PR #44)', () => {
+  // The add-band popover markup lives inside .graph-overlay-top,
+  // which the mobile stylesheet forces to display:none. Without
+  // moving the panel out of that subtree on mobile-open, no amount
+  // of position:fixed on the panel itself makes it paint — the
+  // ancestor's display:none removes the whole subtree from the
+  // render tree. This test locks in the "detach to <body>" rescue
+  // introduced in PR #44 so a future refactor of hookPopoverForMobile
+  // doesn't quietly re-break the mobile Add-your-band form.
+  const hookMatch = INDEX_HTML.match(
+    /function\s+hookPopoverForMobile\s*\([^)]*\)\s*\{([\s\S]*?)\n\s{8}\}\s*\n/
+  );
+  assert.ok(hookMatch, 'Expected to find function hookPopoverForMobile in index.html.');
+  const body = stripJsComments(hookMatch[1]);
+
+  assert.ok(
+    /document\.body\.appendChild\s*\(\s*popover\s*\)/.test(body),
+    'hookPopoverForMobile must move the popover to <body> on mobile-open ' +
+      '(document.body.appendChild(popover)). Otherwise the ancestor ' +
+      '.graph-overlay-top display:none keeps the panel from rendering.'
+  );
+
+  // And it must be able to put it back so desktop popover machinery
+  // (bottomPopovers array, clampPopover, close buttons) still finds
+  // it in place when the viewport resizes above 900px.
+  assert.ok(
+    /insertBefore\s*\(\s*popover\s*,/.test(body) || /appendChild\s*\(\s*popover\s*\)/.test(body.replace('document.body.appendChild(popover)', '')),
+    'hookPopoverForMobile must restore the popover to its original ' +
+      'parent on close / viewport-resize, otherwise the desktop popover ' +
+      'machinery loses track of it.'
+  );
+});
+
+test('regression: mobile add-band bottom-sheet CSS is not the only defense', () => {
+  // Cross-check the CSS: the mobile #add-band-popover.is-open-mobile
+  // rules must exist AND the code comment should acknowledge that
+  // the panel has to be moved out of .graph-overlay-top for those
+  // rules to apply. This exists so if someone deletes the JS rescue
+  // and thinks the CSS alone is enough, the test fires with an
+  // explanation.
+  const cssMatch = INDEX_HTML.match(/#add-band-popover\.is-open-mobile\s*\{[^}]+\}/);
+  assert.ok(cssMatch, 'Expected #add-band-popover.is-open-mobile ruleset in index.html.');
+  assert.ok(
+    /position:\s*fixed/.test(cssMatch[0]) && /bottom:\s*0/.test(cssMatch[0]),
+    'Mobile add-band bottom-sheet must be position:fixed + bottom:0.'
+  );
+});
