@@ -2432,11 +2432,29 @@ async function shareToSocial(platform) {
       if (!svg) return null;
       const siteUrl = window.location.origin + window.location.pathname;
       const rect = svg.getBoundingClientRect();
-      const scale = 2;
-      const graphW = Math.max(1200, Math.floor(rect.width * scale));
-      const graphH = Math.max(900, Math.floor(rect.height * scale));
-      const headerH = Math.round(120 * scale / 2);
-      const footerH = Math.round(72 * scale / 2);
+
+      // Aspect-ratio-preserving sizing. Previous version used
+      // Math.max(1200, ...) and Math.max(900, ...) as floors which
+      // silently stretched the graph horizontally on mobile (a 390px
+      // portrait viewport was rendered onto a 1200x1520 canvas — the
+      // graph got squashed 1.54× wide). We now scale the whole canvas
+      // by a single factor and let the aspect ratio be whatever the
+      // stage actually is (portrait on phones, landscape on desktops).
+      //
+      // scale is chosen so the output is at least ~1200 CSS pixels
+      // wide (so mobile shares aren't pixel-tiny) but never less than
+      // 2× (retina quality on desktop). Header/footer heights scale in
+      // proportion so the banner text stays visually consistent across
+      // aspect ratios.
+      const MIN_OUTPUT_WIDTH = 1200;
+      const scale = Math.max(2, MIN_OUTPUT_WIDTH / Math.max(rect.width, 1));
+      const graphW = Math.floor(rect.width * scale);
+      const graphH = Math.floor(rect.height * scale);
+      // Header ≈ 120px, footer ≈ 72px at scale=2 (matches the design
+      // spec: banner should read as ~7-10% of the total canvas height
+      // on desktop, up to ~15% on tall portrait mobile shots).
+      const headerH = Math.round(60 * scale);
+      const footerH = Math.round(36 * scale);
       const canvas = document.createElement('canvas');
       canvas.width = graphW;
       canvas.height = graphH + headerH + footerH;
@@ -2446,7 +2464,9 @@ async function shareToSocial(platform) {
       ctx.fillStyle = '#0b1118';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Header strip (top): app name banner.
+      // Header strip (top): app name banner. Text size scales with
+      // canvas so the title stays readable on tiny thumbnails and
+      // proportionate on big desktop exports.
       const headerGrad = ctx.createLinearGradient(0, 0, 0, headerH);
       headerGrad.addColorStop(0, '#111b26');
       headerGrad.addColorStop(1, '#0b1118');
@@ -2457,7 +2477,7 @@ async function shareToSocial(platform) {
       ctx.fillStyle = '#e6eef7';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = `600 ${Math.round(38 * scale / 2)}px "Inter", "Segoe UI", system-ui, sans-serif`;
+      ctx.font = `600 ${Math.round(19 * scale)}px "Inter", "Segoe UI", system-ui, sans-serif`;
       ctx.fillText('Rock Band Family Tree', canvas.width / 2, headerH / 2);
 
       // Serialize the live SVG with inline stylesheet.
@@ -2496,7 +2516,7 @@ async function shareToSocial(platform) {
         ctx.fillStyle = '#a3b3c6';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = `500 ${Math.round(20 * scale / 2)}px "Inter", "Segoe UI", system-ui, sans-serif`;
+        ctx.font = `500 ${Math.round(10 * scale)}px "Inter", "Segoe UI", system-ui, sans-serif`;
         const displayUrl = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
         ctx.fillText(displayUrl, canvas.width / 2, footerY + footerH / 2);
 
@@ -2513,98 +2533,15 @@ async function shareToSocial(platform) {
         return;
       }
       const siteUrl = window.location.origin + window.location.pathname;
-      const rect = svg.getBoundingClientRect();
-      const scale = 2; // 2x for retina-quality output
-      const graphW = Math.max(1200, Math.floor(rect.width * scale));
-      const graphH = Math.max(900, Math.floor(rect.height * scale));
-      const headerH = Math.round(120 * scale / 2); // ~120px at 1x
-      const footerH = Math.round(72 * scale / 2);  // ~72px at 1x
-      const canvas = document.createElement('canvas');
-      canvas.width = graphW;
-      canvas.height = graphH + headerH + footerH;
-      const ctx = canvas.getContext('2d');
-
-      // Solid background matches the app's stage color.
-      ctx.fillStyle = '#0b1118';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // --- Header strip (top): app name + subtle divider
-      // Slight gradient so it reads as a banner, not a flat bar.
-      const headerGrad = ctx.createLinearGradient(0, 0, 0, headerH);
-      headerGrad.addColorStop(0, '#111b26');
-      headerGrad.addColorStop(1, '#0b1118');
-      ctx.fillStyle = headerGrad;
-      ctx.fillRect(0, 0, canvas.width, headerH);
-      // 1px divider between header and graph
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.fillRect(0, headerH - 1, canvas.width, 1);
-      // Title, centered horizontally, vertically centered in the header.
-      ctx.fillStyle = '#e6eef7';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = `600 ${Math.round(38 * scale / 2)}px "Inter", "Segoe UI", system-ui, sans-serif`;
-      ctx.fillText('Rock Band Family Tree', canvas.width / 2, headerH / 2);
-
-      // Serialize the live SVG and draw it into the middle band. We inject
-      // an inline <style> tag into the serialized copy because when the SVG
-      // is loaded back into an <img> for canvas.drawImage(), external CSS
-      // rules (like .link { stroke: ... } and .node.band circle { fill: ... })
-      // do NOT apply — the <img> renders the SVG in isolation. Without this,
-      // the exported PNG would show only default black lines and unstyled
-      // circles. Mirror the on-page CSS for these classes so the export
-      // looks like what the user sees on the stage.
-      const serializer = new XMLSerializer();
-      const inlineStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-      inlineStyle.textContent = `
-        .link { stroke: rgba(161, 204, 228, 0.34); stroke-opacity: 0.75; }
-        .node.band circle { fill: #f7fbff; stroke: #8fe8f6; stroke-width: 2.1; }
-        .node.person circle { fill: #0b1722; stroke: #98aec0; stroke-width: 1.8; }
-        .node-label { fill: #e7f3fb; font-size: 11px; font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
-      `;
-      const svgClone = svg.cloneNode(true);
-      svgClone.insertBefore(inlineStyle, svgClone.firstChild);
-      const source = serializer.serializeToString(svgClone);
-      const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-      const svgUrl = URL.createObjectURL(svgBlob);
-
-      let pngBlob;
-      try {
-        await new Promise((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => {
-            ctx.drawImage(img, 0, headerH, graphW, graphH);
-            URL.revokeObjectURL(svgUrl);
-            resolve();
-          };
-          img.onerror = (e) => {
-            URL.revokeObjectURL(svgUrl);
-            reject(e);
-          };
-          img.src = svgUrl;
-        });
-
-        // --- Footer strip (bottom): site URL so viewers know where to go.
-        const footerY = headerH + graphH;
-        // 1px divider between graph and footer
-        ctx.fillStyle = 'rgba(255,255,255,0.08)';
-        ctx.fillRect(0, footerY, canvas.width, 1);
-        ctx.fillStyle = '#0b1118';
-        ctx.fillRect(0, footerY + 1, canvas.width, footerH - 1);
-        ctx.fillStyle = '#a3b3c6';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = `500 ${Math.round(20 * scale / 2)}px "Inter", "Segoe UI", system-ui, sans-serif`;
-        // Strip protocol for a cleaner display; the actual shared link is
-        // always the full URL, sent alongside the image on mobile share.
-        const displayUrl = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-        ctx.fillText(displayUrl, canvas.width / 2, footerY + footerH / 2);
-
-        // Convert canvas -> Blob (needed for navigator.share on mobile).
-        pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-      } catch (err) {
-        setShareFeedback('Could not generate PNG in this browser view.');
-        return;
-      }
+      // Delegate the actual canvas drawing to renderGraphPngBlob() —
+      // one source of truth for header/footer/aspect-ratio math shared
+      // with copyGraphPngToClipboard(), tryNativeShare(), and
+      // shareToSocial(). Previously all four call sites duplicated the
+      // same ~80 lines of Canvas + SVG serialization + inline-styling,
+      // and only three of them got the mobile aspect-ratio fix from
+      // PR 13 — which is exactly the kind of drift that duplication
+      // causes. Consolidating.
+      const pngBlob = await renderGraphPngBlob();
       if (!pngBlob) {
         setShareFeedback('Could not generate PNG in this browser view.');
         return;
@@ -2690,76 +2627,10 @@ async function shareToSocial(platform) {
         return;
       }
       setShareFeedback('Rendering image…');
-      // Reuse the same render path as exportCurrentGraphPng() by
-      // extracting the canvas-building steps. To keep the change
-      // surgical, we inline a minimal render here that mirrors the
-      // main exporter (same header, footer, inline styles, scale).
-      const siteUrl = window.location.origin + window.location.pathname;
-      const rect = svg.getBoundingClientRect();
-      const scale = 2;
-      const graphW = Math.max(1200, Math.floor(rect.width * scale));
-      const graphH = Math.max(900, Math.floor(rect.height * scale));
-      const headerH = Math.round(120 * scale / 2);
-      const footerH = Math.round(72 * scale / 2);
-      const canvas = document.createElement('canvas');
-      canvas.width = graphW;
-      canvas.height = graphH + headerH + footerH;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#0b1118';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      const headerGrad = ctx.createLinearGradient(0, 0, 0, headerH);
-      headerGrad.addColorStop(0, '#111b26');
-      headerGrad.addColorStop(1, '#0b1118');
-      ctx.fillStyle = headerGrad;
-      ctx.fillRect(0, 0, canvas.width, headerH);
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.fillRect(0, headerH - 1, canvas.width, 1);
-      ctx.fillStyle = '#e6eef7';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = `600 ${Math.round(38 * scale / 2)}px "Inter", "Segoe UI", system-ui, sans-serif`;
-      ctx.fillText('Rock Band Family Tree', canvas.width / 2, headerH / 2);
-      const serializer = new XMLSerializer();
-      const inlineStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-      inlineStyle.textContent = `
-        .link { stroke: rgba(161, 204, 228, 0.34); stroke-opacity: 0.75; }
-        .node.band circle { fill: #f7fbff; stroke: #8fe8f6; stroke-width: 2.1; }
-        .node.person circle { fill: #0b1722; stroke: #98aec0; stroke-width: 1.8; }
-        .node-label { fill: #e7f3fb; font-size: 11px; font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
-      `;
-      const svgClone = svg.cloneNode(true);
-      svgClone.insertBefore(inlineStyle, svgClone.firstChild);
-      const source = serializer.serializeToString(svgClone);
-      const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-      const svgObjUrl = URL.createObjectURL(svgBlob);
-      let pngBlob;
-      try {
-        await new Promise((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => {
-            ctx.drawImage(img, 0, headerH, graphW, graphH);
-            URL.revokeObjectURL(svgObjUrl);
-            resolve();
-          };
-          img.onerror = (e) => { URL.revokeObjectURL(svgObjUrl); reject(e); };
-          img.src = svgObjUrl;
-        });
-        const footerY = headerH + graphH;
-        ctx.fillStyle = 'rgba(255,255,255,0.08)';
-        ctx.fillRect(0, footerY, canvas.width, 1);
-        ctx.fillStyle = '#0b1118';
-        ctx.fillRect(0, footerY + 1, canvas.width, footerH - 1);
-        ctx.fillStyle = '#a3b3c6';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = `500 ${Math.round(20 * scale / 2)}px "Inter", "Segoe UI", system-ui, sans-serif`;
-        const displayUrl = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-        ctx.fillText(displayUrl, canvas.width / 2, footerY + footerH / 2);
-        pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-      } catch (err) {
-        setShareFeedback('Could not render the image.');
-        return;
-      }
+      // Use the shared renderer so all clipboard/download/share paths
+      // produce identical PNGs. See renderGraphPngBlob() for the
+      // aspect-ratio-preserving canvas math.
+      const pngBlob = await renderGraphPngBlob();
       if (!pngBlob) {
         setShareFeedback('Could not render the image.');
         return;
