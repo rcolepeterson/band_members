@@ -1,0 +1,39 @@
+{
+  "_description": "PR 7 seed. Bay Area punk/ska + 90s alt-rock beyond grunge + Faith No More. Direct-ingest bands: 8 Bay Area punk/ska/alt (Green Day, Rancid, Operation Ivy, NOFX, The Offspring, Faith No More, Mr. Bungle, Fantomas already in graph so skipped) + 11 alt-rock (Breeders, Belly, Throwing Muses, Guided by Voices, Pavement, Yo La Tengo, Sleater-Kinney, Built to Spill, Dinosaur Jr., The Lemonheads, Cake, They Might Be Giants). Bridge-persons for gap-fill (Billie Joe, Fat Mike, Jesse Michaels for Op Ivy split, Mike Patton to bridge Mr. Bungle/Fantomas/Faith No More clusters). 8 new common-name pins added (Rancid, Belly, Cake, Pavement, Lemonheads, NOFX, Faith No More, plus pre-existing).",
+  "persons": [
+    "Billie Joe Armstrong",
+    "Mike Dirnt",
+    "Fat Mike",
+    "Jesse Michaels",
+    "Mike Patton",
+    "Bill Gould",
+    "Kim Deal",
+    "Tanya Donelly",
+    "Kristin Hersh",
+    "Stephen Malkmus",
+    "Robert Pollard",
+    "J Mascis",
+    "Lou Barlow"
+  ],
+  "bands": [
+    "Green Day",
+    "Rancid",
+    "Operation Ivy",
+    "NOFX",
+    "The Offspring",
+    "Faith No More",
+    "Mr. Bungle",
+    "The Breeders",
+    "Belly",
+    "Throwing Muses",
+    "Guided by Voices",
+    "Pavement",
+    "Yo La Tengo",
+    "Sleater-Kinney",
+    "Built to Spill",
+    "Dinosaur Jr.",
+    "The Lemonheads",
+    "Cake",
+    "They Might Be Giants"
+  ]
+}

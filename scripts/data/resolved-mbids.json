@@ -1042,6 +1042,78 @@
       "name": "Rage Against the Machine",
       "score": 100,
       "resolvedAt": "2026-07-15T01:01:02.434Z"
+    },
+    "green day": {
+      "mbid": "084308bd-1654-436f-ba03-df6697104e19",
+      "name": "Green Day",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:24:39.517Z"
+    },
+    "operation ivy": {
+      "mbid": "931e1d1f-6b2f-4ff8-9f70-aa537210cd46",
+      "name": "Operation Ivy",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:24:40.355Z"
+    },
+    "offspring": {
+      "mbid": "23a03e33-a603-404e-bcbf-2c00159d7067",
+      "name": "The Offspring",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:47.018Z"
+    },
+    "mr bungle": {
+      "mbid": "277e21a9-2d64-452d-96c4-2d23a7af5891",
+      "name": "Mr. Bungle",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:47.856Z"
+    },
+    "breeders": {
+      "mbid": "667e856e-f3a7-42e9-8244-95422ef31321",
+      "name": "The Breeders",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:48.828Z"
+    },
+    "throwing muses": {
+      "mbid": "b1b9d5cc-7975-43e5-960e-670583da7bc8",
+      "name": "Throwing Muses",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:49.944Z"
+    },
+    "guided by voices": {
+      "mbid": "6c85f4c3-026c-4c16-9a7c-f546f42ed0fb",
+      "name": "Guided by Voices",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:51.040Z"
+    },
+    "yo la tengo": {
+      "mbid": "3f542031-b054-454d-b57b-812fa2a81b11",
+      "name": "Yo La Tengo",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:51.953Z"
+    },
+    "sleater-kinney": {
+      "mbid": "e36e78eb-3ace-4acd-882c-16789e700ab7",
+      "name": "Sleater-Kinney",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:53.071Z"
+    },
+    "built to spill": {
+      "mbid": "3ac482b8-1494-4071-a0e9-f192f9d2c2b0",
+      "name": "Built to Spill",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:54.141Z"
+    },
+    "dinosaur jr": {
+      "mbid": "77c167d2-4965-4421-830a-9815e4956475",
+      "name": "Dinosaur Jr.",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:55.126Z"
+    },
+    "they might be giants": {
+      "mbid": "183d6ef6-e161-47ff-9085-063c8b897e97",
+      "name": "They Might Be Giants",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:56.277Z"
     }
   },
   "persons": {
@@ -1470,7 +1542,85 @@
       "name": "Zack de la Rocha",
       "score": 100,
       "resolvedAt": "2026-07-15T01:00:56.351Z"
+    },
+    "billie joe armstrong": {
+      "mbid": "5d06fe54-485a-4a07-b506-5f6f719448cb",
+      "name": "Billie Joe Armstrong",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:24:33.661Z"
+    },
+    "mike dirnt": {
+      "mbid": "f332a312-e95b-4413-b6cc-1762a5a6a083",
+      "name": "Mike Dirnt",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:24:35.396Z"
+    },
+    "fat mike": {
+      "mbid": "a4ed62eb-2728-45f0-9290-9684547bf1ef",
+      "name": "Fat Mike",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:24:37.301Z"
+    },
+    "jesse michaels": {
+      "mbid": "cf8b6e69-523c-4a64-b2e8-c64f171b742b",
+      "name": "Jesse Michaels",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:26.169Z"
+    },
+    "mike patton": {
+      "mbid": "6e891631-d99c-4768-8bc2-5e5feb42881c",
+      "name": "Mike Patton",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:27.914Z"
+    },
+    "bill gould": {
+      "mbid": "d9710807-6216-4c6c-a1c1-5f45e333007a",
+      "name": "Bill Gould",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:29.960Z"
+    },
+    "kim deal": {
+      "mbid": "760e4df4-e851-46c8-b34d-afa2e9706831",
+      "name": "Kim Deal",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:32.083Z"
+    },
+    "tanya donelly": {
+      "mbid": "478e2b34-bda3-48c8-81e4-77efac91f3ec",
+      "name": "Tanya Donelly",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:34.131Z"
+    },
+    "kristin hersh": {
+      "mbid": "0b461f11-c7af-4ddb-a30e-5cb0aabb3e7f",
+      "name": "Kristin Hersh",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:36.316Z"
+    },
+    "stephen malkmus": {
+      "mbid": "eaefd603-84c1-4db4-a72b-0cb718a0cc07",
+      "name": "Stephen Malkmus",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:38.386Z"
+    },
+    "robert pollard": {
+      "mbid": "e7f29e49-6078-4528-a5dc-5d0eeb8a1437",
+      "name": "Robert Pollard",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:40.542Z"
+    },
+    "j mascis": {
+      "mbid": "82315599-2215-4c3e-a36f-87be58d06ec0",
+      "name": "J Mascis",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:42.526Z"
+    },
+    "lou barlow": {
+      "mbid": "6523f86d-11d3-489e-81f6-6cbe08c367de",
+      "name": "Lou Barlow",
+      "score": 100,
+      "resolvedAt": "2026-07-15T01:26:44.751Z"
     }
   },
-  "generatedAt": "2026-07-15T01:01:25.953Z"
+  "generatedAt": "2026-07-15T01:29:03.601Z"
 }
