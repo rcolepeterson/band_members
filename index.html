@@ -518,6 +518,36 @@ body {
 }
 .mobile-sheet-share .mobile-share-btn svg { flex-shrink: 0; }
 
+/* Mobile-only Add-your-band button strip. Uses the same visual pattern
+   as .mobile-sheet-share so it reads as a peer primary action. The
+   desktop Add-your-band button lives inside .graph-overlay-top which
+   is display:none on mobile (see PR 8 / PR 18), so without this row
+   mobile users have no way to reach the submission form. */
+.mobile-sheet-add-band {
+  display: flex;
+  padding: 0.6rem 0 0.4rem;
+  border-top: 1px solid rgba(225, 244, 255, 0.14);
+  margin-top: 0.4rem;
+}
+.mobile-sheet-add-band .mobile-add-band-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  padding: 0.7rem 1rem;
+  background: linear-gradient(180deg, rgba(143,232,246,0.20), rgba(143,232,246,0.08));
+  border-color: rgba(143, 232, 246, 0.55);
+  color: #f0fbff;
+}
+.mobile-sheet-add-band .mobile-add-band-btn:hover,
+.mobile-sheet-add-band .mobile-add-band-btn:focus-visible {
+  background: linear-gradient(180deg, rgba(143,232,246,0.30), rgba(143,232,246,0.14));
+  border-color: rgba(143, 232, 246, 0.85);
+}
+.mobile-sheet-add-band .mobile-add-band-btn svg { flex-shrink: 0; }
+
 .tool-chip::before,
 .tool-chip::after,
 .graph-version-pill::before,
@@ -1789,6 +1819,26 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <line x1="12" y1="2" x2="12" y2="15"/>
           </svg>
           Share this graph
+        </button>
+      </div>
+      <!--
+        Mobile Add-your-band button. The desktop Add-your-band button
+        lives inside .graph-overlay-top which was made display:none on
+        mobile in PR 18 (Unify controls into a single top toolbar), so
+        mobile users had no path to the submission form after that
+        change. Clicking this closes the sheet and triggers the desktop
+        #add-band-btn programmatically. The existing hookPopoverForMobile
+        ('add-band-popover') hook (added in PR 11) converts the popover
+        panel to a bottom sheet on mobile, so the form itself already
+        works — we just needed the trigger back.
+      -->
+      <div class="mobile-sheet-add-band">
+        <button class="tool-chip mobile-add-band-btn" type="button" id="mobile-add-band-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Add your band
         </button>
       </div>
     </aside>
@@ -5362,6 +5412,30 @@ function downloadPngBlob(blob) {
                 alert('Sharing isn’t supported in this browser. Try a different browser to share directly.');
               }
             }
+          });
+        }
+
+        // Mobile Add-your-band button (inside the hamburger sheet).
+        // The desktop #add-band-btn lives in .graph-overlay-top which
+        // is display:none on mobile, so we need our own trigger here.
+        // Clicking closes the sheet first (same reason as mobile Share:
+        // don't fight our own bottom sheet for real estate), then clicks
+        // the desktop button. hookPopoverForMobile('add-band-popover')
+        // (registered later in this script) converts the popover panel
+        // to a bottom sheet on mobile, so the form itself already works.
+        const mobileAddBandBtn = document.getElementById('mobile-add-band-btn');
+        if (mobileAddBandBtn) {
+          mobileAddBandBtn.addEventListener('click', async (event) => {
+            // Prevent the document-level 'click outside → close popovers'
+            // handler from immediately dismissing the popover we're
+            // about to open.
+            event.stopPropagation();
+            closeSheet();
+            // Wait for the sheet close animation so the add-band bottom
+            // sheet doesn't overlap the closing hamburger sheet.
+            await new Promise(r => setTimeout(r, 300));
+            const desktopAddBandBtn = document.getElementById('add-band-btn');
+            if (desktopAddBandBtn) desktopAddBandBtn.click();
           });
         }
 
