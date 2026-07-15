@@ -1,0 +1,22 @@
+{
+  "_description": "PR 8 seed. User-requested bands: VAST (Jon Crosby), The Tea Party, Ghost (Sweden), The Dillinger Escape Plan, Sick Puppies, Evanescence. Already in graph: Skid Row, Megadeth, The Smashing Pumpkins, Brad, Satchel, Malfunkshun, Mad Season. Adding Pigeonhed (Shawn Smith's dance/soul project — missing from graph). Shawn Smith bridge-person sweep to find any other missing projects. 4 new common-name pins (VAST, Ghost, Skid Row for safety even though in-graph, Pigeonhed).",
+  "persons": [
+    "Shawn Smith",
+    "Jon Crosby",
+    "Jeff Martin",
+    "Tobias Forge",
+    "Ben Weinman",
+    "Greg Puciato",
+    "Amy Lee",
+    "Shim Moore"
+  ],
+  "bands": [
+    "VAST",
+    "The Tea Party",
+    "Ghost",
+    "The Dillinger Escape Plan",
+    "Sick Puppies",
+    "Evanescence",
+    "Pigeonhed"
+  ]
+}
