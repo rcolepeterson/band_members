@@ -419,6 +419,52 @@ test('fetchWikipedia accepts a search fallback whose top hit shares a significan
   assert.ok(result.page && result.page.title === 'The Rejectors');
 });
 
+// PR 4d fix: Wikipedia's summary endpoint follows redirects server-side
+// and returns the redirected page's title in `data.title`. For obscure
+// bands, Wikipedia often has a redirect from the band name to an album
+// or unrelated page (e.g. 'Alice_Mudgarden' -> 'Sap (EP)',
+// 'Bingo_Hand_Job' -> 'R.E.M.'). Apply the same plausibility check we
+// use on the search fallback so these silent redirects don't sneak in
+// and poison the name score.
+test('fetchWikipedia rejects a direct-lookup response whose title redirected to an unrelated page', async () => {
+  const fetchImpl = async (url) => {
+    const decoded = decodeURIComponent(url);
+    if (decoded.includes('/page/summary/')) {
+      // Wikipedia returns 200 with a *different* title because of a redirect.
+      return fakeJsonResponse(200, {
+        title: 'Sap (EP)',
+        type: 'standard',
+        extract: 'Sap is the second studio EP by Alice in Chains.',
+      });
+    }
+    if (decoded.includes('list=search')) {
+      return fakeJsonResponse(200, { query: { search: [] } });
+    }
+    return fakeJsonResponse(404, {});
+  };
+  const result = await fetchWikipedia('Alice Mudgarden', { fetchImpl });
+  assert.equal(result.ok, true);
+  assert.equal(result.page, null, 'redirected unrelated page should be rejected');
+});
+
+test('fetchWikipedia accepts a direct-lookup response whose title matches after a benign redirect', async () => {
+  // e.g. 'Nirvana' redirects to 'Nirvana (band)' — title still shares the
+  // token 'nirvana', so it passes the plausibility check.
+  const fetchImpl = async (url) => {
+    const decoded = decodeURIComponent(url);
+    if (decoded.includes('/page/summary/')) {
+      return fakeJsonResponse(200, {
+        title: 'Nirvana (band)',
+        type: 'standard',
+        extract: 'Nirvana was an American rock band.',
+      });
+    }
+    return fakeJsonResponse(404, {});
+  };
+  const result = await fetchWikipedia('Nirvana', { fetchImpl });
+  assert.ok(result.page && result.page.title === 'Nirvana (band)');
+});
+
 test('fetchWikipedia scans past unrelated hits until it finds a plausible one', async () => {
   // Search returns [unrelated, unrelated, plausible]. We should skip past
   // the first two and land on the third.

@@ -275,11 +275,21 @@ export async function fetchWikipedia(bandName, { fetchImpl = fetch } = {}) {
         continue;
       }
       // Disambiguation pages have no useful extract; skip them.
+      // Also skip pages whose title Wikipedia silently redirected us to a
+      // completely unrelated topic ("Alice_Mudgarden" -> "Sap (EP)",
+      // "Bingo_Hand_Job" -> "R.E.M."). Wikipedia's summary endpoint chases
+      // redirects server-side and returns the redirected page's title in
+      // `data.title`, so we can detect these by checking the returned
+      // title against our band name with the same plausibility filter we
+      // use on the search fallback.
       if (data && data.type !== 'disambiguation' && data.extract) {
-        return { ok: true, page: data };
+        const returnedTitle = data.title || '';
+        if (wikipediaTitleIsPlausibleMatch(name, returnedTitle)) {
+          return { ok: true, page: data };
+        }
       }
     }
-    // 404 or unusable payload -> try next candidate.
+    // 404, unusable payload, or unrelated redirect target -> try next candidate.
   }
 
   // Fall back to the search API to find the right page title.
