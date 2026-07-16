@@ -1787,11 +1787,11 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 .node-card__verify-details th, .node-card__verify-details td {
   padding: 4px 6px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06);
   /* PR 4b fix: long MusicBrainz genre tag lists can be 20+ items.
-     Allow the cell content to wrap into a scroll box rather than
-     stretching the whole card. The parent .node-card also has
-     max-height + overflow-y:auto as a second safety net. */
-  overflow-wrap: anywhere;
-  word-break: break-word;
+     overflow-wrap: break-word (not 'anywhere') keeps whole words
+     intact -- 'anywhere' was breaking 'Grunge' into 'Grung / e'.
+     The parent .node-card also has max-height + overflow-y:auto as
+     a scroll safety net. */
+  overflow-wrap: break-word;
   vertical-align: top;
   max-width: 0; /* forces table-layout:fixed to distribute widths evenly */
 }
@@ -5061,6 +5061,13 @@ function downloadPngBlob(blob) {
           if (nowHidden) renderVerifyDetailsPanel(verification);
           nodeCardVerifyDetails.hidden = !nowHidden;
           nodeCardVerifyToggle.textContent = nowHidden ? 'Hide verification details' : 'Show verification details';
+          // PR 4b fix: re-run positioning after the card's height changes.
+          // positionNodeCard() reads offsetHeight to decide whether to flip
+          // above/below the node and to clamp inside the viewport, so it
+          // must be called AFTER the DOM has reflowed with the new height.
+          // Using rAF is safer than a bare call because the toggle happens
+          // synchronously and the browser hasn't laid out the new content.
+          requestAnimationFrame(() => positionNodeCard());
         };
         return;
       }
