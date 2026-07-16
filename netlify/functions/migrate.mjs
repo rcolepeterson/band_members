@@ -110,7 +110,7 @@ export default async (req) => {
       create table if not exists contributions (
         id bigserial primary key,
         user_id uuid not null references users(id) on delete cascade,
-        action text not null check (action in ('add_band','edit_band')),
+        action text not null check (action in ('add_band','edit_band','edit_band_members')),
         band_id text,
         band_name text,
         metadata jsonb not null default '{}'::jsonb,
@@ -118,6 +118,21 @@ export default async (req) => {
       )
     `;
     results.push('table contributions ready');
+
+    // PR 3b: bands_edit_members.mjs logs action='edit_band_members'. Because
+    // `create table if not exists` is a no-op on a database that already has
+    // this table (every deploy after the first), the CHECK constraint above
+    // never gets a chance to pick up the new allowed value on its own. Drop
+    // and recreate the constraint explicitly — same idempotent
+    // drop-then-recreate pattern already used for the updated_at triggers
+    // below, just applied to a CHECK constraint instead of a trigger.
+    await sql`alter table contributions drop constraint if exists contributions_action_check`;
+    await sql`
+      alter table contributions
+      add constraint contributions_action_check
+      check (action in ('add_band','edit_band','edit_band_members'))
+    `;
+    results.push('constraint contributions_action_check ready (edit_band_members allowed)');
 
     // Query patterns we anticipate:
     //   - "list my contributions"       -> user_id + created_at desc
