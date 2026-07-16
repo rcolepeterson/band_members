@@ -298,6 +298,60 @@ export default async (req) => {
     `;
     results.push('index memberships_member_id_idx ready');
 
+    // verifications table ------------------------------------------------------
+    // PR 4a: cross-check RESULT (not a lock — see _verify_helpers.mjs's header
+    // comment) produced by comparing a band's row against MusicBrainz and
+    // Wikipedia. One row per band (unique index on band_id below); re-running
+    // /api/verify-band upserts this row rather than appending, since we only
+    // ever care about the latest check.
+    //
+    // `verified_at` is the cache/invalidation clock: verify_band.mjs treats a
+    // cached row as usable when it's both < 24h old AND newer than
+    // bands.updated_at. That comparison is why there's no explicit
+    // invalidation code in bands_edit.mjs / bands_edit_members.mjs — any edit
+    // already bumps bands.updated_at via the existing bands_set_updated_at
+    // trigger, which is sufficient to make verified_at look stale on the next
+    // read. See the comments in those two files for the same pointer.
+    //
+    // `breakdown` is free-form JSONB (~4KB budget per row) holding the
+    // per-field scores plus the specific values compared, so the shape can
+    // evolve without a migration.
+    await sql`
+      create table if not exists verifications (
+        id               bigserial primary key,
+        band_id          uuid not null references bands(id) on delete cascade,
+        verified_at      timestamptz not null default now(),
+        overall_score    int not null check (overall_score between 0 and 100),
+        breakdown        jsonb not null default '{}'::jsonb,
+        musicbrainz_mbid text,
+        musicbrainz_url  text,
+        wikipedia_title  text,
+        wikipedia_url    text
+      )
+    `;
+    results.push('table verifications ready');
+
+    // Idempotent guard for the CHECK constraint, matching the same
+    // drop-then-recreate pattern used above for contributions_action_check —
+    // `create table if not exists` is a no-op on every deploy after the
+    // first, so if this constraint's definition ever changes, only an
+    // explicit drop/add (not the CREATE TABLE) will pick it up.
+    await sql`alter table verifications drop constraint if exists verifications_overall_score_check`;
+    await sql`
+      alter table verifications
+      add constraint verifications_overall_score_check
+      check (overall_score between 0 and 100)
+    `;
+    results.push('constraint verifications_overall_score_check ready');
+
+    // One row per band — re-verifying upserts (on conflict (band_id) do
+    // update ...) rather than appending a history of checks.
+    await sql`
+      create unique index if not exists verifications_band_id_idx
+      on verifications (band_id)
+    `;
+    results.push('index verifications_band_id_idx ready');
+
     return ok({ steps: results });
   } catch (err) {
     console.error('migrate failed', err);

@@ -30,6 +30,14 @@
 //      directly), membership removals, membership updates, the
 //      bands.edited_by touch, the contribution log entry, and the counter
 //      increment.
+//
+// PR 4a note (passive cache invalidation): like bands_edit.mjs, this file
+// makes no direct write to the `verifications` table. The bands.edited_by
+// touch in step 2 goes through the same UPDATE-triggers-bands_set_updated_at
+// path, so any roster edit here also bumps bands.updated_at and therefore
+// silently invalidates that band's cached cross-check result (verify_band.mjs
+// compares bands.updated_at against verifications.verified_at). No explicit
+// invalidation code needed here.
 
 import {
   getSql,

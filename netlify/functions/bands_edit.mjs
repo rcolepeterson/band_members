@@ -17,6 +17,14 @@
 // atomic with each other). If the client's edit UI ever wants to show a
 // success toast with contribution info, it should read the `changes` field
 // from THIS endpoint's response, not make a second call.
+//
+// PR 4a note (passive cache invalidation): this endpoint does NOT need to
+// touch the `verifications` table directly. Every successful UPDATE here
+// bumps `bands.updated_at` via the existing bands_set_updated_at trigger
+// (see migrate.mjs), and verify_band.mjs treats a cached verification as
+// stale whenever bands.updated_at is newer than verifications.verified_at.
+// So an edit here silently invalidates any prior cross-check result for
+// this band without this file knowing the verifications table exists.
 
 import {
   getSql,
