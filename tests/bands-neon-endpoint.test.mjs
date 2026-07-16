@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 import { DB_URL_ENV } from '../netlify/functions/_db.mjs';
 import bandsNeon from '../netlify/functions/bands_neon.mjs';
 import seedBands from '../netlify/functions/seed_bands.mjs';
+import patchMembers from '../netlify/functions/patch_members.mjs';
 
 function req(method, headers = {}, body) {
   const init = { method, headers: new Headers(headers) };
@@ -168,3 +169,67 @@ test('POST /api/seed-bands checks admin auth before DB configuration',
     assert.equal(r.status, 401);
   })
 );
+
+// --- /api/patch-members ----------------------------------------------------
+// One-off admin cleanup endpoint. Only method + auth are worth covering here;
+// the actual DB mutation is manually verified against the deploy preview.
+test('GET /api/patch-members returns 405', async () => {
+  const r = await patchMembers(req('GET'));
+  assert.equal(r.status, 405);
+});
+
+test('POST /api/patch-members without admin token returns 401',
+  withoutDb(async () => {
+    const r = await patchMembers(req('POST', {}, { updates: [] }));
+    assert.equal(r.status, 401);
+  })
+);
+
+test('POST /api/patch-members with wrong admin token returns 401',
+  withoutDb(async () => {
+    const before = process.env.ADMIN_TOKEN;
+    process.env.ADMIN_TOKEN = 'correct-token';
+    try {
+      const r = await patchMembers(req('POST', { 'x-admin-token': 'wrong' }, { updates: [] }));
+      assert.equal(r.status, 401);
+    } finally {
+      if (before === undefined) delete process.env.ADMIN_TOKEN;
+      else process.env.ADMIN_TOKEN = before;
+    }
+  })
+);
+
+test('POST /api/patch-members returns 400 when body is not JSON', async () => {
+  const before = process.env.ADMIN_TOKEN;
+  process.env.ADMIN_TOKEN = 'correct-token';
+  process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
+  try {
+    const r = await patchMembers(
+      req('POST', { 'x-admin-token': 'correct-token', 'content-type': 'application/json' }, 'not json {')
+    );
+    assert.equal(r.status, 400);
+  } finally {
+    if (before === undefined) delete process.env.ADMIN_TOKEN;
+    else process.env.ADMIN_TOKEN = before;
+    delete process.env[DB_URL_ENV];
+  }
+});
+
+test('POST /api/patch-members returns 400 when body.updates is missing or not an array', async () => {
+  const before = process.env.ADMIN_TOKEN;
+  process.env.ADMIN_TOKEN = 'correct-token';
+  process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
+  try {
+    const cases = [{}, { updates: 'not-an-array' }, { updates: null }];
+    for (const body of cases) {
+      const r = await patchMembers(req('POST', { 'x-admin-token': 'correct-token' }, body));
+      assert.equal(r.status, 400, `expected 400 for ${JSON.stringify(body)}`);
+      const j = await r.json();
+      assert.equal(j.field, 'updates');
+    }
+  } finally {
+    if (before === undefined) delete process.env.ADMIN_TOKEN;
+    else process.env.ADMIN_TOKEN = before;
+    delete process.env[DB_URL_ENV];
+  }
+});
