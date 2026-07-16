@@ -247,6 +247,17 @@
     .member-add-btn:hover{border-color:rgba(82,174,182,0.56);color:#effcff}
     @media (max-width: 720px){.member-row-fields{grid-template-columns:1fr}}
 
+    /*
+      Edit-band mode (PR 3b) member rows: same shell as .member-row but four
+      fields across (name, instrument1, instrument2, tenure) instead of the
+      add-band form's three (name, instrument, weight). Falls back to one
+      column on narrow widths like the add-band rows do.
+    */
+    .edit-member-row-fields{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:var(--space-3)}
+    .edit-member-row-fields label{margin-top:0}
+    @media (max-width: 900px){.edit-member-row-fields{grid-template-columns:1fr 1fr}}
+    @media (max-width: 480px){.edit-member-row-fields{grid-template-columns:1fr}}
+
 
     #existing-band-member-list{justify-content:flex-start;gap:var(--space-2)}
     #existing-band-member-list span{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);padding:0.35rem 0.6rem;border-radius:999px}
@@ -1690,9 +1701,60 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   border-radius: 6px;
 }
 .node-card__close:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+/*
+  Edit affordance (PR 3b): a pencil icon button that sits directly to the
+  left of the close button, same size/hover treatment so the two read as a
+  matched pair in the card's top-right corner. Only injected into the DOM
+  when populateNodeCard() decides the current node is a band AND the user
+  is signed in (see populateNodeCard / renderEditAffordances).
+*/
+.node-card__edit {
+  position: absolute;
+  top: 6px;
+  right: 34px;
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.node-card__edit svg { width: 15px; height: 15px; display: block; }
+.node-card__edit:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+/*
+  Text button below the info rows / connections block that opens the same
+  edit popover as the pencil icon. Subtle by default (thin border, muted
+  text) but fills on hover so it stays findable without competing with the
+  member chips visually.
+*/
+.node-card__edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(230, 236, 243, 0.72);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.node-card__edit-btn:hover {
+  color: #fff;
+  background: rgba(82, 174, 182, 0.16);
+  border-color: rgba(82, 174, 182, 0.4);
+}
+.node-card__edit-btn svg { width: 12px; height: 12px; }
 .node-card__header {
   margin-bottom: 10px;
-  padding-right: 22px;   /* leave room for the close button */
+  padding-right: 46px;   /* leave room for the close button + edit pencil */
 }
 .node-card__name {
   font-size: 15px;
@@ -2253,6 +2315,55 @@ main.layout { padding: 0 !important; gap: 0 !important; }
               <div id="submission-feedback" class="validation-message submission-feedback" aria-live="polite"></div>
               <div class="footer-strip"><button class="submit-btn" type="button" id="save-draft-btn">Save draft band</button></div>
               </div><!-- /data-signed-in-only -->
+
+              <!--
+                PR 3b: Edit-band mode. A third state for this popover,
+                alongside the signup gate above and the add-band form
+                above that. Hidden by default; setSubmissionMode('edit-band')
+                shows this block and hides the add-band form (and vice
+                versa for the other two modes). Kept as a sibling block
+                rather than merged into #submission-form because the data
+                shape is different enough (existing members with
+                membership-scoped remove/rename/instrument edits vs. a
+                flat list of new connections) that sharing the same inputs
+                would make both flows harder to follow.
+              -->
+              <div data-edit-band-only hidden id="edit-band-panel">
+                <div class="share-popover-title" id="edit-band-title">Edit band</div>
+                <p class="share-popover-copy">Update this band's details or roster. Changes are visible to everyone as soon as you save.</p>
+                <div class="signed-in-strip">
+                  <span>Signed in as <strong data-current-user-name>—</strong></span>
+                </div>
+                <form class="form-grid form-grid-expanded" id="edit-band-form">
+                  <input type="hidden" id="edit-band-id" value="" />
+                  <div><label for="edit-band-name">Band name</label><input id="edit-band-name" name="edit-band-name" type="text" /></div>
+                  <div class="form-span-2 location-fields">
+                    <label class="members-block-label">Location</label>
+                    <div class="location-fields-row">
+                      <div><label for="edit-band-city">City</label><input id="edit-band-city" name="edit-band-city" type="text" /></div>
+                      <div><label for="edit-band-state">State</label><select id="edit-band-state" name="edit-band-state"><option value="">—</option></select></div>
+                      <div><label for="edit-band-country">Country</label><select id="edit-band-country" name="edit-band-country"></select></div>
+                    </div>
+                    <div class="field-note">State applies to US locations only and is disabled for other countries.</div>
+                  </div>
+                  <div><label for="edit-band-years-active">Years active</label><input id="edit-band-years-active" name="edit-band-years-active" type="text" placeholder="1990–1993" /></div>
+                  <div><label for="edit-band-label">Label</label><input id="edit-band-label" name="edit-band-label" type="text" placeholder="Sub Pop, Epic, SST…" /></div>
+                  <div class="form-span-2"><label for="edit-band-genre">Genre</label><input id="edit-band-genre" name="edit-band-genre" type="text" list="genre-suggestions" placeholder="Grunge, Alternative Rock, Punk Rock…" autocapitalize="words" /></div>
+                  <div class="form-span-2"><label for="edit-band-albums">Albums released</label><input id="edit-band-albums" name="edit-band-albums" type="text" placeholder="Ten; Vs.; Vitalogy" /></div>
+                  <div class="form-span-2 members-block">
+                    <label class="members-block-label">Band members</label>
+                    <div id="edit-members-container"></div>
+                    <button type="button" class="member-add-btn" id="edit-add-member-row-btn">+ Add another member</button>
+                    <datalist id="existing-members-datalist"></datalist>
+                  </div>
+                </form>
+                <div id="edit-band-validation" class="validation-message" aria-live="polite"></div>
+                <div id="edit-band-feedback" class="validation-message submission-feedback" aria-live="polite"></div>
+                <div class="footer-strip">
+                  <button class="submit-btn" type="button" id="edit-band-save-btn">Save changes</button>
+                  <button class="link-btn" type="button" id="edit-band-cancel-btn">Cancel</button>
+                </div>
+              </div><!-- /data-edit-band-only -->
             </div>
           </div>
           <!--
@@ -2378,6 +2489,20 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     -->
     <div id="node-card" class="node-card" role="dialog" aria-label="Selected node details" aria-hidden="true" hidden>
       <button type="button" class="node-card__close" id="node-card-close" aria-label="Close details">&times;</button>
+      <!--
+        PR 3b: edit-band pencil. Static markup lives here, hidden by default;
+        populateNodeCard() shows it only for band nodes when the current
+        user is signed in (see renderEditAffordances). Kept out of the DOM
+        for anonymous visitors' interactions via the hidden attribute, not
+        by injecting/removing the node on every card open, so listeners
+        attached once at load stay valid.
+      -->
+      <button type="button" class="node-card__edit" id="node-card-edit" aria-label="Edit this band" title="Edit this band" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9"></path>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+        </svg>
+      </button>
       <div class="node-card__header">
         <div class="node-card__name" id="node-card-name">—</div>
         <div class="node-card__sub" id="node-card-sub"></div>
@@ -2387,6 +2512,19 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         <div class="node-card__row-label" id="node-card-connections-label">Members</div>
         <div class="node-card__chips" id="node-card-connections"></div>
       </div>
+      <!--
+        PR 3b: "Edit this band" text button. Sits below the connections
+        chips (the last content block in the card) so it reads as a
+        footer-level action rather than competing with the info rows.
+        Hidden by default; same visibility rule as the pencil above.
+      -->
+      <button type="button" class="node-card__edit-btn" id="node-card-edit-btn" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9"></path>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+        </svg>
+        <span>Edit this band</span>
+      </button>
       <div class="node-card__tail" aria-hidden="true"></div>
     </div>
 
@@ -3514,6 +3652,16 @@ function downloadPngBlob(blob) {
     // (network, auth, empty DB before migration runs). CSV fallback is
     // a 2-week safety net; a follow-up PR will remove it once we're
     // confident /api/bands is reliable.
+    // PR 3b: raw /api/bands payload (bands/members/memberships, each with
+    // their real DB ids), kept alongside the flattened master graph. The
+    // master graph built by buildMasterGraph() only carries display names
+    // (matching the CSV row shape), so the edit UI reads band/member ids
+    // from this cache instead. Repopulated every time loadGraphData()
+    // succeeds against /api/bands; stays null if we fell back to the CSV
+    // (in which case there is no backend id to edit against, so the edit
+    // affordances effectively have nothing to PATCH -- see openEditBandPopover).
+    let rawBandsData = null;
+
     async function loadGraphData() {
       try {
         const response = await fetch('/api/bands');
@@ -3522,9 +3670,11 @@ function downloadPngBlob(blob) {
         if (!data || !Array.isArray(data.bands) || data.bands.length === 0) {
           throw new Error('/api/bands returned empty payload');
         }
+        rawBandsData = data;
         return normalizeNeonToRows(data);
       } catch (error) {
         console.warn('Falling back to CSV load; /api/bands failed:', error);
+        rawBandsData = null;
         return d3.csv('seattle_band_members-2-2.csv?v=6');
       }
     }
@@ -3833,10 +3983,86 @@ function downloadPngBlob(blob) {
       return Array.isArray(data?.submissions) ? data.submissions : [];
     }
 
+    // A single free-text instrument field (as used by the add-band draft
+    // shape, e.g. "Guitar, vocals") split into the two discrete
+    // instrument1/instrument2 columns the new-shape /api/bands endpoint
+    // expects. Anything past the second comma-separated value is dropped --
+    // same two-instrument ceiling the rest of the schema assumes.
+    function splitInstrumentField(raw) {
+      const parts = String(raw || '').split(',').map(s => s.trim()).filter(Boolean);
+      return { instrument1: parts[0] || '', instrument2: parts[1] || '' };
+    }
+
+    // Maps the legacy draft shape (band/members[{member,instrument,relation}]/
+    // city/state/country/genre/yearsActive/label/albums/bio) onto the new
+    // POST /api/bands request body ({ name, city, ..., members: [{ name,
+    // instrument1, instrument2 }] }).
+    function draftToNewBandPayload(draft) {
+      const members = (Array.isArray(draft.members) ? draft.members : []).map(entry => {
+        const { instrument1, instrument2 } = splitInstrumentField(entry.instrument);
+        return { name: entry.member, instrument1, instrument2, tenure: '' };
+      });
+      return {
+        name: draft.band,
+        city: draft.city || '',
+        state: draft.state || '',
+        country: draft.country || '',
+        genre: draft.genre || '',
+        years_active: draft.yearsActive || '',
+        label: draft.label || '',
+        albums: draft.albums || '',
+        members
+      };
+    }
+
+    // Adapts a POST /api/bands success response ({ ok, band, member_ids,
+    // memberships_created }) back into the legacy "stored submission" shape
+    // (same fields as the draft, plus an id) so commitToGraph()/applyDraftToMaster()
+    // downstream keep working unmodified regardless of which endpoint served
+    // the write.
+    function newBandResponseToStoredRecord(data, draft) {
+      const band = (data && data.band) || {};
+      return {
+        ...draft,
+        id: band.id || (data && data.id) || null,
+      };
+    }
+
     // POST a single draft to the backend. Resolves with the stored record
     // (including its server-generated id/timestamp) on success; throws with a
     // user-facing message on validation/network/server error.
+    //
+    // PR 3b: signed-in users POST to the new /api/bands endpoint (Neon,
+    // bearer-authenticated, cleaner response shape) instead of the legacy
+    // BANDS_ENDPOINT. Anonymous users are unaffected -- they have no token to
+    // send, so they keep using the legacy path exactly as before. The legacy
+    // endpoint still works for signed-in users too (it's bridged server-side
+    // per the PR 3b notes), so this branch is a client-side preference, not a
+    // hard requirement.
     async function postSharedSubmission(draft) {
+      const user = loadCurrentUser();
+      if (user && user.token) {
+        let response;
+        try {
+          response = await fetch('/api/bands', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'authorization': 'Bearer ' + user.token
+            },
+            body: JSON.stringify(draftToNewBandPayload(draft))
+          });
+        } catch (networkError) {
+          throw new Error('Could not reach the server. Check your connection and try again.');
+        }
+        let data = null;
+        try { data = await response.json(); } catch (parseError) { /* non-JSON error body */ }
+        if (!response.ok || !data || data.ok === false) {
+          throw new Error((data && data.error) || `The server rejected the submission (${response.status}).`);
+        }
+        return newBandResponseToStoredRecord(data, draft);
+      }
+
       let response;
       try {
         response = await fetch(BANDS_ENDPOINT, {
@@ -4384,6 +4610,8 @@ function downloadPngBlob(blob) {
     const nodeCardConnLabel = document.getElementById('node-card-connections-label');
     const nodeCardConn = document.getElementById('node-card-connections');
     const nodeCardCloseBtn = document.getElementById('node-card-close');
+    const nodeCardEditBtn = document.getElementById('node-card-edit');
+    const nodeCardEditTextBtn = document.getElementById('node-card-edit-btn');
 
     function makeCardRow(key, value, opts) {
       // By default the row is emitted only when value is non-empty (keeps
@@ -4460,6 +4688,28 @@ function downloadPngBlob(blob) {
           });
           nodeCardConnWrap.hidden = false;
         }
+      }
+
+      renderEditAffordances(node);
+    }
+
+    // PR 3b: show/hide the pencil icon + "Edit this band" text button.
+    // Both only ever appear for band nodes, and only when a user is
+    // signed in (loadCurrentUser() returns a valid stored user). Anonymous
+    // visitors never see either affordance — no signed-out nudge is shown
+    // from the node card itself; the existing signup gate in the add-band
+    // popover already covers that path. Rebinding the click handler on
+    // every call (instead of once at load) keeps the handler's captured
+    // `node` current without needing a separate mutable state variable.
+    function renderEditAffordances(node) {
+      const canEdit = node.type === 'band' && !!loadCurrentUser();
+      if (nodeCardEditBtn) {
+        nodeCardEditBtn.hidden = !canEdit;
+        nodeCardEditBtn.onclick = canEdit ? (ev) => { ev.stopPropagation(); openEditBandPopover(node); } : null;
+      }
+      if (nodeCardEditTextBtn) {
+        nodeCardEditTextBtn.hidden = !canEdit;
+        nodeCardEditTextBtn.onclick = canEdit ? (ev) => { ev.stopPropagation(); openEditBandPopover(node); } : null;
       }
     }
 
@@ -5016,7 +5266,59 @@ function downloadPngBlob(blob) {
       return { memberExists, members };
     }
 
-    function setSubmissionMode(duplicate) {
+    // PR 3b: setSubmissionMode() now accepts a mode STRING instead of a
+    // boolean, so the popover can represent a third state (editing an
+    // existing band) alongside the original two. Boolean callers from
+    // before this PR keep working unchanged -- `true` maps to
+    // 'existing-band-connection' and `false`/anything else maps to
+    // 'new-band'-- so none of the pre-existing add-band call sites needed
+    // to change.
+    //
+    // Modes:
+    //   'new-band'                 -- default add-band state (blank form).
+    //   'existing-band-connection' -- add-band form detected the typed band
+    //                                 name already exists; ghosts the
+    //                                 band-level-only fields since this
+    //                                 submission is just a new membership.
+    //   'edit-band'                -- the edit-band popover (#edit-band-panel)
+    //                                 is the visible panel; the add-band
+    //                                 form's own mode line/ghosting is not
+    //                                 relevant, so this just makes sure the
+    //                                 add-band panel and edit panel are not
+    //                                 both visible at once.
+    function setSubmissionMode(modeInput) {
+      const resolvedMode = modeInput === true ? 'existing-band-connection'
+        : modeInput === 'edit-band' ? 'edit-band'
+        : modeInput === 'existing-band-connection' ? 'existing-band-connection'
+        : 'new-band';
+
+      const addBandForm = document.getElementById('submission-form');
+      const editBandPanel = document.getElementById('edit-band-panel');
+
+      if (resolvedMode === 'edit-band') {
+        // Hide the add-band form's own panel (data-signed-in-only) and show
+        // the edit-band panel. The signup gate panel is untouched -- it's
+        // only relevant to anonymous visitors, and edit-band mode is never
+        // entered by one (see renderEditAffordances / openEditBandPopover).
+        if (addBandForm) {
+          const addBandPanel = addBandForm.closest('[data-signed-in-only]');
+          if (addBandPanel) addBandPanel.hidden = true;
+        }
+        if (editBandPanel) editBandPanel.hidden = false;
+        return;
+      }
+
+      // Any non-edit mode: make sure the edit panel is hidden and the
+      // add-band panel is visible again (only matters if the user had the
+      // edit popover open and then this function is called for some other
+      // reason -- defensive, since normal flow closes the popover first).
+      if (editBandPanel) editBandPanel.hidden = true;
+      if (addBandForm) {
+        const addBandPanel = addBandForm.closest('[data-signed-in-only]');
+        if (addBandPanel && loadCurrentUser()) addBandPanel.hidden = false;
+      }
+
+      const duplicate = resolvedMode === 'existing-band-connection';
       const mode = document.getElementById('submission-mode');
       const saveButton = document.getElementById('save-draft-btn');
       const ghostTargets = [
@@ -5734,6 +6036,540 @@ function downloadPngBlob(blob) {
         saveButton.textContent = previousLabel;
       }
     });
+
+    // -----------------------------------------------------------------
+    // PR 3b: Edit-band popover.
+    //
+    // Opens the same #add-band-popover shell (see setSubmissionMode's
+    // 'edit-band' branch) but shows #edit-band-panel instead of the
+    // add-band form. Pre-fills band metadata + a roster of member rows,
+    // then on save diffs against the original snapshot and fires the
+    // PATCH /api/bands/:id (metadata) and/or PATCH /api/bands/:id/members
+    // (roster) requests in parallel.
+    //
+    // Known gap (see PR notes / final report): GET /api/bands intentionally
+    // omits each membership's own database id (bands_neon.mjs selects only
+    // band_id/member_id/tenure/weight/relation), so there is no client-
+    // accessible membership_id for pre-existing rows. This UI tracks each
+    // existing row by member_id (data-member-id) and threads it through as
+    // best-effort. Sending a real membership_id to PATCH /api/bands/:id/members
+    // remove/update is NOT possible from this client until the read endpoint
+    // exposes it -- those two operations are wired up and ready to send a
+    // real id the moment it's available, but will currently be skipped with
+    // an inline warning rather than sent with a guessed/wrong id.
+    // -----------------------------------------------------------------
+
+    const editBandState = {
+      band: null,          // the master-graph band node currently being edited
+      bandId: null,         // resolved via rawBandsData by name
+      original: null,       // snapshot for diffing: { meta, members }
+      existingMemberNames: [] // for the datalist, built once per popover open
+    };
+
+    // Look up a band's backend row (with its real id) by display name.
+    // Case-insensitive to match the rest of the app's canonical-name rules.
+    function findRawBandByName(name) {
+      if (!rawBandsData || !Array.isArray(rawBandsData.bands)) return null;
+      const key = normalizeKey(name);
+      return rawBandsData.bands.find(b => normalizeKey(b.name) === key) || null;
+    }
+
+    function findRawMemberByName(name) {
+      if (!rawBandsData || !Array.isArray(rawBandsData.members)) return null;
+      const key = normalizeKey(name);
+      return rawBandsData.members.find(m => normalizeKey(m.name) === key) || null;
+    }
+
+    // Every membership row for a given band id, joined with its member's
+    // name/instruments. Mirrors getBandMembersWithTenure but reads from the
+    // raw payload (ids) rather than the master graph (display names only).
+    function findRawMembershipsForBand(bandId) {
+      if (!rawBandsData || !Array.isArray(rawBandsData.memberships)) return [];
+      const membersById = new Map(rawBandsData.members.map(m => [m.id, m]));
+      return rawBandsData.memberships
+        .filter(m => m.band_id === bandId)
+        .map(m => ({ membership: m, member: membersById.get(m.member_id) || null }))
+        .filter(row => row.member);
+    }
+
+    // Build (once per popover open) the deduplicated, case-insensitive list
+    // of existing member names for the "add member" datalist.
+    function rebuildExistingMembersDatalist() {
+      const datalist = document.getElementById('existing-members-datalist');
+      if (!datalist) return;
+      const seen = new Set();
+      const names = [];
+      if (rawBandsData && Array.isArray(rawBandsData.members)) {
+        rawBandsData.members.forEach(m => {
+          const key = normalizeKey(m.name);
+          if (!m.name || seen.has(key)) return;
+          seen.add(key);
+          names.push(m.name);
+        });
+      }
+      names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+      datalist.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      names.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        frag.appendChild(option);
+      });
+      datalist.appendChild(frag);
+      editBandState.existingMemberNames = names;
+    }
+
+    // Build one member row for the edit-band roster. `data` is either an
+    // existing membership join row ({ membership, member }) or null for a
+    // freshly-added blank row. Existing rows carry data-member-id (their
+    // band_members.id) and data-original-* attributes used later to diff.
+    // New rows have no data-member-id and instead get a hidden
+    // data-picked-id field that a datalist selection can populate.
+    function buildEditMemberRow(data) {
+      const row = document.createElement('div');
+      row.className = 'member-row';
+      row.setAttribute('data-edit-member-row', '');
+
+      const isExisting = !!(data && data.member);
+      if (isExisting) {
+        row.dataset.memberId = data.member.id;
+        row.dataset.originalName = data.member.name || '';
+        row.dataset.originalInstrument1 = data.member.instrument1 || '';
+        row.dataset.originalInstrument2 = data.member.instrument2 || '';
+        row.dataset.originalTenure = (data.membership && data.membership.tenure) || '';
+        // PR 3b fix: GET /api/bands now exposes membership.id (see
+        // bands_neon.mjs). Threading it through here lets the submit logic
+        // send real remove/update ops for existing rows. Rows without an id
+        // (older cached responses, or freshly-added new rows) still fall
+        // back to the _unsupported branch below, which surfaces a warning
+        // rather than silently dropping the op.
+        if (data.membership && data.membership.id != null) {
+          row.dataset.membershipId = String(data.membership.id);
+        }
+      } else {
+        row.dataset.memberId = '';
+        row.dataset.originalName = '';
+        row.dataset.originalInstrument1 = '';
+        row.dataset.originalInstrument2 = '';
+        row.dataset.originalTenure = '';
+      }
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'member-row-remove';
+      removeBtn.setAttribute('data-remove-edit-row', '');
+      removeBtn.setAttribute('aria-label', 'Remove this member');
+      removeBtn.innerHTML = '&times;';
+      row.appendChild(removeBtn);
+
+      const fields = document.createElement('div');
+      fields.className = 'edit-member-row-fields';
+
+      const nameWrap = document.createElement('div');
+      const nameLabel = document.createElement('label');
+      nameLabel.textContent = 'Member name';
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'edit-member-name-input';
+      nameInput.value = isExisting ? data.member.name : '';
+      nameInput.placeholder = 'Member name';
+      if (!isExisting) {
+        // Only brand-new rows get the suggest-match datalist; renaming an
+        // existing member is a deliberate rename_member op, not a pick from
+        // the roster, so existing rows don't wire up the datalist.
+        nameInput.setAttribute('list', 'existing-members-datalist');
+        nameInput.addEventListener('input', () => {
+          const match = editBandState.existingMemberNames.find(n => normalizeKey(n) === normalizeKey(nameInput.value));
+          row.dataset.pickedId = match ? (findRawMemberByName(match) || {}).id || '' : '';
+        });
+      }
+      nameWrap.appendChild(nameLabel);
+      nameWrap.appendChild(nameInput);
+
+      const instr1Wrap = document.createElement('div');
+      const instr1Label = document.createElement('label');
+      instr1Label.textContent = 'Instrument 1';
+      const instr1Input = document.createElement('input');
+      instr1Input.type = 'text';
+      instr1Input.className = 'edit-member-instrument1-input';
+      instr1Input.value = isExisting ? (data.member.instrument1 || '') : '';
+      instr1Input.placeholder = 'Guitar';
+      instr1Wrap.appendChild(instr1Label);
+      instr1Wrap.appendChild(instr1Input);
+
+      const instr2Wrap = document.createElement('div');
+      const instr2Label = document.createElement('label');
+      instr2Label.textContent = 'Instrument 2';
+      const instr2Input = document.createElement('input');
+      instr2Input.type = 'text';
+      instr2Input.className = 'edit-member-instrument2-input';
+      instr2Input.value = isExisting ? (data.member.instrument2 || '') : '';
+      instr2Input.placeholder = 'Vocals';
+      instr2Wrap.appendChild(instr2Label);
+      instr2Wrap.appendChild(instr2Input);
+
+      const tenureWrap = document.createElement('div');
+      const tenureLabel = document.createElement('label');
+      tenureLabel.textContent = 'Tenure';
+      const tenureInput = document.createElement('input');
+      tenureInput.type = 'text';
+      tenureInput.className = 'edit-member-tenure-input';
+      tenureInput.value = isExisting ? ((data.membership && data.membership.tenure) || '') : '';
+      tenureInput.placeholder = '1990-1995';
+      tenureWrap.appendChild(tenureLabel);
+      tenureWrap.appendChild(tenureInput);
+
+      fields.appendChild(nameWrap);
+      fields.appendChild(instr1Wrap);
+      fields.appendChild(instr2Wrap);
+      fields.appendChild(tenureWrap);
+      row.appendChild(fields);
+
+      return row;
+    }
+
+    function addEditMemberRow(data) {
+      const container = document.getElementById('edit-members-container');
+      if (!container) return;
+      const row = buildEditMemberRow(data || null);
+      container.appendChild(row);
+      return row;
+    }
+
+    document.getElementById('edit-add-member-row-btn')?.addEventListener('click', () => {
+      const row = addEditMemberRow(null);
+      row?.querySelector('.edit-member-name-input')?.focus();
+    });
+
+    document.getElementById('edit-members-container')?.addEventListener('click', (event) => {
+      const removeBtn = event.target.closest('[data-remove-edit-row]');
+      if (!removeBtn) return;
+      removeBtn.closest('[data-edit-member-row]')?.remove();
+    });
+
+    // Populates #edit-band-panel with a band's current data and opens the
+    // add-band popover in edit-band mode. `node` is a master-graph band
+    // node (has .id / .genre / .yearsActive / etc, matching populateNodeCard's
+    // reads). Requires rawBandsData to be populated (i.e. /api/bands, not
+    // the CSV fallback, served the current graph) -- if it's not, the popover
+    // still opens but with an inline warning and a disabled roster, since
+    // there is no backend band id to PATCH against.
+    function openEditBandPopover(node) {
+      const rawBand = findRawBandByName(node.id);
+      const feedback = document.getElementById('edit-band-feedback');
+      const validation = document.getElementById('edit-band-validation');
+      if (feedback) { feedback.textContent = ''; feedback.classList.remove('is-visible', 'is-warning', 'is-success'); }
+
+      if (!rawBand) {
+        if (validation) {
+          validation.textContent = 'This band could not be matched to a backend record, so it can\u2019t be edited right now. Try reloading the page.';
+          validation.classList.add('is-warning');
+        }
+        editBandState.band = null;
+        editBandState.bandId = null;
+        editBandState.original = null;
+      } else if (validation) {
+        validation.textContent = '';
+        validation.classList.remove('is-warning', 'is-success');
+      }
+
+      editBandState.band = node;
+      editBandState.bandId = rawBand ? rawBand.id : null;
+
+      document.getElementById('edit-band-title').textContent = `Edit band: ${node.id}`;
+      document.getElementById('edit-band-id').value = editBandState.bandId || '';
+      document.getElementById('edit-band-name').value = (rawBand && rawBand.name) || node.id || '';
+      document.getElementById('edit-band-city').value = (rawBand && rawBand.city) || node.city || '';
+      populateCountryOptions('edit-band-country');
+      document.getElementById('edit-band-country').value = (rawBand && rawBand.country) || node.country || 'USA';
+      populateStateOptionsFor('edit-band-state', document.getElementById('edit-band-country').value);
+      document.getElementById('edit-band-state').value = (rawBand && rawBand.state) || node.state || '';
+      document.getElementById('edit-band-years-active').value = (rawBand && rawBand.years_active) || node.yearsActive || '';
+      document.getElementById('edit-band-label').value = (rawBand && rawBand.label) || node.label || '';
+      document.getElementById('edit-band-genre').value = (rawBand && rawBand.genre) || node.genre || '';
+      document.getElementById('edit-band-albums').value = (rawBand && rawBand.albums) || node.albums || '';
+
+      rebuildExistingMembersDatalist();
+
+      const container = document.getElementById('edit-members-container');
+      if (container) container.innerHTML = '';
+      const membershipRows = editBandState.bandId ? findRawMembershipsForBand(editBandState.bandId) : [];
+      membershipRows.forEach(row => addEditMemberRow(row));
+
+      // Snapshot for diffing at submit time.
+      editBandState.original = {
+        meta: {
+          name: document.getElementById('edit-band-name').value,
+          city: document.getElementById('edit-band-city').value,
+          state: document.getElementById('edit-band-state').value,
+          country: document.getElementById('edit-band-country').value,
+          years_active: document.getElementById('edit-band-years-active').value,
+          label: document.getElementById('edit-band-label').value,
+          genre: document.getElementById('edit-band-genre').value,
+          albums: document.getElementById('edit-band-albums').value
+        },
+        memberIds: membershipRows.map(r => r.member.id),
+        // Map member_id -> membership_id so a row removal (which knows the
+        // member_id from data-member-id) can be translated back into the
+        // membership_id the PATCH endpoint needs. Only rows whose membership
+        // exposed an id get entered here; the rest fall through to the
+        // _unsupported branch in computeEditBandDiff().
+        membershipIdByMemberId: (() => {
+          const map = {};
+          membershipRows.forEach(r => {
+            if (r.membership && r.membership.id != null) {
+              map[r.member.id] = String(r.membership.id);
+            }
+          });
+          return map;
+        })()
+      };
+
+      setSubmissionMode('edit-band');
+
+      const popover = document.getElementById('add-band-popover');
+      const addBtn = document.getElementById('add-band-btn');
+      if (popover) {
+        popover.hidden = false;
+        addBtn?.setAttribute('aria-expanded', 'true');
+        clampPopover(popover);
+      }
+    }
+
+    // Reuses the same country/state <select> population helpers the
+    // add-band form relies on, targeting the edit-band inputs instead.
+    // Falls back to a no-op if those helpers aren't in scope by the time
+    // this file loads (defensive only -- they're defined earlier in the
+    // same script and by the time a user can click the pencil the whole
+    // script has already run once).
+    function populateCountryOptions(selectId) {
+      const source = document.getElementById('submission-country');
+      const target = document.getElementById(selectId);
+      if (!source || !target || target.options.length) return;
+      target.innerHTML = source.innerHTML;
+    }
+    function populateStateOptionsFor(selectId, country) {
+      const target = document.getElementById(selectId);
+      if (!target) return;
+      if (typeof populateStateOptions === 'function') {
+        // populateStateOptions() (defined earlier) writes into
+        // #submission-state; borrow its option list for our select too by
+        // running it, then copying, then restoring the original target's
+        // prior value handling stays with the caller.
+        const originalSelect = document.getElementById('submission-state');
+        const priorValue = originalSelect ? originalSelect.value : '';
+        populateStateOptions(country);
+        if (originalSelect) target.innerHTML = originalSelect.innerHTML;
+        if (originalSelect) originalSelect.value = priorValue;
+      }
+    }
+
+    function closeEditBandPopover() {
+      const popover = document.getElementById('add-band-popover');
+      const addBtn = document.getElementById('add-band-btn');
+      if (popover) {
+        popover.hidden = true;
+        popover.style.left = '';
+      }
+      addBtn?.setAttribute('aria-expanded', 'false');
+      setSubmissionMode('new-band');
+    }
+
+    document.getElementById('edit-band-cancel-btn')?.addEventListener('click', closeEditBandPopover);
+
+    function showEditBandFeedback(message, isError) {
+      const feedback = document.getElementById('edit-band-feedback');
+      if (!feedback) return;
+      feedback.textContent = message;
+      feedback.classList.add('is-visible');
+      feedback.classList.toggle('is-warning', !!isError);
+      feedback.classList.toggle('is-success', !isError);
+    }
+
+    // Computes the band-metadata diff (only fields that changed) plus the
+    // roster operations (add/remove/update/rename_member/member_instruments)
+    // by comparing the current DOM state of #edit-band-panel against
+    // editBandState.original.
+    function computeEditBandDiff() {
+      const meta = {};
+      const fieldMap = {
+        name: 'edit-band-name',
+        city: 'edit-band-city',
+        state: 'edit-band-state',
+        country: 'edit-band-country',
+        years_active: 'edit-band-years-active',
+        label: 'edit-band-label',
+        genre: 'edit-band-genre',
+        albums: 'edit-band-albums'
+      };
+      Object.entries(fieldMap).forEach(([key, id]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const value = el.value.trim();
+        if (value !== (editBandState.original.meta[key] || '')) meta[key] = value;
+      });
+
+      const add = [];
+      const remove = [];
+      const update = [];
+      const renameMember = [];
+      const memberInstruments = [];
+
+      const rows = Array.from(document.querySelectorAll('[data-edit-member-row]'));
+      const stillPresentIds = new Set();
+
+      rows.forEach(row => {
+        const name = row.querySelector('.edit-member-name-input')?.value.trim() || '';
+        const instrument1 = row.querySelector('.edit-member-instrument1-input')?.value.trim() || '';
+        const instrument2 = row.querySelector('.edit-member-instrument2-input')?.value.trim() || '';
+        const tenure = row.querySelector('.edit-member-tenure-input')?.value.trim() || '';
+        const memberId = row.dataset.memberId || '';
+
+        if (!memberId) {
+          // New row. Prefer the id captured from a datalist pick; fall back
+          // to sending the typed name so the backend upserts it.
+          if (!name) return;
+          const pickedId = row.dataset.pickedId || '';
+          add.push(pickedId ? { id: pickedId, tenure } : { name, tenure });
+          return;
+        }
+
+        stillPresentIds.add(memberId);
+
+        if (name && name !== row.dataset.originalName) {
+          renameMember.push({ member_id: memberId, new_name: name });
+        }
+        if (instrument1 !== row.dataset.originalInstrument1 || instrument2 !== row.dataset.originalInstrument2) {
+          memberInstruments.push({ member_id: memberId, instrument1, instrument2 });
+        }
+        if (tenure !== row.dataset.originalTenure) {
+          const membershipId = row.dataset.membershipId || '';
+          if (membershipId) {
+            update.push({ membership_id: membershipId, tenure });
+          } else {
+            // See module header: no membership_id is available from the
+            // client today. Recorded here (not silently dropped) so the
+            // caller can surface it instead of pretending the tenure edit
+            // was saved.
+            update.push({ membership_id: null, tenure, member_id: memberId, _unsupported: true });
+          }
+        }
+      });
+
+      (editBandState.original.memberIds || []).forEach(id => {
+        if (stillPresentIds.has(id)) return;
+        // A row for this member was deleted from the UI. Look up its
+        // membership_id from the original snapshot -- if we have it (the
+        // common case now that GET /api/bands returns membership ids), send
+        // a real remove op. If somehow we don't (bad cached payload), fall
+        // back to the _unsupported marker so the caller can surface it
+        // rather than silently drop the removal.
+        const membershipId = (editBandState.original.membershipIdByMemberId && editBandState.original.membershipIdByMemberId[id]) || '';
+        if (membershipId) {
+          remove.push({ membership_id: membershipId });
+        } else {
+          remove.push({ member_id: id, _unsupported: true });
+        }
+      });
+
+      return { meta, add, remove, update, renameMember, memberInstruments };
+    }
+
+    document.getElementById('edit-band-save-btn')?.addEventListener('click', async () => {
+      if (!editBandState.bandId) {
+        showEditBandFeedback('Cannot save: this band has no backend id to edit against.', true);
+        return;
+      }
+
+      const diff = computeEditBandDiff();
+
+      const unsupportedRemovals = diff.remove.filter(r => r._unsupported);
+      const unsupportedUpdates = diff.update.filter(u => u._unsupported);
+      const supportedRemoveIds = diff.remove.filter(r => !r._unsupported).map(r => r.membership_id);
+      const supportedUpdates = diff.update
+        .filter(u => !u._unsupported)
+        .map(u => ({ membership_id: u.membership_id, tenure: u.tenure }));
+
+      const metaChanged = Object.keys(diff.meta).length > 0;
+      const memberOpsPresent = diff.add.length || supportedRemoveIds.length || supportedUpdates.length
+        || diff.renameMember.length || diff.memberInstruments.length;
+
+      if (!metaChanged && !memberOpsPresent) {
+        if (unsupportedRemovals.length || unsupportedUpdates.length) {
+          showEditBandFeedback('Member removal and tenure updates on existing rows are not supported by this build yet (missing membership id from the backend). No changes were saved.', true);
+        } else {
+          showEditBandFeedback('Nothing changed.', false);
+        }
+        return;
+      }
+
+      const saveButton = document.getElementById('edit-band-save-btn');
+      const previousLabel = saveButton.textContent;
+      saveButton.disabled = true;
+      saveButton.textContent = 'Saving\u2026';
+      showEditBandFeedback('Saving changes\u2026', false);
+
+      const user = loadCurrentUser();
+      if (!user || !user.token) {
+        showEditBandFeedback('You must be signed in to edit a band.', true);
+        saveButton.disabled = false;
+        saveButton.textContent = previousLabel;
+        return;
+      }
+
+      const requests = [];
+      if (metaChanged) {
+        requests.push(fetch('/api/bands/' + editBandState.bandId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + user.token },
+          body: JSON.stringify(diff.meta)
+        }));
+      }
+      if (memberOpsPresent) {
+        const membersBody = {};
+        if (diff.add.length) membersBody.add = diff.add.map(({ id, name }) => id ? { id } : { name });
+        if (supportedRemoveIds.length) membersBody.remove = supportedRemoveIds;
+        if (supportedUpdates.length) membersBody.update = supportedUpdates;
+        if (diff.renameMember.length) membersBody.rename_member = diff.renameMember;
+        if (diff.memberInstruments.length) membersBody.member_instruments = diff.memberInstruments;
+        requests.push(fetch('/api/bands/' + editBandState.bandId + '/members', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + user.token },
+          body: JSON.stringify(membersBody)
+        }));
+      }
+
+      try {
+        const responses = await Promise.all(requests);
+        for (const response of responses) {
+          let body = null;
+          try { body = await response.json(); } catch (_) { /* non-JSON error body */ }
+          if (!response.ok || !body || body.ok === false) {
+            throw new Error((body && body.error) || `The server rejected the edit (${response.status}).`);
+          }
+        }
+
+        await loadGraphData().then(rows => {
+          const master = buildMasterGraph(rows);
+          graphState = { master };
+          renderGraph();
+        });
+
+        let message = 'Band updated.';
+        if (unsupportedRemovals.length || unsupportedUpdates.length) {
+          message += ' Note: member removal / tenure changes on existing rows were not sent (missing membership id from the backend) -- everything else saved.';
+        }
+        showEditBandFeedback(message, false);
+        closeEditBandPopover();
+      } catch (error) {
+        console.error('Edit band save failed', error);
+        showEditBandFeedback(error.message || 'Could not save changes. Try again.', true);
+      } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = previousLabel;
+      }
+    });
+
 
     (function () {
       const logo = document.querySelector('.hero-logo-clean');

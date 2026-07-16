@@ -63,7 +63,7 @@ export default async (req) => {
         order by name
       `,
       sql`
-        select band_id, member_id, tenure, weight, relation
+        select id, band_id, member_id, tenure, weight, relation
         from memberships
       `,
     ]);
