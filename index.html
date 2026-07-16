@@ -1752,6 +1752,43 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   border-color: rgba(82, 174, 182, 0.4);
 }
 .node-card__edit-btn svg { width: 12px; height: 12px; }
+/*
+  PR 4b: cross-check verification UI. .node-card__name-wrap lets the band
+  name and the silver-star score chip sit on one line without the chip
+  wrapping oddly on narrow cards. .verification-chip is the small pill
+  showing the star + score (or a "Verifying..." pending state while an
+  auto-triggered check is in flight -- see populateNodeCard's auto-verify
+  block). .node-card__verify-toggle / .node-card__verify-details are the
+  progressive-disclosure "Show verification details" table. All of this is
+  only ever injected for band nodes that have (or are fetching) a
+  verification row; musician nodes never show any of it.
+*/
+.node-card__name-wrap { display: inline-flex; align-items: center; gap: var(--space-2); }
+.verification-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px var(--space-2); border-radius: var(--radius-full);
+  background: rgba(192, 192, 192, 0.10); border: 1px solid rgba(192, 192, 192, 0.30);
+  font-size: var(--text-xs); color: rgba(230, 236, 243, 0.85);
+  line-height: 1;
+}
+.verification-chip svg { width: 12px; height: 12px; fill: #c0c0c0; }
+.verification-chip.pending { opacity: 0.6; font-style: italic; }
+.node-card__verify-toggle {
+  background: none; border: none; color: var(--color-primary-hover);
+  cursor: pointer; padding: var(--space-2) 0; font-size: var(--text-xs);
+}
+.node-card__verify-details table { width: 100%; font-size: var(--text-xs); border-collapse: collapse; margin-top: var(--space-2); }
+.node-card__verify-details th, .node-card__verify-details td { padding: 4px 6px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.node-card__verify-details th { color: var(--color-text-muted); font-weight: 500; }
+.verify-score-cell.high { color: #7cc57c; }
+.verify-score-cell.mid { color: #d4b46a; }
+.verify-score-cell.low { color: #d47474; }
+.verify-sources { margin-top: var(--space-2); font-size: var(--text-xs); color: var(--color-text-muted); }
+.verify-sources a { color: var(--color-primary-hover); text-decoration: none; }
+.verify-sources a:hover { text-decoration: underline; }
+/* Graph-node silver star badge (see the node.each() render block). Never
+   intercepts clicks -- the underlying node circle stays the click target. */
+.node .verification-badge { pointer-events: none; }
 .node-card__header {
   margin-bottom: 10px;
   padding-right: 46px;   /* leave room for the close button + edit pencil */
@@ -2504,7 +2541,19 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         </svg>
       </button>
       <div class="node-card__header">
-        <div class="node-card__name" id="node-card-name">—</div>
+        <!--
+          PR 4b: node-card-name is wrapped so populateNodeCard() can append
+          a trailing .verification-chip (silver star + score, or a
+          "Verifying..." pending state) right after the band name text
+          without disturbing node-card-name's own textContent assignment.
+          The wrapper is always present; the chip span inside it is only
+          populated for band nodes that have (or are fetching) a
+          verification -- see populateNodeCard / renderVerificationChip.
+        -->
+        <div class="node-card__name-wrap">
+          <div class="node-card__name" id="node-card-name">—</div>
+          <span id="node-card-verify-chip"></span>
+        </div>
         <div class="node-card__sub" id="node-card-sub"></div>
       </div>
       <div class="node-card__rows" id="node-card-rows"></div>
@@ -2512,6 +2561,18 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         <div class="node-card__row-label" id="node-card-connections-label">Members</div>
         <div class="node-card__chips" id="node-card-connections"></div>
       </div>
+      <!--
+        PR 4b: expandable field-by-field cross-check breakdown. Hidden by
+        default; populateNodeCard() reveals the toggle button only for band
+        nodes with a verification, and the details div is filled in fresh
+        (innerHTML rebuilt) on every populate rather than kept as static
+        markup, since its row count depends on which fields the backend
+        found comparable data for (see _verify_helpers.mjs's
+        scoreVerification). The toggle button's own click handler just
+        flips `hidden` -- standard progressive disclosure, no re-fetching.
+      -->
+      <button type="button" class="node-card__verify-toggle" id="node-card-verify-toggle" hidden>Show verification details</button>
+      <div class="node-card__verify-details" id="node-card-verify-details" hidden></div>
       <!--
         PR 3b: "Edit this band" text button. Sits below the connections
         chips (the last content block in the card) so it reads as a
@@ -2647,6 +2708,36 @@ function getNodeStrokeWidth(node) {
   if (node.weight === 2) return 1.6;
   if (node.weight === 3) return 1.5;
   return 1.6;
+}
+
+// PR 4b: silver-star verification badge, appended to a band node's <g>
+// right after its halo/core circles so it draws on top of them. Only
+// called for d.type === "band" (see node.each below); no-ops silently for
+// any node without a matching verification, and for nodes we can't
+// resolve to a backend uuid at all (CSV-fallback mode).
+//
+// Sizing/position per the design spec: ~40% of the node's own radius,
+// anchored at (r*0.7, -r*0.7) so it sits on the upper-right edge of the
+// halo rather than dead center. `pointer-events: none` (see the
+// .verification-badge CSS rule) keeps the whole node's existing click
+// target (the core circle) exclusively clickable -- the star is purely
+// decorative and must never intercept the click that opens the node card.
+function appendVerificationBadge(g, d, r) {
+  const bandId = bandUuidForNode(d);
+  if (!bandId) return;
+  const verification = verificationsMap.get(bandId);
+  if (!verification || verification.overall_score === null || verification.overall_score === undefined) return;
+
+  const starSize = r * 0.4;
+  const scale = starSize / 12; // SILVER_STAR_PATH_D is drawn on a 24x24 viewBox (radius 12 from its own center)
+  g.append("path")
+    .attr("class", "verification-badge")
+    .attr("d", SILVER_STAR_PATH_D)
+    .attr("transform", `translate(${r * 0.7}, ${-r * 0.7}) scale(${scale}) translate(-12, -12)`)
+    .attr("fill", "#c0c0c0")
+    .attr("stroke", "#8a8a8a")
+    .attr("stroke-width", 0.8)
+    .attr("opacity", 0.9);
 }
 
     function getPersonFill(node) {
@@ -3662,6 +3753,71 @@ function downloadPngBlob(blob) {
     // affordances effectively have nothing to PATCH -- see openEditBandPopover).
     let rawBandsData = null;
 
+    // ---------------------------------------------------------------------
+    // PR 4b: cross-check verification UI state.
+    //
+    // window.__verifications maps band_id (uuid, NOT the display-name
+    // node.id used elsewhere in the graph) -> the verification payload
+    // shape returned by GET /api/verify-band-status, or null once we've
+    // confirmed there is no row yet. Exposed on `window` (rather than a
+    // closed-over module variable) per the task spec, so other code /
+    // future debugging can inspect it from the console; graph code below
+    // reads it through the `verificationsMap` alias for brevity.
+    //
+    // verifiedBandIdsInFlight is the per-session dedupe set described in
+    // the task: once we've fired (or are firing) an auto-verify POST for a
+    // band_id, we never fire a second one in the same page session, even
+    // if the user reopens that band's popover rapidly.
+    // ---------------------------------------------------------------------
+    window.__verifications = new Map();
+    const verificationsMap = window.__verifications;
+    const verifyInFlightOrDone = new Set();
+
+    // Shared 5-point star path (viewBox 0 0 24 24), reused for both the
+    // popover chip and the graph-node badge so the two always look like
+    // the same glyph. Silver fill/stroke per the design spec.
+    const SILVER_STAR_PATH_D = 'M12 2.5l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7-5.4-4.7 7.1-.6z';
+
+    // Look up a band node's real backend uuid. Graph nodes key off display
+    // name (node.id), but verifications are keyed by the bands table's
+    // uuid primary key -- findRawBandByName bridges the two. Returns null
+    // when there's no backend record to match (CSV-fallback mode, or a
+    // band added only client-side that hasn't round-tripped through
+    // /api/bands yet).
+    function bandUuidForNode(node) {
+      if (!node || node.type !== 'band') return null;
+      const raw = findRawBandByName(node.id);
+      return raw ? raw.id : null;
+    }
+
+    // Fetch cached verification statuses for every band id in one batched
+    // call. Called once at page load, right after rawBandsData is
+    // populated and before the first renderGraph(), so badges are present
+    // on the very first paint instead of popping in late. Failures are
+    // swallowed (logged only) -- this is a progressive enhancement (silver
+    // stars), never something that should block the graph from rendering.
+    async function loadVerificationStatuses(bandIds) {
+      if (!Array.isArray(bandIds) || !bandIds.length) return;
+      // The endpoint caps at 100 ids per request (see
+      // verify_band_status.mjs); chunk so this still works once the app
+      // has grown well past 500 bands, not just at today's scale.
+      const CHUNK = 100;
+      for (let i = 0; i < bandIds.length; i += CHUNK) {
+        const chunk = bandIds.slice(i, i + CHUNK);
+        try {
+          const res = await fetch(`/api/verify-band-status?band_ids=${chunk.join(',')}`);
+          if (!res.ok) throw new Error(`/api/verify-band-status returned ${res.status}`);
+          const data = await res.json();
+          const verifications = (data && data.verifications) || {};
+          for (const [bandId, verification] of Object.entries(verifications)) {
+            verificationsMap.set(bandId, verification || null);
+          }
+        } catch (error) {
+          console.warn('Could not load verification statuses for a batch of bands; silver-star badges may be incomplete this session.', error);
+        }
+      }
+    }
+
     async function loadGraphData() {
       try {
         const response = await fetch('/api/bands');
@@ -4612,6 +4768,10 @@ function downloadPngBlob(blob) {
     const nodeCardCloseBtn = document.getElementById('node-card-close');
     const nodeCardEditBtn = document.getElementById('node-card-edit');
     const nodeCardEditTextBtn = document.getElementById('node-card-edit-btn');
+    // PR 4b: cross-check verification chip + expandable details elements.
+    const nodeCardVerifyChip = document.getElementById('node-card-verify-chip');
+    const nodeCardVerifyToggle = document.getElementById('node-card-verify-toggle');
+    const nodeCardVerifyDetails = document.getElementById('node-card-verify-details');
 
     function makeCardRow(key, value, opts) {
       // By default the row is emitted only when value is non-empty (keeps
@@ -4690,6 +4850,11 @@ function downloadPngBlob(blob) {
         }
       }
 
+      // PR 4b: cross-check verification chip + expandable details. Only
+      // ever shown for band nodes -- musician nodes never get a chip or
+      // toggle, matching the edit affordances' node.type gate just below.
+      renderVerificationChip(node);
+
       renderEditAffordances(node);
     }
 
@@ -4710,6 +4875,238 @@ function downloadPngBlob(blob) {
       if (nodeCardEditTextBtn) {
         nodeCardEditTextBtn.hidden = !canEdit;
         nodeCardEditTextBtn.onclick = canEdit ? (ev) => { ev.stopPropagation(); openEditBandPopover(node); } : null;
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // PR 4b: cross-check verification chip, expandable details, and the
+    // auto-verify-on-open flow.
+    // ---------------------------------------------------------------------
+
+    // Coarse "time ago" formatter for the verify-sources footer line (e.g.
+    // "verified 3 hours ago"). Deliberately simple -- this is a background
+    // metadata line, not a feature worth pulling in a date library for.
+    function relativeTime(isoString) {
+      const then = new Date(isoString).getTime();
+      if (!Number.isFinite(then)) return 'recently';
+      const diffMs = Date.now() - then;
+      const minutes = Math.round(diffMs / 60000);
+      if (minutes < 1) return 'just now';
+      if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+      const hours = Math.round(minutes / 60);
+      if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+      const days = Math.round(hours / 24);
+      return `${days} day${days === 1 ? '' : 's'} ago`;
+    }
+
+    // 0-100 score -> the CSS class used for both the details table's score
+    // cell and (implicitly, via the same thresholds) how a human would read
+    // the chip's number. Matches the task's spec: 100=green, 60-99=yellow,
+    // <60=red, missing=gray.
+    function verifyScoreClass(score) {
+      if (typeof score !== 'number') return 'verify-score-cell';
+      if (score >= 100) return 'verify-score-cell high';
+      if (score >= 60) return 'verify-score-cell mid';
+      return 'verify-score-cell low';
+    }
+
+    const EM_DASH_VERIFY = '\u2014';
+
+    // Human-readable field names for the breakdown table's first column.
+    // Falls back to the raw key (title-cased) for any future field the
+    // backend adds that this map hasn't been updated for yet.
+    const VERIFY_FIELD_LABELS = {
+      name: 'Name',
+      country: 'Country',
+      city: 'City',
+      genre: 'Genre',
+      years_active: 'Years active',
+    };
+
+    // Render one breakdown field's Wikipedia cell. Some fields (city,
+    // genre, years_active) only ever get a boolean "mentioned in the
+    // extract" signal from Wikipedia rather than a directly comparable
+    // value (see _verify_helpers.mjs's scoreCityField/scoreGenreField/
+    // scoreYearsActiveField) -- render those as "mentioned"/"not found"
+    // per the task spec, and fall back to the literal wikipedia title/tag
+    // value for name's field, which does carry one.
+    function wikipediaCellText(field) {
+      if (field.wikipedia) return field.wikipedia; // name field
+      if (typeof field.wikipedia_mentions === 'boolean') {
+        return field.wikipedia_mentions ? 'mentioned' : 'not found';
+      }
+      return EM_DASH_VERIFY;
+    }
+
+    function musicbrainzCellText(field) {
+      if (field.musicbrainz) return field.musicbrainz; // name/country/city
+      if (Array.isArray(field.musicbrainz_tags) && field.musicbrainz_tags.length) return field.musicbrainz_tags.join(', ');
+      if (field.musicbrainz_life_span) {
+        const { begin, end } = field.musicbrainz_life_span;
+        if (begin || end) return `${begin || '?'}–${end || 'present'}`;
+      }
+      return EM_DASH_VERIFY;
+    }
+
+    // Build the <table> of per-field rows inside the expandable details
+    // panel. `breakdown` is the verification's breakdown object (one key
+    // per field that had comparable data -- see scoreVerification's header
+    // comment on why some fields are simply absent rather than zero).
+    function buildVerifyDetailsTable(breakdown) {
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th>Field</th><th>Ours</th><th>MusicBrainz</th><th>Wikipedia</th><th>Score</th></tr>';
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+
+      Object.entries(breakdown || {}).forEach(([key, field]) => {
+        const tr = document.createElement('tr');
+        const label = VERIFY_FIELD_LABELS[key] || key;
+        const scoreText = typeof field.score === 'number' ? String(field.score) : EM_DASH_VERIFY;
+        tr.innerHTML = `
+          <td>${label}</td>
+          <td>${field.ours || EM_DASH_VERIFY}</td>
+          <td>${musicbrainzCellText(field)}</td>
+          <td>${wikipediaCellText(field)}</td>
+          <td class="${verifyScoreClass(field.score)}">${scoreText}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      return table;
+    }
+
+    // Fully rebuild the details panel's contents (table + sources footer)
+    // for one verification payload. Called once per populateNodeCard, not
+    // wired to be incremental -- the whole panel is cheap enough to redraw.
+    function renderVerifyDetailsPanel(verification) {
+      nodeCardVerifyDetails.innerHTML = '';
+      nodeCardVerifyDetails.appendChild(buildVerifyDetailsTable(verification.breakdown));
+
+      const sources = document.createElement('div');
+      sources.className = 'verify-sources';
+      const parts = [];
+      const mb = verification.sources && verification.sources.musicbrainz;
+      const wiki = verification.sources && verification.sources.wikipedia;
+      if (mb && mb.url) parts.push(`<a href="${mb.url}" target="_blank" rel="noopener">MusicBrainz</a>`);
+      if (wiki && wiki.url) parts.push(`<a href="${wiki.url}" target="_blank" rel="noopener">Wikipedia</a>`);
+      const sourceLinks = parts.length ? parts.join(' \u00b7 ') : 'No source links available';
+      sources.innerHTML = `${sourceLinks} \u00b7 verified ${relativeTime(verification.verified_at)}`;
+      nodeCardVerifyDetails.appendChild(sources);
+    }
+
+    // Build the small silver-star + score chip shown next to the band name.
+    // `pending` renders the "Verifying..." italic state used while an
+    // auto-triggered check is in flight (see triggerAutoVerify below).
+    function renderVerifyChipContent(overallScore, pending) {
+      nodeCardVerifyChip.innerHTML = '';
+      if (pending) {
+        const span = document.createElement('span');
+        span.className = 'verification-chip pending';
+        span.textContent = 'Verifying against MusicBrainz + Wikipedia\u2026';
+        nodeCardVerifyChip.appendChild(span);
+        return;
+      }
+      const chip = document.createElement('span');
+      chip.className = 'verification-chip';
+      chip.title = 'Cross-checked against MusicBrainz and Wikipedia \u2014 click to see details';
+      chip.innerHTML = `<svg viewBox="0 0 24 24" class="silver-star"><path d="${SILVER_STAR_PATH_D}"></path></svg><span>${overallScore}</span>`;
+      nodeCardVerifyChip.appendChild(chip);
+    }
+
+    // Top-level entry point called from populateNodeCard for every node
+    // (band or musician). Decides, in order:
+    //   1. Not a band -> clear everything, bail.
+    //   2. Band with a cached verification -> show the chip + details
+    //      toggle immediately, no network call.
+    //   3. Band with no verification yet, signed in, not already tried
+    //      this session -> show a pending chip and fire the background
+    //      POST /api/verify-band (see triggerAutoVerify).
+    //   4. Band with no verification and (signed out OR already tried) ->
+    //      show nothing. Signed-out visitors never see a pending state,
+    //      per the task spec ("silently skip auto-verify, show no badge").
+    function renderVerificationChip(node) {
+      nodeCardVerifyChip.innerHTML = '';
+      nodeCardVerifyToggle.hidden = true;
+      nodeCardVerifyDetails.hidden = true;
+      nodeCardVerifyToggle.onclick = null;
+
+      if (node.type !== 'band') return;
+      const bandId = bandUuidForNode(node);
+      if (!bandId) return; // CSV-fallback mode -- no backend id to key on
+
+      const verification = verificationsMap.get(bandId);
+      if (verification && typeof verification.overall_score === 'number') {
+        renderVerifyChipContent(verification.overall_score, false);
+        nodeCardVerifyToggle.hidden = false;
+        nodeCardVerifyToggle.textContent = 'Show verification details';
+        nodeCardVerifyToggle.onclick = () => {
+          const nowHidden = nodeCardVerifyDetails.hidden;
+          if (nowHidden) renderVerifyDetailsPanel(verification);
+          nodeCardVerifyDetails.hidden = !nowHidden;
+          nodeCardVerifyToggle.textContent = nowHidden ? 'Hide verification details' : 'Show verification details';
+        };
+        return;
+      }
+
+      // No verification cached yet. Auto-fire only when signed in AND we
+      // haven't already tried this band_id this session (debounce set).
+      const user = loadCurrentUser();
+      if (!user) return; // signed out -- silently skip, no badge, no pending state
+      if (verifyInFlightOrDone.has(bandId)) return; // already tried/in flight this session
+
+      renderVerifyChipContent(null, true); // pending state
+      triggerAutoVerify(node, bandId, user);
+    }
+
+    // Fires POST /api/verify-band in the background for a band that has
+    // never been checked. On success, updates window.__verifications and,
+    // IF this node is still the one anchored in the card, refreshes both
+    // the popover (re-running populateNodeCard) and the graph node's own
+    // badge. Marks bandId in verifyInFlightOrDone immediately (not just on
+    // success) so a rapid re-open of the same popover never fires a second
+    // request while the first is still in flight.
+    async function triggerAutoVerify(node, bandId, user) {
+      verifyInFlightOrDone.add(bandId);
+      try {
+        const res = await fetch('/api/verify-band', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + user.token },
+          body: JSON.stringify({ band_id: bandId }),
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok || !body || body.ok === false) {
+          console.warn('Auto-verify failed for band', bandId, body && body.error);
+          verificationsMap.set(bandId, null);
+          return;
+        }
+        verificationsMap.set(bandId, {
+          overall_score: body.overall_score,
+          verified_at: body.verified_at,
+          breakdown: body.breakdown,
+          sources: body.sources,
+        });
+      } catch (error) {
+        console.warn('Auto-verify request failed for band', bandId, error);
+        return;
+      } finally {
+        // Refresh the popover only if the user hasn't navigated away from
+        // this node in the meantime (nodeCardState.node is the live
+        // selection; comparing by reference is safe since openNodeCard
+        // always passes the same object the graph is using for this tick).
+        if (nodeCardState.node === node) populateNodeCard(node);
+        // Refresh just this node's badge in the live graph, without a full
+        // renderGraph() (which would rebuild every node and could disrupt
+        // an in-progress drag/zoom). d3's selectAll + filter by id finds
+        // the specific <g class="node"> for this band and re-appends the
+        // badge circle/path onto it.
+        if (svgSelection) {
+          graphGroup.selectAll('g.node.band').filter(d => d.id === node.id).each(function(d) {
+            const g = d3.select(this);
+            g.selectAll('.verification-badge').remove();
+            appendVerificationBadge(g, d, getPersonRadius(d));
+          });
+        }
       }
     }
 
@@ -5017,6 +5414,7 @@ function downloadPngBlob(blob) {
       .attr("fill", getPersonFill(d))
       .attr("stroke", getNodeStroke(d))
       .attr("stroke-width", getNodeStrokeWidth(d));
+    appendVerificationBadge(g, d, r);
     return;
   }
 
@@ -6652,6 +7050,20 @@ function downloadPngBlob(blob) {
       rebuildInstrumentDatalist();
       rebuildGenreDatalist();
       graphState = { master };
+
+      // PR 4b: fetch every band's cached verification status in one batch
+      // call, BEFORE the first renderGraph() below, so silver-star badges
+      // are present on the initial paint instead of popping in a moment
+      // later. Uses rawBandsData (populated by loadGraphData() on success)
+      // rather than master.nodes, since we need real backend uuids here,
+      // not display names -- see bandUuidForNode's comment. Silently a
+      // no-op in CSV-fallback mode (rawBandsData stays null), since there
+      // are no backend ids to look up.
+      if (rawBandsData && Array.isArray(rawBandsData.bands)) {
+        const allBandIds = rawBandsData.bands.map(b => b.id).filter(Boolean);
+        await loadVerificationStatuses(allBandIds);
+      }
+
       const sceneSelect = document.getElementById('scene-filter');
       // Build the location dropdown from locationKey/locationLabel, deduped by
       // key and sorted alphabetically by the human-readable label (not the
