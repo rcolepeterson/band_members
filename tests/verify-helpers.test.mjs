@@ -21,6 +21,8 @@ import {
   fetchWikipedia,
   scoreVerification,
   COUNTRY_ALPHA3_TO_ALPHA2,
+  wikipediaTitleIsPlausibleMatch,
+  MB_NAME_QUALITY_FLOOR,
 } from '../netlify/functions/_verify_helpers.mjs';
 
 // --- normalizeBandName -------------------------------------------------------
@@ -233,6 +235,46 @@ test('fetchMusicBrainz logs a rate-limited message on 429', async () => {
   }
 });
 
+// PR 4c fix: reject weakly-related MB matches so we don't cross-check
+// against a completely different band. Real-world example: "Camp Hero"
+// (obscure) getting matched to "Megadeth" because MB has no better hit.
+test('fetchMusicBrainz rejects a match whose name similarity is below the quality floor', async () => {
+  const fetchImpl = async () => fakeJsonResponse(200, {
+    artists: [{ id: 'wrong-1', type: 'Group', name: 'Megadeth', score: 100 }],
+  });
+  const result = await fetchMusicBrainz('Camp Hero', { fetchImpl });
+  assert.equal(result.ok, true);
+  assert.equal(result.artist, null, 'unrelated Group name should be rejected, not returned');
+});
+
+test('fetchMusicBrainz accepts a match whose name is a small variation (typo, punctuation)', async () => {
+  // e.g. 'GAK' vs 'G.A.K.' — normalization strips punctuation so this should pass.
+  const fetchImpl = async () => fakeJsonResponse(200, {
+    artists: [{ id: 'ok-1', type: 'Group', name: 'G.A.K.', score: 100 }],
+  });
+  const result = await fetchMusicBrainz('GAK', { fetchImpl });
+  assert.equal(result.artist && result.artist.id, 'ok-1');
+});
+
+test('fetchMusicBrainz falls back to a Person-type match when no Group exists (solo artist coverage)', async () => {
+  // Sir Mix-a-Lot has no Group entry on MB; before this fix we'd match a
+  // completely unrelated Group like "A Lot Like Birds". Now we should
+  // prefer the actual Person entry.
+  const fetchImpl = async () => fakeJsonResponse(200, {
+    artists: [
+      { id: 'unrelated-group', type: 'Group', name: 'A Lot Like Birds', score: 80 },
+      { id: 'solo-1', type: 'Person', name: 'Sir Mix-a-Lot', score: 100 },
+    ],
+  });
+  const result = await fetchMusicBrainz('Sir Mix-a-Lot', { fetchImpl });
+  assert.equal(result.artist && result.artist.id, 'solo-1');
+});
+
+test('MB_NAME_QUALITY_FLOOR is exported and set to a reasonable value', () => {
+  assert.ok(typeof MB_NAME_QUALITY_FLOOR === 'number');
+  assert.ok(MB_NAME_QUALITY_FLOOR >= 20 && MB_NAME_QUALITY_FLOOR <= 60);
+});
+
 // --- fetchWikipedia (mocked fetch) ---------------------------------------------
 
 test('fetchWikipedia returns the summary page on the first "(band)" candidate', async () => {
@@ -306,6 +348,100 @@ test('fetchWikipedia reports failure immediately on 429', async () => {
   const result = await fetchWikipedia('Nirvana', { fetchImpl });
   assert.equal(result.ok, false);
   assert.ok(result.error.includes('rate limited'));
+});
+
+// PR 4c fix: Wikipedia's search API happily returns keyword-adjacent but
+// unrelated pages, which quietly poisoned the name score. Real-world
+// examples: "Christ on a Crutch" -> "Nate Mendel", "Bush Pig" -> "Red
+// river hog". We now require at least one significant token to overlap.
+test('wikipediaTitleIsPlausibleMatch accepts titles that share a meaningful token', () => {
+  assert.equal(wikipediaTitleIsPlausibleMatch('Christ on a Crutch', 'Christ on a Crutch (band)'), true);
+  assert.equal(wikipediaTitleIsPlausibleMatch('Nirvana', 'Nirvana (band)'), true);
+  assert.equal(wikipediaTitleIsPlausibleMatch('The Rejectors', 'The Rejectors'), true);
+});
+
+test('wikipediaTitleIsPlausibleMatch rejects titles that share nothing but stopwords', () => {
+  // "The Rejectors" vs "The All-American Rejects" -> only 'the' overlaps (stopword), reject.
+  assert.equal(wikipediaTitleIsPlausibleMatch('The Rejectors', 'The All-American Rejects'), false);
+  // "Christ on a Crutch" vs "Nate Mendel" -> no overlap.
+  assert.equal(wikipediaTitleIsPlausibleMatch('Christ on a Crutch', 'Nate Mendel'), false);
+  // "Bush Pig" vs "Red river hog" -> no overlap.
+  assert.equal(wikipediaTitleIsPlausibleMatch('Bush Pig', 'Red river hog'), false);
+  // "Alice Mudgarden" vs "Sap (EP)" -> no overlap.
+  assert.equal(wikipediaTitleIsPlausibleMatch('Alice Mudgarden', 'Sap (EP)'), false);
+});
+
+test('wikipediaTitleIsPlausibleMatch handles empty and non-string input safely', () => {
+  assert.equal(wikipediaTitleIsPlausibleMatch('', 'Nirvana'), false);
+  assert.equal(wikipediaTitleIsPlausibleMatch('Nirvana', ''), false);
+  assert.equal(wikipediaTitleIsPlausibleMatch(null, 'Nirvana'), false);
+  assert.equal(wikipediaTitleIsPlausibleMatch('Nirvana', undefined), false);
+});
+
+test('fetchWikipedia rejects a search fallback whose top hit is not a plausible name match', async () => {
+  // Simulate: direct "(band)" candidates 404, direct bare name 404,
+  // then search returns an unrelated page like Nate Mendel.
+  const fetchImpl = async (url) => {
+    const decoded = decodeURIComponent(url);
+    if (decoded.includes('/page/summary/')) return fakeJsonResponse(404, {});
+    if (decoded.includes('list=search')) {
+      return fakeJsonResponse(200, { query: { search: [{ title: 'Nate Mendel' }] } });
+    }
+    return fakeJsonResponse(404, {});
+  };
+  const result = await fetchWikipedia('Christ on a Crutch', { fetchImpl });
+  assert.equal(result.ok, true);
+  assert.equal(result.page, null, 'unrelated search hit should not be returned as our band page');
+});
+
+test('fetchWikipedia accepts a search fallback whose top hit shares a significant token', async () => {
+  // Direct summary lookups 404; search returns "The Rejectors" (plausible).
+  let seenSummaryTitles = [];
+  const fetchImpl = async (url) => {
+    const decoded = decodeURIComponent(url);
+    if (decoded.includes('/page/summary/')) {
+      seenSummaryTitles.push(decoded);
+      if (decoded.includes('The_Rejectors') && !decoded.includes('(band)')) {
+        return fakeJsonResponse(200, {
+          title: 'The Rejectors',
+          extract: 'The Rejectors were an American hardcore punk band from Seattle.',
+        });
+      }
+      return fakeJsonResponse(404, {});
+    }
+    if (decoded.includes('list=search')) {
+      return fakeJsonResponse(200, { query: { search: [{ title: 'The Rejectors' }] } });
+    }
+    return fakeJsonResponse(404, {});
+  };
+  const result = await fetchWikipedia('The Rejectors', { fetchImpl });
+  assert.equal(result.ok, true);
+  assert.ok(result.page && result.page.title === 'The Rejectors');
+});
+
+test('fetchWikipedia scans past unrelated hits until it finds a plausible one', async () => {
+  // Search returns [unrelated, unrelated, plausible]. We should skip past
+  // the first two and land on the third.
+  const fetchImpl = async (url) => {
+    const decoded = decodeURIComponent(url);
+    if (decoded.includes('/page/summary/')) {
+      if (decoded.includes('Bam_Bam_(album)')) {
+        return fakeJsonResponse(200, { title: 'Bam Bam (album)', extract: 'A hardcore punk album by Bam Bam.' });
+      }
+      return fakeJsonResponse(404, {});
+    }
+    if (decoded.includes('list=search')) {
+      return fakeJsonResponse(200, { query: { search: [
+        { title: 'The Flintstones' },
+        { title: 'Riot in Cell Block Number 9' },
+        { title: 'Bam Bam (album)' },
+      ] } });
+    }
+    return fakeJsonResponse(404, {});
+  };
+  const result = await fetchWikipedia('Bam Bam', { fetchImpl });
+  assert.equal(result.ok, true);
+  assert.ok(result.page && result.page.title === 'Bam Bam (album)');
 });
 
 // --- scoreVerification (the field-by-field scoring engine) ---------------------

@@ -200,13 +200,50 @@ export async function fetchMusicBrainz(bandName, { country, fetchImpl = fetch } 
   const artists = Array.isArray(data.artists) ? data.artists : [];
   if (!artists.length) return { ok: true, artist: null };
 
-  // Match strategy per spec: prefer the top-scoring Group-type match; if
-  // none is type Group, fall back to the top overall result. MB already
-  // sorts by relevance score (descending), so the first Group hit IS the
-  // top-scoring group.
+  // Match strategy: prefer the top-scoring Group-type match, then
+  // Person-type (solo artists like Sir Mix-a-Lot), then the top overall
+  // result. For each candidate in that order, apply the name-similarity
+  // quality floor: if the top-priority Group is unrelated (e.g. "Camp
+  // Hero" -> "Megadeth"), skip it and try the next candidate.
+  const oursNorm = normalizeBandName(name);
   const bestGroup = artists.find(a => a && a.type === 'Group');
-  const artist = bestGroup || artists[0];
-  return { ok: true, artist };
+  const bestPerson = artists.find(a => a && a.type === 'Person');
+  const orderedCandidates = [bestGroup, bestPerson, artists[0]].filter(
+    (a, i, arr) => a && arr.indexOf(a) === i
+  );
+
+  for (const candidate of orderedCandidates) {
+    if (!candidate.name) continue;
+    const nameScore = scoreNameMatch(oursNorm, normalizeBandName(candidate.name));
+    if (nameScore === null || nameScore >= MB_NAME_QUALITY_FLOOR) {
+      return { ok: true, artist: candidate };
+    }
+  }
+  // All candidates failed the quality floor -> no plausible match.
+  return { ok: true, artist: null };
+}
+
+// Reject MusicBrainz candidates whose normalized-name score is below this
+// floor. 40 is loose enough to accept small variants (typo, punctuation,
+// missing "the") while rejecting completely different bands returned by
+// MB's fuzzy search.
+export const MB_NAME_QUALITY_FLOOR = 40;
+
+// Reject Wikipedia summary-search fallbacks whose title shares no
+// meaningful tokens with our band name. Wikipedia's search often returns
+// unrelated but keyword-adjacent pages ("Christ on a Crutch" -> "Nate
+// Mendel") which would otherwise silently poison the name score.
+export function wikipediaTitleIsPlausibleMatch(bandName, title) {
+  const stopwords = new Set(['the', 'a', 'an', 'and', 'of', 'in', 'on', 'to']);
+  const tokenize = s => new Set(
+    s.toLowerCase().split(/\W+/).filter(t => t && !stopwords.has(t))
+  );
+  const ours = tokenize(bandName || '');
+  const theirs = tokenize(title || '');
+  if (!ours.size || !theirs.size) return false;
+  // Require at least one significant (non-stopword) token to overlap.
+  for (const tok of ours) if (theirs.has(tok)) return true;
+  return false;
 }
 
 // Fetch a Wikipedia summary for a band. Tries the direct summary endpoint
@@ -266,7 +303,14 @@ export async function fetchWikipedia(bandName, { fetchImpl = fetch } = {}) {
   const hits = searchData && searchData.query && Array.isArray(searchData.query.search) ? searchData.query.search : [];
   if (!hits.length) return { ok: true, page: null };
 
-  const topTitle = hits[0].title;
+  // Wikipedia's search likes to return keyword-adjacent but unrelated
+  // pages (e.g. searching "Christ on a Crutch band" returns "Nate Mendel"
+  // because he played in that band once). Skip until we find a hit whose
+  // title shares a significant token with our band name, or give up.
+  const plausibleHit = hits.find(h => h && h.title && wikipediaTitleIsPlausibleMatch(name, h.title));
+  if (!plausibleHit) return { ok: true, page: null };
+
+  const topTitle = plausibleHit.title;
   const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topTitle.replace(/\s+/g, '_'))}`;
   let summaryRes;
   try {
