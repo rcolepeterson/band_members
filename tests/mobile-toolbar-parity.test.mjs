@@ -57,6 +57,7 @@ const REQUIRED_PARITY = [
   { desktopId: 'genre-filter',     mobileMatch: 'mobile-genre-filter',     label: 'Genre filter select' },
   { desktopId: 'share-graph-btn',  mobileMatch: 'mobile-share-btn',        label: 'Share this graph' },
   { desktopId: 'add-band-btn',     mobileMatch: 'mobile-add-band-btn',     label: 'Add your band' },
+  { desktopId: 'send-feedback-btn', mobileMatch: 'mobile-send-feedback-btn', label: 'Send feedback' },
 ];
 
 // data-filter / data-action chips share the same attribute values
@@ -238,7 +239,7 @@ test('regression: global toolChips handler ignores chips without data-filter/act
 test('every non-filter tool-chip with an id has a dedicated click handler', () => {
   // Pull every <tag class="...tool-chip..." ... id="..." ...> without
   // data-filter/data-action. Regex is intentionally simple; we're
-  // grepping index.html, not parsing HTML.
+  // grepping index.INDEX_HTML, not parsing HTML.
   const chipTagPattern = /<[^>]*class="[^"]*\btool-chip\b[^"]*"[^>]*>/g;
   const scriptSource = stripJsComments(INDEX_HTML);
   const missingHandlers = [];
@@ -453,5 +454,126 @@ test('every popover inside .graph-overlay-top is either hookPopoverForMobile-reg
       `The hook exists specifically to rescue popovers from that ` +
       `display:none ancestor. If the target no longer lives there, ` +
       `remove the hookPopoverForMobile call.`
+  );
+});
+
+// ---- Send Feedback form (Netlify Forms) regression suite ----
+// These tests pin the Netlify Forms integration contract for the feedback
+// button + popover added in the send-feedback feature. Any of them failing
+// almost certainly means submissions have stopped reaching Netlify or the
+// spam control has been bypassed.
+
+test('index.html has hidden static feedback form for Netlify build-time discovery', () => {
+  // Netlify's form parser scans deployed HTML at build time; it will not
+  // register forms that live inside JavaScript-rendered popovers. The
+  // hidden static duplicate near the top of <body> is what actually gets
+  // registered. Removing it would silently break form submissions on the
+  // next deploy.
+  const hiddenStaticFormRe =
+    /<form\b[^>]*\bname="feedback"[^>]*\bdata-netlify="true"[^>]*\bhidden\b[^>]*>/;
+  assert.match(
+    INDEX_HTML,
+    hiddenStaticFormRe,
+    'Expected a hidden static <form name="feedback" data-netlify="true" hidden> ' +
+      'near the top of <body> so Netlify can discover the form at build time. ' +
+      'Without it, POSTs to "/" with form-name=feedback return 404 from Netlify.'
+  );
+});
+
+test('feedback form declares Netlify honeypot and matching form-name hidden input', () => {
+  // The netlify-honeypot attribute activates server-side spam filtering.
+  // The form-name hidden input is required for JS-submitted forms so
+  // Netlify can associate the POST body with the registered form.
+  const visibleFormRe =
+    /<form[^>]*\bid="feedback-form"[^>]*\bnetlify-honeypot="bot-field"[^>]*>/;
+  assert.match(
+    INDEX_HTML,
+    visibleFormRe,
+    'Expected #feedback-form to have netlify-honeypot="bot-field" attribute. ' +
+      'Without it, Netlify does not filter bot-fill submissions and the ' +
+      'inbox will fill with spam.'
+  );
+
+  assert.match(
+    INDEX_HTML,
+    /<input\s+type="hidden"\s+name="form-name"\s+value="feedback"\s*\/>/,
+    'Expected the visible feedback form to include <input type="hidden" ' +
+      'name="form-name" value="feedback" />. Without it, Netlify returns 404 ' +
+      'on POST because it can\'t associate the payload with the registered form.'
+  );
+
+  assert.match(
+    INDEX_HTML,
+    /<input\s+name="bot-field"/,
+    'Expected an <input name="bot-field"> honeypot input inside the feedback ' +
+      'form. This is the field Netlify inspects server-side to drop bot submissions.'
+  );
+});
+
+test('feedback form has required fields: type dropdown, message, optional email', () => {
+  // These field names are the schema Netlify stores and the notification
+  // email includes. Renaming any of them silently breaks the email format
+  // that already-configured Netlify notifications produce.
+  assert.match(
+    INDEX_HTML,
+    /<select[^>]*\bid="feedback-type"[^>]*\bname="feedback-type"[^>]*\brequired\b/,
+    'Expected required <select id="feedback-type" name="feedback-type"> in the feedback form.'
+  );
+  assert.match(
+    INDEX_HTML,
+    /<textarea[^>]*\bid="feedback-message"[^>]*\bname="feedback-message"[^>]*\brequired\b/,
+    'Expected required <textarea id="feedback-message" name="feedback-message"> in the feedback form.'
+  );
+  assert.match(
+    INDEX_HTML,
+    /<input[^>]*\bid="feedback-email"[^>]*\bname="feedback-email"[^>]*\btype="email"/,
+    'Expected optional <input id="feedback-email" name="feedback-email" type="email"> in the feedback form.'
+  );
+});
+
+test('feedback popover is registered with hookPopoverForMobile for bottom-sheet rescue', () => {
+  // The feedback popover lives inside .graph-overlay-top which is
+  // display:none on mobile. Without hookPopoverForMobile('feedback-popover'),
+  // tapping the mobile Send-feedback button opens a popover the user
+  // literally cannot see. The generic popover-hook-guard test above also
+  // covers this via KNOWN_NO_MOBILE_TRIGGER symmetry, but this pin makes
+  // the diagnostic clearer if the registration ever gets removed.
+  assert.match(
+    INDEX_HTML,
+    /hookPopoverForMobile\(['"]feedback-popover['"]\)/,
+    'Expected hookPopoverForMobile(\'feedback-popover\') call in the mobile ' +
+      'IIFE. Without it, the feedback popover stays inside .graph-overlay-top ' +
+      '(display:none on mobile) and mobile users cannot see the form.'
+  );
+});
+
+test('feedback form submit handler intercepts default submit and POSTs to Netlify', () => {
+  // Two guarantees:
+  //   1. preventDefault() runs so we don't navigate away to the form's
+  //      action URL and lose the user's context.
+  //   2. We fetch('/', { method: 'POST', ... }) so the request reaches
+  //      Netlify's form endpoint (which is the site root).
+  const initBlockRe = /function initFeedbackForm\(\)\s*{[\s\S]*?\n\s*\}\)\(\);/;
+  const match = INDEX_HTML.match(initBlockRe);
+  assert.ok(
+    match,
+    'Expected an initFeedbackForm IIFE that wires the feedback form submit handler.'
+  );
+  const block = match[0];
+  assert.match(
+    block,
+    /event\.preventDefault\(\)/,
+    'Expected the feedback submit handler to call event.preventDefault() so ' +
+      'the browser does not navigate away on submit.'
+  );
+  assert.match(
+    block,
+    /fetch\(\s*['"]\/['"]\s*,\s*\{[\s\S]*?method:\s*['"]POST['"]/,
+    'Expected the feedback submit handler to POST to "/" (the Netlify Forms endpoint).'
+  );
+  assert.match(
+    block,
+    /application\/x-www-form-urlencoded/,
+    'Expected the feedback submit handler to send Content-Type application/x-www-form-urlencoded.'
   );
 });
