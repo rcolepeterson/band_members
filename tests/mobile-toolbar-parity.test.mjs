@@ -311,19 +311,55 @@ test('regression: hookPopoverForMobile detaches add-band-popover to <body> on mo
   );
 });
 
-test('regression: mobile add-band bottom-sheet CSS is not the only defense', () => {
-  // Cross-check the CSS: the mobile #add-band-popover.is-open-mobile
-  // rules must exist AND the code comment should acknowledge that
-  // the panel has to be moved out of .graph-overlay-top for those
-  // rules to apply. This exists so if someone deletes the JS rescue
-  // and thinks the CSS alone is enough, the test fires with an
-  // explanation.
-  const cssMatch = INDEX_HTML.match(/#add-band-popover\.is-open-mobile\s*\{[^}]+\}/);
-  assert.ok(cssMatch, 'Expected #add-band-popover.is-open-mobile ruleset in index.html.');
+test('regression: every hookPopoverForMobile-registered popover has bottom-sheet CSS', () => {
+  // Cross-check the CSS: every popover that gets registered via
+  // hookPopoverForMobile MUST have a matching .is-open-mobile CSS
+  // ruleset that positions it as a bottom sheet. Without that CSS,
+  // hookPopoverForMobile detaches the popover to <body> and adds the
+  // class, but the popover has no visible styling — so on mobile the
+  // user clicks the trigger, the hamburger sheet closes, and nothing
+  // visible replaces it. That failure was hit in PR #47 for the
+  // feedback popover before this test caught it.
+  //
+  // We extract the list of registered ids from the source, then
+  // require each to have a corresponding .is-open-mobile rule with
+  // the bottom-sheet essentials (position:fixed + bottom:0).
+  const registrations = [
+    ...INDEX_HTML.matchAll(/hookPopoverForMobile\(['"]([^'"]+)['"]\)/g),
+  ].map((m) => m[1]);
   assert.ok(
-    /position:\s*fixed/.test(cssMatch[0]) && /bottom:\s*0/.test(cssMatch[0]),
-    'Mobile add-band bottom-sheet must be position:fixed + bottom:0.'
+    registrations.length >= 1,
+    'Expected at least one hookPopoverForMobile registration.'
   );
+
+  for (const popoverId of registrations) {
+    // Look for `#<id>.is-open-mobile` anywhere in the CSS — either as
+    // its own selector or as part of a comma-separated selector list —
+    // followed by a rule body containing position:fixed + bottom:0.
+    //
+    // We deliberately don't try to prove the rule sits inside the
+    // right @media block: the .is-open-mobile class is only ever added
+    // by hookPopoverForMobile, which is itself only active on mobile,
+    // so a rule with that selector cannot fire on desktop by accident.
+    const ruleRe = new RegExp(
+      `#${popoverId}\\.is-open-mobile(?:[\\s,][^{]*)?\\{([^}]+)\\}`
+    );
+    const match = INDEX_HTML.match(ruleRe);
+    assert.ok(
+      match,
+      `Expected an #${popoverId}.is-open-mobile CSS ruleset. Without ` +
+        `it, tapping the mobile trigger for #${popoverId} closes the ` +
+        `hamburger sheet and shows an invisible detached panel — the ` +
+        `classic "graph just refreshes" symptom. Fix: add ` +
+        `#${popoverId}.is-open-mobile to the existing bottom-sheet ` +
+        `selector list inside @media (max-width: 900px).`
+    );
+    assert.ok(
+      /position:\s*fixed/.test(match[1]) && /bottom:\s*0/.test(match[1]),
+      `Mobile bottom-sheet rule for #${popoverId}.is-open-mobile must ` +
+        `be position:fixed + bottom:0.`
+    );
+  }
 });
 
 test('every popover inside .graph-overlay-top is either hookPopoverForMobile-registered or explicitly exempt', () => {

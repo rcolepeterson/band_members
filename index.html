@@ -1242,14 +1242,21 @@ body {
     font-size: 0.9rem;
   }
 
-  /* Node-details popover -> bottom sheet look. Reuse existing popover markup
-     but reposition it as a full-width slide-up on mobile. Note: the
-     panel is originally nested inside .graph-overlay-top which this
-     same @media block sets to display:none, so `position:fixed` on
-     the panel alone is not enough to paint it. hookPopoverForMobile
-     moves the panel to <body> on mobile-open (see PR #44) so this
-     ruleset can actually take effect. */
-  #add-band-popover.is-open-mobile {
+  /* Popover -> bottom sheet look on mobile. Reuse existing popover markup
+     but reposition it as a full-width slide-up. Note: the popovers are
+     originally nested inside .graph-overlay-top which this same @media
+     block sets to display:none, so `position:fixed` on the popover
+     alone is not enough to paint it. hookPopoverForMobile moves the
+     popover to <body> on mobile-open (see PR #44) so this ruleset can
+     actually take effect.
+
+     Any popover that is registered via hookPopoverForMobile MUST be
+     included in this selector, otherwise the mobile trigger opens an
+     invisible detached panel and the user just sees a graph refresh.
+     Popovers currently registered: add-band-popover, feedback-popover.
+  */
+  #add-band-popover.is-open-mobile,
+  #feedback-popover.is-open-mobile {
     position: fixed;
     left: 0;
     right: 0;
