@@ -3456,6 +3456,81 @@ function downloadPngBlob(blob) {
     }
 
     // ---------------------------------------------------------------------
+    // PR 3a: load graph data from Neon Postgres via /api/bands, falling
+    // back to the CSV if that fetch fails for any reason (network error,
+    // non-2xx, or an empty payload — e.g. before the one-time seed has run
+    // against a fresh DB). The CSV fallback is a 2-week safety net; a
+    // follow-up PR will remove it once we're confident /api/bands is
+    // reliable in production. See the PR description for the rollout plan.
+    // ---------------------------------------------------------------------
+
+    // Adapts the /api/bands response shape ({ bands, members, memberships })
+    // into the flat CSV-row shape buildMasterGraph() already knows how to
+    // consume. One row is produced per membership, matching the CSV's
+    // "one row per band-to-member edge" convention. Field mapping mirrors
+    // buildMasterGraph()'s reads exactly (see that function, above):
+    //   source/target/source_type/target_type -> band/member names + kinds
+    //   relation_type, weight                  -> from the membership row
+    //   city/state/country/genre               -> from the band row
+    //   'Instrument 1'/'Instrument 2'           -> from the member row
+    //     (also mirrored onto the misspelled 'Intrument 1'/'Intrument 2'
+    //     keys, since buildMasterGraph() and collectInstrumentsFromCsv()
+    //     both accept either spelling)
+    //   yearsActive                             -> band.years_active
+    //   personYearsActive                       -> member.years_active
+    //   memberYearsActive                       -> membership.tenure
+    function normalizeNeonToRows(data) {
+      const bandsById = new Map((data.bands || []).map(b => [b.id, b]));
+      const membersById = new Map((data.members || []).map(m => [m.id, m]));
+
+      return (data.memberships || []).map(membership => {
+        const band = bandsById.get(membership.band_id) || {};
+        const member = membersById.get(membership.member_id) || {};
+        const instrument1 = member.instrument1 || '';
+        const instrument2 = member.instrument2 || '';
+        return {
+          source: band.name || '',
+          target: member.name || '',
+          source_type: 'band',
+          target_type: 'person',
+          relation_type: membership.relation || 'member_of',
+          city: band.city || '',
+          state: band.state || '',
+          country: band.country || '',
+          genre: band.genre || '',
+          weight: membership.weight != null ? String(membership.weight) : '1',
+          'Instrument 1': instrument1,
+          'Instrument 2': instrument2,
+          'Intrument 1': instrument1,
+          'Intrument 2': instrument2,
+          yearsActive: band.years_active || '',
+          personYearsActive: member.years_active || '',
+          memberYearsActive: membership.tenure || ''
+        };
+      });
+    }
+
+    // Try Neon first. Fall back to CSV if that fails for any reason
+    // (network, auth, empty DB before migration runs). CSV fallback is
+    // a 2-week safety net; a follow-up PR will remove it once we're
+    // confident /api/bands is reliable.
+    async function loadGraphData() {
+      try {
+        const response = await fetch('/api/bands');
+        if (!response.ok) throw new Error(`/api/bands returned ${response.status}`);
+        const data = await response.json();
+        if (!data || !Array.isArray(data.bands) || data.bands.length === 0) {
+          throw new Error('/api/bands returned empty payload');
+        }
+        return normalizeNeonToRows(data);
+      } catch (error) {
+        console.warn('Falling back to CSV load; /api/bands failed:', error);
+        return d3.csv('seattle_band_members-2-2.csv?v=6');
+      }
+    }
+
+
+    // ---------------------------------------------------------------------
     // Dynamic instrument suggestions.
     //
     // The instrument field stays free text (comma-separated for multiple
@@ -5714,7 +5789,7 @@ function downloadPngBlob(blob) {
     });
     svgSelection.call(zoomBehavior);
 
-    d3.csv('seattle_band_members-2-2.csv?v=6').then(async rows => {
+    loadGraphData().then(async rows => {
       const master = buildMasterGraph(rows);
       // Seed instrument suggestions from the CSV and refresh the datalist so
       // real values are suggestible as soon as the base data lands.

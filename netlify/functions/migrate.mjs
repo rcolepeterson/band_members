@@ -19,13 +19,16 @@
 // Schema summary:
 //   users         — one row per signed-up person (email is the natural key)
 //   contributions — append-only log of add/edit actions per user
+//   bands         — one row per band (PR 3a: migrated out of CSV/Blobs)
+//   band_members  — one row per person
+//   memberships   — join table linking a band to a member, with tenure
 //
-// Rationale for keeping bands OUT of the DB (for now):
-//   The graph data still lives in CSV. Migrating the whole graph into
-//   Postgres is a separate project. For attribution we only need to record
-//   who did what against the existing band-id namespace (strings from the
-//   CSV / draft submissions). If we later move bands into Postgres, this
-//   log links up cleanly via band_id.
+// PR 3a note: bands now live in Postgres, not just CSV. The CSV remains in
+// the repo as a 2-week fallback (see index.html's loadGraphData()), and rows
+// imported from it are flagged csv_origin=true on the bands table so future
+// features (verification, edit locks) can treat them differently from
+// bands added through the app. See seed_bands.mjs for the one-time import
+// of CSV rows + existing Blobs submissions into these tables.
 
 import {
   getSql,
@@ -151,6 +154,134 @@ export default async (req) => {
       for each row execute function set_updated_at()
     `;
     results.push('trigger users_set_updated_at ready');
+
+    // bands table ------------------------------------------------------------
+    // PR 3a: bands move out of CSV/Blobs and into Postgres as first-class
+    // rows. `csv_origin` marks rows imported from the base CSV (via
+    // seed_bands.mjs) so future features (verification, edit locks) can
+    // treat CSV-sourced data differently from app-added data. `added_by` /
+    // `edited_by` are nullable references to users — nullable because CSV
+    // rows have no attributable user, and ON DELETE SET NULL so deleting a
+    // user account doesn't cascade into deleting the bands they touched.
+    await sql`
+      create table if not exists bands (
+        id           uuid primary key default gen_random_uuid(),
+        name         text not null,
+        city         text,
+        state        text,
+        country      text,
+        genre        text,
+        years_active text,
+        label        text,
+        albums       text,
+        csv_origin   boolean not null default false,
+        added_by     uuid references users(id) on delete set null,
+        edited_by    uuid references users(id) on delete set null,
+        created_at   timestamptz not null default now(),
+        updated_at   timestamptz not null default now()
+      )
+    `;
+    results.push('table bands ready');
+
+    // Case-insensitive uniqueness on name, mirroring the users_email_lower_idx
+    // pattern. This is also what seed_bands.mjs upserts against.
+    await sql`
+      create unique index if not exists bands_name_lower_idx
+      on bands (lower(name))
+    `;
+    results.push('index bands_name_lower_idx ready');
+
+    // Query patterns we anticipate: filtering the graph by scene (city) or
+    // by genre, both of which the client's existing dropdowns already do
+    // client-side against the CSV — these indexes prepare for pushing that
+    // filtering server-side later.
+    await sql`create index if not exists bands_city_idx on bands (city)`;
+    results.push('index bands_city_idx ready');
+    await sql`create index if not exists bands_genre_idx on bands (genre)`;
+    results.push('index bands_genre_idx ready');
+
+    // Reuses the same set_updated_at() function created above for users.
+    await sql`drop trigger if exists bands_set_updated_at on bands`;
+    await sql`
+      create trigger bands_set_updated_at
+      before update on bands
+      for each row execute function set_updated_at()
+    `;
+    results.push('trigger bands_set_updated_at ready');
+
+    // band_members table ------------------------------------------------------
+    // One row per person. Instrument fields are limited to two (instrument1/
+    // instrument2) matching the two most-used columns in the CSV
+    // (`Intrument 1` / `Intrument 2` — the source data's columns 3 and 4 are
+    // effectively always empty in practice; buildMasterGraph() in index.html
+    // only ever reads the first two anyway).
+    await sql`
+      create table if not exists band_members (
+        id            uuid primary key default gen_random_uuid(),
+        name          text not null,
+        city          text,
+        state         text,
+        country       text,
+        instrument1   text,
+        instrument2   text,
+        years_active  text,
+        bio           text,
+        created_at    timestamptz not null default now(),
+        updated_at    timestamptz not null default now()
+      )
+    `;
+    results.push('table band_members ready');
+
+    await sql`
+      create unique index if not exists band_members_name_lower_idx
+      on band_members (lower(name))
+    `;
+    results.push('index band_members_name_lower_idx ready');
+
+    await sql`drop trigger if exists band_members_set_updated_at on band_members`;
+    await sql`
+      create trigger band_members_set_updated_at
+      before update on band_members
+      for each row execute function set_updated_at()
+    `;
+    results.push('trigger band_members_set_updated_at ready');
+
+    // memberships table ------------------------------------------------------
+    // Join table linking a band to a member, one row per membership (i.e. one
+    // row per CSV edge). `tenure` is the member's years active AT THIS band
+    // (as opposed to band_members.years_active, which is the person's overall
+    // career span). `weight` and `relation` mirror the CSV's `weight` and
+    // `relation_type` columns. ON DELETE CASCADE on both foreign keys because
+    // a membership has no meaning once either side is gone. The UNIQUE
+    // constraint on (band_id, member_id) is what seed_bands.mjs upserts
+    // against, and matches the real-world invariant: a person joins a given
+    // band once (rejoining is modeled as one continuous or updated tenure,
+    // not a second row).
+    await sql`
+      create table if not exists memberships (
+        id           bigserial primary key,
+        band_id      uuid not null references bands(id) on delete cascade,
+        member_id    uuid not null references band_members(id) on delete cascade,
+        tenure       text,
+        weight       integer not null default 1,
+        relation     text not null default 'member_of',
+        created_at   timestamptz not null default now(),
+        unique (band_id, member_id)
+      )
+    `;
+    results.push('table memberships ready');
+
+    await sql`
+      create index if not exists memberships_band_id_idx
+      on memberships (band_id)
+    `;
+    results.push('index memberships_band_id_idx ready');
+
+    await sql`
+      create index if not exists memberships_member_id_idx
+      on memberships (member_id)
+    `;
+    results.push('index memberships_member_id_idx ready');
 
     return ok({ steps: results });
   } catch (err) {
