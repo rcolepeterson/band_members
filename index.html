@@ -477,6 +477,68 @@ body {
   min-height: 6.5rem;
   resize: vertical;
 }
+
+/* Sign-up / signed-in UI inside the Add-your-band popover (PR 2:
+   Signup + Attribution). The popover hosts two sibling sections
+   toggled by JS: [data-signup-only] shows for anonymous visitors
+   (name + email capture), [data-signed-in-only] shows the existing
+   submission form plus the identity strip below. Styles here cover
+   only the new pieces — the form + popover container styling is
+   inherited from .share-popover / .form-grid. */
+#signup-form input[type="text"],
+#signup-form input[type="email"] {
+  /* Explicit width so long emails don't overflow the popover on
+     narrow desktop widths. .form-grid inputs already stretch, but
+     these two live in a form-span-2 and inherit no min-width. */
+  width: 100%;
+  box-sizing: border-box;
+}
+#signup-status {
+  /* Reserve space so the submit button doesn't jump when a
+     validation or network message appears. Empty by default. */
+  min-height: 1.2em;
+}
+.signed-in-strip {
+  /* Small identity chip shown at the top of the signed-in state
+     inside the Add-your-band popover. Reads as a soft badge with a
+     Sign Out link on the right. Kept subtle so it doesn't compete
+     with the form. */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 0.75rem);
+  padding: 0.55rem 0.75rem;
+  margin-bottom: var(--space-3, 0.75rem);
+  border: 1px solid var(--color-border, rgba(225, 244, 255, 0.14));
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--text-sm, 0.85rem);
+  color: var(--color-text-muted, rgba(225, 244, 255, 0.7));
+  background: var(--color-surface-soft, rgba(225, 244, 255, 0.04));
+}
+.signed-in-strip strong {
+  color: var(--color-text, rgba(225, 244, 255, 0.94));
+  font-weight: 600;
+}
+.link-btn {
+  /* Text-only inline button styled to look like a link. Used for
+     Sign out inside the signed-in strip. Kept generic so we can
+     reuse it elsewhere later. */
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--color-accent, #7cc4ff);
+  font: inherit;
+  font-size: var(--text-sm, 0.85rem);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.link-btn:hover,
+.link-btn:focus-visible {
+  color: var(--color-accent-hover, #a9d8ff);
+  outline: none;
+}
 #feedback-status:empty { display: none; }
 #feedback-status.is-error { color: #ff9b9b; }
 #feedback-status.is-success { color: #9befcf; }
@@ -2067,11 +2129,71 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             </div>
           </div>
           <div class="popover-anchor">
+            <!--
+              Add-your-band / Sign-up combo button.
+
+              For anonymous visitors this reads "Sign up" and opens the
+              signup gate (name + email) inside the popover. Once the
+              user is signed in (bmft-user in localStorage, verified
+              against /api/me on load), the button label flips to "Add
+              your band" and clicking it opens the existing submission
+              form directly.
+
+              The two states live in a single popover so we get one
+              hookPopoverForMobile registration and one mobile
+              bottom-sheet CSS rule (see the #add-band-popover.is-open
+              -mobile block earlier in this file). The visible section
+              inside the popover is toggled by JS via
+              [data-signup-only] vs [data-signed-in-only] attributes
+              on the two panels.
+            -->
             <button class="primary-btn add-band-btn" type="button" id="add-band-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="add-band-popover">Add your band</button>
             <div class="share-popover popover-down popover-wide" id="add-band-popover" role="dialog" aria-label="Add your band" hidden>
               <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
-              <div class="share-popover-title">Add your band</div>
-              <p class="share-popover-copy">Drop a new branch into the tree. Plain text only — links and promo URLs are not allowed.</p>
+
+              <!--
+                Signed-out state: name + email capture. Sits at the top
+                of the popover; the whole submission form beneath is
+                hidden via the data-signed-in-only attribute until the
+                signup succeeds. Copy is short on purpose — the goal is
+                to move users through the gate, not sell them on it.
+              -->
+              <div data-signup-only>
+                <div class="share-popover-title">Sign up to add your band</div>
+                <p class="share-popover-copy">
+                  Quick one-time sign-up so we can attribute your contributions and let you edit later.
+                  No password. Your email is only used for account recovery — never shared.
+                </p>
+                <form class="form-grid" id="signup-form" novalidate>
+                  <div class="form-span-2">
+                    <label for="signup-name">Your name</label>
+                    <input id="signup-name" name="signup-name" type="text" autocomplete="name" placeholder="Jane Musician" required maxlength="100" />
+                  </div>
+                  <div class="form-span-2">
+                    <label for="signup-email">Email</label>
+                    <input id="signup-email" name="signup-email" type="email" autocomplete="email" placeholder="you@example.com" required maxlength="254" />
+                    <div class="field-note">Only used to attribute contributions and reach you if we need to. Not shared.</div>
+                  </div>
+                  <div id="signup-status" class="validation-message" aria-live="polite"></div>
+                  <div class="form-span-2 footer-strip">
+                    <button class="submit-btn" type="submit" id="signup-submit-btn">Sign up</button>
+                  </div>
+                </form>
+              </div>
+
+              <!--
+                Signed-in state: the existing Add-your-band form,
+                shown only when the user has a valid bmft-user in
+                localStorage. Also carries a small identity strip so
+                the user can see who they're posting as and sign out.
+              -->
+              <div data-signed-in-only hidden>
+                <div class="share-popover-title">Add your band</div>
+                <p class="share-popover-copy">Drop a new branch into the tree. Plain text only — links and promo URLs are not allowed.</p>
+                <div class="signed-in-strip" id="signed-in-strip">
+                  <span>Signed in as <strong data-current-user-name>—</strong></span>
+                  <button type="button" class="link-btn" id="sign-out-btn">Sign out</button>
+                </div>
               <form class="form-grid form-grid-expanded" id="submission-form">
                 <div><label for="band-name">Band name</label><input id="band-name" name="band-name" type="text" placeholder="Temple of the Dog" /></div>
                 <div class="form-span-2 location-fields">
@@ -2130,6 +2252,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
               <div id="submission-mode" class="validation-message" aria-live="polite">Mode: Create a new band entry.</div>
               <div id="submission-feedback" class="validation-message submission-feedback" aria-live="polite"></div>
               <div class="footer-strip"><button class="submit-btn" type="button" id="save-draft-btn">Save draft band</button></div>
+              </div><!-- /data-signed-in-only -->
             </div>
           </div>
           <!--
@@ -3477,6 +3600,150 @@ function downloadPngBlob(blob) {
     // ---------------------------------------------------------------------
     const BANDS_ENDPOINT = '/.netlify/functions/bands';
     const USER_SUBMISSIONS_KEY = 'rbft-user-submissions';
+
+    // ---------------------------------------------------------------------
+    // PR 2: Signup + Attribution session helpers.
+    //
+    // Users sign up with name + email against /api/signup. The response
+    // includes a bearer token which we store in localStorage under the
+    // BMFT_USER_KEY. On every page load we optimistically restore that
+    // user from localStorage (so the toolbar flips instantly, no network
+    // round-trip) and then verify against /api/me in the background;
+    // if the server rejects the token (e.g. we wiped the DB, or the
+    // user's row was deleted) we sign them out silently.
+    //
+    // The stored shape is intentionally narrow — name, email, token, and
+    // the counter snapshot from signup — so we don't accidentally rely on
+    // stale server data. Live counters come from /api/me when needed.
+    // ---------------------------------------------------------------------
+    const BMFT_USER_KEY = 'bmft-user';
+    const SIGNUP_ENDPOINT = '/api/signup';
+    const ME_ENDPOINT = '/api/me';
+    const CONTRIBUTIONS_ENDPOINT = '/api/contributions';
+
+    function loadCurrentUser() {
+      try {
+        const raw = localStorage.getItem(BMFT_USER_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        if (typeof parsed.token !== 'string' || parsed.token.length < 8) return null;
+        if (typeof parsed.email !== 'string' || !parsed.email) return null;
+        return parsed;
+      } catch (error) {
+        // Corrupted JSON — clear it so we don't loop on the failure.
+        try { localStorage.removeItem(BMFT_USER_KEY); } catch (_) {}
+        return null;
+      }
+    }
+
+    function saveCurrentUser(user) {
+      try {
+        localStorage.setItem(BMFT_USER_KEY, JSON.stringify(user));
+        return true;
+      } catch (error) {
+        console.warn('Could not persist signed-in user to localStorage.', error);
+        return false;
+      }
+    }
+
+    function clearCurrentUser() {
+      try { localStorage.removeItem(BMFT_USER_KEY); } catch (_) {}
+    }
+
+    // Flip the visible state of the Add-your-band button + popover contents
+    // based on whether we have a signed-in user. Runs on load, after signup,
+    // and after sign-out. Safe to call multiple times — idempotent.
+    function setSignedInState(user) {
+      const isSignedIn = Boolean(user);
+      const addBtn = document.getElementById('add-band-btn');
+      const mobileAddBtn = document.getElementById('mobile-add-band-btn');
+      const popover = document.getElementById('add-band-popover');
+      if (addBtn) {
+        addBtn.textContent = isSignedIn ? 'Add your band' : 'Sign up';
+        addBtn.setAttribute('aria-label', isSignedIn ? 'Add your band' : 'Sign up to add your band');
+      }
+      if (mobileAddBtn) {
+        // The mobile button has an SVG icon followed by a text node. Rewrite
+        // just the trailing text; keep the icon intact.
+        const textNodes = Array.from(mobileAddBtn.childNodes).filter(n => n.nodeType === 3);
+        const label = isSignedIn ? 'Add your band' : 'Sign up';
+        if (textNodes.length) {
+          textNodes[textNodes.length - 1].textContent = ' ' + label;
+        } else {
+          mobileAddBtn.appendChild(document.createTextNode(' ' + label));
+        }
+      }
+      if (popover) {
+        const signupSection = popover.querySelector('[data-signup-only]');
+        const signedInSection = popover.querySelector('[data-signed-in-only]');
+        if (signupSection) signupSection.hidden = isSignedIn;
+        if (signedInSection) signedInSection.hidden = !isSignedIn;
+        const nameSpan = popover.querySelector('[data-current-user-name]');
+        if (nameSpan && user) nameSpan.textContent = user.name || user.email || 'you';
+      }
+    }
+
+    // Fire and forget contribution log. Never throws — attribution is a
+    // best-effort side effect and must not block the primary add-band flow.
+    // If the user isn't signed in we silently no-op (the add-band flow
+    // itself is gated on sign-in earlier).
+    async function logContribution(action, bandId, bandName, metadata) {
+      const user = loadCurrentUser();
+      if (!user || !user.token) return;
+      try {
+        await fetch(CONTRIBUTIONS_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'authorization': 'Bearer ' + user.token
+          },
+          body: JSON.stringify({
+            action: action,
+            band_id: bandId || null,
+            band_name: bandName || null,
+            metadata: metadata || {}
+          })
+        });
+      } catch (error) {
+        console.warn('Contribution log failed (non-blocking).', error);
+      }
+    }
+
+    // Verify the locally stored token against /api/me. If the server
+    // rejects it (401), sign the user out silently — their token is stale.
+    // If the network is unreachable, keep the local state (offline safety).
+    async function verifyStoredUser() {
+      const user = loadCurrentUser();
+      if (!user || !user.token) return;
+      try {
+        const response = await fetch(ME_ENDPOINT, {
+          headers: { 'authorization': 'Bearer ' + user.token }
+        });
+        if (response.status === 401 || response.status === 404) {
+          clearCurrentUser();
+          setSignedInState(null);
+          return;
+        }
+        if (response.ok) {
+          const data = await response.json().catch(() => null);
+          if (data && data.user) {
+            // Refresh cached name / counters from the server.
+            saveCurrentUser({
+              id: data.user.id,
+              name: data.user.name,
+              email: data.user.email,
+              token: user.token,
+              bands_added: data.user.bands_added,
+              bands_edited: data.user.bands_edited
+            });
+            setSignedInState(loadCurrentUser());
+          }
+        }
+      } catch (error) {
+        // Network failure — leave the local state alone.
+      }
+    }
 
     // Fetch all shared submissions from the backend. Returns an array of draft
     // objects (same shape applyDraftToMaster consumes). Throws on network or
@@ -5363,6 +5630,14 @@ function downloadPngBlob(blob) {
           showSubmissionFeedback(result.reason || 'Nothing new to add — that entry already exists.', true);
           return;
         }
+        // PR 2: attribute this add to the signed-in user. Fire and
+        // forget — attribution must never block the primary flow.
+        logContribution('add_band', (storedRecord && storedRecord.id) || null, draft.band, {
+          city: draft.city || null,
+          country: draft.country || null,
+          state: draft.state || null,
+          member_count: Array.isArray(draft.members) ? draft.members.length : null
+        });
         finishAndReport(result, true);
       } catch (error) {
         // Offline/error safety net: this keeps the OLD localStorage-merge
@@ -5964,6 +6239,100 @@ function downloadPngBlob(blob) {
         }
         hookPopoverForMobile('add-band-popover');
         hookPopoverForMobile('feedback-popover');
+
+        // -----------------------------------------------------------------
+        // PR 2: Signup form wiring.
+        //
+        // Runs after hookPopoverForMobile so the popover DOM is in its
+        // final resting position for both desktop and mobile. Flips the
+        // toolbar/popover state from stored localStorage synchronously so
+        // the visible label matches the user's state on first paint, then
+        // background-verifies against /api/me.
+        // -----------------------------------------------------------------
+        (function initSignup() {
+          setSignedInState(loadCurrentUser());
+          verifyStoredUser();
+
+          const form = document.getElementById('signup-form');
+          const status = document.getElementById('signup-status');
+          const submitBtn = document.getElementById('signup-submit-btn');
+          const nameInput = document.getElementById('signup-name');
+          const emailInput = document.getElementById('signup-email');
+
+          if (form) {
+            form.addEventListener('submit', async (event) => {
+              event.preventDefault();
+              const name = (nameInput && nameInput.value || '').trim();
+              const email = (emailInput && emailInput.value || '').trim().toLowerCase();
+              // Client-side sanity check. Server enforces the real rules.
+              if (!name || name.length > 100) {
+                status.textContent = 'Please enter your name (up to 100 characters).';
+                status.className = 'validation-message is-error';
+                return;
+              }
+              if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                status.textContent = 'That doesn’t look like a valid email. Try again.';
+                status.className = 'validation-message is-error';
+                return;
+              }
+              submitBtn.disabled = true;
+              const previousLabel = submitBtn.textContent;
+              submitBtn.textContent = 'Signing up…';
+              status.textContent = '';
+              status.className = 'validation-message';
+              try {
+                const response = await fetch(SIGNUP_ENDPOINT, {
+                  method: 'POST',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({ name: name, email: email })
+                });
+                let data = null;
+                try { data = await response.json(); } catch (_) {}
+                if (!response.ok || !data || !data.user || !data.user.token) {
+                  const msg = (data && (data.error || data.message)) || `Sign-up failed (${response.status}).`;
+                  status.textContent = msg;
+                  status.className = 'validation-message is-error';
+                  return;
+                }
+                saveCurrentUser({
+                  id: data.user.id,
+                  name: data.user.name,
+                  email: data.user.email,
+                  token: data.user.token,
+                  bands_added: data.user.bands_added || 0,
+                  bands_edited: data.user.bands_edited || 0
+                });
+                setSignedInState(loadCurrentUser());
+                // The signup section is now hidden; if there's any residual
+                // input we clear it for good measure.
+                form.reset();
+              } catch (error) {
+                status.textContent = 'Could not reach the server. Check your connection and try again.';
+                status.className = 'validation-message is-error';
+              } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = previousLabel;
+              }
+            });
+          }
+
+          const signOutBtn = document.getElementById('sign-out-btn');
+          if (signOutBtn) {
+            signOutBtn.addEventListener('click', () => {
+              clearCurrentUser();
+              setSignedInState(null);
+              // Close the popover so the user sees the flipped toolbar
+              // clearly instead of the now-hidden signed-in panel.
+              const popover = document.getElementById('add-band-popover');
+              const addBtn = document.getElementById('add-band-btn');
+              if (popover) {
+                popover.hidden = true;
+                popover.classList.remove('is-open-mobile');
+              }
+              if (addBtn) addBtn.setAttribute('aria-expanded', 'false');
+            });
+          }
+        })();
 
         // Escape key closes the menu sheet on mobile.
         document.addEventListener('keydown', ev => {
