@@ -1,4 +1,6 @@
 import { getStore } from '@netlify/blobs';
+import { getSql, isDbConfigured, extractBearerToken, findUserByToken } from './_db.mjs';
+import { createBandInNeon } from './_bands_write.mjs';
 
 // Shared backend for "Add your band" submissions.
 //
@@ -419,6 +421,108 @@ async function readSubmissions(store) {
   return Array.isArray(existing) ? existing : [];
 }
 
+// --- PR 3b migration bridge --------------------------------------------
+//
+// This is the trickiest file in PR 3b, so read this block before touching
+// the POST handler below.
+//
+// Context: PR 3a moved the READ path (GET /api/bands) to Neon Postgres, but
+// left this legacy Blobs endpoint (POST /.netlify/functions/bands) as the
+// only write path, because the client's "Add your band" form still posts
+// here. PR 3b adds the real Neon write path (bands_create.mjs at
+// POST /api/bands) but we can't just delete this endpoint: any browser tab
+// with cached JS from before this deploy is still going to POST here, and
+// breaking that silently drops real submissions on the floor.
+//
+// So instead, this endpoint becomes a BRIDGE:
+//   - If the caller is signed in (valid bearer token), we validate the
+//     submission with the SAME validateSubmission() the client contract has
+//     always relied on, then translate the resulting draft into a Neon
+//     write via the shared createBandInNeon() helper (the same function
+//     bands_create.mjs uses, so there is exactly one Neon write
+//     implementation in this codebase, not two that can drift).
+//   - If Neon reports a name conflict (the band already exists), we DO NOT
+//     error out to the client — we fall back to the OLD blob write path.
+//     This matches today's UX: a duplicate submission still gets queued and
+//     shown to the user as "your submission is in", rather than surfacing a
+//     409 that the old client-side success handler has no branch for.
+//   - If the caller is anonymous (no bearer token), we skip Neon entirely
+//     and keep the OLD blob write path. Anonymous submissions still work
+//     exactly as before — signup is a soft nudge, not a hard gate.
+//   - In EVERY case (Neon success, Neon conflict->blob fallback, or
+//     anonymous->blob), we still write the SAME audit-log entry to the
+//     'band-submissions-audit' blob store, so there remains ONE unified
+//     audit trail regardless of which backend actually took the write. This
+//     is why writeAuditEntry() is called from a single place after the
+//     if/else below, not duplicated inside each branch.
+//   - The HTTP response shape is kept IDENTICAL to the pre-PR-3b shape
+//     ({ submission: {...draft...} }, 201) in every case, so the client's
+//     existing success handler (which reads `submission` off the response)
+//     keeps working unmodified. The Neon-backed band id is not surfaced
+//     here; the client doesn't use it today, and adding it is out of scope
+//     for the migration bridge (a future PR can widen this response once
+//     the client is updated to consume it).
+//
+// Translation from draft -> Neon create-band input:
+//   name = draft.band
+//   members = draft.members.map(m => ({
+//     name: m.member, instrument1: m.instrument, tenure: '',
+//     weight: Number(m.relation) || 2, relation: 'member_of',
+//   }))
+// draft.members entries are always { member, instrument, relation } per
+// validateSubmission()'s normalization, so there is no id-reference case
+// here (legacy submissions never reference an existing member by id) —
+// every member in a legacy submission is a new-by-name entry.
+function draftToNeonCreateInput(draft, userId) {
+  return {
+    name: draft.band,
+    city: draft.city,
+    state: draft.state,
+    country: draft.country,
+    genre: draft.genre,
+    years_active: draft.yearsActive,
+    label: draft.label,
+    albums: draft.albums,
+    members: (draft.members || []).map(m => {
+      const relationNum = Number(m.relation);
+      return {
+        name: m.member,
+        instrument1: m.instrument || '',
+        instrument2: '',
+        tenure: '',
+        weight: Number.isFinite(relationNum) && relationNum > 0 ? relationNum : 2,
+        relation: 'member_of',
+      };
+    }),
+    userId,
+  };
+}
+
+// Attempt the Neon write for a signed-in submitter. Returns
+// { landedInNeon: true } on success, or { landedInNeon: false } if we should
+// fall back to the blob path (name conflict, or any Neon-side error — a DB
+// outage must never block a legitimate submission, matching the existing
+// fire-and-forget audit philosophy in this file).
+async function tryNeonWrite(draft, user) {
+  try {
+    const sql = getSql();
+    const input = draftToNeonCreateInput(draft, user.id);
+    const result = await createBandInNeon(sql, input);
+    if (result.conflict || result.missingMemberIds) {
+      // Conflict: band already exists in Neon -> fall back to blob so the
+      // submission is still queued/visible, matching current UX.
+      // missingMemberIds: shouldn't happen (legacy drafts never reference
+      // ids), but fail safe into the blob path rather than erroring the
+      // whole request if it somehow does.
+      return { landedInNeon: false };
+    }
+    return { landedInNeon: true, band: result.band };
+  } catch (err) {
+    console.error('bands.mjs: Neon write failed, falling back to blob path', err);
+    return { landedInNeon: false };
+  }
+}
+
 export default async function handler(req) {
   const store = getSubmissionsStore();
 
@@ -483,20 +587,50 @@ export default async function handler(req) {
       return jsonResponse({ error: result.error }, 400);
     }
 
-    try {
-      // Read-modify-write the single submissions blob.
-      const submissions = await readSubmissions(store);
-      submissions.push(result.draft);
-      await store.setJSON(BLOB_KEY, submissions);
-    } catch (error) {
-      return jsonResponse({ error: 'Could not save submission.' }, 500);
+    // --- Migration bridge: try Neon first if signed in, else/else-fallback
+    // to the original blob write path. See the big comment block above
+    // draftToNeonCreateInput() for the full rationale. `landedInNeon` tracks
+    // which path actually took the write, purely so the audit-log entry
+    // below can record it — the HTTP response shape is identical either way.
+    let landedInNeon = false;
+    const token = extractBearerToken(req);
+    if (token && isDbConfigured()) {
+      try {
+        const sql = getSql();
+        const user = await findUserByToken(sql, token);
+        if (user) {
+          const neonResult = await tryNeonWrite(result.draft, user);
+          landedInNeon = neonResult.landedInNeon;
+        }
+        // Invalid/revoked token: fall through to the anonymous/blob path
+        // rather than 401ing — this endpoint has never required auth, and a
+        // stale cached token shouldn't suddenly block a submission.
+      } catch (error) {
+        console.error('bands.mjs: signed-in Neon redirect check failed, falling back to blob path', error);
+        landedInNeon = false;
+      }
     }
 
-    // Fire-and-forget audit log. Awaited (not orphaned as a floating promise)
-    // so that in the Netlify Functions runtime the write completes before the
-    // function exits; Functions v2 does not wait for orphan promises after the
-    // response returns. writeAuditEntry() swallows its own errors.
-    await writeAuditEntry('submission_accepted', result.draft.id, result.draft, req);
+    if (!landedInNeon) {
+      try {
+        // Read-modify-write the single submissions blob. This is the ORIGINAL
+        // write path, now reached when: the caller is anonymous, the DB isn't
+        // configured, the token didn't resolve to a user, the band already
+        // exists in Neon (conflict fallback), or the Neon write errored.
+        const submissions = await readSubmissions(store);
+        submissions.push(result.draft);
+        await store.setJSON(BLOB_KEY, submissions);
+      } catch (error) {
+        return jsonResponse({ error: 'Could not save submission.' }, 500);
+      }
+    }
+
+    // Unified audit trail: write the SAME audit entry regardless of which
+    // backend (Neon or Blob) actually took the write, so admins reconciling
+    // the audit log don't need to know which path a given submission used.
+    // Fire-and-forget (writeAuditEntry swallows its own errors), but awaited
+    // per Functions v2's no-orphan-promises-after-response rule.
+    await writeAuditEntry('submission_accepted', result.draft.id, { ...result.draft, landedInNeon }, req);
 
     return jsonResponse({ submission: result.draft }, 201);
   }

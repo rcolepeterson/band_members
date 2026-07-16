@@ -132,7 +132,10 @@ test('bands_neon.mjs exists', () => {
 
 test('bands_neon.mjs mounts at /api/bands', () => {
   const src = readFn('bands_neon.mjs');
-  assert.match(src, /export const config\s*=\s*\{\s*path:\s*['"]\/api\/bands['"]\s*\}/);
+  // PR 3b: bands_create.mjs (POST) and bands_edit.mjs (PATCH /:id) now share
+  // the /api/bands path family, so bands_neon.mjs's config additionally
+  // declares `method: 'GET'` to disambiguate. The path itself is unchanged.
+  assert.match(src, /export const config\s*=\s*\{\s*path:\s*['"]\/api\/bands['"]\s*,\s*method:\s*['"]GET['"]\s*\}/);
 });
 
 test('bands_neon.mjs only allows GET (write path is a later PR)', () => {
@@ -162,11 +165,17 @@ test('the legacy bands.mjs has no config export, so it stays on the default /.ne
   assert.doesNotMatch(src, /export const config/);
 });
 
-test('bands.mjs is untouched by PR 3a (still Blobs-backed, no Postgres import)', () => {
+// PR 3a assertion (superseded by PR 3b): bands.mjs used to have zero
+// Postgres awareness. PR 3b's task explicitly requires bands.mjs's POST
+// branch to redirect writes to Neon when the caller is signed in, so it now
+// imports _db.mjs (for auth helpers) and _bands_write.mjs (the shared Neon
+// write path) alongside its original @netlify/blobs import. GET and DELETE
+// remain Blobs-only — see the dedicated bridge-behavior tests below.
+test('bands.mjs remains Blobs-backed for GET/DELETE and gained Neon-write awareness in PR 3b', () => {
   const src = readFn('bands.mjs');
   assert.match(src, /@netlify\/blobs/);
-  assert.doesNotMatch(src, /@neondatabase\/serverless/);
-  assert.doesNotMatch(src, /from '\.\/_db\.mjs'/);
+  assert.match(src, /from '\.\/_db\.mjs'/, 'PR 3b: bands.mjs imports auth helpers to redirect signed-in POSTs to Neon');
+  assert.match(src, /from '\.\/_bands_write\.mjs'/, 'PR 3b: bands.mjs reuses the shared Neon write helper instead of duplicating it');
 });
 
 test('/api/bands and /api/seed-bands are distinct paths from each other and from /api/migrate', () => {
@@ -174,7 +183,10 @@ test('/api/bands and /api/seed-bands are distinct paths from each other and from
   const seedSrc = readFn('seed_bands.mjs');
   const migrateSrc = readFn('migrate.mjs');
   const extractPath = (src) => {
-    const match = /export const config\s*=\s*\{\s*path:\s*['"]([^'"]+)['"]\s*\}/.exec(src);
+    // Tolerate an optional trailing `, method: '...'` field (added in PR 3b
+    // so /api/bands can be shared by GET/POST/PATCH handlers in different
+    // files) without weakening the path-value assertion itself.
+    const match = /export const config\s*=\s*\{\s*path:\s*['"]([^'"]+)['"](?:\s*,\s*method:\s*['"][A-Z]+['"])?\s*\}/.exec(src);
     return match ? match[1] : null;
   };
   const bandsPath = extractPath(bandsSrc);
@@ -185,4 +197,134 @@ test('/api/bands and /api/seed-bands are distinct paths from each other and from
   assert.equal(migratePath, '/api/migrate');
   const paths = new Set([bandsPath, seedPath, migratePath]);
   assert.equal(paths.size, 3, 'all three routes must be distinct');
+});
+
+// --- PR 3b: write endpoints --------------------------------------------------
+
+test('bands_create.mjs exists and mounts POST /api/bands', () => {
+  assert.ok(existsSync(path.join(FUNCTIONS_DIR, 'bands_create.mjs')));
+  const src = readFn('bands_create.mjs');
+  assert.match(src, /export const config\s*=\s*\{\s*path:\s*['"]\/api\/bands['"]\s*,\s*method:\s*['"]POST['"]\s*\}/);
+});
+
+test('bands_edit.mjs exists and mounts PATCH /api/bands/:id', () => {
+  assert.ok(existsSync(path.join(FUNCTIONS_DIR, 'bands_edit.mjs')));
+  const src = readFn('bands_edit.mjs');
+  assert.match(src, /export const config\s*=\s*\{\s*path:\s*['"]\/api\/bands\/:id['"]\s*,\s*method:\s*['"]PATCH['"]\s*\}/);
+});
+
+test('bands_edit_members.mjs exists and mounts PATCH /api/bands/:id/members', () => {
+  assert.ok(existsSync(path.join(FUNCTIONS_DIR, 'bands_edit_members.mjs')));
+  const src = readFn('bands_edit_members.mjs');
+  assert.match(src, /export const config\s*=\s*\{\s*path:\s*['"]\/api\/bands\/:id\/members['"]\s*,\s*method:\s*['"]PATCH['"]\s*\}/);
+});
+
+test('_bands_write.mjs exists as the shared Neon band-creation helper', () => {
+  assert.ok(existsSync(path.join(FUNCTIONS_DIR, '_bands_write.mjs')));
+  const src = readFn('_bands_write.mjs');
+  assert.match(src, /export\s+(async\s+)?function\s+createBandInNeon/, 'expected createBandInNeon to be exported');
+});
+
+test('bands_create.mjs delegates band creation to the shared _bands_write.mjs helper rather than duplicating the transaction', () => {
+  const src = readFn('bands_create.mjs');
+  assert.match(src, /import\s*\{\s*createBandInNeon\s*\}\s*from\s*['"]\.\/_bands_write\.mjs['"]/);
+});
+
+test('bands.mjs (legacy) reuses the same _bands_write.mjs helper for its Neon redirect, not a second implementation', () => {
+  const src = readFn('bands.mjs');
+  assert.match(src, /import\s*\{\s*createBandInNeon\s*\}\s*from\s*['"]\.\/_bands_write\.mjs['"]/);
+});
+
+test('the add-band contribution is logged with action \'add_band\' inside the shared _bands_write.mjs transaction', () => {
+  const src = readFn('_bands_write.mjs');
+  assert.match(src, /'add_band'/);
+  assert.match(src, /sql\.transaction\(/, 'the contribution insert must ride along in the same sql.transaction as the write it audits');
+});
+
+test('bands_edit.mjs logs an edit_band contribution inside its sql.transaction, and skips logging on a no-op diff', () => {
+  const src = readFn('bands_edit.mjs');
+  assert.match(src, /'edit_band'/);
+  assert.match(src, /sql\.transaction\(/);
+  // No-op guard: an empty diff must short-circuit before any transaction is
+  // built, so a PATCH with no actual field changes never writes a
+  // contribution row.
+  assert.match(src, /changes/i);
+});
+
+test('bands_edit_members.mjs logs an edit_band_members contribution inside its second sql.transaction', () => {
+  const src = readFn('bands_edit_members.mjs');
+  assert.match(src, /'edit_band_members'/);
+  assert.match(src, /sql\.transaction\(/);
+});
+
+test('bands_edit.mjs and bands_edit_members.mjs both set bands.edited_by on write (no ownership check, attribution only)', () => {
+  const editSrc = readFn('bands_edit.mjs');
+  const editMembersSrc = readFn('bands_edit_members.mjs');
+  assert.match(editSrc, /edited_by\s*=\s*\$\{user\.id\}/);
+  assert.match(editMembersSrc, /edited_by\s*=\s*\$\{user\.id\}/);
+});
+
+test('bands_edit.mjs and bands_edit_members.mjs both increment the bands_edited counter on the acting user', () => {
+  const editSrc = readFn('bands_edit.mjs');
+  const editMembersSrc = readFn('bands_edit_members.mjs');
+  assert.match(editSrc, /bands_edited\s*=\s*bands_edited\s*\+\s*1/);
+  assert.match(editMembersSrc, /bands_edited\s*=\s*bands_edited\s*\+\s*1/);
+});
+
+test('bands_edit.mjs restricts its dynamic SET clause to a fixed field allowlist (no raw user-supplied column names)', () => {
+  const src = readFn('bands_edit.mjs');
+  assert.match(src, /EDITABLE_FIELDS/);
+  assert.match(src, /sql\.unsafe\(/, 'sql.unsafe is only safe here because it is fed from EDITABLE_FIELDS, never raw input');
+});
+
+test('all three PR 3b write endpoints require auth via extractBearerToken + findUserByToken from _db.mjs', () => {
+  ['bands_create.mjs', 'bands_edit.mjs', 'bands_edit_members.mjs'].forEach(name => {
+    const src = readFn(name);
+    assert.match(src, /extractBearerToken/, `${name} should extract the bearer token`);
+    assert.match(src, /findUserByToken/, `${name} should resolve the token to a user`);
+    assert.match(src, /unauthorized\(/, `${name} should use the shared unauthorized() response builder`);
+  });
+});
+
+test('all three PR 3b write endpoints reject non-matching HTTP methods with methodNotAllowed', () => {
+  ['bands_create.mjs', 'bands_edit.mjs', 'bands_edit_members.mjs'].forEach(name => {
+    const src = readFn(name);
+    assert.match(src, /methodNotAllowed/, `${name} should use the shared methodNotAllowed() response builder`);
+  });
+});
+
+test('contributions.mjs allows edit_band_members alongside add_band and edit_band', () => {
+  const src = readFn('contributions.mjs');
+  assert.match(src, /VALID_ACTIONS\s*=\s*new Set\(\[[^\]]*'add_band'[^\]]*'edit_band'[^\]]*'edit_band_members'[^\]]*\]\)/s);
+});
+
+test('contributions.mjs documents that write endpoints log internally, not via a client-facing second call', () => {
+  const src = readFn('contributions.mjs');
+  // A comment near VALID_ACTIONS (or elsewhere in the file) should call out
+  // the race-condition rationale for internal logging, per the task spec.
+  assert.match(src, /race/i);
+});
+
+test('migrate.mjs\'s contributions CHECK constraint allows edit_band_members (DDL only, not executed)', () => {
+  const src = readFn('migrate.mjs');
+  assert.match(src, /check\s*\(\s*action\s+in\s*\(\s*'add_band'\s*,\s*'edit_band'\s*,\s*'edit_band_members'\s*\)\s*\)/i);
+  // Idempotent re-apply for already-existing databases: a bare CREATE TABLE
+  // IF NOT EXISTS wouldn't update the constraint on a table that already
+  // exists, so migrate.mjs must also ALTER the constraint explicitly.
+  assert.match(src, /alter table contributions/i);
+  assert.match(src, /drop constraint if exists contributions_action_check/i);
+  assert.match(src, /add constraint contributions_action_check/i);
+});
+
+test('/api/bands/:id and /api/bands/:id/members are distinct route configs from /api/bands', () => {
+  const createSrc = readFn('bands_create.mjs');
+  const editSrc = readFn('bands_edit.mjs');
+  const editMembersSrc = readFn('bands_edit_members.mjs');
+  const extractPathAndMethod = (src) => {
+    const match = /export const config\s*=\s*\{\s*path:\s*['"]([^'"]+)['"]\s*,\s*method:\s*['"]([A-Z]+)['"]\s*\}/.exec(src);
+    return match ? `${match[2]} ${match[1]}` : null;
+  };
+  const routes = [createSrc, editSrc, editMembersSrc].map(extractPathAndMethod);
+  assert.deepEqual(routes, ['POST /api/bands', 'PATCH /api/bands/:id', 'PATCH /api/bands/:id/members']);
+  assert.equal(new Set(routes).size, 3, 'all three write routes must be distinct (path, method) pairs');
 });

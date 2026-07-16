@@ -18,6 +18,14 @@
 // schema) land in PR 3b. A POST here deliberately returns 405 so the route
 // shape is locked in now without committing to write semantics yet.
 //
+// PR 3b update: this file now declares `config.method: 'GET'` so it can
+// coexist on the same /api/bands path with bands_create.mjs (POST) and
+// bands_edit.mjs (PATCH /api/bands/:id) without route ambiguity — Netlify
+// Functions v2 dispatches by (path, method) when multiple functions share a
+// path but declare disjoint methods. The `req.method !== 'GET'` guard below
+// is kept anyway as defense in depth (e.g. local dev quirks, future method
+// additions to this same file).
+//
 // No auth: this is public graph data, same trust level as the CSV file it
 // replaces.
 
@@ -55,7 +63,7 @@ export default async (req) => {
         order by name
       `,
       sql`
-        select band_id, member_id, tenure, weight, relation
+        select id, band_id, member_id, tenure, weight, relation
         from memberships
       `,
     ]);
@@ -73,4 +81,4 @@ export default async (req) => {
 // new read path. Does NOT collide with bands.mjs, which has no `config`
 // export and therefore only serves the legacy `/.netlify/functions/bands`
 // path.
-export const config = { path: '/api/bands' };
+export const config = { path: '/api/bands', method: 'GET' };

@@ -36,7 +36,18 @@ import {
   findUserByToken,
 } from './_db.mjs';
 
-const VALID_ACTIONS = new Set(['add_band', 'edit_band']);
+// PR 3b note: bands_create.mjs / bands_edit.mjs / bands_edit_members.mjs log
+// their own contribution rows DIRECTLY inside the same sql.transaction() as
+// the actual write (see those files). The client's edit UI should NOT also
+// call this endpoint for edits — doing so would be a race (a client-fired
+// contribution could land before, after, or independent of whether the
+// underlying write actually succeeded, since the two HTTP calls aren't
+// atomic with each other). This endpoint remains the attribution channel for
+// the legacy add-band flow (index.html's logContribution('add_band', ...)
+// after a successful postSharedSubmission) and stays generally reachable for
+// any future direct-call use case, which is why 'edit_band_members' is added
+// to VALID_ACTIONS below even though nothing calls this endpoint with it today.
+const VALID_ACTIONS = new Set(['add_band', 'edit_band', 'edit_band_members']);
 
 async function parseJsonBody(req) {
   try {
@@ -81,7 +92,7 @@ export default async (req) => {
 
   const action = typeof body.action === 'string' ? body.action.trim() : '';
   if (!VALID_ACTIONS.has(action)) {
-    return badRequest("action must be one of 'add_band' or 'edit_band'", { field: 'action' });
+    return badRequest("action must be one of 'add_band', 'edit_band', or 'edit_band_members'", { field: 'action' });
   }
 
   // band_id + band_name are optional — a "add" action may not have a stable
