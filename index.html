@@ -450,6 +450,37 @@ body {
   cursor: pointer;
 }
 .primary-btn.add-band-btn:hover { transform: translateY(-1px); }
+
+/* ---- Feedback form styles ----
+   The feedback popover reuses .share-popover / .form-grid styling so
+   most rules are inherited. These add-ons cover the honeypot (must be
+   invisible to users but fillable by bots) and inline hint text. */
+.feedback-honeypot {
+  /* Visually hidden but NOT display:none. Bots that skip display:none
+     fields will still fill this out; Netlify then drops the submission. */
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.field-note-inline {
+  /* Softer, smaller text used inside a <label> to note optional fields. */
+  font-weight: 400;
+  font-size: 0.8em;
+  color: var(--color-text-muted, rgba(225, 244, 255, 0.5));
+  margin-left: 0.35em;
+}
+#feedback-form textarea {
+  /* Textarea in .form-grid inherits input styling but needs a min-height */
+  min-height: 6.5rem;
+  resize: vertical;
+}
+#feedback-status:empty { display: none; }
+#feedback-status.is-error { color: #ff9b9b; }
+#feedback-status.is-success { color: #9befcf; }
+
 /* Downward-opening popovers (mirror of .popover-up used elsewhere). */
 .popover-down {
   position: absolute;
@@ -547,6 +578,22 @@ body {
   border-color: rgba(143, 232, 246, 0.85);
 }
 .mobile-sheet-add-band .mobile-add-band-btn svg { flex-shrink: 0; }
+
+/* Mobile Send-feedback button. Same overall layout as mobile-add-band-btn
+   (full-width, centered icon+label) but without the cyan CTA gradient —
+   feedback is a secondary action, not a primary conversion, so it uses
+   the neutral tool-chip glass fill. Reuses the same wrapper class
+   (.mobile-sheet-add-band) so top/bottom spacing matches. */
+.mobile-sheet-add-band .mobile-send-feedback-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  padding: 0.7rem 1rem;
+}
+.mobile-sheet-add-band .mobile-send-feedback-btn svg { flex-shrink: 0; }
 
 .tool-chip::before,
 .tool-chip::after,
@@ -1195,14 +1242,21 @@ body {
     font-size: 0.9rem;
   }
 
-  /* Node-details popover -> bottom sheet look. Reuse existing popover markup
-     but reposition it as a full-width slide-up on mobile. Note: the
-     panel is originally nested inside .graph-overlay-top which this
-     same @media block sets to display:none, so `position:fixed` on
-     the panel alone is not enough to paint it. hookPopoverForMobile
-     moves the panel to <body> on mobile-open (see PR #44) so this
-     ruleset can actually take effect. */
-  #add-band-popover.is-open-mobile {
+  /* Popover -> bottom sheet look on mobile. Reuse existing popover markup
+     but reposition it as a full-width slide-up. Note: the popovers are
+     originally nested inside .graph-overlay-top which this same @media
+     block sets to display:none, so `position:fixed` on the popover
+     alone is not enough to paint it. hookPopoverForMobile moves the
+     popover to <body> on mobile-open (see PR #44) so this ruleset can
+     actually take effect.
+
+     Any popover that is registered via hookPopoverForMobile MUST be
+     included in this selector, otherwise the mobile trigger opens an
+     invisible detached panel and the user just sees a graph refresh.
+     Popovers currently registered: add-band-popover, feedback-popover.
+  */
+  #add-band-popover.is-open-mobile,
+  #feedback-popover.is-open-mobile {
     position: fixed;
     left: 0;
     right: 0;
@@ -1302,7 +1356,10 @@ body {
   transform: translateY(-1px);
 }
 
-.popover-up .share-popover-title {
+.popover-up .share-popover-title,
+.popover-down .share-popover-title {
+  /* Leave clear space so the absolute-positioned close button in the
+     top-right corner doesn't overlap the title text. */
   padding-right: 2rem;
 }
 
@@ -1720,6 +1777,23 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   </style>
 </head>
 <body>
+ <!--
+   Hidden static form for Netlify Forms build-time discovery. Netlify's
+   form parser only sees forms present in the deployed HTML at build time,
+   which excludes the visible feedback form that lives inside a
+   JavaScript-rendered popover (#feedback-popover). This duplicate is
+   never shown to users (hidden attribute) and never submitted — it exists
+   solely so Netlify registers a form named "feedback" with these fields
+   and accepts submissions from the real form. If you add a field to the
+   real form (in #feedback-popover), mirror it here too.
+   Docs: https://docs.netlify.com/forms/setup/#javascript-forms
+ -->
+ <form name="feedback" data-netlify="true" netlify-honeypot="bot-field" hidden>
+   <input type="text" name="feedback-type" />
+   <textarea name="feedback-message"></textarea>
+   <input type="email" name="feedback-email" />
+   <input type="text" name="bot-field" />
+ </form>
  <div id="password-gate" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background-color:#04070b;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
   <div style="color:#ffffff;font-family:Arial,sans-serif;font-size:18px;">Enter password</div>
   <form id="gate-form" style="display:flex;flex-direction:column;align-items:center;gap:16px;">
@@ -1844,6 +1918,24 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
           Add your band
+        </button>
+      </div>
+      <!--
+        Mobile Send-feedback button. Same pattern as mobile-add-band-btn:
+        the desktop #send-feedback-btn is inside .graph-overlay-top which
+        is display:none on mobile, so mobile users need their own trigger.
+        Clicking closes the sheet and programmatically clicks the desktop
+        #send-feedback-btn. hookPopoverForMobile('feedback-popover')
+        (registered in the mobile IIFE) rescues the popover into a bottom
+        sheet on mobile so the form renders correctly.
+      -->
+      <div class="mobile-sheet-add-band">
+        <button class="tool-chip mobile-send-feedback-btn" type="button" id="mobile-send-feedback-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>
+            <path d="M3 7l9 6 9-6"/>
+          </svg>
+          Send feedback
         </button>
       </div>
     </aside>
@@ -2038,6 +2130,81 @@ main.layout { padding: 0 !important; gap: 0 !important; }
               <div id="submission-mode" class="validation-message" aria-live="polite">Mode: Create a new band entry.</div>
               <div id="submission-feedback" class="validation-message submission-feedback" aria-live="polite"></div>
               <div class="footer-strip"><button class="submit-btn" type="button" id="save-draft-btn">Save draft band</button></div>
+            </div>
+          </div>
+          <!--
+            Send feedback popover. Uses Netlify Forms for zero-backend
+            submission handling (see the hidden static form for build-
+            time discovery near the top of <body>). Submissions POST to
+            "/" with `form-name=feedback`, which Netlify intercepts and
+            routes to the site's Forms dashboard + configured
+            notification email (see Site configuration > Forms >
+            Notifications). Honeypot field bot-field is inspected by
+            Netlify server-side; submissions with a non-empty bot-field
+            are silently dropped. Do not add a visible label for it.
+
+            The popover lives inside .graph-overlay-top (display:none
+            on mobile), so hookPopoverForMobile('feedback-popover') is
+            registered in the mobile IIFE to detach-to-body when opened
+            on mobile. That path is enforced by the popover-hook-guard
+            test added in PR #45.
+          -->
+          <div class="popover-anchor">
+            <!--
+              Text-only tool chip to match the sibling toolbar buttons
+              (Share this graph, Add your band, Search, Scene, Genre).
+              No icon: the bracket-marker pseudo-elements added by the
+              .tool-chip CSS supply the visual pipes that read as `|
+              Send feedback |` in the toolbar.
+            -->
+            <button class="tool-chip" type="button" id="send-feedback-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="feedback-popover">Send feedback</button>
+            <div class="share-popover popover-down" id="feedback-popover" role="dialog" aria-label="Send feedback" hidden>
+              <button class="popover-close" type="button" data-popover-close aria-label="Close panel">&times;</button>
+              <div class="share-popover-title">Send feedback</div>
+              <p class="share-popover-copy">
+                Spot a bug, want a feature, or have a suggestion? Send a short note and it’ll land in the maintainer’s inbox.
+              </p>
+              <form class="form-grid" id="feedback-form" name="feedback" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/?feedback=thanks">
+                <!--
+                  Netlify requires the form-name hidden input for JS-submitted
+                  forms so it can associate the POST body with the form
+                  Netlify discovered at build time (see the hidden static
+                  duplicate below). Do not remove.
+                -->
+                <input type="hidden" name="form-name" value="feedback" />
+                <!--
+                  Honeypot: bot-field is invisible to users but visible to
+                  bots that blindly fill every input. Netlify drops any
+                  submission where bot-field is non-empty. The wrapper is
+                  visually hidden but NOT display:none, so bots that check
+                  for that shortcut still fill it.
+                -->
+                <p class="feedback-honeypot" aria-hidden="true">
+                  <label>Don’t fill this out if you’re human: <input name="bot-field" tabindex="-1" autocomplete="off" /></label>
+                </p>
+                <div class="form-span-2">
+                  <label for="feedback-type">Type of feedback</label>
+                  <select id="feedback-type" name="feedback-type" required>
+                    <option value="Suggestion">Suggestion</option>
+                    <option value="Feature request">Feature request</option>
+                    <option value="Bug report">Bug report</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div class="form-span-2">
+                  <label for="feedback-message">Message</label>
+                  <textarea id="feedback-message" name="feedback-message" required rows="5" placeholder="What’s on your mind? Describe the bug, feature idea, or suggestion."></textarea>
+                </div>
+                <div class="form-span-2">
+                  <label for="feedback-email">Your email <span class="field-note-inline">(optional — leave blank to stay anonymous)</span></label>
+                  <input id="feedback-email" name="feedback-email" type="email" autocomplete="email" placeholder="you@example.com" />
+                  <div class="field-note">Only used if the maintainer needs to reply. Not stored anywhere else.</div>
+                </div>
+                <div id="feedback-status" class="validation-message" aria-live="polite"></div>
+                <div class="form-span-2 footer-strip">
+                  <button class="submit-btn" type="submit" id="feedback-submit-btn">Send feedback</button>
+                </div>
+              </form>
             </div>
           </div>
           <span class="version-pill graph-version-pill" aria-label="Current version">Version 0.3</span>
@@ -2478,6 +2645,7 @@ function downloadPngBlob(blob) {
       { btn: document.getElementById('search-btn'), pop: document.getElementById('search-popover') },
       { btn: document.getElementById('scene-btn'),  pop: document.getElementById('scene-popover') },
       { btn: document.getElementById('genre-btn'),  pop: document.getElementById('genre-popover') },
+      { btn: document.getElementById('send-feedback-btn'), pop: document.getElementById('feedback-popover') },
     ].filter(entry => entry.btn && entry.pop);
 
     function closeBottomPopovers(except) {
@@ -2550,6 +2718,106 @@ function downloadPngBlob(blob) {
       closeBottomPopovers(null);
       toggleSharePopover(false);
     });
+
+    // ---- Feedback form submit handler (Netlify Forms) --------------------
+    //
+    // The visible feedback form (#feedback-form) lives inside a JS-rendered
+    // popover, so Netlify's build-time crawler can't see it. A hidden static
+    // duplicate near the top of <body> registers the form with Netlify at
+    // build time; this handler POSTs the visible form's data to the site
+    // root as application/x-www-form-urlencoded with form-name=feedback,
+    // which Netlify intercepts and routes to the site's Forms dashboard +
+    // the configured notification email.
+    //
+    // Bot control: the honeypot field 'bot-field' is checked server-side by
+    // Netlify. Submissions where it's non-empty are silently accepted with
+    // 200 OK but never stored or emailed, so we don't need to inspect it
+    // client-side.
+    //
+    // UX contract:
+    //   - On success: show a success message, clear the form, keep popover
+    //     open for ~2s so the user sees the confirmation, then close it.
+    //   - On network error: show an error message and leave the form filled
+    //     so the user can retry without retyping.
+    //   - Never navigate away (default form action would redirect to /), so
+    //     we always preventDefault() first.
+    (function initFeedbackForm() {
+      const form = document.getElementById('feedback-form');
+      if (!form) return;
+      const statusEl = document.getElementById('feedback-status');
+      const submitBtn = document.getElementById('feedback-submit-btn');
+
+      function setStatus(kind, message) {
+        if (!statusEl) return;
+        statusEl.classList.remove('is-error', 'is-success');
+        if (kind === 'error') statusEl.classList.add('is-error');
+        if (kind === 'success') statusEl.classList.add('is-success');
+        statusEl.textContent = message || '';
+      }
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (submitBtn && submitBtn.disabled) return;
+
+        const formData = new FormData(form);
+        // URL-encode: Netlify's docs recommend application/x-www-form-urlencoded
+        // for JS submissions since multipart/form-data has more edge cases
+        // around the form-name field. We have no file inputs so url-encoded
+        // is a strict superset of what we need.
+        const body = new URLSearchParams();
+        for (const [key, value] of formData.entries()) {
+          body.append(key, String(value));
+        }
+
+        setStatus('', 'Sending…');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.dataset._label = submitBtn.textContent;
+          submitBtn.textContent = 'Sending…';
+        }
+
+        try {
+          const response = await fetch('/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+          });
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+
+          setStatus('success', 'Thanks — your feedback was sent. The maintainer will read it soon.');
+          form.reset();
+
+          // Give the user ~2.5s to see the success message before we
+          // auto-close the popover. If they close it manually, that's
+          // fine — the success message clears when the popover reopens
+          // via the popover-close handler above.
+          setTimeout(() => {
+            const popover = document.getElementById('feedback-popover');
+            const trigger = document.getElementById('send-feedback-btn');
+            if (popover) {
+              popover.hidden = true;
+              popover.classList.remove('is-open-mobile');
+              popover.style.left = '';
+            }
+            if (trigger) trigger.setAttribute('aria-expanded', 'false');
+            setStatus('', '');
+          }, 2500);
+        } catch (err) {
+          console.error('feedback submit failed', err);
+          setStatus('error',
+            'Couldn’t send your feedback right now. Check your connection and try again, ' +
+            'or email vimana17@gmail.com directly.');
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            if (submitBtn.dataset._label) {
+              submitBtn.textContent = submitBtn.dataset._label;
+              delete submitBtn.dataset._label;
+            }
+          }
+        }
+      });
+    })();
 
     // Render the current graph SVG to a PNG canvas with a branded header
     // strip so the exported image is self-explanatory when it lands on
@@ -5457,6 +5725,25 @@ function downloadPngBlob(blob) {
           });
         }
 
+        // Mobile Send-feedback button (inside the hamburger sheet).
+        // Same pattern as mobile Add-your-band above: the desktop
+        // #send-feedback-btn lives in .graph-overlay-top (display:none
+        // on mobile), so we need our own trigger here. Clicking closes
+        // the hamburger sheet first (don't fight our own bottom sheet
+        // for real estate), then clicks the desktop button. The
+        // hookPopoverForMobile('feedback-popover') registration below
+        // then rescues the popover into a bottom sheet on mobile.
+        const mobileSendFeedbackBtn = document.getElementById('mobile-send-feedback-btn');
+        if (mobileSendFeedbackBtn) {
+          mobileSendFeedbackBtn.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            closeSheet();
+            await new Promise(r => setTimeout(r, 300));
+            const desktopSendFeedbackBtn = document.getElementById('send-feedback-btn');
+            if (desktopSendFeedbackBtn) desktopSendFeedbackBtn.click();
+          });
+        }
+
         // Segmented scene control: top locations / All / Other (opens dropdown).
         // data-location-key values: a real locationKey for each top-location
         // segment, "all", or the sentinel "__other".
@@ -5676,6 +5963,7 @@ function downloadPngBlob(blob) {
           });
         }
         hookPopoverForMobile('add-band-popover');
+        hookPopoverForMobile('feedback-popover');
 
         // Escape key closes the menu sheet on mobile.
         document.addEventListener('keydown', ev => {
