@@ -2804,9 +2804,14 @@ function downloadPngBlob(blob) {
           }, 2500);
         } catch (err) {
           console.error('feedback submit failed', err);
+          // Surface the underlying reason inline so mobile-specific failures
+          // (fetch abort, CORS, mixed-content, 4xx from Netlify) can be
+          // diagnosed without a JS console. The generic message still leads;
+          // the technical detail follows in parentheses.
+          const detail = err && err.message ? String(err.message).slice(0, 120) : 'unknown error';
           setStatus('error',
             'Couldn’t send your feedback right now. Check your connection and try again, ' +
-            'or email vimana17@gmail.com directly.');
+            'or email vimana17@gmail.com directly. (' + detail + ')');
         } finally {
           if (submitBtn) {
             submitBtn.disabled = false;
