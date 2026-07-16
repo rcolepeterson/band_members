@@ -1783,19 +1783,40 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   background: none; border: none; color: var(--color-primary-hover);
   cursor: pointer; padding: var(--space-2) 0; font-size: var(--text-xs);
 }
-.node-card__verify-details table { width: 100%; font-size: var(--text-xs); border-collapse: collapse; margin-top: var(--space-2); table-layout: fixed; }
-.node-card__verify-details th, .node-card__verify-details td {
-  padding: 4px 6px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06);
-  /* PR 4b fix: long MusicBrainz genre tag lists can be 20+ items.
-     overflow-wrap: break-word (not 'anywhere') keeps whole words
-     intact -- 'anywhere' was breaking 'Grunge' into 'Grung / e'.
-     The parent .node-card also has max-height + overflow-y:auto as
-     a scroll safety net. */
-  overflow-wrap: break-word;
-  vertical-align: top;
-  max-width: 0; /* forces table-layout:fixed to distribute widths evenly */
+/* PR 4b: stacked-list layout for the verification details panel.
+   Each field is a small block: a header line with the field name +
+   colored score, then three source rows (Ours / MusicBrainz /
+   Wikipedia) laid out as two-column key\/value pairs. The stacked
+   layout gives each value most of the card width to wrap into,
+   which was the fundamental problem with the earlier 5-column
+   table: 5 columns in a ~300px card can't fit words like
+   'alternative' without breaking mid-character. */
+.node-card__verify-details .verify-fields {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  margin-top: var(--space-2);
 }
-.node-card__verify-details th { color: var(--color-text-muted); font-weight: 500; }
+.node-card__verify-details .verify-field {
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 6px;
+  padding: 6px 8px; background: rgba(255,255,255,0.02);
+}
+.node-card__verify-details .verify-field__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-2); margin-bottom: 4px;
+}
+.node-card__verify-details .verify-field__label {
+  font-size: var(--text-xs); font-weight: 600; color: var(--color-text);
+}
+.node-card__verify-details .verify-field__row {
+  display: grid; grid-template-columns: 74px 1fr; gap: var(--space-2);
+  font-size: var(--text-xs); line-height: 1.4; padding: 1px 0;
+}
+.node-card__verify-details .verify-field__src {
+  color: var(--color-text-muted);
+}
+.node-card__verify-details .verify-field__val {
+  overflow-wrap: break-word; word-break: normal;
+  color: rgba(230, 236, 243, 0.9);
+}
 .verify-score-cell.high { color: #7cc57c; }
 .verify-score-cell.mid { color: #d4b46a; }
 .verify-score-cell.low { color: #d47474; }
@@ -4964,32 +4985,46 @@ function downloadPngBlob(blob) {
       return EM_DASH_VERIFY;
     }
 
-    // Build the <table> of per-field rows inside the expandable details
-    // panel. `breakdown` is the verification's breakdown object (one key
-    // per field that had comparable data -- see scoreVerification's header
-    // comment on why some fields are simply absent rather than zero).
+    // Escape helper so free-form external strings (MusicBrainz tags,
+    // Wikipedia titles, etc.) can't inject markup into innerHTML.
+    function escapeVerifyText(s) {
+      if (s == null) return EM_DASH_VERIFY;
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // Build the per-field details block inside the expandable panel.
+    // Rewritten from a 5-column table to a stacked-list layout: each
+    // field renders as a titled group with three sub-rows for our value,
+    // MusicBrainz, and Wikipedia, plus a colored score badge. The old
+    // table layout meant 5 columns of ~55px each inside the ~300px card,
+    // which forced long words like 'alternative' to break mid-character.
+    // Stacking gives each value the full card width to wrap into.
     function buildVerifyDetailsTable(breakdown) {
-      const table = document.createElement('table');
-      const thead = document.createElement('thead');
-      thead.innerHTML = '<tr><th>Field</th><th>Ours</th><th>MusicBrainz</th><th>Wikipedia</th><th>Score</th></tr>';
-      table.appendChild(thead);
-      const tbody = document.createElement('tbody');
+      const container = document.createElement('div');
+      container.className = 'verify-fields';
 
       Object.entries(breakdown || {}).forEach(([key, field]) => {
-        const tr = document.createElement('tr');
         const label = VERIFY_FIELD_LABELS[key] || key;
         const scoreText = typeof field.score === 'number' ? String(field.score) : EM_DASH_VERIFY;
-        tr.innerHTML = `
-          <td>${label}</td>
-          <td>${field.ours || EM_DASH_VERIFY}</td>
-          <td>${musicbrainzCellText(field)}</td>
-          <td>${wikipediaCellText(field)}</td>
-          <td class="${verifyScoreClass(field.score)}">${scoreText}</td>
+        const scoreClass = verifyScoreClass(field.score);
+
+        const block = document.createElement('div');
+        block.className = 'verify-field';
+        block.innerHTML = `
+          <div class="verify-field__head">
+            <span class="verify-field__label">${escapeVerifyText(label)}</span>
+            <span class="${scoreClass}">${scoreText}</span>
+          </div>
+          <div class="verify-field__row"><span class="verify-field__src">Ours</span><span class="verify-field__val">${escapeVerifyText(field.ours)}</span></div>
+          <div class="verify-field__row"><span class="verify-field__src">MusicBrainz</span><span class="verify-field__val">${escapeVerifyText(musicbrainzCellText(field))}</span></div>
+          <div class="verify-field__row"><span class="verify-field__src">Wikipedia</span><span class="verify-field__val">${escapeVerifyText(wikipediaCellText(field))}</span></div>
         `;
-        tbody.appendChild(tr);
+        container.appendChild(block);
       });
-      table.appendChild(tbody);
-      return table;
+
+      return container;
     }
 
     // Fully rebuild the details panel's contents (table + sources footer)
