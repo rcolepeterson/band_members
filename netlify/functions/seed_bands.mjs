@@ -291,13 +291,41 @@ export default async (req) => {
     // with duplicates), but avoids sending hundreds of redundant statements
     // for bands/members that appear in many rows (which every CSV band with
     // >1 member does).
+    //
+    // While deduping, we MERGE fill-missing across the different rows that
+    // reference the same band or member. Example: Mark Arm appears in the
+    // CSV first via Green River (instrument2=''), and later via Mudhoney
+    // (instrument2='guitar'). If we only kept the first row we'd drop the
+    // guitar. Merging picks the first non-empty value for each field across
+    // all rows mentioning that member/band, which matches the semantics of
+    // the ON CONFLICT ... COALESCE(nullif(...)) SQL upsert but does it in
+    // memory before we send anything to the DB.
+    function mergeFillMissing(existing, incoming) {
+      const merged = { ...existing };
+      for (const key of Object.keys(incoming)) {
+        const cur = merged[key];
+        const next = incoming[key];
+        const curEmpty = cur === null || cur === undefined || cur === '';
+        const nextEmpty = next === null || next === undefined || next === '';
+        if (curEmpty && !nextEmpty) merged[key] = next;
+      }
+      return merged;
+    }
     const bandsByKey = new Map();
     const membersByKey = new Map();
     for (const entry of allEntries) {
       const bandKey = entry.band.name.toLowerCase();
       const memberKey = entry.member.name.toLowerCase();
-      if (!bandsByKey.has(bandKey)) bandsByKey.set(bandKey, entry.band);
-      if (!membersByKey.has(memberKey)) membersByKey.set(memberKey, entry.member);
+      if (bandsByKey.has(bandKey)) {
+        bandsByKey.set(bandKey, mergeFillMissing(bandsByKey.get(bandKey), entry.band));
+      } else {
+        bandsByKey.set(bandKey, entry.band);
+      }
+      if (membersByKey.has(memberKey)) {
+        membersByKey.set(memberKey, mergeFillMissing(membersByKey.get(memberKey), entry.member));
+      } else {
+        membersByKey.set(memberKey, entry.member);
+      }
     }
 
     // --- Transaction 1: upsert every distinct band and member -------------
