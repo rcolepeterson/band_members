@@ -1732,32 +1732,122 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 .node-card__edit svg { width: 15px; height: 15px; display: block; }
 .node-card__edit:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
 /*
-  Text button below the info rows / connections block that opens the same
-  edit popover as the pencil icon. Subtle by default (thin border, muted
-  text) but fills on hover so it stays findable without competing with the
-  member chips visually.
+  Signed-out hint that sits below the info rows / connections block on
+  band cards, telling anonymous visitors the edit affordance exists
+  behind sign-in. Non-interactive text with a single inline anchor that
+  opens the Add-your-band popover (which hosts the sign-up gate).
+  Muted enough that signed-in users, who never see it, don't miss it.
 */
-.node-card__edit-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.node-card__signin-hint {
   margin-top: 10px;
-  padding: 5px 10px;
+  font-size: 12px;
+  color: rgba(230, 236, 243, 0.6);
+  letter-spacing: 0.01em;
+}
+.node-card__signin-hint a,
+.node-card__signin-hint button.link-like {
+  color: rgba(82, 174, 182, 0.95);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.node-card__signin-hint a:hover,
+.node-card__signin-hint button.link-like:hover {
+  color: #fff;
+}
+
+/*
+  Welcome nudge (first-time signed-out visitors). Frosted-glass card
+  positioned:fixed so it can be anchored to either #add-band-btn
+  (desktop) or #mobile-menu-btn (mobile) via JS-set top/left/right
+  inline styles. The .is-anchor-right class right-aligns via a JS-set
+  --nudge-right variable so the caret can point up at either anchor.
+  Fades in via .is-visible (opacity + translateY) so the transition is
+  reversible for dismiss.
+*/
+.welcome-nudge {
+  position: fixed;
+  z-index: 60;
+  width: min(320px, calc(100vw - 24px));
+  padding: 14px 16px 12px;
+  background: rgba(18, 22, 30, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  color: rgba(230, 236, 243, 0.92);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 220ms ease-out, transform 220ms ease-out;
+  pointer-events: none;
+}
+.welcome-nudge.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.welcome-nudge__caret {
+  position: absolute;
+  top: -7px;
+  right: 18px;
+  width: 12px;
+  height: 12px;
+  background: rgba(18, 22, 30, 0.82);
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  transform: rotate(45deg);
+}
+.welcome-nudge__title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  margin-bottom: 4px;
+}
+.welcome-nudge__body {
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 0 0 10px;
+  color: rgba(230, 236, 243, 0.82);
+}
+.welcome-nudge__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.welcome-nudge__dismiss,
+.welcome-nudge__cta {
+  min-height: 32px;
+  padding: 0 12px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: rgba(230, 236, 243, 0.72);
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   cursor: pointer;
 }
-.node-card__edit-btn:hover {
-  color: #fff;
-  background: rgba(82, 174, 182, 0.16);
-  border-color: rgba(82, 174, 182, 0.4);
+.welcome-nudge__dismiss {
+  color: rgba(230, 236, 243, 0.7);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.16);
 }
-.node-card__edit-btn svg { width: 12px; height: 12px; }
+.welcome-nudge__dismiss:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+.welcome-nudge__cta {
+  color: #0b0f14;
+  background: rgba(82, 174, 182, 0.95);
+  border: 1px solid rgba(82, 174, 182, 0.95);
+}
+.welcome-nudge__cta:hover {
+  background: #74c9d0;
+  border-color: #74c9d0;
+}
 /*
   PR 4b: cross-check verification UI. .node-card__name-wrap lets the band
   name and the silver-star score chip sit on one line without the chip
@@ -2611,19 +2701,43 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       <button type="button" class="node-card__verify-toggle" id="node-card-verify-toggle" hidden>Show verification details</button>
       <div class="node-card__verify-details" id="node-card-verify-details" hidden></div>
       <!--
-        PR 3b: "Edit this band" text button. Sits below the connections
-        chips (the last content block in the card) so it reads as a
-        footer-level action rather than competing with the info rows.
-        Hidden by default; same visibility rule as the pencil above.
+        Signed-out discoverability hint. Only shown for band nodes when
+        loadCurrentUser() returns null. The inline "Sign in" button opens
+        the same Add-your-band popover the pencil would trigger — that
+        popover already gates on sign-up for anonymous visitors, so this
+        is the single entry point into the edit flow for signed-out
+        users. See renderEditAffordances.
       -->
-      <button type="button" class="node-card__edit-btn" id="node-card-edit-btn" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 20h9"></path>
-          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
-        </svg>
-        <span>Edit this band</span>
-      </button>
+      <div class="node-card__signin-hint" id="node-card-signin-hint" hidden>
+        <button type="button" class="link-like" id="node-card-signin-link">Sign in</button> to edit this band.
+      </div>
       <div class="node-card__tail" aria-hidden="true"></div>
+    </div>
+
+    <!--
+      Welcome nudge for first-time signed-out visitors. Anchored below
+      #add-band-btn on desktop and below #mobile-menu-btn on mobile (the
+      two primary CTAs in each viewport), with a small up-caret pointing
+      at the anchor. Positioned absolutely inside .graph-stage so the
+      anchor math stays scoped to the graph area; the JS below reads the
+      anchor's bounding rect and re-runs on resize / mobile-query change.
+
+      Visibility rules (see initWelcomeNudge):
+        - Only shown when loadCurrentUser() returns null.
+        - Only shown when localStorage['bmft-welcome-seen'] is unset.
+        - Fades in ~1.5s after load so the graph settles first.
+        - Dismissed by: Got it button, Sign up button, successful sign-in
+          (setSignedInState hook), or Escape. All dismiss paths set the
+          localStorage flag so the nudge never returns for this browser.
+    -->
+    <div class="welcome-nudge" id="welcome-nudge" role="dialog" aria-label="Welcome" aria-live="polite" hidden>
+      <div class="welcome-nudge__caret" aria-hidden="true"></div>
+      <div class="welcome-nudge__title">New here?</div>
+      <p class="welcome-nudge__body">Sign up (name + email, no password) to add or edit bands. Your contributions get credited to you.</p>
+      <div class="welcome-nudge__actions">
+        <button type="button" class="welcome-nudge__dismiss" id="welcome-nudge-dismiss">Got it</button>
+        <button type="button" class="welcome-nudge__cta" id="welcome-nudge-cta">Sign up →</button>
+      </div>
     </div>
 
   </div>
@@ -4074,6 +4188,15 @@ function downloadPngBlob(blob) {
     // and after sign-out. Safe to call multiple times — idempotent.
     function setSignedInState(user) {
       const isSignedIn = Boolean(user);
+      // Dismiss the welcome nudge as soon as the user is signed in
+      // (via sign-up, restored token, or manual sign-in). Uses the
+      // "transient" dismiss path so this doesn't leak state before the
+      // sign-in actually succeeds — initWelcomeNudge exposes the hook
+      // globally as window.__dismissWelcomeNudge and is a no-op if the
+      // nudge was never mounted.
+      if (isSignedIn && typeof window.__dismissWelcomeNudge === 'function') {
+        window.__dismissWelcomeNudge('signed-in');
+      }
       const addBtn = document.getElementById('add-band-btn');
       const mobileAddBtn = document.getElementById('mobile-add-band-btn');
       const popover = document.getElementById('add-band-popover');
@@ -4804,7 +4927,8 @@ function downloadPngBlob(blob) {
     const nodeCardConn = document.getElementById('node-card-connections');
     const nodeCardCloseBtn = document.getElementById('node-card-close');
     const nodeCardEditBtn = document.getElementById('node-card-edit');
-    const nodeCardEditTextBtn = document.getElementById('node-card-edit-btn');
+    const nodeCardSigninHint = document.getElementById('node-card-signin-hint');
+    const nodeCardSigninLink = document.getElementById('node-card-signin-link');
     // PR 4b: cross-check verification chip + expandable details elements.
     const nodeCardVerifyChip = document.getElementById('node-card-verify-chip');
     const nodeCardVerifyToggle = document.getElementById('node-card-verify-toggle');
@@ -4895,23 +5019,33 @@ function downloadPngBlob(blob) {
       renderEditAffordances(node);
     }
 
-    // PR 3b: show/hide the pencil icon + "Edit this band" text button.
-    // Both only ever appear for band nodes, and only when a user is
-    // signed in (loadCurrentUser() returns a valid stored user). Anonymous
-    // visitors never see either affordance — no signed-out nudge is shown
-    // from the node card itself; the existing signup gate in the add-band
-    // popover already covers that path. Rebinding the click handler on
+    // Show/hide the pencil icon (signed-in band nodes) OR the
+    // "Sign in to edit this band" hint (signed-out band nodes). Musician
+    // nodes never get either affordance. Rebinding the click handler on
     // every call (instead of once at load) keeps the handler's captured
     // `node` current without needing a separate mutable state variable.
+    //
+    // The single "Edit this band" pill button that used to sit below the
+    // connections chips was removed in favor of the pencil-only pattern —
+    // two edit affordances on the same card were redundant, and one of
+    // them was a hidden signed-in-only entry point that new visitors
+    // never discovered.
     function renderEditAffordances(node) {
-      const canEdit = node.type === 'band' && !!loadCurrentUser();
+      const isBand = node.type === 'band';
+      const signedIn = !!loadCurrentUser();
+      const canEdit = isBand && signedIn;
+      const showSigninHint = isBand && !signedIn;
       if (nodeCardEditBtn) {
         nodeCardEditBtn.hidden = !canEdit;
         nodeCardEditBtn.onclick = canEdit ? (ev) => { ev.stopPropagation(); openEditBandPopover(node); } : null;
       }
-      if (nodeCardEditTextBtn) {
-        nodeCardEditTextBtn.hidden = !canEdit;
-        nodeCardEditTextBtn.onclick = canEdit ? (ev) => { ev.stopPropagation(); openEditBandPopover(node); } : null;
+      if (nodeCardSigninHint) {
+        nodeCardSigninHint.hidden = !showSigninHint;
+      }
+      if (nodeCardSigninLink) {
+        // Route the inline "Sign in" link through the same trigger the
+        // welcome nudge uses so both entry points share one code path.
+        nodeCardSigninLink.onclick = showSigninHint ? (ev) => { ev.stopPropagation(); openSignupPopover(); } : null;
       }
     }
 
@@ -6831,6 +6965,21 @@ function downloadPngBlob(blob) {
       setSubmissionMode('new-band');
     }
 
+    // Opens the Add-your-band popover programmatically from anywhere in
+    // the app. For signed-out visitors this popover surfaces the sign-up
+    // form (via [data-signup-only]); for signed-in visitors it surfaces
+    // the add-band form. Two callers today: the welcome nudge's Sign-up
+    // CTA and the node-card "Sign in to edit" hint. Prefers the mobile
+    // trigger on mobile so hookPopoverForMobile's detach-to-body /
+    // bottom-sheet path runs; falls back to the desktop trigger.
+    function openSignupPopover() {
+      const isMobile = window.matchMedia('(max-width: 900px)').matches;
+      const mobileBtn = document.getElementById('mobile-add-band-btn');
+      const desktopBtn = document.getElementById('add-band-btn');
+      const trigger = (isMobile && mobileBtn) ? mobileBtn : desktopBtn;
+      if (trigger) trigger.click();
+    }
+
     document.getElementById('edit-band-cancel-btn')?.addEventListener('click', closeEditBandPopover);
 
     function showEditBandFeedback(message, isError) {
@@ -7620,6 +7769,122 @@ function downloadPngBlob(blob) {
         }
         hookPopoverForMobile('add-band-popover');
         hookPopoverForMobile('feedback-popover');
+
+        // ---------------------------------------------------------------
+        // Welcome nudge for first-time signed-out visitors.
+        //
+        // Anchored under #add-band-btn on desktop and under
+        // #mobile-menu-btn on mobile, with a small up-caret pointing at
+        // the anchor. Visible only when loadCurrentUser() is null AND
+        // localStorage['bmft-welcome-seen'] is unset. Fades in 1.5s
+        // after load so it doesn't fight the graph fade-in.
+        //
+        // Dismiss paths (all mark the flag):
+        //   1. "Got it" button.
+        //   2. "Sign up →" button (also opens the sign-up popover).
+        //   3. Successful sign-in via setSignedInState (see above).
+        //   4. Escape key while visible.
+        //
+        // The anchor is recomputed on window resize and on MOBILE_QUERY
+        // change so it stays glued to the right button across viewport
+        // shifts. Runs inside the same mobile IIFE as hookPopoverForMobile
+        // so MOBILE_QUERY is already in scope.
+        // ---------------------------------------------------------------
+        (function initWelcomeNudge() {
+          const nudge = document.getElementById('welcome-nudge');
+          if (!nudge) return;
+          const dismissBtn = document.getElementById('welcome-nudge-dismiss');
+          const ctaBtn = document.getElementById('welcome-nudge-cta');
+          const desktopAnchor = document.getElementById('add-band-btn');
+          const mobileAnchor = document.getElementById('mobile-menu-btn');
+          const STORAGE_KEY = 'bmft-welcome-seen';
+
+          function alreadyDismissed() {
+            try { return localStorage.getItem(STORAGE_KEY) === '1'; }
+            catch (_) { return false; }
+          }
+          function markDismissed() {
+            try { localStorage.setItem(STORAGE_KEY, '1'); } catch (_) {}
+          }
+
+          // Pick the currently-visible anchor. On mobile the desktop
+          // #add-band-btn lives inside .graph-overlay-top (display:none),
+          // so its bounding rect is 0x0 — we fall back to the hamburger.
+          function pickAnchor() {
+            if (MOBILE_QUERY.matches && mobileAnchor && !mobileAnchor.hidden) return mobileAnchor;
+            if (!MOBILE_QUERY.matches && desktopAnchor) return desktopAnchor;
+            return mobileAnchor || desktopAnchor || null;
+          }
+
+          function positionNudge() {
+            const anchor = pickAnchor();
+            if (!anchor) return;
+            const rect = anchor.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) return; // anchor not laid out yet
+            const vw = document.documentElement.clientWidth;
+            const margin = 10;
+            // Anchor's right edge → nudge's right edge (right-aligned)
+            // so the caret sits under the button on both desktop and
+            // mobile (both anchors sit near the right edge of the viewport).
+            const rightPx = Math.max(margin, vw - rect.right);
+            nudge.style.right = rightPx + 'px';
+            nudge.style.left = 'auto';
+            nudge.style.top = (rect.bottom + 10) + 'px';
+            // Shift the caret horizontally so it points at the anchor's
+            // centerline regardless of nudge width.
+            const nudgeRect = nudge.getBoundingClientRect();
+            const caretFromRight = Math.max(10, Math.min(nudgeRect.width - 20, vw - rect.left - rect.width / 2 - rightPx));
+            const caret = nudge.querySelector('.welcome-nudge__caret');
+            if (caret) caret.style.right = caretFromRight + 'px';
+          }
+
+          function showNudge() {
+            nudge.hidden = false;
+            // Position after unhide so getBoundingClientRect() is real.
+            positionNudge();
+            // Next frame: add .is-visible so the transition runs.
+            requestAnimationFrame(() => nudge.classList.add('is-visible'));
+          }
+
+          // "transient" reason skips the localStorage write so the nudge
+          // can be reshown on a later visit if we ever want that path.
+          // Currently every dismiss reason marks the flag.
+          function hideNudge(reason) {
+            nudge.classList.remove('is-visible');
+            // Wait for the fade-out transition before flipping hidden,
+            // otherwise the pointer-events:none rule takes effect a frame
+            // too late and a stray click can slip through.
+            setTimeout(() => { nudge.hidden = true; }, 240);
+            if (reason !== 'transient') markDismissed();
+          }
+
+          // Expose the hide hook so setSignedInState can dismiss on sign-in.
+          window.__dismissWelcomeNudge = hideNudge;
+
+          if (dismissBtn) dismissBtn.addEventListener('click', () => hideNudge('got-it'));
+          if (ctaBtn) ctaBtn.addEventListener('click', () => {
+            hideNudge('cta');
+            openSignupPopover();
+          });
+
+          document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            if (nudge.hidden) return;
+            hideNudge('escape');
+          });
+
+          window.addEventListener('resize', () => {
+            if (!nudge.hidden) positionNudge();
+          });
+          MOBILE_QUERY.addEventListener('change', () => {
+            if (!nudge.hidden) positionNudge();
+          });
+
+          // Decide whether to show. Skip if signed in or already dismissed.
+          if (loadCurrentUser()) return;
+          if (alreadyDismissed()) return;
+          setTimeout(showNudge, 1500);
+        })();
 
         // -----------------------------------------------------------------
         // PR 2: Signup form wiring.
