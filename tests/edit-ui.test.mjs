@@ -42,21 +42,40 @@ test('the pencil button is hidden by default (JS toggles visibility per node)', 
 });
 
 // -----------------------------------------------------------------------
-// 2. "Edit this band" text button below the info block.
+// 2. Signed-out "Sign in to edit this band" hint.
+//
+// Historically this slot held a redundant second "Edit this band" pill
+// button (#node-card-edit-btn) alongside the pencil in the top-right
+// corner. Two edit affordances on the same card were redundant, and the
+// pill was signed-in-only — signed-out visitors saw nothing that
+// mentioned editing existed, and at least one collaborator asked whether
+// the edit feature was broken because of it.
+//
+// The pill was removed in favor of a single edit affordance (the pencil)
+// plus a signed-out discovery hint in the same slot. Deeper structural
+// tests for the removal live in welcome-nudge-and-edit-cleanup.test.mjs.
 // -----------------------------------------------------------------------
 
-test('node card contains a text button labeled "Edit this band"', () => {
+test('node card contains a "Sign in to edit this band" hint for signed-out visitors', () => {
   assert.ok(
-    INDEX_HTML.includes('id="node-card-edit-btn"'),
-    'Expected #node-card-edit-btn to exist.'
+    INDEX_HTML.includes('id="node-card-signin-hint"'),
+    'Expected #node-card-signin-hint to exist as the signed-out affordance ' +
+      'that used to be filled by the removed #node-card-edit-btn pill.'
   );
-  const idx = INDEX_HTML.indexOf('id="node-card-edit-btn"');
-  const blockEnd = INDEX_HTML.indexOf('</button>', idx);
+  const idx = INDEX_HTML.indexOf('id="node-card-signin-hint"');
+  const blockEnd = INDEX_HTML.indexOf('</div>', idx);
   const block = INDEX_HTML.slice(idx, blockEnd);
-  assert.ok(block.includes('Edit this band'), 'Expected the visible text "Edit this band" inside the button.');
+  assert.ok(
+    block.includes('to edit this band'),
+    'Expected the visible text "to edit this band" inside the hint.'
+  );
+  assert.ok(
+    INDEX_HTML.includes('id="node-card-signin-link"'),
+    'Expected an inline #node-card-signin-link button that opens the sign-up popover.'
+  );
 });
 
-test('renderEditAffordances gates both the pencil and text button on sign-in + band type', () => {
+test('renderEditAffordances gates the pencil on sign-in + band type', () => {
   assert.ok(
     INDEX_HTML.includes('function renderEditAffordances'),
     'Expected a renderEditAffordances() function.'
