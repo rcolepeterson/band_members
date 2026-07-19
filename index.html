@@ -2725,7 +2725,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       Visibility rules (see initWelcomeNudge):
         - Only shown when loadCurrentUser() returns null.
         - Only shown when localStorage['bmft-welcome-seen'] is unset.
-        - Fades in ~1.5s after load so the graph settles first.
+        - Fades in ~2s after load so the graph has fully settled first.
         - Dismissed by: Got it button, Sign up button, successful sign-in
           (setSignedInState hook), or Escape. All dismiss paths set the
           localStorage flag so the nudge never returns for this browser.
@@ -7776,8 +7776,8 @@ function downloadPngBlob(blob) {
         // Anchored under #add-band-btn on desktop and under
         // #mobile-menu-btn on mobile, with a small up-caret pointing at
         // the anchor. Visible only when loadCurrentUser() is null AND
-        // localStorage['bmft-welcome-seen'] is unset. Fades in 1.5s
-        // after load so it doesn't fight the graph fade-in.
+        // localStorage['bmft-welcome-seen'] is unset. Fades in 2s
+        // after load so the graph has fully settled first.
         //
         // Dismiss paths (all mark the flag):
         //   1. "Got it" button.
@@ -7883,7 +7883,7 @@ function downloadPngBlob(blob) {
           // Decide whether to show. Skip if signed in or already dismissed.
           if (loadCurrentUser()) return;
           if (alreadyDismissed()) return;
-          setTimeout(showNudge, 1500);
+          setTimeout(showNudge, 2000);
         })();
 
         // -----------------------------------------------------------------

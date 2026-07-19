@@ -223,7 +223,7 @@ test('welcome nudge CSS positions it as position:fixed with a fade-in transition
   );
 });
 
-test('initWelcomeNudge gates on signed-in state, dismissed flag, and delays 1.5s', () => {
+test('initWelcomeNudge gates on signed-in state, dismissed flag, and delays 2s', () => {
   const fnMatch = INDEX_HTML.match(
     /\(function\s+initWelcomeNudge\(\)\s*\{([\s\S]*?)\n\s{8}\}\)\(\);/
   );
@@ -249,12 +249,12 @@ test('initWelcomeNudge gates on signed-in state, dismissed flag, and delays 1.5s
     'The dismissed check must read from localStorage. If the flag lives ' +
       'anywhere else it does not persist across sessions.'
   );
-  // Gate 3: 1.5s delay so the graph settles first.
+  // Gate 3: 2s delay so the graph has fully settled first.
   assert.match(
     body,
-    /setTimeout\(\s*showNudge\s*,\s*1500\s*\)/,
-    'Expected a 1500ms delay before showNudge is called so the nudge does ' +
-      'not fight the initial graph fade-in.'
+    /setTimeout\(\s*showNudge\s*,\s*2000\s*\)/,
+    'Expected a 2000ms delay before showNudge is called so the nudge does ' +
+      'not fight the initial graph fade-in / force-layout settle.'
   );
 });
 
