@@ -3399,7 +3399,77 @@ function downloadPngBlob(blob) {
     // long comment in the old exporter for the rationale on inlining
     // the SVG stylesheet before serialization — external CSS doesn't
     // apply when an SVG is loaded back into an <img> for drawImage.
+    // perf(graph): canvas-native PNG export path. When RENDERER === 'canvas'
+    // there is no SVG to serialize -- the live #graph-canvas already holds
+    // exactly the pixels we want (drawCanvasFrame() keeps it current on
+    // every zoom/pan/drag). We just need to composite it into the same
+    // header/footer banner frame the SVG path builds, using canvas.toBlob()
+    // instead of html2canvas/SVG-to-Image. Kept as its own function so the
+    // SVG path above is untouched.
+    async function renderGraphPngBlobCanvas() {
+      const liveCanvas = document.getElementById('graph-canvas');
+      if (!liveCanvas) return null;
+      const siteUrl = window.location.origin + window.location.pathname;
+      const rect = liveCanvas.getBoundingClientRect();
+
+      const MIN_OUTPUT_WIDTH = 1200;
+      const scale = Math.max(2, MIN_OUTPUT_WIDTH / Math.max(rect.width, 1));
+      const graphW = Math.floor(rect.width * scale);
+      const graphH = Math.floor(rect.height * scale);
+      const headerH = Math.round(60 * scale);
+      const footerH = Math.round(36 * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = graphW;
+      canvas.height = graphH + headerH + footerH;
+      const ctx = canvas.getContext('2d');
+
+      // Solid background matching the app's stage color -- same fill used
+      // by the SVG export path, applied here BEFORE drawing the live
+      // canvas snapshot so any transparent pixels (e.g. outside the node
+      // bounds) composite onto the correct background rather than white.
+      ctx.fillStyle = '#0b1118';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const headerGrad = ctx.createLinearGradient(0, 0, 0, headerH);
+      headerGrad.addColorStop(0, '#111b26');
+      headerGrad.addColorStop(1, '#0b1118');
+      ctx.fillStyle = headerGrad;
+      ctx.fillRect(0, 0, canvas.width, headerH);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(0, headerH - 1, canvas.width, 1);
+      ctx.fillStyle = '#e6eef7';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `600 ${Math.round(19 * scale)}px "Inter", "Segoe UI", system-ui, sans-serif`;
+      ctx.fillText('Rock Band Family Tree', canvas.width / 2, headerH / 2);
+
+      // Draw the live graph canvas directly -- no SVG serialization, no
+      // Image() round-trip. drawImage can scale a canvas source just like
+      // an <img>, so this preserves the aspect-ratio-correct sizing math
+      // used by the SVG path above.
+      ctx.drawImage(liveCanvas, 0, headerH, graphW, graphH);
+
+      const footerY = headerH + graphH;
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(0, footerY, canvas.width, 1);
+      ctx.fillStyle = '#0b1118';
+      ctx.fillRect(0, footerY + 1, canvas.width, footerH - 1);
+      ctx.fillStyle = '#a3b3c6';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `500 ${Math.round(10 * scale)}px "Inter", "Segoe UI", system-ui, sans-serif`;
+      const displayUrl = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      ctx.fillText(displayUrl, canvas.width / 2, footerY + footerH / 2);
+
+      return await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    }
+
     async function renderGraphPngBlob() {
+      // perf(graph): short-circuit to the canvas-native export when the
+      // canvas renderer is active -- there is no SVG DOM to snapshot in
+      // that mode. The SVG path below (html2canvas-free but SVG-serializing)
+      // is unchanged and still used verbatim for RENDERER === 'svg'.
+      if (RENDERER === 'canvas') return renderGraphPngBlobCanvas();
       const svg = document.getElementById('graph-svg');
       if (!svg) return null;
       const siteUrl = window.location.origin + window.location.pathname;
