@@ -5394,10 +5394,20 @@ function downloadPngBlob(blob) {
       const node = nodeCardState.node;
       if (!node || nodeCardEl.hidden) return;
       const stage = document.querySelector('.graph-stage');
-      if (!stage || !svgSelection || !graphGroup) return;
+      if (!stage) return;
 
-      // graph coords → zoomed coords via the group's current d3.zoomTransform
-      const t = d3.zoomTransform(svgSelection.node());
+      // perf(graph): canvas renderer has no SVG group to read a
+      // zoomTransform off of -- it tracks its own transform (set by the
+      // canvas d3.zoom handler) in the module-level canvasTransform.
+      let t;
+      if (RENDERER === 'canvas') {
+        if (!canvasEl) return;
+        t = canvasTransform || d3.zoomIdentity;
+      } else {
+        if (!svgSelection || !graphGroup) return;
+        // graph coords -> zoomed coords via the group's current d3.zoomTransform
+        t = d3.zoomTransform(svgSelection.node());
+      }
       const sx = t.applyX(node.x || 0);
       const sy = t.applyY(node.y || 0);
 
@@ -5470,11 +5480,16 @@ function downloadPngBlob(blob) {
     // catch the outer SVG only.
     document.addEventListener('click', e => {
       if (!nodeCardState.node) return;
+      // perf(graph): canvas renderer has no per-node DOM elements to stop
+      // propagation, so handleCanvasPick() (wired to #graph-canvas's own
+      // click listener) already closes the card on an empty-canvas click
+      // before this document-level listener runs. This branch stays as a
+      // harmless no-op safety net for the canvas case and remains the
+      // primary path for the SVG renderer.
       const svg = document.getElementById('graph-svg');
-      if (!svg) return;
-      // Close only if the click landed on the bare SVG background (not on
-      // a node <g>, and not on the card itself).
-      if (e.target === svg) closeNodeCard();
+      if (RENDERER !== 'canvas' && svg && e.target === svg) { closeNodeCard(); return; }
+      const canvas = document.getElementById('graph-canvas');
+      if (RENDERER === 'canvas' && canvas && e.target === canvas) { closeNodeCard(); }
     });
 
     function updateSelection(node, degree = 0) {
@@ -5554,7 +5569,7 @@ function downloadPngBlob(blob) {
     }
 
     // ---------------------------------------------------------------------
-    // Shared force-layout helpers.
+    // Shared force-layout helpers (SVG + canvas renderers both use these).
     //
     // Canonical, unit-tested copies live in
     // scripts/graph-render-helpers.mjs (tests/graph-render-helpers.test.mjs
@@ -5574,8 +5589,9 @@ function downloadPngBlob(blob) {
     const SIMULATION_TICKS = 300;
 
     // Builds (but does not run) the d3.forceSimulation for a given
-    // nodes/links array. Pulled out of renderGraph() so future renderers
-    // configure the physics identically.
+    // nodes/links array. Pulled out of renderGraph() so both the SVG and
+    // canvas draw paths configure the physics identically -- the only
+    // difference between renderers is how the *result* gets painted.
     function buildForceSimulation(nodes, links, width, height, degree, collideRadius) {
       return d3.forceSimulation(nodes)
         .force('link', d3.forceLink(links).id(d => d.id)
@@ -5862,10 +5878,11 @@ function downloadPngBlob(blob) {
       // fired ~60-150 times and wrote to ~3,200 DOM nodes (link x1/y1/x2/y2
       // + node transform) on every single tick -- that's the multi-second
       // freeze on load for the full 3,233-node graph. runSyncForceLayout()
-      // advances the simulation SIMULATION_TICKS times with .tick() calls
-      // that never touch the DOM, then we paint the SVG exactly once with
-      // final positions. See scripts/graph-render-helpers.mjs for the
-      // canonical, unit-tested copy of this stepping logic.
+      // (shared with the canvas renderer below) advances the simulation
+      // SIMULATION_TICKS times with .tick() calls that never touch the DOM,
+      // then we paint the SVG exactly once with final positions. See
+      // scripts/graph-render-helpers.mjs for the canonical, unit-tested copy
+      // of this stepping logic.
       runSyncForceLayout(simulation, SIMULATION_TICKS);
 
       link
@@ -5877,8 +5894,8 @@ function downloadPngBlob(blob) {
       positionNodeCard();
 
       // Drag still needs a live simulation to reheat (alphaTarget/restart);
-      // once reheated it ticks normally and this 'tick' handler keeps the
-      // SVG in sync for the (cheap, rare) duration of an active drag.
+      // once reheated it ticks normally and the 'tick' handler below keeps
+      // the SVG in sync for the (cheap, rare) duration of an active drag.
       simulation.on('tick', () => {
         link
           .attr('x1', d => d.source.x)
@@ -5891,6 +5908,7 @@ function downloadPngBlob(blob) {
 
       fitGraph(60);
     }
+
     // =======================================================================
     // perf(graph): Canvas renderer.
     //
@@ -5968,6 +5986,178 @@ function downloadPngBlob(blob) {
       return { width, height };
     }
 
+
+    // Builds a d3.quadtree over the current canvasNodes for O(log n)
+    // hit-testing. Rebuilt whenever positions change materially (after
+    // layout, and after each drag tick) -- cheap even for ~3,200 nodes.
+    // Canonical, unit-tested copy: scripts/graph-render-helpers.mjs::buildNodeQuadtree.
+    function buildNodeQuadtree(nodes) {
+      return d3.quadtree()
+        .x(d => d.x)
+        .y(d => d.y)
+        .addAll(nodes);
+    }
+
+    // Given world-space (graph) coordinates, finds the nearest node within
+    // maxRadius using the quadtree, or null if none qualifies. World-space
+    // means the CALLER is responsible for inverse-transforming
+    // screen/event coordinates through the current zoom transform first.
+    // Canonical, unit-tested copy: scripts/graph-render-helpers.mjs::hitTestNode.
+    function hitTestNode(quadtree, x, y, maxRadius) {
+      if (!quadtree) return null;
+      const found = quadtree.find(x, y, maxRadius);
+      return found || null;
+    }
+
+    // Screen (canvas CSS pixel) coordinates -> world (graph) coordinates,
+    // using the inverse of the currently-applied zoom transform.
+    function screenToWorld(sx, sy) {
+      const t = canvasTransform || d3.zoomIdentity;
+      return [(sx - t.x) / t.k, (sy - t.y) / t.k];
+    }
+
+    // Per-node hit-test radius: outer drawn radius plus a small forgiveness
+    // margin so small member dots are still easy to hit with a mouse/finger.
+    function canvasHitRadius(d) {
+      return getNodeOuterRadius(d) + 6;
+    }
+
+    function onCanvasClick(event) {
+      if (canvasDragActive) return; // drag end already handled the gesture
+      const rect = canvasEl.getBoundingClientRect();
+      handleCanvasPick(event.clientX - rect.left, event.clientY - rect.top);
+    }
+
+    function handleCanvasPick(screenX, screenY) {
+      if (!canvasQuadtree) return;
+      const [wx, wy] = screenToWorld(screenX, screenY);
+      // maxRadius varies per node, but quadtree.find takes one scalar radius.
+      // 40 comfortably covers the largest node (band halo ~18px) plus
+      // forgiveness at typical zoom levels; onCanvasClick already divided
+      // by scale via screenToWorld, so this is in world units.
+      const found = hitTestNode(canvasQuadtree, wx, wy, 40);
+      if (!found) {
+        if (nodeCardState.node) closeNodeCard();
+        return;
+      }
+      openCanvasNodeCard(found);
+    }
+
+    // Mirrors the SVG node.on('click', ...) handler: computes linkedNames /
+    // bandMembers off the current canvasLinks/canvasNodes and opens the
+    // card. Kept as its own function (rather than reusing the SVG
+    // closure-scoped handler) because the SVG version closes over `nodes`/
+    // `links` local to renderGraphSvg; this closes over the canvas
+    // module-level canvasNodes/canvasLinks instead.
+    function openCanvasNodeCard(d) {
+      const linkedNames = canvasLinks
+        .filter(link => {
+          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+          return sourceId === d.id || targetId === d.id;
+        })
+        .map(link => {
+          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+          return sourceId === d.id ? targetId : sourceId;
+        });
+      const bandMembers = d.type === 'band'
+        ? canvasLinks
+            .filter(link => {
+              const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+              return sourceId === d.id;
+            })
+            .map(link => typeof link.target === 'object' ? link.target : canvasNodes.find(node => node.id === link.target))
+            .filter(Boolean)
+        : [];
+      updateSelection(d, linkedNames.length, linkedNames, bandMembers);
+      openNodeCard(d);
+      startNodeCardRaf();
+    }
+
+    let canvasDragNode = null;
+    let canvasDragMoved = false;
+
+    function onCanvasMouseDown(event) {
+      if (!canvasQuadtree) return;
+      const rect = canvasEl.getBoundingClientRect();
+      const [wx, wy] = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
+      const found = hitTestNode(canvasQuadtree, wx, wy, 40);
+      if (!found) return;
+      canvasDragNode = found;
+      canvasDragMoved = false;
+      canvasDragActive = true;
+      found.fx = found.x;
+      found.fy = found.y;
+      if (canvasSimulation) canvasSimulation.alphaTarget(0.3).restart();
+      startNodeCardRaf();
+
+      const onMove = moveEvent => {
+        canvasDragMoved = true;
+        const r = canvasEl.getBoundingClientRect();
+        const [mx, my] = screenToWorld(moveEvent.clientX - r.left, moveEvent.clientY - r.top);
+        canvasDragNode.fx = mx;
+        canvasDragNode.fy = my;
+        // While dragging we DO animate -- this is the one place the plan
+        // calls for a live tick loop instead of the synchronous batch.
+        if (canvasSimulation) canvasSimulation.tick();
+        canvasQuadtree = buildNodeQuadtree(canvasNodes);
+        drawCanvasFrame();
+        positionNodeCard();
+      };
+      const onUp = () => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        if (canvasDragNode) {
+          canvasDragNode.fx = null;
+          canvasDragNode.fy = null;
+        }
+        if (canvasSimulation) canvasSimulation.alphaTarget(0);
+        canvasDragActive = false;
+        // A drag that never moved is just a click -- let the click handler
+        // (which fires right after mouseup) open the node card normally.
+        if (canvasDragMoved && canvasDragNode) {
+          canvasQuadtree = buildNodeQuadtree(canvasNodes);
+          drawCanvasFrame();
+        }
+        canvasDragNode = null;
+        stopNodeCardRafIfIdle();
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    }
+
+    function onCanvasMouseMove(event) {
+      if (!canvasQuadtree || canvasDragActive) return;
+      const rect = canvasEl.getBoundingClientRect();
+      const [wx, wy] = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
+      const found = hitTestNode(canvasQuadtree, wx, wy, 40);
+      canvasEl.style.cursor = found ? 'pointer' : 'default';
+    }
+
+    // ---------------------------------------------------------------------
+    // rAF loop for positionNodeCard(). Only runs while the node card is
+    // open OR a drag is in progress -- per the plan, we must NOT run rAF
+    // continuously (that would reintroduce a constant per-frame cost even
+    // when nothing is moving).
+    // ---------------------------------------------------------------------
+    function startNodeCardRaf() {
+      if (canvasRafRunning) return;
+      canvasRafRunning = true;
+      const step = () => {
+        if (!nodeCardState.node && !canvasDragActive) {
+          canvasRafRunning = false;
+          return;
+        }
+        positionNodeCard();
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
+
+    function stopNodeCardRafIfIdle() {
+      if (!nodeCardState.node && !canvasDragActive) canvasRafRunning = false;
+    }
 
     // ---------------------------------------------------------------------
     // Bounds + fitGraph (canvas variant)
