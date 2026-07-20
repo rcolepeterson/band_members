@@ -47,7 +47,13 @@ import {
 // after a successful postSharedSubmission) and stays generally reachable for
 // any future direct-call use case, which is why 'edit_band_members' is added
 // to VALID_ACTIONS below even though nothing calls this endpoint with it today.
-const VALID_ACTIONS = new Set(['add_band', 'edit_band', 'edit_band_members']);
+//
+// edit-person-bio PR: edit-person.mjs follows the exact same internal-logging
+// pattern (see its header) and logs action='edit_person_bio' directly inside
+// its own sql.transaction(), never through this endpoint. 'edit_person_bio'
+// is added to VALID_ACTIONS for the same reachability reason as
+// 'edit_band_members' above.
+const VALID_ACTIONS = new Set(['add_band', 'edit_band', 'edit_band_members', 'edit_person_bio']);
 
 async function parseJsonBody(req) {
   try {
@@ -92,7 +98,7 @@ export default async (req) => {
 
   const action = typeof body.action === 'string' ? body.action.trim() : '';
   if (!VALID_ACTIONS.has(action)) {
-    return badRequest("action must be one of 'add_band', 'edit_band', or 'edit_band_members'", { field: 'action' });
+    return badRequest("action must be one of 'add_band', 'edit_band', 'edit_band_members', or 'edit_person_bio'", { field: 'action' });
   }
 
   // band_id + band_name are optional — a "add" action may not have a stable
@@ -121,6 +127,10 @@ export default async (req) => {
     // Two writes, one transaction so a mid-write failure can't leave the
     // counter and log out of sync. Neon's HTTP driver supports `sql.transaction()`
     // taking an array of statements executed atomically.
+    // edit_person_bio counts toward bands_edited too -- there's no separate
+    // "members edited" counter on the users table, and a musician-bio edit
+    // is conceptually the same kind of contribution as a band edit for
+    // leaderboard/analytics purposes.
     const counterColumn = action === 'add_band' ? 'bands_added' : 'bands_edited';
 
     // Neon's serverless driver `sql.transaction` accepts an array of

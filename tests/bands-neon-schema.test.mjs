@@ -298,6 +298,11 @@ test('contributions.mjs allows edit_band_members alongside add_band and edit_ban
   assert.match(src, /VALID_ACTIONS\s*=\s*new Set\(\[[^\]]*'add_band'[^\]]*'edit_band'[^\]]*'edit_band_members'[^\]]*\]\)/s);
 });
 
+test('contributions.mjs also allows edit_person_bio (musician bio edits)', () => {
+  const src = readFn('contributions.mjs');
+  assert.match(src, /VALID_ACTIONS\s*=\s*new Set\(\[[^\]]*'edit_person_bio'[^\]]*\]\)/s);
+});
+
 test('contributions.mjs documents that write endpoints log internally, not via a client-facing second call', () => {
   const src = readFn('contributions.mjs');
   // A comment near VALID_ACTIONS (or elsewhere in the file) should call out
@@ -305,9 +310,9 @@ test('contributions.mjs documents that write endpoints log internally, not via a
   assert.match(src, /race/i);
 });
 
-test('migrate.mjs\'s contributions CHECK constraint allows edit_band_members (DDL only, not executed)', () => {
+test('migrate.mjs\'s contributions CHECK constraint allows edit_band_members and edit_person_bio (DDL only, not executed)', () => {
   const src = readFn('migrate.mjs');
-  assert.match(src, /check\s*\(\s*action\s+in\s*\(\s*'add_band'\s*,\s*'edit_band'\s*,\s*'edit_band_members'\s*\)\s*\)/i);
+  assert.match(src, /check\s*\(\s*action\s+in\s*\(\s*'add_band'\s*,\s*'edit_band'\s*,\s*'edit_band_members'\s*,\s*'edit_person_bio'\s*\)\s*\)/i);
   // Idempotent re-apply for already-existing databases: a bare CREATE TABLE
   // IF NOT EXISTS wouldn't update the constraint on a table that already
   // exists, so migrate.mjs must also ALTER the constraint explicitly.
