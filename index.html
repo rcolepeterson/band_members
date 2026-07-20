@@ -2406,6 +2406,32 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                     <input id="signup-email" name="signup-email" type="email" autocomplete="email" placeholder="you@example.com" required maxlength="254" />
                     <div class="field-note">Only used to attribute contributions and reach you if we need to. Not shared.</div>
                   </div>
+                  <!--
+                    Profile fields added in PR signup-profile-fields. City /
+                    state / country give the map some 'where do our
+                    contributors live?' signal; instrument answers 'what do
+                    they play?'. All four required at signup per product
+                    decision on 2026-07-19; instrument accepts free-text so
+                    people who don't play can enter 'Music listener' or
+                    'Music connoisseur' (hinted in the placeholder).
+                  -->
+                  <div>
+                    <label for="signup-city">City</label>
+                    <input id="signup-city" name="signup-city" type="text" autocomplete="address-level2" placeholder="Seattle" required maxlength="80" />
+                  </div>
+                  <div>
+                    <label for="signup-state">State / region</label>
+                    <input id="signup-state" name="signup-state" type="text" autocomplete="address-level1" placeholder="WA" required maxlength="80" />
+                  </div>
+                  <div class="form-span-2">
+                    <label for="signup-country">Country</label>
+                    <input id="signup-country" name="signup-country" type="text" autocomplete="country-name" placeholder="USA" required maxlength="80" />
+                  </div>
+                  <div class="form-span-2">
+                    <label for="signup-instrument">Instrument you play</label>
+                    <input id="signup-instrument" name="signup-instrument" type="text" placeholder="Guitar, Bass, Drums… or &quot;Music listener&quot; if you don't play" required maxlength="60" />
+                    <div class="field-note">Don't play? Type <em>Music listener</em> or <em>Music connoisseur</em>.</div>
+                  </div>
                   <div id="signup-status" class="validation-message" aria-live="polite"></div>
                   <div class="form-span-2 footer-strip">
                     <button class="submit-btn" type="submit" id="signup-submit-btn">Sign up</button>
@@ -7910,12 +7936,24 @@ function downloadPngBlob(blob) {
           const submitBtn = document.getElementById('signup-submit-btn');
           const nameInput = document.getElementById('signup-name');
           const emailInput = document.getElementById('signup-email');
+          // Profile fields added in PR signup-profile-fields. Kept as separate
+          // element lookups (instead of a loop) so a missing element fails
+          // loudly at read time via the null check below rather than silently
+          // sending an empty string.
+          const cityInput = document.getElementById('signup-city');
+          const stateInput = document.getElementById('signup-state');
+          const countryInput = document.getElementById('signup-country');
+          const instrumentInput = document.getElementById('signup-instrument');
 
           if (form) {
             form.addEventListener('submit', async (event) => {
               event.preventDefault();
               const name = (nameInput && nameInput.value || '').trim();
               const email = (emailInput && emailInput.value || '').trim().toLowerCase();
+              const city = (cityInput && cityInput.value || '').trim();
+              const state = (stateInput && stateInput.value || '').trim();
+              const country = (countryInput && countryInput.value || '').trim();
+              const instrument = (instrumentInput && instrumentInput.value || '').trim();
               // Client-side sanity check. Server enforces the real rules.
               if (!name || name.length > 100) {
                 status.textContent = 'Please enter your name (up to 100 characters).';
@@ -7924,6 +7962,30 @@ function downloadPngBlob(blob) {
               }
               if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                 status.textContent = 'That doesn’t look like a valid email. Try again.';
+                status.className = 'validation-message is-error';
+                return;
+              }
+              // Profile field checks mirror the server rules in signup.mjs.
+              // Length caps: city/state/country 80, instrument 60. We check
+              // presence + length here so users get instant feedback instead
+              // of a round-trip.
+              if (!city || city.length > 80) {
+                status.textContent = 'Please enter your city (up to 80 characters).';
+                status.className = 'validation-message is-error';
+                return;
+              }
+              if (!state || state.length > 80) {
+                status.textContent = 'Please enter your state or region (up to 80 characters).';
+                status.className = 'validation-message is-error';
+                return;
+              }
+              if (!country || country.length > 80) {
+                status.textContent = 'Please enter your country (up to 80 characters).';
+                status.className = 'validation-message is-error';
+                return;
+              }
+              if (!instrument || instrument.length > 60) {
+                status.textContent = 'Please enter an instrument (or type "Music listener" if you don\'t play).';
                 status.className = 'validation-message is-error';
                 return;
               }
@@ -7936,7 +7998,14 @@ function downloadPngBlob(blob) {
                 const response = await fetch(SIGNUP_ENDPOINT, {
                   method: 'POST',
                   headers: { 'content-type': 'application/json' },
-                  body: JSON.stringify({ name: name, email: email })
+                  body: JSON.stringify({
+                    name: name,
+                    email: email,
+                    city: city,
+                    state: state,
+                    country: country,
+                    instrument: instrument
+                  })
                 });
                 let data = null;
                 try { data = await response.json(); } catch (_) {}
@@ -7952,7 +8021,11 @@ function downloadPngBlob(blob) {
                   email: data.user.email,
                   token: data.user.token,
                   bands_added: data.user.bands_added || 0,
-                  bands_edited: data.user.bands_edited || 0
+                  bands_edited: data.user.bands_edited || 0,
+                  city: data.user.city || '',
+                  state: data.user.state || '',
+                  country: data.user.country || '',
+                  instrument: data.user.instrument || ''
                 });
                 setSignedInState(loadCurrentUser());
                 // The signup section is now hidden; if there's any residual

@@ -17,6 +17,10 @@ import {
   generateToken,
   normalizeEmail,
   normalizeName,
+  normalizeCity,
+  normalizeState,
+  normalizeCountry,
+  normalizeInstrument,
   isPlausibleEmail,
 } from '../netlify/functions/_db.mjs';
 
@@ -147,4 +151,47 @@ test('isPlausibleEmail rejects obvious garbage', () => {
   for (const e of ['', 'a', 'no-at-sign', '@leading', 'trailing@', undefined, null, 42]) {
     assert.equal(isPlausibleEmail(e), false, `expected ${JSON.stringify(e)} rejected`);
   }
+});
+
+// --- profile-field normalizers (signup-profile-fields) ---------------------
+// All four share the same shape (trim + collapse whitespace + length-cap), so
+// this is one parameterized suite instead of four near-identical blocks.
+const PROFILE_NORMALIZERS = [
+  { name: 'normalizeCity',       fn: normalizeCity,       cap: 80 },
+  { name: 'normalizeState',      fn: normalizeState,      cap: 80 },
+  { name: 'normalizeCountry',    fn: normalizeCountry,    cap: 80 },
+  { name: 'normalizeInstrument', fn: normalizeInstrument, cap: 60 },
+];
+
+for (const { name, fn, cap } of PROFILE_NORMALIZERS) {
+  test(`${name} trims and collapses whitespace`, () => {
+    assert.equal(fn('  Seattle  '), 'Seattle');
+    assert.equal(fn('San   Francisco'), 'San Francisco');
+  });
+
+  test(`${name} caps length at ${cap}`, () => {
+    const huge = 'a'.repeat(cap * 3);
+    assert.equal(fn(huge).length, cap);
+  });
+
+  test(`${name} handles non-strings safely`, () => {
+    assert.equal(fn(undefined), '');
+    assert.equal(fn(null), '');
+    assert.equal(fn(42), '');
+  });
+
+  test(`${name} preserves non-ASCII characters`, () => {
+    // Postgres text column stores UTF-8 and we don't want to strip diacritics.
+    // Explicit test so a future "clean up" refactor doesn't silently do so.
+    assert.equal(fn('  Zürich  '), 'Zürich');
+    assert.equal(fn('  São Paulo  '), 'São Paulo');
+  });
+}
+
+test('normalizeInstrument accepts the "Music listener" non-player option', () => {
+  // This is a copy contract: the client placeholder + server error message
+  // both point users to enter "Music listener" or "Music connoisseur" when
+  // they don't play. The normalizer must let those pass through unchanged.
+  assert.equal(normalizeInstrument('Music listener'),     'Music listener');
+  assert.equal(normalizeInstrument('Music connoisseur'),  'Music connoisseur');
 });

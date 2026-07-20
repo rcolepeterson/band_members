@@ -61,6 +61,51 @@ test('signup form has a submit button and a status region', () => {
   assert.match(INDEX_HTML, /id="signup-status"[^>]*aria-live="polite"/);
 });
 
+// Profile fields added in PR signup-profile-fields. All four required at
+// signup so the field-presence assertion below also asserts the `required`
+// HTML attribute. The instrument field's placeholder must hint at the
+// "Music listener" alternative so people who don't play know what to type;
+// the label copy is also asserted for the same reason.
+test('signup form has required city / state / country / instrument fields', () => {
+  for (const id of ['signup-city', 'signup-state', 'signup-country', 'signup-instrument']) {
+    const re = new RegExp(`id="${id}"[^>]*required`);
+    assert.match(INDEX_HTML, re, `Expected #${id} to be present and required.`);
+  }
+});
+
+test('signup instrument field hints at "Music listener" for non-players', () => {
+  // Grab the input tag itself so we don't accidentally match the surrounding
+  // documentation or another element.
+  const match = INDEX_HTML.match(/<input id="signup-instrument"[^>]*>/);
+  assert.ok(match, 'Expected #signup-instrument input to be present.');
+  assert.match(
+    match[0],
+    /Music listener/,
+    'Expected #signup-instrument placeholder to hint at the "Music listener" option.'
+  );
+});
+
+test('signup submit handler POSTs the profile fields to /api/signup', () => {
+  // The submit handler builds a JSON body containing every profile field.
+  // We assert on the object-literal shape rather than the exact whitespace
+  // so the test survives minor reformatting. Anchor on SIGNUP_ENDPOINT so
+  // we don't accidentally match one of the other fetch/JSON.stringify sites
+  // in index.html (contributions, verify-band, etc.).
+  const anchorIdx = INDEX_HTML.indexOf('fetch(SIGNUP_ENDPOINT');
+  assert.ok(
+    anchorIdx > 0,
+    'Expected fetch(SIGNUP_ENDPOINT, ...) call inside submit handler.'
+  );
+  // Look at the next ~600 chars — enough to cover fetch options + body.
+  const window = INDEX_HTML.slice(anchorIdx, anchorIdx + 600);
+  for (const key of ['name:', 'email:', 'city:', 'state:', 'country:', 'instrument:']) {
+    assert.ok(
+      window.includes(key),
+      `Expected signup submit body to include "${key}" property.`
+    );
+  }
+});
+
 test('signed-in strip has a sign-out button', () => {
   assert.match(INDEX_HTML, /id="sign-out-btn"/);
   assert.match(INDEX_HTML, /data-current-user-name/);

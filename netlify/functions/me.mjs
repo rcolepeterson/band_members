@@ -46,6 +46,12 @@ export default async (req) => {
         bands_added: user.bands_added,
         bands_edited: user.bands_edited,
         created_at: user.created_at,
+        // Profile fields (nullable on existing rows that predate the
+        // signup-profile-fields migration; always populated for new signups).
+        city: user.city,
+        state: user.state,
+        country: user.country,
+        instrument: user.instrument,
       },
     });
   } catch (err) {

@@ -102,6 +102,22 @@ export default async (req) => {
     `;
     results.push('index users_email_lower_idx ready');
 
+    // signup-profile-fields: capture where a user lives and what they play.
+    // All four columns are nullable — existing users predate the fields and
+    // shouldn't be broken by the migration. New signups fill these in via the
+    // form (see signup.mjs's validation), so going forward every new row will
+    // have values. `instrument` accepts free-text including entries like
+    // 'Music listener / connoisseur' for people who don't play, per the
+    // product decision on 2026-07-19.
+    //
+    // Using `add column if not exists` (Postgres 9.6+) makes this idempotent
+    // the same way the rest of this migrator is.
+    await sql`alter table users add column if not exists city       text`;
+    await sql`alter table users add column if not exists state      text`;
+    await sql`alter table users add column if not exists country    text`;
+    await sql`alter table users add column if not exists instrument text`;
+    results.push('columns users.{city,state,country,instrument} ready');
+
     // contributions table ---------------------------------------------------
     // Append-only log. Each row is one recorded action by one user on one
     // band. The metadata column is jsonb so we can extend without migrations
