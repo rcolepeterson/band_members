@@ -2166,7 +2166,33 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       </div>
       <!-- Country chips are populated inside the mobile Scene picker (see #mobile-country-chip-row below inside the scene picker wrapper). -->
       <!--
-        Mobile share button. Lives at the bottom of the sheet so a user
+        Mobile Add-your-band button. The desktop Add-your-band button
+        lives inside .graph-overlay-top which was made display:none on
+        mobile in PR 18 (Unify controls into a single top toolbar), so
+        mobile users had no path to the submission form after that
+        change. Clicking this closes the sheet and triggers the desktop
+        #add-band-btn programmatically. The existing hookPopoverForMobile
+        ('add-band-popover') hook (added in PR 11) converts the popover
+        panel to a bottom sheet on mobile, so the form itself already
+        works — we just needed the trigger back.
+
+        Order note: Add-your-band sits above the Share button in the
+        sheet because the primary CTA on mobile is contributing to the
+        graph. Users who came to share a specific view still have a
+        one-tap Share button right below it; users landing for the
+        first time see the more valuable "Add your band" action first.
+      -->
+      <div class="mobile-sheet-add-band">
+        <button class="tool-chip mobile-add-band-btn" type="button" id="mobile-add-band-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Add your band
+        </button>
+      </div>
+      <!--
+        Mobile share button. Sits directly below Add-your-band so a user
         who's just explored a scene / found a band they love can share
         it in one thumb-reach action. Clicking this closes the sheet and
         triggers the same tryNativeShare() flow the top-level 'Share
@@ -2186,26 +2212,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             <line x1="12" y1="2" x2="12" y2="15"/>
           </svg>
           Share this graph
-        </button>
-      </div>
-      <!--
-        Mobile Add-your-band button. The desktop Add-your-band button
-        lives inside .graph-overlay-top which was made display:none on
-        mobile in PR 18 (Unify controls into a single top toolbar), so
-        mobile users had no path to the submission form after that
-        change. Clicking this closes the sheet and triggers the desktop
-        #add-band-btn programmatically. The existing hookPopoverForMobile
-        ('add-band-popover') hook (added in PR 11) converts the popover
-        panel to a bottom sheet on mobile, so the form itself already
-        works — we just needed the trigger back.
-      -->
-      <div class="mobile-sheet-add-band">
-        <button class="tool-chip mobile-add-band-btn" type="button" id="mobile-add-band-btn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-          Add your band
         </button>
       </div>
       <!--
