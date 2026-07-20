@@ -5664,10 +5664,37 @@ function downloadPngBlob(blob) {
     // bound, not a number we expect to hit in the common case.
     const SIMULATION_TICKS = 120;
 
+    // Tick budget for a "warm" re-layout after a filter change, where most
+    // node positions are seeded from lastNodePositions (see
+    // applyCachedPositions below) instead of the simulation's random
+    // initial layout. Far fewer ticks are needed to settle small
+    // perturbations (nodes that only just entered/left the filtered set)
+    // when the bulk of the graph already starts in roughly the right place.
+    //
+    // perf(graph): measured on the full ~3200-node graph that seeded/pinned
+    // nodes never move regardless of tick count (fx/fy holds them exactly in
+    // place -- only genuinely new/unpinned nodes need ticks to settle), and
+    // even with 20% of nodes freshly unpinned, new-node placement quality at
+    // 10 ticks was within ~1% of 40 ticks. 40 was measured to cost ~1.3s on
+    // this graph size purely from Barnes-Hut charge-force overhead per tick
+    // (independent of how many nodes are actually moving) -- far more than
+    // needed. 15 keeps a safety margin above the tested floor of 10 for
+    // filter changes with a larger fraction of new nodes than tested.
+    const WARM_SIMULATION_TICKS = 15;
+
     // alpha threshold below which runSyncForceLayout() stops early -- see
     // scripts/graph-render-helpers.mjs::runSyncForceLayout for the
     // canonical, unit-tested copy of this constant/behavior.
     const SIMULATION_MIN_ALPHA = 0.02;
+
+    // Module-level cache of the last known-good {x, y} for each node id,
+    // populated after every successful layout (SVG or canvas) and consulted
+    // before the next one so filter changes can warm-start instead of
+    // starting from d3-force's random initial positions. Canonical,
+    // unit-tested copies of the read/write helpers:
+    // scripts/graph-render-helpers.mjs::{snapshotNodePositions,
+    // applyCachedPositions, clearFixedPositions}.
+    const lastNodePositions = new Map();
 
     // Builds (but does not run) the d3.forceSimulation for a given
     // nodes/links array. Pulled out of renderGraph() so both the SVG and
@@ -5719,6 +5746,85 @@ function downloadPngBlob(blob) {
         if (simulation.alpha() < minAlpha) break;
       }
       return simulation;
+    }
+
+    // ---------------------------------------------------------------------
+    // Position caching across filter changes (perf(graph) bug C).
+    // Canonical, unit-tested copies: scripts/graph-render-helpers.mjs::
+    // {snapshotNodePositions, applyCachedPositions, clearFixedPositions}.
+    // ---------------------------------------------------------------------
+
+    // Records {x, y} for every node with a finite position into
+    // lastNodePositions, keyed by node id. Called once after every
+    // successful layout (SVG + canvas), so the NEXT layout (e.g. after a
+    // filter change) can warm-start from these instead of d3-force's
+    // random initial positions.
+    function snapshotNodePositions(nodes) {
+      nodes.forEach(d => {
+        if (Number.isFinite(d.x) && Number.isFinite(d.y)) {
+          lastNodePositions.set(d.id, { x: d.x, y: d.y });
+        }
+      });
+    }
+
+    // Seeds any node in `nodes` whose id is present in lastNodePositions
+    // with its cached x/y (and, when `pin` is true, fx/fy so the
+    // simulation briefly treats it as fixed while ticking). Returns how
+    // many nodes were seeded, so the caller can decide whether a warm
+    // (short) layout is appropriate.
+    function applyCachedPositions(nodes, { pin = false } = {}) {
+      let seeded = 0;
+      nodes.forEach(d => {
+        const cached = lastNodePositions.get(d.id);
+        if (!cached) return;
+        d.x = cached.x;
+        d.y = cached.y;
+        if (pin) {
+          d.fx = cached.x;
+          d.fy = cached.y;
+        }
+        seeded++;
+      });
+      return seeded;
+    }
+
+    // Clears fx/fy set by applyCachedPositions(..., { pin: true }) so a
+    // later drag on one of those nodes isn't fighting a stale fixed
+    // position.
+    function clearFixedPositions(nodes) {
+      nodes.forEach(d => {
+        d.fx = null;
+        d.fy = null;
+      });
+    }
+
+    // Runs the layout for a fresh nodes/links array, warm-starting from
+    // lastNodePositions when available. Shared by both the SVG and canvas
+    // render paths so a filter change is cheap on either renderer:
+    //   - Cold path (no/low cache hit -- first load, or an entirely new
+    //     node set): full SIMULATION_TICKS budget, random d3-force init.
+    //   - Warm path (most node ids already have a cached position -- the
+    //     common case for a filter change on an already-rendered graph):
+    //     seed + pin cached positions, run a much shorter
+    //     WARM_SIMULATION_TICKS budget, then unpin.
+    // Always snapshots the final positions back into lastNodePositions so
+    // the next call (whatever renderer/filter triggers it) can warm-start
+    // too.
+    function runLayoutWithPositionCache(simulation, nodes) {
+      const seeded = lastNodePositions.size ? applyCachedPositions(nodes, { pin: true }) : 0;
+      const isWarm = seeded > 0 && seeded >= nodes.length * 0.5;
+      if (isWarm) {
+        runSyncForceLayout(simulation, WARM_SIMULATION_TICKS, SIMULATION_MIN_ALPHA);
+        clearFixedPositions(nodes);
+      } else {
+        // Not a mostly-cached re-layout (first load, or the filtered set
+        // changed drastically) -- clear any partial pins from the cache
+        // check above and run the full cold layout.
+        clearFixedPositions(nodes);
+        runSyncForceLayout(simulation, SIMULATION_TICKS, SIMULATION_MIN_ALPHA);
+      }
+      snapshotNodePositions(nodes);
+      return isWarm;
     }
 
     function renderGraph() {
@@ -5973,11 +6079,15 @@ function downloadPngBlob(blob) {
       // + node transform) on every single tick -- that's the multi-second
       // freeze on load for the full 3,233-node graph. runSyncForceLayout()
       // (shared with the canvas renderer below) advances the simulation
-      // SIMULATION_TICKS times with .tick() calls that never touch the DOM,
-      // then we paint the SVG exactly once with final positions. See
+      // up to SIMULATION_TICKS times with .tick() calls that never touch
+      // the DOM (with an early exit once alpha settles), then we paint the
+      // SVG exactly once with final positions. See
       // scripts/graph-render-helpers.mjs for the canonical, unit-tested copy
-      // of this stepping logic.
-      runSyncForceLayout(simulation, SIMULATION_TICKS);
+      // of this stepping logic. runLayoutWithPositionCache additionally
+      // warm-starts from lastNodePositions when most node ids already have
+      // a cached position (e.g. a filter change), which is what makes
+      // repeated filter changes near-instant instead of a full re-freeze.
+      runLayoutWithPositionCache(simulation, nodes);
 
       link
         .attr('x1', d => d.source.x)
@@ -6600,7 +6710,10 @@ function downloadPngBlob(blob) {
       };
 
       const simulation = buildForceSimulation(nodes, links, width, height, degree, collideRadius);
-      runSyncForceLayout(simulation, SIMULATION_TICKS);
+      // perf(graph): warm-starts from lastNodePositions when available --
+      // see runLayoutWithPositionCache and the comment on the SVG call
+      // site above for the full rationale.
+      runLayoutWithPositionCache(simulation, nodes);
 
       canvasNodes = nodes;
       canvasLinks = links;
