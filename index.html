@@ -490,6 +490,42 @@ body {
   resize: vertical;
 }
 
+/* ---- Edit-person (musician bio) popover ----
+   Unlike #edit-band-panel (nested inside #add-band-popover, anchored to
+   the toolbar's Add-your-band button), this popover is triggered from the
+   floating node card, which can be positioned anywhere in the graph
+   viewport. Anchoring a dropdown-style .share-popover to that would be
+   awkward, so it's fixed + centered instead, reusing .share-popover's
+   glass background/border/blur but overriding position. z-index sits
+   above .node-card (12) and the mobile bottom-sheet popovers (up to 75)
+   so it's always reachable once opened, but below #password-gate (9999). */
+.edit-person-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  transform: translate(-50%, -50%);
+  width: min(380px, calc(100vw - 2rem));
+  z-index: 500;
+}
+#edit-person-form textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+.readonly-name {
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-md, 8px);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: var(--color-text, #e6ecf3);
+  font-size: var(--text-base);
+}
+@media (max-width: 900px) {
+  .edit-person-panel {
+    width: calc(100vw - 1.7rem);
+  }
+}
+
 /* Sign-up / signed-in UI inside the Add-your-band popover (PR 2:
    Signup + Attribution). The popover hosts two sibling sections
    toggled by JS: [data-signup-only] shows for anonymous visitors
@@ -2745,6 +2781,38 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         <button type="button" class="link-like" id="node-card-signin-link">Sign in</button> to edit this band.
       </div>
       <div class="node-card__tail" aria-hidden="true"></div>
+    </div>
+
+    <!--
+      Minimal edit-person popover (beta scope: bio only -- no rename,
+      instrument, or tenure edits here; those remain inside the edit-band
+      roster flow). Opened from the musician-node pencil via
+      openEditPersonPopover(node) -- see renderEditAffordances(). A
+      standalone fixed-position panel (not nested inside #add-band-popover
+      like #edit-band-panel is) since its trigger is the floating node
+      card, which can be anchored anywhere in the graph viewport rather
+      than a fixed toolbar button.
+    -->
+    <div id="edit-person-panel" class="share-popover edit-person-panel" role="dialog" aria-label="Edit musician" hidden>
+      <button type="button" class="popover-close" id="edit-person-close-btn" aria-label="Close">&times;</button>
+      <div class="share-popover-title">Edit musician</div>
+      <form class="form-grid" id="edit-person-form" novalidate>
+        <div class="form-span-2">
+          <label for="edit-person-name">Musician</label>
+          <div id="edit-person-name" class="readonly-name">—</div>
+        </div>
+        <div class="form-span-2">
+          <label for="edit-person-bio">Bio</label>
+          <textarea id="edit-person-bio" name="edit-person-bio" maxlength="2000" rows="6"
+            placeholder="Optional bio, personal context, side projects, influences, or anything you want to say about this musician."></textarea>
+          <div class="field-note">Plain text only. Links and promo URLs are not allowed.</div>
+        </div>
+        <div id="edit-person-feedback" class="validation-message submission-feedback" aria-live="polite"></div>
+        <div class="form-span-2 footer-strip">
+          <button class="submit-btn" type="submit" id="edit-person-save-btn">Save bio</button>
+          <button class="link-btn" type="button" id="edit-person-cancel-btn" data-cancel>Cancel</button>
+        </div>
+      </form>
     </div>
 
     <!--
@@ -7389,6 +7457,135 @@ function downloadPngBlob(blob) {
       } finally {
         saveButton.disabled = false;
         saveButton.textContent = previousLabel;
+      }
+    });
+
+    // -----------------------------------------------------------------------
+    // Edit-person popover: minimal beta-scope edit for a single musician's
+    // bio field. Deliberately separate from the edit-band machinery above --
+    // no roster, no instrument/tenure/rename editing here. See the PR
+    // description for why that scope was cut down for the beta.
+    // -----------------------------------------------------------------------
+
+    const editPersonState = {
+      node: null,     // the master-graph node object being edited
+      personId: null, // resolved backend id (band_members.id) once known
+    };
+
+    function showEditPersonFeedback(message, isError) {
+      const feedback = document.getElementById('edit-person-feedback');
+      if (!feedback) return;
+      feedback.textContent = message;
+      feedback.classList.add('is-visible');
+      feedback.classList.toggle('is-warning', !!isError);
+      feedback.classList.toggle('is-success', !isError);
+    }
+
+    // Populates and opens #edit-person-panel for the given musician node.
+    // Mirrors openEditBandPopover's choreography: reset feedback, populate
+    // fields from the freshest known data (node.bio, already present on the
+    // loaded graph data -- see buildMasterGraph()/normalizeNeonToRows()), show
+    // the panel, then focus the first editable input.
+    function openEditPersonPopover(node) {
+      if (!node) return;
+      const feedback = document.getElementById('edit-person-feedback');
+      if (feedback) { feedback.textContent = ''; feedback.classList.remove('is-visible', 'is-warning', 'is-success'); }
+
+      editPersonState.node = node;
+      // Prefer the backend uuid if we can resolve it (keeps the PATCH target
+      // stable even if the person is later renamed); fall back to the
+      // display name, which edit-person.mjs also accepts.
+      const rawMember = typeof findRawMemberByName === 'function' ? findRawMemberByName(node.id) : null;
+      editPersonState.personId = (rawMember && rawMember.id) || node.id;
+
+      const nameEl = document.getElementById('edit-person-name');
+      if (nameEl) nameEl.textContent = node.id || '';
+      const bioField = document.getElementById('edit-person-bio');
+      if (bioField) bioField.value = node.bio || '';
+
+      closeBottomPopovers(null);
+      toggleSharePopover(false);
+
+      const panel = document.getElementById('edit-person-panel');
+      if (panel) {
+        panel.hidden = false;
+        panel.setAttribute('aria-hidden', 'false');
+      }
+      if (bioField) bioField.focus();
+    }
+
+    function closeEditPersonPopover() {
+      const panel = document.getElementById('edit-person-panel');
+      if (panel) {
+        panel.hidden = true;
+        panel.setAttribute('aria-hidden', 'true');
+      }
+      editPersonState.node = null;
+      editPersonState.personId = null;
+    }
+
+    document.getElementById('edit-person-close-btn')?.addEventListener('click', closeEditPersonPopover);
+    document.getElementById('edit-person-cancel-btn')?.addEventListener('click', closeEditPersonPopover);
+    document.getElementById('edit-person-panel')?.addEventListener('click', (event) => event.stopPropagation());
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && editPersonState.node) closeEditPersonPopover();
+    });
+
+    document.getElementById('edit-person-form')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!editPersonState.personId) {
+        showEditPersonFeedback('Cannot save: this musician has no backend id to edit against.', true);
+        return;
+      }
+
+      const user = loadCurrentUser();
+      if (!user || !user.token) {
+        showEditPersonFeedback('You must be signed in to edit a musician.', true);
+        return;
+      }
+
+      const bioField = document.getElementById('edit-person-bio');
+      const bio = (bioField ? bioField.value : '').trim();
+
+      const saveButton = document.getElementById('edit-person-save-btn');
+      const previousLabel = saveButton ? saveButton.textContent : '';
+      if (saveButton) { saveButton.disabled = true; saveButton.textContent = 'Saving\u2026'; }
+      showEditPersonFeedback('Saving changes\u2026', false);
+
+      try {
+        const response = await fetch('/api/edit-person', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + user.token },
+          body: JSON.stringify({ personId: editPersonState.personId, bio }),
+        });
+        let body = null;
+        try { body = await response.json(); } catch (_) { /* non-JSON error body */ }
+        if (!response.ok || !body || body.ok === false) {
+          throw new Error((body && body.error) || `The server rejected the edit (${response.status}).`);
+        }
+
+        // Update the local graph state so the reopened node card reflects
+        // the change immediately, without a full page reload -- mirrors how
+        // openEditBandPopover's save handler refreshes state after a write,
+        // just scoped to the single node instead of a full loadGraphData().
+        const node = editPersonState.node;
+        if (node) {
+          node.bio = body.bio || '';
+          if (graphState && graphState.master && Array.isArray(graphState.master.nodes)) {
+            const liveNode = graphState.master.nodes.find(n => n.type === 'person' && n.id === node.id);
+            if (liveNode) liveNode.bio = body.bio || '';
+          }
+        }
+
+        showEditPersonFeedback('Bio updated.', false);
+        closeEditPersonPopover();
+        // Reopen the node card so the fresh bio is visible right away.
+        if (node) openNodeCard(node);
+      } catch (error) {
+        console.error('Edit person save failed', error);
+        showEditPersonFeedback(error.message || 'Could not save changes. Try again.', true);
+      } finally {
+        if (saveButton) { saveButton.disabled = false; saveButton.textContent = previousLabel; }
       }
     });
 
