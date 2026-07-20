@@ -126,7 +126,7 @@ export default async (req) => {
       create table if not exists contributions (
         id bigserial primary key,
         user_id uuid not null references users(id) on delete cascade,
-        action text not null check (action in ('add_band','edit_band','edit_band_members')),
+        action text not null check (action in ('add_band','edit_band','edit_band_members','edit_person_bio')),
         band_id text,
         band_name text,
         metadata jsonb not null default '{}'::jsonb,
@@ -142,13 +142,17 @@ export default async (req) => {
     // and recreate the constraint explicitly — same idempotent
     // drop-then-recreate pattern already used for the updated_at triggers
     // below, just applied to a CHECK constraint instead of a trigger.
+    //
+    // edit-person-bio PR: edit-person.mjs logs action='edit_person_bio' for
+    // musician bio edits (band_id/band_name stay null for this action since
+    // the edit isn't band-scoped — see edit-person.mjs). Same widen pattern.
     await sql`alter table contributions drop constraint if exists contributions_action_check`;
     await sql`
       alter table contributions
       add constraint contributions_action_check
-      check (action in ('add_band','edit_band','edit_band_members'))
+      check (action in ('add_band','edit_band','edit_band_members','edit_person_bio'))
     `;
-    results.push('constraint contributions_action_check ready (edit_band_members allowed)');
+    results.push('constraint contributions_action_check ready (edit_band_members, edit_person_bio allowed)');
 
     // Query patterns we anticipate:
     //   - "list my contributions"       -> user_id + created_at desc
