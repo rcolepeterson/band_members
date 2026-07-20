@@ -7519,6 +7519,7 @@ function downloadPngBlob(blob) {
     const editPersonState = {
       node: null,     // the master-graph node object being edited
       personId: null, // resolved backend id (band_members.id) once known
+      reopenNodeAfterClose: null, // if set, node card is reopened on close
     };
 
     function showEditPersonFeedback(message, isError) {
@@ -7555,6 +7556,17 @@ function downloadPngBlob(blob) {
       closeBottomPopovers(null);
       toggleSharePopover(false);
 
+      // Close the musician's node card before opening the edit panel.
+      // On mobile the node card is a full bottom sheet that visually
+      // overlaps the centered edit panel; hiding it eliminates any
+      // "which one is on top" ambiguity. We remember the node so the
+      // card can be reopened when the edit panel closes, giving the
+      // user a natural return-to-context flow.
+      editPersonState.reopenNodeAfterClose = node;
+      if (typeof closeNodeCard === 'function' && nodeCardState && nodeCardState.node) {
+        closeNodeCard();
+      }
+
       const panel = document.getElementById('edit-person-panel');
       if (panel) {
         panel.hidden = false;
@@ -7569,8 +7581,15 @@ function downloadPngBlob(blob) {
         panel.hidden = true;
         panel.setAttribute('aria-hidden', 'true');
       }
+      // Restore the musician's node card so the user returns to the
+      // context they were in (and can see the freshly-saved bio).
+      const nodeToReopen = editPersonState.reopenNodeAfterClose;
       editPersonState.node = null;
       editPersonState.personId = null;
+      editPersonState.reopenNodeAfterClose = null;
+      if (nodeToReopen && typeof openNodeCard === 'function') {
+        openNodeCard(nodeToReopen);
+      }
     }
 
     document.getElementById('edit-person-close-btn')?.addEventListener('click', closeEditPersonPopover);
@@ -7627,9 +7646,9 @@ function downloadPngBlob(blob) {
         }
 
         showEditPersonFeedback('Bio updated.', false);
+        // closeEditPersonPopover() reopens the node card itself now
+        // (via reopenNodeAfterClose), so we don't double-open here.
         closeEditPersonPopover();
-        // Reopen the node card so the fresh bio is visible right away.
-        if (node) openNodeCard(node);
       } catch (error) {
         console.error('Edit person save failed', error);
         showEditPersonFeedback(error.message || 'Could not save changes. Try again.', true);

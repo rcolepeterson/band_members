@@ -152,13 +152,30 @@ test('edit-person submit handler updates the local graph node and reopens the no
   const block = INDEX_HTML.slice(idx, endIdx);
   assert.ok(block.includes('graphState.master.nodes'), 'Expected a direct update to graphState.master.nodes.');
   assert.ok(block.includes('node.bio = body.bio'), 'Expected node.bio to be updated from the response body.');
-  assert.ok(block.includes('openNodeCard(node)'), 'Expected the node card to be reopened after a successful save.');
+  // The submit handler closes the edit panel, and closeEditPersonPopover()
+  // in turn reopens the previously-hidden node card via its
+  // reopenNodeAfterClose bookkeeping. So the submit block itself no
+  // longer calls openNodeCard directly; it just needs to close.
+  assert.ok(block.includes('closeEditPersonPopover()'), 'Expected the edit panel to be closed after a successful save (which reopens the node card).');
   // Strip // line comments before checking for an actual loadGraphData()
   // *call* -- the handler's own explanatory comment mentions loadGraphData()
   // by name as a contrast to what it does NOT do, which would otherwise
   // produce a false positive here.
   const codeOnly = block.replace(/\/\/.*$/gm, '');
   assert.ok(!codeOnly.includes('loadGraphData()'), 'Did not expect a full loadGraphData() call for a single-field bio edit.');
+});
+
+test('opening the edit-person panel hides the underlying node card, and closing it reopens the same node', () => {
+  const openIdx = INDEX_HTML.indexOf('function openEditPersonPopover');
+  const openEnd = INDEX_HTML.indexOf('\n    }', openIdx);
+  const openBlock = INDEX_HTML.slice(openIdx, openEnd);
+  assert.ok(openBlock.includes('reopenNodeAfterClose = node'), 'Expected the open handler to record the node so it can be reopened later.');
+  assert.ok(openBlock.includes('closeNodeCard'), 'Expected the open handler to close the underlying node card (avoids z-index overlap on mobile).');
+
+  const closeIdx = INDEX_HTML.indexOf('function closeEditPersonPopover');
+  const closeEnd = INDEX_HTML.indexOf('\n    }', closeIdx);
+  const closeBlock = INDEX_HTML.slice(closeIdx, closeEnd);
+  assert.ok(closeBlock.includes('openNodeCard(nodeToReopen)'), 'Expected the close handler to reopen the previously-hidden node card.');
 });
 
 // -----------------------------------------------------------------------
