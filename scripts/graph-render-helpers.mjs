@@ -5,7 +5,7 @@
 // behind the perf(graph) canvas renderer work:
 //   - rendererFromSearch: ?renderer= query-param parsing.
 //   - runSyncForceLayout: synchronous d3-force tick loop (no per-tick
-//     DOM/canvas writes).
+//     DOM/canvas writes), with an alpha-based early exit.
 //   - buildNodeQuadtree / hitTestNode: canvas click/drag hit-testing.
 //   - zoomFilterAllowsPointerdown: d3.zoom().filter() logic so panning
 //     never wins the race against a node drag/click.
@@ -38,8 +38,18 @@ export function rendererFromSearch(search) {
 // synchronously `ticks` times. No DOM/canvas writes happen here -- the
 // caller does exactly one paint after this returns, which is the whole
 // point of the perf fix (the old code painted once per tick).
-export function runSyncForceLayout(simulation, ticks = 300) {
-  for (let i = 0; i < ticks; i++) simulation.tick();
+//
+// Early exit: once simulation.alpha() drops below `minAlpha`, the layout
+// has effectively converged (further ticks move nodes by imperceptible
+// amounts), so we stop early rather than always spending the full `ticks`
+// budget. This is what lets a fixed `ticks` upper bound (used for perf
+// budgeting/determinism in tests) also behave well on graphs that settle
+// faster than the worst case.
+export function runSyncForceLayout(simulation, ticks = 300, minAlpha = 0.02) {
+  for (let i = 0; i < ticks; i++) {
+    simulation.tick();
+    if (simulation.alpha() < minAlpha) break;
+  }
   return simulation;
 }
 

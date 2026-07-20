@@ -5653,13 +5653,21 @@ function downloadPngBlob(blob) {
     // rationale (classic, non-module script). Keep the two in sync by hand.
     // ---------------------------------------------------------------------
 
-    // Number of synchronous ticks to run before treating the layout as
-    // "settled". 300 ticks with alphaDecay ~0.045 (starting alpha 1) decays
-    // alpha to a negligible value well before 300 ticks for graphs this
-    // size, so positions are stable; we still run the full count rather
-    // than checking alpha, because a fixed tick count makes layout time
-    // deterministic (useful for both perf budgeting and tests).
-    const SIMULATION_TICKS = 300;
+    // Number of synchronous ticks to run (upper bound) before treating the
+    // layout as "settled". perf(graph): this used to be 300, which at
+    // O(N^2) charge-force cost for the full 3,233-node graph meant ~7-10s
+    // of main-thread-blocking JS on every cold load. alphaDecay is bumped
+    // (below, in buildForceSimulation) so alpha crosses the early-exit
+    // threshold well before 120 ticks on graphs this size, and
+    // runSyncForceLayout() now stops as soon as alpha is negligible rather
+    // than always spending the full tick budget -- so 120 is a safe upper
+    // bound, not a number we expect to hit in the common case.
+    const SIMULATION_TICKS = 120;
+
+    // alpha threshold below which runSyncForceLayout() stops early -- see
+    // scripts/graph-render-helpers.mjs::runSyncForceLayout for the
+    // canonical, unit-tested copy of this constant/behavior.
+    const SIMULATION_MIN_ALPHA = 0.02;
 
     // Builds (but does not run) the d3.forceSimulation for a given
     // nodes/links array. Pulled out of renderGraph() so both the SVG and
@@ -5687,7 +5695,11 @@ function downloadPngBlob(blob) {
         .force('center', d3.forceCenter(width / 2, height / 2))
         .force('collision', d3.forceCollide().radius(collideRadius).strength(0.9).iterations(2))
         .alpha(1)
-        .alphaDecay(0.045)
+        // perf(graph): bumped from 0.045 -> 0.05 so alpha decays faster and
+        // the early-exit in runSyncForceLayout() kicks in sooner. Safe on
+        // this graph -- convergence quality is visually unchanged, it just
+        // arrives at (effectively) the same layout in fewer ticks.
+        .alphaDecay(0.05)
         .stop();
     }
 
@@ -5695,8 +5707,17 @@ function downloadPngBlob(blob) {
     // DOM/canvas writes -- this is the whole point of the perf fix. Caller
     // is responsible for the single paint afterwards. Returns the
     // simulation for chaining.
-    function runSyncForceLayout(simulation, ticks = SIMULATION_TICKS) {
-      for (let i = 0; i < ticks; i++) simulation.tick();
+    //
+    // perf(graph): early-exits once alpha drops below minAlpha, instead of
+    // always spending the full `ticks` budget -- most of the ~10s cold-load
+    // freeze was ticks run well past the point the layout had visually
+    // settled. Canonical, unit-tested copy:
+    // scripts/graph-render-helpers.mjs::runSyncForceLayout.
+    function runSyncForceLayout(simulation, ticks = SIMULATION_TICKS, minAlpha = SIMULATION_MIN_ALPHA) {
+      for (let i = 0; i < ticks; i++) {
+        simulation.tick();
+        if (simulation.alpha() < minAlpha) break;
+      }
       return simulation;
     }
 
