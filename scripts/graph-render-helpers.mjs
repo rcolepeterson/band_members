@@ -7,6 +7,8 @@
 //   - runSyncForceLayout: synchronous d3-force tick loop (no per-tick
 //     DOM/canvas writes).
 //   - buildNodeQuadtree / hitTestNode: canvas click/drag hit-testing.
+//   - zoomFilterAllowsPointerdown: d3.zoom().filter() logic so panning
+//     never wins the race against a node drag/click.
 //   - computeNodeBounds: bounding-box math used by the canvas fitGraph
 //     variant.
 //

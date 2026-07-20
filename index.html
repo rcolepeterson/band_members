@@ -2858,6 +2858,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     let canvasEl = null;
     let canvasCtx = null;
     let canvasZoomBehavior = null;
+    let canvasDragBehavior = null; // fix(graph-canvas): per-node d3.drag(), see initCanvasStage
     let canvasTransform = null; // last d3.zoomTransform applied to the canvas
     let canvasQuadtree = null;
     let canvasNodes = [];
@@ -5551,15 +5552,17 @@ function downloadPngBlob(blob) {
     document.addEventListener('click', e => {
       if (!nodeCardState.node) return;
       // perf(graph): canvas renderer has no per-node DOM elements to stop
-      // propagation, so handleCanvasPick() (wired to #graph-canvas's own
-      // click listener) already closes the card on an empty-canvas click
-      // before this document-level listener runs. This branch stays as a
-      // harmless no-op safety net for the canvas case and remains the
-      // primary path for the SVG renderer.
+      // propagation, so every click on the canvas -- whether it hits a
+      // node or not -- bubbles here with e.target === canvas. handleCanvasPick()
+      // (wired to #graph-canvas's own click listener, which runs before this
+      // document-level listener during bubbling) already opens the card on a
+      // hit and closes it on a miss, so this listener must NOT also act on
+      // canvas clicks -- doing so previously closed the card immediately
+      // after handleCanvasPick had just opened it on the very same click.
+      // Only the SVG renderer needs this listener, since SVG nodes stop
+      // propagation individually and only empty-background clicks bubble here.
       const svg = document.getElementById('graph-svg');
       if (RENDERER !== 'canvas' && svg && e.target === svg) { closeNodeCard(); return; }
-      const canvas = document.getElementById('graph-canvas');
-      if (RENDERER === 'canvas' && canvas && e.target === canvas) { closeNodeCard(); }
     });
 
     function updateSelection(node, degree = 0) {
@@ -6005,16 +6008,54 @@ function downloadPngBlob(blob) {
       canvasEl.style.display = 'block';
       canvasCtx = canvasEl.getContext('2d');
 
-      canvasZoomBehavior = d3.zoom().scaleExtent([0.25, 3]).on('zoom', event => {
-        canvasTransform = event.transform;
-        drawCanvasFrame();
-        positionNodeCard();
-      });
+      // fix(graph-canvas): d3.zoom binds its own mousedown listener
+      // internally to start a pan gesture. Previously we ALSO attached a
+      // plain `mousedown` listener (onCanvasMouseDown) to implement
+      // per-node drag -- but d3.zoom's internal listener always fired
+      // first and had already started panning the whole canvas by the
+      // time ours ran, so node drag (and, by extension, click, since a
+      // pan-in-progress made onCanvasClick bail via canvasDragActive)
+      // never worked.
+      //
+      // The fix is the canonical d3 canvas pattern: give zoom a `.filter()`
+      // that declines to start a pan whenever the pointerdown landed on a
+      // node (that gesture belongs to d3.drag() instead), and drive
+      // per-node dragging through a real d3.drag() behavior rather than
+      // raw mousedown/mousemove/mouseup listeners. d3.drag() only starts
+      // firing 'drag' events once the pointer has moved past a small
+      // threshold, so a plain click/tap that never moved still reaches the
+      // browser's native `click` event (and therefore onCanvasClick)
+      // unimpeded.
+      canvasZoomBehavior = d3.zoom()
+        .scaleExtent([0.25, 3])
+        .filter(event => zoomFilterAllowsPointerdown(event, canvasQuadtree, screenToWorldFromClientPoint, 40))
+        .on('zoom', event => {
+          canvasTransform = event.transform;
+          drawCanvasFrame();
+          positionNodeCard();
+        });
+
+      canvasDragBehavior = d3.drag()
+        .subject(event => {
+          const [wx, wy] = screenToWorldFromClientPoint(event.x, event.y);
+          return hitTestNode(canvasQuadtree, wx, wy, 40);
+        })
+        .on('start', onCanvasDragStart)
+        .on('drag', onCanvasDragMove)
+        .on('end', onCanvasDragEnd);
+
+      // Order matters: call zoom first, then drag, so drag's own listeners
+      // are registered after zoom's and aren't swallowed by it. zoom's
+      // .filter() above is what actually prevents the conflict (drag never
+      // even gets a 'start' for a node's pointerdown that zoom would have
+      // wanted to pan on -- there's no overlap because zoom declines those
+      // events outright), but this ordering is the documented-safe pattern
+      // regardless.
       d3.select(canvasEl).call(canvasZoomBehavior);
+      d3.select(canvasEl).call(canvasDragBehavior);
       canvasTransform = d3.zoomIdentity;
 
       canvasEl.addEventListener('click', onCanvasClick);
-      canvasEl.addEventListener('mousedown', onCanvasMouseDown);
       canvasEl.addEventListener('mousemove', onCanvasMouseMove);
       // Touch support: treat a tap the same as a click for node-card
       // opening (drag already works via d3.zoom's own touch handling for
@@ -6086,6 +6127,34 @@ function downloadPngBlob(blob) {
       return [(sx - t.x) / t.k, (sy - t.y) / t.k];
     }
 
+    // Same as screenToWorld, but takes coordinates already relative to
+    // canvasEl's own box (as d3.zoom's filter event and d3.drag's
+    // event.x/event.y both are -- both use d3-selection's pointer()
+    // against the container element) rather than clientX/clientY. Kept as
+    // a separate name so call sites are self-documenting about which
+    // coordinate space they're starting from.
+    function screenToWorldFromClientPoint(x, y) {
+      return screenToWorld(x, y);
+    }
+
+    // fix(graph-canvas): d3.zoom().filter() predicate. Wheel/pinch events
+    // always pass through so zoom still works; pointerdown-family events
+    // (mousedown/touchstart/pointerdown) are declined whenever they land
+    // on a node, since that gesture belongs to canvasDragBehavior
+    // (d3.drag()) instead of a pan. Canonical, unit-tested copy:
+    // scripts/graph-render-helpers.mjs::zoomFilterAllowsPointerdown.
+    function zoomFilterAllowsPointerdown(event, quadtree, toWorld, hitRadius) {
+      const type = event && event.type;
+      if (type !== 'mousedown' && type !== 'touchstart' && type !== 'pointerdown') return true;
+      const touch = event.touches && event.touches[0];
+      const clientX = event.clientX ?? touch?.clientX;
+      const clientY = event.clientY ?? touch?.clientY;
+      if (clientX == null || clientY == null) return true;
+      const rect = canvasEl.getBoundingClientRect();
+      const [wx, wy] = toWorld(clientX - rect.left, clientY - rect.top);
+      return hitTestNode(quadtree, wx, wy, hitRadius) == null;
+    }
+
     // Per-node hit-test radius: outer drawn radius plus a small forgiveness
     // margin so small member dots are still easy to hit with a mouse/finger.
     function canvasHitRadius(d) {
@@ -6145,14 +6214,21 @@ function downloadPngBlob(blob) {
       startNodeCardRaf();
     }
 
+    // fix(graph-canvas): per-node dragging, now driven by d3.drag()
+    // instead of raw mousedown/mousemove/mouseup listeners racing against
+    // d3.zoom's own internal mousedown handler (see the comment on
+    // canvasZoomBehavior in initCanvasStage for the full root-cause
+    // writeup). canvasDragBehavior.subject() (set up in initCanvasStage)
+    // hit-tests the pointerdown point and returns the node to drag, or
+    // null/undefined for "no subject" -- d3.drag treats a null subject as
+    // "don't start a drag gesture at all", which is exactly the pan-area
+    // behavior we want (and note zoom's .filter() already keeps zoom from
+    // fighting over the same pointerdown when it DOES land on a node).
     let canvasDragNode = null;
     let canvasDragMoved = false;
 
-    function onCanvasMouseDown(event) {
-      if (!canvasQuadtree) return;
-      const rect = canvasEl.getBoundingClientRect();
-      const [wx, wy] = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
-      const found = hitTestNode(canvasQuadtree, wx, wy, 40);
+    function onCanvasDragStart(event) {
+      const found = event.subject;
       if (!found) return;
       canvasDragNode = found;
       canvasDragMoved = false;
@@ -6161,40 +6237,40 @@ function downloadPngBlob(blob) {
       found.fy = found.y;
       if (canvasSimulation) canvasSimulation.alphaTarget(0.3).restart();
       startNodeCardRaf();
+    }
 
-      const onMove = moveEvent => {
-        canvasDragMoved = true;
-        const r = canvasEl.getBoundingClientRect();
-        const [mx, my] = screenToWorld(moveEvent.clientX - r.left, moveEvent.clientY - r.top);
-        canvasDragNode.fx = mx;
-        canvasDragNode.fy = my;
-        // While dragging we DO animate -- this is the one place the plan
-        // calls for a live tick loop instead of the synchronous batch.
-        if (canvasSimulation) canvasSimulation.tick();
+    function onCanvasDragMove(event) {
+      if (!canvasDragNode) return;
+      canvasDragMoved = true;
+      const [mx, my] = screenToWorldFromClientPoint(event.x, event.y);
+      canvasDragNode.fx = mx;
+      canvasDragNode.fy = my;
+      // While dragging we DO animate -- this is the one place the plan
+      // calls for a live tick loop instead of the synchronous batch.
+      if (canvasSimulation) canvasSimulation.tick();
+      canvasQuadtree = buildNodeQuadtree(canvasNodes);
+      drawCanvasFrame();
+      positionNodeCard();
+    }
+
+    function onCanvasDragEnd() {
+      if (canvasDragNode) {
+        canvasDragNode.fx = null;
+        canvasDragNode.fy = null;
+      }
+      if (canvasSimulation) canvasSimulation.alphaTarget(0);
+      canvasDragActive = false;
+      // A drag that never moved is just a click -- d3.drag's own
+      // click-suppression (it only fires 'drag' past a small pixel
+      // threshold) means the browser's native click event still reaches
+      // onCanvasClick right after this, so we don't need to do anything
+      // special here for the click-to-open-card case.
+      if (canvasDragMoved && canvasDragNode) {
         canvasQuadtree = buildNodeQuadtree(canvasNodes);
         drawCanvasFrame();
-        positionNodeCard();
-      };
-      const onUp = () => {
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-        if (canvasDragNode) {
-          canvasDragNode.fx = null;
-          canvasDragNode.fy = null;
-        }
-        if (canvasSimulation) canvasSimulation.alphaTarget(0);
-        canvasDragActive = false;
-        // A drag that never moved is just a click -- let the click handler
-        // (which fires right after mouseup) open the node card normally.
-        if (canvasDragMoved && canvasDragNode) {
-          canvasQuadtree = buildNodeQuadtree(canvasNodes);
-          drawCanvasFrame();
-        }
-        canvasDragNode = null;
-        stopNodeCardRafIfIdle();
-      };
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
+      }
+      canvasDragNode = null;
+      stopNodeCardRafIfIdle();
     }
 
     function onCanvasMouseMove(event) {
