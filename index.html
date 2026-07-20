@@ -2646,11 +2646,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 
     <svg id="graph-svg" role="img" aria-label="Interactive Seattle band family tree graph"></svg>
 
-    <!-- perf(graph): canvas renderer target. Same size/position as #graph-svg
-         (both live directly inside .graph-stage). Only one of the two is
-         ever visible -- see RENDERER flag / initCanvasStage(). -->
-    <canvas id="graph-canvas" role="img" aria-label="Interactive Seattle band family tree graph" style="display:none;position:absolute;inset:0;width:100%;height:100%;"></canvas>
-
     <div
       id="graph-fallback"
       style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;padding:2rem;color:#a8b0be;text-align:center;"
@@ -2839,33 +2834,9 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     const noteRight = document.getElementById('graph-note-right');
     const toolChips = Array.from(document.querySelectorAll('.tool-chip'));
 
-    // perf(graph): renderer feature flag. ?renderer=svg keeps the old
-    // per-tick SVG path as an escape hatch; any other value (including no
-    // param, or an unrecognized value) uses the new canvas renderer, which
-    // is now the default. Read once at load -- this page never changes
-    // renderer mid-session. Canonical, unit-tested copy of this parsing
-    // logic lives in scripts/graph-render-helpers.mjs::rendererFromSearch.
-    function rendererFromSearch(search) {
-      const params = new URLSearchParams(search);
-      return params.get('renderer') === 'svg' ? 'svg' : 'canvas';
-    }
-    const RENDERER = rendererFromSearch(window.location.search);
-
     let svgSelection = null;
     let graphGroup = null;
     let zoomBehavior = null;
-    // Canvas renderer state (only populated when RENDERER === 'canvas').
-    let canvasEl = null;
-    let canvasCtx = null;
-    let canvasZoomBehavior = null;
-    let canvasDragBehavior = null; // fix(graph-canvas): per-node d3.drag(), see initCanvasStage
-    let canvasTransform = null; // last d3.zoomTransform applied to the canvas
-    let canvasQuadtree = null;
-    let canvasNodes = [];
-    let canvasLinks = [];
-    let canvasSimulation = null;
-    let canvasDragActive = false;
-    let canvasRafRunning = false;
     let graphState = null;
     let currentFilter = 'all';
     let currentScene = 'all';
@@ -3400,77 +3371,7 @@ function downloadPngBlob(blob) {
     // long comment in the old exporter for the rationale on inlining
     // the SVG stylesheet before serialization — external CSS doesn't
     // apply when an SVG is loaded back into an <img> for drawImage.
-    // perf(graph): canvas-native PNG export path. When RENDERER === 'canvas'
-    // there is no SVG to serialize -- the live #graph-canvas already holds
-    // exactly the pixels we want (drawCanvasFrame() keeps it current on
-    // every zoom/pan/drag). We just need to composite it into the same
-    // header/footer banner frame the SVG path builds, using canvas.toBlob()
-    // instead of html2canvas/SVG-to-Image. Kept as its own function so the
-    // SVG path above is untouched.
-    async function renderGraphPngBlobCanvas() {
-      const liveCanvas = document.getElementById('graph-canvas');
-      if (!liveCanvas) return null;
-      const siteUrl = window.location.origin + window.location.pathname;
-      const rect = liveCanvas.getBoundingClientRect();
-
-      const MIN_OUTPUT_WIDTH = 1200;
-      const scale = Math.max(2, MIN_OUTPUT_WIDTH / Math.max(rect.width, 1));
-      const graphW = Math.floor(rect.width * scale);
-      const graphH = Math.floor(rect.height * scale);
-      const headerH = Math.round(60 * scale);
-      const footerH = Math.round(36 * scale);
-      const canvas = document.createElement('canvas');
-      canvas.width = graphW;
-      canvas.height = graphH + headerH + footerH;
-      const ctx = canvas.getContext('2d');
-
-      // Solid background matching the app's stage color -- same fill used
-      // by the SVG export path, applied here BEFORE drawing the live
-      // canvas snapshot so any transparent pixels (e.g. outside the node
-      // bounds) composite onto the correct background rather than white.
-      ctx.fillStyle = '#0b1118';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      const headerGrad = ctx.createLinearGradient(0, 0, 0, headerH);
-      headerGrad.addColorStop(0, '#111b26');
-      headerGrad.addColorStop(1, '#0b1118');
-      ctx.fillStyle = headerGrad;
-      ctx.fillRect(0, 0, canvas.width, headerH);
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.fillRect(0, headerH - 1, canvas.width, 1);
-      ctx.fillStyle = '#e6eef7';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = `600 ${Math.round(19 * scale)}px "Inter", "Segoe UI", system-ui, sans-serif`;
-      ctx.fillText('Rock Band Family Tree', canvas.width / 2, headerH / 2);
-
-      // Draw the live graph canvas directly -- no SVG serialization, no
-      // Image() round-trip. drawImage can scale a canvas source just like
-      // an <img>, so this preserves the aspect-ratio-correct sizing math
-      // used by the SVG path above.
-      ctx.drawImage(liveCanvas, 0, headerH, graphW, graphH);
-
-      const footerY = headerH + graphH;
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.fillRect(0, footerY, canvas.width, 1);
-      ctx.fillStyle = '#0b1118';
-      ctx.fillRect(0, footerY + 1, canvas.width, footerH - 1);
-      ctx.fillStyle = '#a3b3c6';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = `500 ${Math.round(10 * scale)}px "Inter", "Segoe UI", system-ui, sans-serif`;
-      const displayUrl = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      ctx.fillText(displayUrl, canvas.width / 2, footerY + footerH / 2);
-
-      return await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-    }
-
     async function renderGraphPngBlob() {
-      // perf(graph): short-circuit to the canvas-native export when the
-      // canvas renderer is active -- there is no SVG DOM to snapshot in
-      // that mode. The SVG path below (html2canvas-free but SVG-serializing)
-      // is unchanged and still used verbatim for RENDERER === 'svg'.
-      if (RENDERER === 'canvas') return renderGraphPngBlobCanvas();
       const svg = document.getElementById('graph-svg');
       if (!svg) return null;
       const siteUrl = window.location.origin + window.location.pathname;
@@ -5465,20 +5366,10 @@ function downloadPngBlob(blob) {
       const node = nodeCardState.node;
       if (!node || nodeCardEl.hidden) return;
       const stage = document.querySelector('.graph-stage');
-      if (!stage) return;
+      if (!stage || !svgSelection || !graphGroup) return;
 
-      // perf(graph): canvas renderer has no SVG group to read a
-      // zoomTransform off of -- it tracks its own transform (set by the
-      // canvas d3.zoom handler) in the module-level canvasTransform.
-      let t;
-      if (RENDERER === 'canvas') {
-        if (!canvasEl) return;
-        t = canvasTransform || d3.zoomIdentity;
-      } else {
-        if (!svgSelection || !graphGroup) return;
-        // graph coords -> zoomed coords via the group's current d3.zoomTransform
-        t = d3.zoomTransform(svgSelection.node());
-      }
+      // graph coords → zoomed coords via the group's current d3.zoomTransform
+      const t = d3.zoomTransform(svgSelection.node());
       const sx = t.applyX(node.x || 0);
       const sy = t.applyY(node.y || 0);
 
@@ -5551,18 +5442,11 @@ function downloadPngBlob(blob) {
     // catch the outer SVG only.
     document.addEventListener('click', e => {
       if (!nodeCardState.node) return;
-      // perf(graph): canvas renderer has no per-node DOM elements to stop
-      // propagation, so every click on the canvas -- whether it hits a
-      // node or not -- bubbles here with e.target === canvas. handleCanvasPick()
-      // (wired to #graph-canvas's own click listener, which runs before this
-      // document-level listener during bubbling) already opens the card on a
-      // hit and closes it on a miss, so this listener must NOT also act on
-      // canvas clicks -- doing so previously closed the card immediately
-      // after handleCanvasPick had just opened it on the very same click.
-      // Only the SVG renderer needs this listener, since SVG nodes stop
-      // propagation individually and only empty-background clicks bubble here.
       const svg = document.getElementById('graph-svg');
-      if (RENDERER !== 'canvas' && svg && e.target === svg) { closeNodeCard(); return; }
+      if (!svg) return;
+      // Close only if the click landed on the bare SVG background (not on
+      // a node <g>, and not on the card itself).
+      if (e.target === svg) closeNodeCard();
     });
 
     function updateSelection(node, degree = 0) {
@@ -5607,7 +5491,6 @@ function downloadPngBlob(blob) {
     }
 
     function fitGraph(padding = 80) {
-      if (RENDERER === 'canvas') return fitGraphCanvas(padding);
       if (!graphGroup || !zoomBehavior || !svgSelection) return;
       const stage = document.querySelector('.graph-stage');
       if (!stage) return;
@@ -5642,7 +5525,7 @@ function downloadPngBlob(blob) {
     }
 
     // ---------------------------------------------------------------------
-    // Shared force-layout helpers (SVG + canvas renderers both use these).
+    // Force-layout helpers for the SVG renderer.
     //
     // Canonical, unit-tested copies live in
     // scripts/graph-render-helpers.mjs (tests/graph-render-helpers.test.mjs
@@ -5688,18 +5571,15 @@ function downloadPngBlob(blob) {
     const SIMULATION_MIN_ALPHA = 0.02;
 
     // Module-level cache of the last known-good {x, y} for each node id,
-    // populated after every successful layout (SVG or canvas) and consulted
-    // before the next one so filter changes can warm-start instead of
-    // starting from d3-force's random initial positions. Canonical,
-    // unit-tested copies of the read/write helpers:
-    // scripts/graph-render-helpers.mjs::{snapshotNodePositions,
-    // applyCachedPositions, clearFixedPositions}.
+    // populated after every successful layout and consulted before the
+    // next one so filter changes can warm-start instead of starting from
+    // d3-force's random initial positions. Canonical, unit-tested copies
+    // of the read/write helpers: scripts/graph-render-helpers.mjs::
+    // {snapshotNodePositions, applyCachedPositions, clearFixedPositions}.
     const lastNodePositions = new Map();
 
     // Builds (but does not run) the d3.forceSimulation for a given
-    // nodes/links array. Pulled out of renderGraph() so both the SVG and
-    // canvas draw paths configure the physics identically -- the only
-    // difference between renderers is how the *result* gets painted.
+    // nodes/links array. Pulled out of renderGraph() for clarity.
     function buildForceSimulation(nodes, links, width, height, degree, collideRadius) {
       return d3.forceSimulation(nodes)
         .force('link', d3.forceLink(links).id(d => d.id)
@@ -5731,7 +5611,7 @@ function downloadPngBlob(blob) {
     }
 
     // Advances `simulation` synchronously `ticks` times with no per-tick
-    // DOM/canvas writes -- this is the whole point of the perf fix. Caller
+    // DOM writes -- this is the whole point of the perf fix. Caller
     // is responsible for the single paint afterwards. Returns the
     // simulation for chaining.
     //
@@ -5756,9 +5636,9 @@ function downloadPngBlob(blob) {
 
     // Records {x, y} for every node with a finite position into
     // lastNodePositions, keyed by node id. Called once after every
-    // successful layout (SVG + canvas), so the NEXT layout (e.g. after a
-    // filter change) can warm-start from these instead of d3-force's
-    // random initial positions.
+    // successful layout, so the NEXT layout (e.g. after a filter change)
+    // can warm-start from these instead of d3-force's random initial
+    // positions.
     function snapshotNodePositions(nodes) {
       nodes.forEach(d => {
         if (Number.isFinite(d.x) && Number.isFinite(d.y)) {
@@ -5799,8 +5679,7 @@ function downloadPngBlob(blob) {
     }
 
     // Runs the layout for a fresh nodes/links array, warm-starting from
-    // lastNodePositions when available. Shared by both the SVG and canvas
-    // render paths so a filter change is cheap on either renderer:
+    // lastNodePositions when available, so a filter change is cheap:
     //   - Cold path (no/low cache hit -- first load, or an entirely new
     //     node set): full SIMULATION_TICKS budget, random d3-force init.
     //   - Warm path (most node ids already have a cached position -- the
@@ -5808,8 +5687,7 @@ function downloadPngBlob(blob) {
     //     seed + pin cached positions, run a much shorter
     //     WARM_SIMULATION_TICKS budget, then unpin.
     // Always snapshots the final positions back into lastNodePositions so
-    // the next call (whatever renderer/filter triggers it) can warm-start
-    // too.
+    // the next call (whatever filter triggers it) can warm-start too.
     function runLayoutWithPositionCache(simulation, nodes) {
       const seeded = lastNodePositions.size ? applyCachedPositions(nodes, { pin: true }) : 0;
       const isWarm = seeded > 0 && seeded >= nodes.length * 0.5;
@@ -5828,12 +5706,6 @@ function downloadPngBlob(blob) {
     }
 
     function renderGraph() {
-      if (!graphState || !svgSelection) return;
-      if (RENDERER === 'canvas') return renderGraphCanvas();
-      return renderGraphSvg();
-    }
-
-    function renderGraphSvg() {
       if (!graphState || !svgSelection) return;
       // Any pending anchored node card is now stale (we're about to build a
       // brand new nodes/links copy). Close it before the DOM under it is
@@ -6078,9 +5950,9 @@ function downloadPngBlob(blob) {
       // fired ~60-150 times and wrote to ~3,200 DOM nodes (link x1/y1/x2/y2
       // + node transform) on every single tick -- that's the multi-second
       // freeze on load for the full 3,233-node graph. runSyncForceLayout()
-      // (shared with the canvas renderer below) advances the simulation
-      // up to SIMULATION_TICKS times with .tick() calls that never touch
-      // the DOM (with an early exit once alpha settles), then we paint the
+      // advances the simulation up to SIMULATION_TICKS times with .tick()
+      // calls that never touch the DOM (with an early exit once alpha
+      // settles), then we paint the
       // SVG exactly once with final positions. See
       // scripts/graph-render-helpers.mjs for the canonical, unit-tested copy
       // of this stepping logic. runLayoutWithPositionCache additionally
@@ -6111,625 +5983,6 @@ function downloadPngBlob(blob) {
       });
 
       fitGraph(60);
-    }
-
-    // =======================================================================
-    // perf(graph): Canvas renderer.
-    //
-    // Draws the same graph (bands + members + edges + verification badges)
-    // onto a single <canvas> instead of ~3,200 SVG DOM nodes. Interactions
-    // (click / drag / zoom / hover) are re-implemented on top of a
-    // d3.quadtree hit-test instead of relying on per-element event
-    // listeners, since canvas has no DOM nodes to attach listeners to.
-    //
-    // Shared with the SVG path: getFilteredGraph, buildForceSimulation,
-    // runSyncForceLayout, getPersonRadius / getPersonFill / getNodeStroke /
-    // getNodeStrokeWidth / getNodeOuterRadius / appendVerificationBadge's
-    // underlying data (bandUuidForNode + verificationsMap), bandNodeLabel,
-    // fitGraph (bounds variant below), positionNodeCard, openNodeCard,
-    // closeNodeCard.
-    // =======================================================================
-
-    // One-time setup: grab the canvas element/context and wire up zoom. Only
-    // called once, right after the SVG stage would otherwise have been
-    // wired, and only when RENDERER === 'canvas'.
-    function initCanvasStage() {
-      canvasEl = document.getElementById('graph-canvas');
-      if (!canvasEl) return;
-      canvasEl.style.display = 'block';
-      canvasCtx = canvasEl.getContext('2d');
-
-      // fix(graph-canvas): d3.zoom binds its own mousedown listener
-      // internally to start a pan gesture. Previously we ALSO attached a
-      // plain `mousedown` listener (onCanvasMouseDown) to implement
-      // per-node drag -- but d3.zoom's internal listener always fired
-      // first and had already started panning the whole canvas by the
-      // time ours ran, so node drag (and, by extension, click, since a
-      // pan-in-progress made onCanvasClick bail via canvasDragActive)
-      // never worked.
-      //
-      // The fix is the canonical d3 canvas pattern: give zoom a `.filter()`
-      // that declines to start a pan whenever the pointerdown landed on a
-      // node (that gesture belongs to d3.drag() instead), and drive
-      // per-node dragging through a real d3.drag() behavior rather than
-      // raw mousedown/mousemove/mouseup listeners. d3.drag() only starts
-      // firing 'drag' events once the pointer has moved past a small
-      // threshold, so a plain click/tap that never moved still reaches the
-      // browser's native `click` event (and therefore onCanvasClick)
-      // unimpeded.
-      canvasZoomBehavior = d3.zoom()
-        .scaleExtent([0.25, 3])
-        .filter(event => zoomFilterAllowsPointerdown(event, canvasQuadtree, screenToWorldFromClientPoint, 40))
-        .on('zoom', event => {
-          canvasTransform = event.transform;
-          drawCanvasFrame();
-          positionNodeCard();
-        });
-
-      canvasDragBehavior = d3.drag()
-        .subject(event => {
-          const [wx, wy] = screenToWorldFromClientPoint(event.x, event.y);
-          return hitTestNode(canvasQuadtree, wx, wy, 40);
-        })
-        .on('start', onCanvasDragStart)
-        .on('drag', onCanvasDragMove)
-        .on('end', onCanvasDragEnd);
-
-      // Order matters: call zoom first, then drag, so drag's own listeners
-      // are registered after zoom's and aren't swallowed by it. zoom's
-      // .filter() above is what actually prevents the conflict (drag never
-      // even gets a 'start' for a node's pointerdown that zoom would have
-      // wanted to pan on -- there's no overlap because zoom declines those
-      // events outright), but this ordering is the documented-safe pattern
-      // regardless.
-      d3.select(canvasEl).call(canvasZoomBehavior);
-      d3.select(canvasEl).call(canvasDragBehavior);
-      canvasTransform = d3.zoomIdentity;
-
-      canvasEl.addEventListener('click', onCanvasClick);
-      canvasEl.addEventListener('mousemove', onCanvasMouseMove);
-      // Touch support: treat a tap the same as a click for node-card
-      // opening (drag already works via d3.zoom's own touch handling for
-      // pan/pinch; per-node drag-to-reposition remains a mouse-first
-      // affordance, matching the desktop-oriented drag feature already in
-      // the SVG renderer).
-      canvasEl.addEventListener('touchend', event => {
-        if (!event.changedTouches || !event.changedTouches.length) return;
-        const touch = event.changedTouches[0];
-        const rect = canvasEl.getBoundingClientRect();
-        handleCanvasPick(touch.clientX - rect.left, touch.clientY - rect.top);
-      });
-
-      window.addEventListener('resize', () => {
-        if (RENDERER === 'canvas' && canvasNodes.length) drawCanvasFrame();
-      });
-    }
-
-    // Resizes the backing store for devicePixelRatio crispness and returns
-    // the CSS-pixel {width, height} of the stage. Safe to call every draw --
-    // only touches canvas.width/height (which are already the intended
-    // value in the common case, so this is cheap) when the stage size or
-    // DPR actually changed.
-    function sizeCanvasToStage() {
-      const stage = document.querySelector('.graph-stage');
-      const rect = stage.getBoundingClientRect();
-      const width = Math.max(rect.width, 420);
-      const height = Math.max(rect.height, 520);
-      const dpr = window.devicePixelRatio || 1;
-      const targetW = Math.round(width * dpr);
-      const targetH = Math.round(height * dpr);
-      if (canvasEl.width !== targetW || canvasEl.height !== targetH) {
-        canvasEl.width = targetW;
-        canvasEl.height = targetH;
-      }
-      canvasEl.style.width = width + 'px';
-      canvasEl.style.height = height + 'px';
-      canvasCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      return { width, height };
-    }
-
-
-    // Builds a d3.quadtree over the current canvasNodes for O(log n)
-    // hit-testing. Rebuilt whenever positions change materially (after
-    // layout, and after each drag tick) -- cheap even for ~3,200 nodes.
-    // Canonical, unit-tested copy: scripts/graph-render-helpers.mjs::buildNodeQuadtree.
-    function buildNodeQuadtree(nodes) {
-      return d3.quadtree()
-        .x(d => d.x)
-        .y(d => d.y)
-        .addAll(nodes);
-    }
-
-    // Given world-space (graph) coordinates, finds the nearest node within
-    // maxRadius using the quadtree, or null if none qualifies. World-space
-    // means the CALLER is responsible for inverse-transforming
-    // screen/event coordinates through the current zoom transform first.
-    // Canonical, unit-tested copy: scripts/graph-render-helpers.mjs::hitTestNode.
-    function hitTestNode(quadtree, x, y, maxRadius) {
-      if (!quadtree) return null;
-      const found = quadtree.find(x, y, maxRadius);
-      return found || null;
-    }
-
-    // Screen (canvas CSS pixel) coordinates -> world (graph) coordinates,
-    // using the inverse of the currently-applied zoom transform.
-    function screenToWorld(sx, sy) {
-      const t = canvasTransform || d3.zoomIdentity;
-      return [(sx - t.x) / t.k, (sy - t.y) / t.k];
-    }
-
-    // Same as screenToWorld, but takes coordinates already relative to
-    // canvasEl's own box (as d3.zoom's filter event and d3.drag's
-    // event.x/event.y both are -- both use d3-selection's pointer()
-    // against the container element) rather than clientX/clientY. Kept as
-    // a separate name so call sites are self-documenting about which
-    // coordinate space they're starting from.
-    function screenToWorldFromClientPoint(x, y) {
-      return screenToWorld(x, y);
-    }
-
-    // fix(graph-canvas): d3.zoom().filter() predicate. Wheel/pinch events
-    // always pass through so zoom still works; pointerdown-family events
-    // (mousedown/touchstart/pointerdown) are declined whenever they land
-    // on a node, since that gesture belongs to canvasDragBehavior
-    // (d3.drag()) instead of a pan. Canonical, unit-tested copy:
-    // scripts/graph-render-helpers.mjs::zoomFilterAllowsPointerdown.
-    function zoomFilterAllowsPointerdown(event, quadtree, toWorld, hitRadius) {
-      const type = event && event.type;
-      if (type !== 'mousedown' && type !== 'touchstart' && type !== 'pointerdown') return true;
-      const touch = event.touches && event.touches[0];
-      const clientX = event.clientX ?? touch?.clientX;
-      const clientY = event.clientY ?? touch?.clientY;
-      if (clientX == null || clientY == null) return true;
-      const rect = canvasEl.getBoundingClientRect();
-      const [wx, wy] = toWorld(clientX - rect.left, clientY - rect.top);
-      return hitTestNode(quadtree, wx, wy, hitRadius) == null;
-    }
-
-    // Per-node hit-test radius: outer drawn radius plus a small forgiveness
-    // margin so small member dots are still easy to hit with a mouse/finger.
-    function canvasHitRadius(d) {
-      return getNodeOuterRadius(d) + 6;
-    }
-
-    function onCanvasClick(event) {
-      if (canvasDragActive) return; // drag end already handled the gesture
-      const rect = canvasEl.getBoundingClientRect();
-      handleCanvasPick(event.clientX - rect.left, event.clientY - rect.top);
-    }
-
-    function handleCanvasPick(screenX, screenY) {
-      if (!canvasQuadtree) return;
-      const [wx, wy] = screenToWorld(screenX, screenY);
-      // maxRadius varies per node, but quadtree.find takes one scalar radius.
-      // 40 comfortably covers the largest node (band halo ~18px) plus
-      // forgiveness at typical zoom levels; onCanvasClick already divided
-      // by scale via screenToWorld, so this is in world units.
-      const found = hitTestNode(canvasQuadtree, wx, wy, 40);
-      if (!found) {
-        if (nodeCardState.node) closeNodeCard();
-        return;
-      }
-      openCanvasNodeCard(found);
-    }
-
-    // Mirrors the SVG node.on('click', ...) handler: computes linkedNames /
-    // bandMembers off the current canvasLinks/canvasNodes and opens the
-    // card. Kept as its own function (rather than reusing the SVG
-    // closure-scoped handler) because the SVG version closes over `nodes`/
-    // `links` local to renderGraphSvg; this closes over the canvas
-    // module-level canvasNodes/canvasLinks instead.
-    function openCanvasNodeCard(d) {
-      const linkedNames = canvasLinks
-        .filter(link => {
-          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-          return sourceId === d.id || targetId === d.id;
-        })
-        .map(link => {
-          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-          return sourceId === d.id ? targetId : sourceId;
-        });
-      const bandMembers = d.type === 'band'
-        ? canvasLinks
-            .filter(link => {
-              const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-              return sourceId === d.id;
-            })
-            .map(link => typeof link.target === 'object' ? link.target : canvasNodes.find(node => node.id === link.target))
-            .filter(Boolean)
-        : [];
-      updateSelection(d, linkedNames.length, linkedNames, bandMembers);
-      openNodeCard(d);
-      startNodeCardRaf();
-    }
-
-    // fix(graph-canvas): per-node dragging, now driven by d3.drag()
-    // instead of raw mousedown/mousemove/mouseup listeners racing against
-    // d3.zoom's own internal mousedown handler (see the comment on
-    // canvasZoomBehavior in initCanvasStage for the full root-cause
-    // writeup). canvasDragBehavior.subject() (set up in initCanvasStage)
-    // hit-tests the pointerdown point and returns the node to drag, or
-    // null/undefined for "no subject" -- d3.drag treats a null subject as
-    // "don't start a drag gesture at all", which is exactly the pan-area
-    // behavior we want (and note zoom's .filter() already keeps zoom from
-    // fighting over the same pointerdown when it DOES land on a node).
-    let canvasDragNode = null;
-    let canvasDragMoved = false;
-
-    function onCanvasDragStart(event) {
-      const found = event.subject;
-      if (!found) return;
-      canvasDragNode = found;
-      canvasDragMoved = false;
-      canvasDragActive = true;
-      found.fx = found.x;
-      found.fy = found.y;
-      if (canvasSimulation) canvasSimulation.alphaTarget(0.3).restart();
-      startNodeCardRaf();
-    }
-
-    function onCanvasDragMove(event) {
-      if (!canvasDragNode) return;
-      canvasDragMoved = true;
-      const [mx, my] = screenToWorldFromClientPoint(event.x, event.y);
-      canvasDragNode.fx = mx;
-      canvasDragNode.fy = my;
-      // While dragging we DO animate -- this is the one place the plan
-      // calls for a live tick loop instead of the synchronous batch.
-      if (canvasSimulation) canvasSimulation.tick();
-      canvasQuadtree = buildNodeQuadtree(canvasNodes);
-      drawCanvasFrame();
-      positionNodeCard();
-    }
-
-    function onCanvasDragEnd() {
-      if (canvasDragNode) {
-        canvasDragNode.fx = null;
-        canvasDragNode.fy = null;
-      }
-      if (canvasSimulation) canvasSimulation.alphaTarget(0);
-      canvasDragActive = false;
-      // A drag that never moved is just a click -- d3.drag's own
-      // click-suppression (it only fires 'drag' past a small pixel
-      // threshold) means the browser's native click event still reaches
-      // onCanvasClick right after this, so we don't need to do anything
-      // special here for the click-to-open-card case.
-      if (canvasDragMoved && canvasDragNode) {
-        canvasQuadtree = buildNodeQuadtree(canvasNodes);
-        drawCanvasFrame();
-      }
-      canvasDragNode = null;
-      stopNodeCardRafIfIdle();
-    }
-
-    function onCanvasMouseMove(event) {
-      if (!canvasQuadtree || canvasDragActive) return;
-      const rect = canvasEl.getBoundingClientRect();
-      const [wx, wy] = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
-      const found = hitTestNode(canvasQuadtree, wx, wy, 40);
-      canvasEl.style.cursor = found ? 'pointer' : 'default';
-    }
-
-    // ---------------------------------------------------------------------
-    // rAF loop for positionNodeCard(). Only runs while the node card is
-    // open OR a drag is in progress -- per the plan, we must NOT run rAF
-    // continuously (that would reintroduce a constant per-frame cost even
-    // when nothing is moving).
-    // ---------------------------------------------------------------------
-    function startNodeCardRaf() {
-      if (canvasRafRunning) return;
-      canvasRafRunning = true;
-      const step = () => {
-        if (!nodeCardState.node && !canvasDragActive) {
-          canvasRafRunning = false;
-          return;
-        }
-        positionNodeCard();
-        requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-    }
-
-    function stopNodeCardRafIfIdle() {
-      if (!nodeCardState.node && !canvasDragActive) canvasRafRunning = false;
-    }
-
-    // ---------------------------------------------------------------------
-    // Bounds + fitGraph (canvas variant)
-    // ---------------------------------------------------------------------
-    // Computes {minX, minY, maxX, maxY} over canvasNodes, padded by each
-    // node's outer radius so halos aren't clipped at the fit boundary.
-    // Canonical, unit-tested copy: scripts/graph-render-helpers.mjs::computeNodeBounds.
-    function computeCanvasNodeBounds(nodes) {
-      if (!nodes.length) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      nodes.forEach(d => {
-        const r = getNodeOuterRadius(d);
-        minX = Math.min(minX, d.x - r);
-        maxX = Math.max(maxX, d.x + r);
-        minY = Math.min(minY, d.y - r);
-        maxY = Math.max(maxY, d.y + r);
-      });
-      return { minX, minY, maxX, maxY };
-    }
-
-    function fitGraphCanvas(padding = 60) {
-      if (!canvasEl || !canvasZoomBehavior || !canvasNodes.length) return;
-      const stage = document.querySelector('.graph-stage');
-      const rect = stage.getBoundingClientRect();
-      const width = Math.max(rect.width, 420);
-      const height = Math.max(rect.height, 520);
-      const bounds = computeCanvasNodeBounds(canvasNodes);
-      const fullWidth = (bounds.maxX - bounds.minX) || width;
-      const fullHeight = (bounds.maxY - bounds.minY) || height;
-      const scale = Math.min(width / (fullWidth + padding), height / (fullHeight + padding), 1.15);
-      const translate = [
-        width / 2 - scale * (bounds.minX + fullWidth / 2),
-        height / 2 - scale * (bounds.minY + fullHeight / 2),
-      ];
-      const target = d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale);
-      d3.select(canvasEl).transition().duration(750).call(canvasZoomBehavior.transform, target);
-    }
-
-    // ---------------------------------------------------------------------
-    // Draw
-    // ---------------------------------------------------------------------
-    function drawCanvasFrame() {
-      if (!canvasCtx || !canvasEl) return;
-      const { width, height } = sizeCanvasToStage();
-      const ctx = canvasCtx;
-      const t = canvasTransform || d3.zoomIdentity;
-
-      ctx.clearRect(0, 0, width, height);
-      ctx.save();
-      ctx.translate(t.x, t.y);
-      ctx.scale(t.k, t.k);
-
-      // 1. Edges -- weight-based stroke width, matching the SVG .link rule
-      // (stroke rgba(161, 204, 228, 0.24)) and the SVG attr('stroke-width',
-      // d => 0.8 + (d.weight || 1) * 0.4).
-      ctx.strokeStyle = 'rgba(161, 204, 228, 0.24)';
-      ctx.lineCap = 'round';
-      canvasLinks.forEach(l => {
-        const source = typeof l.source === 'object' ? l.source : canvasNodeById.get(l.source);
-        const target = typeof l.target === 'object' ? l.target : canvasNodeById.get(l.target);
-        if (!source || !target) return;
-        ctx.lineWidth = 0.8 + (l.weight || 1) * 0.4;
-        ctx.beginPath();
-        ctx.moveTo(source.x, source.y);
-        ctx.lineTo(target.x, target.y);
-        ctx.stroke();
-      });
-
-      // 2. Nodes -- halo / core / ring / verification star, mirroring
-      // node.each(...) in renderGraphSvg exactly (same radii, fills,
-      // strokes, thresholds).
-      canvasNodes.forEach(d => drawCanvasNode(ctx, d));
-
-      // 3. Labels -- same text, font-size, and opacity as the SVG
-      // .node-label, positioned to the right of the node exactly like the
-      // SVG's x = getNodeOuterRadius(d) + 6 / y = 4.
-      canvasNodes.forEach(d => drawCanvasLabel(ctx, d));
-
-      ctx.restore();
-    }
-
-    function drawCanvasNode(ctx, d) {
-      const r = getPersonRadius(d);
-      const x = d.x, y = d.y;
-
-      const circle = (radius, fill, stroke, strokeWidth) => {
-        ctx.beginPath();
-        ctx.arc(x, y, Math.max(radius, 0.01), 0, Math.PI * 2);
-        if (fill && fill !== 'transparent') {
-          ctx.fillStyle = fill;
-          ctx.fill();
-        }
-        if (stroke && strokeWidth) {
-          ctx.strokeStyle = stroke;
-          ctx.lineWidth = strokeWidth;
-          ctx.stroke();
-        }
-      };
-
-      if (d.type === 'band') {
-        circle(r + 7, 'rgba(143,232,246,0.10)', null, 0);
-        circle(r, getPersonFill(d), getNodeStroke(d), getNodeStrokeWidth(d));
-        drawCanvasVerificationBadge(ctx, d, x, y, r);
-        return;
-      }
-
-      if (d.weight === 1) {
-        circle(r + 4, 'rgba(255,255,255,0.05)', null, 0);
-        circle(r, '#05070b', getNodeStroke(d), getNodeStrokeWidth(d));
-        return;
-      }
-
-      if (d.weight === 2) {
-        circle(r, 'transparent', getNodeStroke(d), 1.7);
-        circle(Math.max(2.8, r * 0.42), '#05070b', 'rgba(235,245,250,0.75)', 0.6);
-        return;
-      }
-
-      if (d.weight === 3) {
-        circle(r, 'transparent', getNodeStroke(d), 1.6);
-        return;
-      }
-
-      circle(r, getPersonFill(d), getNodeStroke(d), getNodeStrokeWidth(d));
-    }
-
-    // Canvas equivalent of appendVerificationBadge(): same silver star,
-    // same 0.4*r sizing, same (r*0.7, -r*0.7) anchor on the upper-right of
-    // the node. Uses Path2D so the same SILVER_STAR_PATH_D SVG path data
-    // drives both renderers -- one source of truth for the star shape.
-    let silverStarPath2D = null;
-    function drawCanvasVerificationBadge(ctx, d, x, y, r) {
-      const bandId = bandUuidForNode(d);
-      if (!bandId) return;
-      const verification = verificationsMap.get(bandId);
-      if (!verification || verification.overall_score === null || verification.overall_score === undefined) return;
-
-      if (!silverStarPath2D) {
-        try { silverStarPath2D = new Path2D(SILVER_STAR_PATH_D); } catch (err) { return; }
-      }
-      const starSize = r * 0.4;
-      const scale = starSize / 12;
-      ctx.save();
-      ctx.translate(x + r * 0.7, y - r * 0.7);
-      ctx.scale(scale, scale);
-      ctx.translate(-12, -12);
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = '#c0c0c0';
-      ctx.strokeStyle = '#8a8a8a';
-      ctx.lineWidth = 0.8 / scale; // keep visual stroke width constant post-scale
-      ctx.fill(silverStarPath2D);
-      ctx.stroke(silverStarPath2D);
-      ctx.restore();
-    }
-
-    function drawCanvasLabel(ctx, d) {
-      const isBand = d.type === 'band';
-      ctx.font = `${isBand ? '600 12px' : '10px'} "Inter", "Segoe UI", system-ui, sans-serif`;
-      ctx.fillStyle = '#e7f3fb';
-      ctx.globalAlpha = isBand ? 0.98 : 0.8;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
-      const label = isBand
-        ? bandNodeLabel(d)
-        : (() => {
-            const instruments = [d.instrument1, d.instrument2].filter(Boolean).join(', ');
-            return instruments ? `${d.id} — ${instruments}` : d.id;
-          })();
-      ctx.fillText(label, d.x + getNodeOuterRadius(d) + 6, d.y + 4);
-      ctx.globalAlpha = 1;
-    }
-
-    // Lookup used by drawCanvasFrame's edge pass -- links reference nodes by
-    // id string until d3.forceLink resolves them to object refs during the
-    // first tick, after which l.source/l.target are objects; this map
-    // covers the (rare, pre-layout) case where they're still bare ids.
-    let canvasNodeById = new Map();
-
-    function renderGraphCanvas() {
-      if (!graphState || !canvasEl) return;
-      if (typeof closeNodeCard === 'function' && nodeCardState.node) closeNodeCard();
-
-      const filtered = getFilteredGraph(graphState.master);
-      const nodes = filtered.nodes.map(d => ({ ...d }));
-      const links = filtered.links.map(d => ({ ...d }));
-
-      metricNodes.textContent = filtered.nodes.length;
-      metricLinks.textContent = filtered.links.length;
-      metricScenes.textContent = new Set(filtered.nodes.map(d => locationKey(d)).filter(Boolean)).size;
-      if (graphTotalChip && graphState?.master?.nodes) { graphTotalChip.textContent = `${graphState.master.nodes.length} nodes in tree`; }
-      const badgeParts = [];
-      if (currentFilter !== 'all') badgeParts.push(currentFilter === 'band' ? 'Bands only' : 'Musicians only');
-      if (currentScene !== 'all') {
-        if (currentScene.startsWith('country:')) {
-          badgeParts.push(`All ${currentScene.slice('country:'.length)}`);
-        } else {
-          const sceneSelectEl = document.getElementById('scene-filter');
-          const selectedOption = sceneSelectEl && [...sceneSelectEl.options].find(opt => opt.value === currentScene);
-          badgeParts.push(selectedOption ? selectedOption.textContent : currentScene);
-        }
-      }
-      if (currentGenre && currentGenre !== 'all') badgeParts.push(currentGenre);
-      if (currentSearch) badgeParts.push(`Search: ${currentSearch}`);
-      graphBadge.textContent = badgeParts.length ? badgeParts.join(' · ') : 'Full graph';
-
-      const syncFilterBtn = (btnId, valueId, isActive, valueText) => {
-        const btn = document.getElementById(btnId);
-        const val = document.getElementById(valueId);
-        if (!btn || !val) return;
-        if (isActive) {
-          val.textContent = valueText;
-          val.hidden = false;
-          btn.classList.add('filter-btn--active');
-        } else {
-          val.textContent = '';
-          val.hidden = true;
-          btn.classList.remove('filter-btn--active');
-        }
-      };
-      syncFilterBtn('search-btn', 'search-btn-value', !!currentSearch, currentSearch);
-      const sceneLabel = (() => {
-        if (currentScene === 'all') return '';
-        if (currentScene.startsWith('country:')) return `All ${currentScene.slice('country:'.length)}`;
-        const sceneSelectEl = document.getElementById('scene-filter');
-        const selectedOption = sceneSelectEl && [...sceneSelectEl.options].find(opt => opt.value === currentScene);
-        return selectedOption ? selectedOption.textContent : currentScene;
-      })();
-      syncFilterBtn('scene-btn', 'scene-btn-value', currentScene !== 'all', sceneLabel);
-      syncFilterBtn('genre-btn', 'genre-btn-value', currentGenre && currentGenre !== 'all', currentGenre);
-      noteLeft.textContent = filtered.nodes.length ? `Showing ${filtered.links.length} relationships from your uploaded CSV.` : 'No matches yet. Try clearing or relaxing the filters.';
-
-      if (!nodes.length) {
-        canvasNodes = [];
-        canvasLinks = [];
-        canvasNodeById = new Map();
-        canvasQuadtree = null;
-        drawCanvasFrame();
-        return;
-      }
-
-      const { width, height } = sizeCanvasToStage();
-
-      const degree = {};
-      links.forEach(l => {
-        const s = typeof l.source === 'object' ? l.source.id : l.source;
-        const t = typeof l.target === 'object' ? l.target.id : l.target;
-        degree[s] = (degree[s] || 0) + 1;
-        degree[t] = (degree[t] || 0) + 1;
-      });
-
-      // Label width isn't measurable without a DOM text node the way the
-      // SVG path does (getComputedTextLength()); approximate it from
-      // character count so the collision force still reserves roughly the
-      // right amount of horizontal room for the label drawn alongside each
-      // node. This keeps canvas layout visually consistent with the SVG
-      // layout without needing an offscreen canvas measurement pass.
-      nodes.forEach(d => {
-        const label = d.type === 'band'
-          ? bandNodeLabel(d)
-          : (() => {
-              const instruments = [d.instrument1, d.instrument2].filter(Boolean).join(', ');
-              return instruments ? `${d.id} — ${instruments}` : d.id;
-            })();
-        const fontPx = d.type === 'band' ? 12 : 10;
-        d.labelWidth = label.length * fontPx * 0.56;
-        d.labelHeight = fontPx;
-      });
-
-      const collideRadius = d => {
-        const base = getNodeOuterRadius(d) + 6;
-        const labelReach = (d.labelWidth || 0) * 0.5 + 6;
-        return Math.max(base, labelReach);
-      };
-
-      const simulation = buildForceSimulation(nodes, links, width, height, degree, collideRadius);
-      // perf(graph): warm-starts from lastNodePositions when available --
-      // see runLayoutWithPositionCache and the comment on the SVG call
-      // site above for the full rationale.
-      runLayoutWithPositionCache(simulation, nodes);
-
-      canvasNodes = nodes;
-      canvasLinks = links;
-      canvasNodeById = new Map(nodes.map(d => [d.id, d]));
-      canvasQuadtree = buildNodeQuadtree(canvasNodes);
-      canvasSimulation = simulation;
-
-      drawCanvasFrame();
-      positionNodeCard();
-      fitGraphCanvas(60);
-      // fitGraphCanvas() animates the zoom transform over 750ms via
-      // d3.transition -- the zoom handler's own 'zoom' event redraws each
-      // transition frame, so no extra rAF loop is needed here for the fit
-      // animation itself. Redraw once more immediately so the first paint
-      // isn't a blank canvas while the transition ramps up.
-      drawCanvasFrame();
     }
 
     function getExistingBandMembers(band, scene) {
@@ -8192,14 +7445,7 @@ function downloadPngBlob(blob) {
       positionNodeCard();
     });
 
-    // perf(graph): show exactly one of #graph-svg / #graph-canvas per the
-    // RENDERER flag, and only wire up the stage that's actually visible.
-    if (RENDERER === 'canvas') {
-      document.getElementById('graph-svg').style.display = 'none';
-      initCanvasStage();
-    } else {
-      svgSelection.call(zoomBehavior);
-    }
+    svgSelection.call(zoomBehavior);
 
     loadGraphData().then(async rows => {
       const master = buildMasterGraph(rows);
