@@ -5524,6 +5524,64 @@ function downloadPngBlob(blob) {
       return `${d.id} · ${suffix}`;
     }
 
+    // ---------------------------------------------------------------------
+    // Shared force-layout helpers.
+    //
+    // Canonical, unit-tested copies live in
+    // scripts/graph-render-helpers.mjs (tests/graph-render-helpers.test.mjs
+    // exercises them directly under Node with the same d3 major version
+    // this page loads from the CDN). This inline copy exists for the same
+    // reason every other helper in this file is duplicated rather than
+    // `import`ed -- see the location-helpers comment above for the full
+    // rationale (classic, non-module script). Keep the two in sync by hand.
+    // ---------------------------------------------------------------------
+
+    // Number of synchronous ticks to run before treating the layout as
+    // "settled". 300 ticks with alphaDecay ~0.045 (starting alpha 1) decays
+    // alpha to a negligible value well before 300 ticks for graphs this
+    // size, so positions are stable; we still run the full count rather
+    // than checking alpha, because a fixed tick count makes layout time
+    // deterministic (useful for both perf budgeting and tests).
+    const SIMULATION_TICKS = 300;
+
+    // Builds (but does not run) the d3.forceSimulation for a given
+    // nodes/links array. Pulled out of renderGraph() so future renderers
+    // configure the physics identically.
+    function buildForceSimulation(nodes, links, width, height, degree, collideRadius) {
+      return d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id)
+          .distance(l => {
+            if (l.source.type === 'band' && l.target.type === 'person') {
+              const memberCount = degree[l.source.id] || 1;
+              // Grow the ring with member count so crowded bands fan out.
+              return 74 + Math.min(150, Math.sqrt(memberCount) * 20);
+            }
+            return 110;
+          })
+          .strength(0.8))
+        .force('charge', d3.forceManyBody().strength(d => {
+          if (d.type === 'band') {
+            // Stronger repulsion for high-degree bands so their members spread.
+            return -420 - (degree[d.id] || 0) * 14;
+          }
+          return -180;
+        }))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(collideRadius).strength(0.9).iterations(2))
+        .alpha(1)
+        .alphaDecay(0.045)
+        .stop();
+    }
+
+    // Advances `simulation` synchronously `ticks` times with no per-tick
+    // DOM/canvas writes -- this is the whole point of the perf fix. Caller
+    // is responsible for the single paint afterwards. Returns the
+    // simulation for chaining.
+    function runSyncForceLayout(simulation, ticks = SIMULATION_TICKS) {
+      for (let i = 0; i < ticks; i++) simulation.tick();
+      return simulation;
+    }
+
     function renderGraph() {
       if (!graphState || !svgSelection) return;
       // Any pending anchored node card is now stale (we're about to build a
@@ -5762,29 +5820,30 @@ function downloadPngBlob(blob) {
         return Math.max(base, labelReach);
       };
 
-      const simulation = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(links).id(d => d.id)
-          .distance(l => {
-            if (l.source.type === 'band' && l.target.type === 'person') {
-              const memberCount = degree[l.source.id] || 1;
-              // Grow the ring with member count so crowded bands fan out.
-              return 74 + Math.min(150, Math.sqrt(memberCount) * 20);
-            }
-            return 110;
-          })
-          .strength(0.8))
-        .force('charge', d3.forceManyBody().strength(d => {
-          if (d.type === 'band') {
-            // Stronger repulsion for high-degree bands so their members spread.
-            return -420 - (degree[d.id] || 0) * 14;
-          }
-          return -180;
-        }))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide().radius(collideRadius).strength(0.9).iterations(2))
-        .alpha(1)
-        .alphaDecay(0.045);
+      const simulation = buildForceSimulation(nodes, links, width, height, degree, collideRadius);
 
+      // perf(graph): run the force layout SYNCHRONOUSLY, off-screen, instead
+      // of driving it from simulation.on('tick', ...). The old tick handler
+      // fired ~60-150 times and wrote to ~3,200 DOM nodes (link x1/y1/x2/y2
+      // + node transform) on every single tick -- that's the multi-second
+      // freeze on load for the full 3,233-node graph. runSyncForceLayout()
+      // advances the simulation SIMULATION_TICKS times with .tick() calls
+      // that never touch the DOM, then we paint the SVG exactly once with
+      // final positions. See scripts/graph-render-helpers.mjs for the
+      // canonical, unit-tested copy of this stepping logic.
+      runSyncForceLayout(simulation, SIMULATION_TICKS);
+
+      link
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+      node.attr('transform', d => `translate(${d.x},${d.y})`);
+      positionNodeCard();
+
+      // Drag still needs a live simulation to reheat (alphaTarget/restart);
+      // once reheated it ticks normally and this 'tick' handler keeps the
+      // SVG in sync for the (cheap, rare) duration of an active drag.
       simulation.on('tick', () => {
         link
           .attr('x1', d => d.source.x)
@@ -5792,13 +5851,10 @@ function downloadPngBlob(blob) {
           .attr('x2', d => d.target.x)
           .attr('y2', d => d.target.y);
         node.attr('transform', d => `translate(${d.x},${d.y})`);
-        // Keep the anchored node card glued to its node while the sim runs.
-        // Cheap: only touches left/top on one DOM element per tick.
         positionNodeCard();
       });
 
-      simulation.on('end', () => fitGraph(60));
-      setTimeout(() => fitGraph(60), 900);
+      fitGraph(60);
     }
 
     function getExistingBandMembers(band, scene) {
