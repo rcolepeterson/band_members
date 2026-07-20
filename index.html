@@ -500,13 +500,36 @@ body {
    above .node-card (12) and the mobile bottom-sheet popovers (up to 75)
    so it's always reachable once opened, but below #password-gate (9999). */
 .edit-person-panel {
+  /* Self-contained fixed-center overlay. Do NOT rely on .share-popover's
+     positioning (which is `position: absolute` anchored to a toolbar
+     button) -- this panel is triggered from the floating node card and
+     needs to center on the viewport regardless of where the card sits.
+     Duplicating the glass visuals inline (rather than composing with
+     .share-popover) prevents the mobile .share-popover override at
+     1092 from kidnapping our positioning. */
   position: fixed;
   top: 50%;
   left: 50%;
   right: auto;
+  bottom: auto;
   transform: translate(-50%, -50%);
   width: min(380px, calc(100vw - 2rem));
+  max-height: min(85vh, 620px);
+  overflow-y: auto;
+  padding: 1.15rem 1.15rem 1rem;
   z-index: 500;
+  background: linear-gradient(180deg, rgba(214,239,251,0.18), rgba(148,183,209,0.08));
+  border: 1px solid rgba(225, 244, 255, 0.24);
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  box-shadow: 0 16px 34px rgba(0,0,0,0.4);
+}
+.edit-person-panel .share-popover-title {
+  /* Leave clear space for the close button in the top-right corner. */
+  padding-right: 2rem;
+  margin-bottom: 0.75rem;
 }
 #edit-person-form textarea {
   min-height: 7rem;
@@ -2795,7 +2818,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       card, which can be anchored anywhere in the graph viewport rather
       than a fixed toolbar button.
     -->
-    <div id="edit-person-panel" class="share-popover edit-person-panel" role="dialog" aria-label="Edit musician" hidden>
+    <div id="edit-person-panel" class="edit-person-panel" role="dialog" aria-label="Edit musician" hidden>
       <button type="button" class="popover-close" id="edit-person-close-btn" aria-label="Close">&times;</button>
       <div class="share-popover-title">Edit musician</div>
       <form class="form-grid" id="edit-person-form" novalidate>
