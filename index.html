@@ -2724,10 +2724,12 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       <button type="button" class="node-card__close" id="node-card-close" aria-label="Close details">&times;</button>
       <!--
         PR 3b: edit-band pencil. Static markup lives here, hidden by default;
-        populateNodeCard() shows it only for band nodes when the current
-        user is signed in (see renderEditAffordances). Kept out of the DOM
-        for anonymous visitors' interactions via the hidden attribute, not
-        by injecting/removing the node on every card open, so listeners
+        populateNodeCard() shows it for band nodes AND (as of the
+        edit-person-bio PR) musician nodes when the current user is signed
+        in (see renderEditAffordances). The aria-label/title text is
+        rewritten per node type at render time. Kept out of the DOM for
+        anonymous visitors' interactions via the hidden attribute, not by
+        injecting/removing the node on every card open, so listeners
         attached once at load stay valid.
       -->
       <button type="button" class="node-card__edit" id="node-card-edit" aria-label="Edit this band" title="Edit this band" hidden>
@@ -2778,7 +2780,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         users. See renderEditAffordances.
       -->
       <div class="node-card__signin-hint" id="node-card-signin-hint" hidden>
-        <button type="button" class="link-like" id="node-card-signin-link">Sign in</button> to edit this band.
+        <button type="button" class="link-like" id="node-card-signin-link">Sign in</button> <span id="node-card-signin-hint-text">to edit this band.</span>
       </div>
       <div class="node-card__tail" aria-hidden="true"></div>
     </div>
@@ -5029,6 +5031,7 @@ function downloadPngBlob(blob) {
     const nodeCardCloseBtn = document.getElementById('node-card-close');
     const nodeCardEditBtn = document.getElementById('node-card-edit');
     const nodeCardSigninHint = document.getElementById('node-card-signin-hint');
+    const nodeCardSigninHintText = document.getElementById('node-card-signin-hint-text');
     const nodeCardSigninLink = document.getElementById('node-card-signin-link');
     // PR 4b: cross-check verification chip + expandable details elements.
     const nodeCardVerifyChip = document.getElementById('node-card-verify-chip');
@@ -5120,28 +5123,51 @@ function downloadPngBlob(blob) {
       renderEditAffordances(node);
     }
 
-    // Show/hide the pencil icon (signed-in band nodes) OR the
-    // "Sign in to edit this band" hint (signed-out band nodes). Musician
-    // nodes never get either affordance. Rebinding the click handler on
-    // every call (instead of once at load) keeps the handler's captured
-    // `node` current without needing a separate mutable state variable.
+    // Show/hide the pencil icon (signed-in band OR musician nodes) OR the
+    // "Sign in to edit this band/musician" hint (signed-out band or
+    // musician nodes). Rebinding the click handler on every call (instead
+    // of once at load) keeps the handler's captured `node` current without
+    // needing a separate mutable state variable.
     //
     // The single "Edit this band" pill button that used to sit below the
     // connections chips was removed in favor of the pencil-only pattern —
     // two edit affordances on the same card were redundant, and one of
     // them was a hidden signed-in-only entry point that new visitors
     // never discovered.
+    //
+    // edit-person-bio PR: extended to musician nodes too, deliberately
+    // reusing the exact same pencil + signin-hint slots rather than adding
+    // new DOM -- the pencil already teaches "click here to edit" and the
+    // hint already teaches signed-out visitors the affordance exists; both
+    // lessons apply equally to musician nodes with a one-line change each.
+    // Scope stays minimal: canEditPerson only ever opens the bio-only
+    // openEditPersonPopover, never the band roster editor.
     function renderEditAffordances(node) {
       const isBand = node.type === 'band';
+      const isPerson = node.type === 'person';
       const signedIn = !!loadCurrentUser();
-      const canEdit = isBand && signedIn;
-      const showSigninHint = isBand && !signedIn;
+      const canEditBand = isBand && signedIn;
+      const canEditPerson = isPerson && signedIn;
+      const canEdit = canEditBand || canEditPerson;
+      const showSigninHint = (isBand || isPerson) && !signedIn;
       if (nodeCardEditBtn) {
         nodeCardEditBtn.hidden = !canEdit;
-        nodeCardEditBtn.onclick = canEdit ? (ev) => { ev.stopPropagation(); openEditBandPopover(node); } : null;
+        const label = canEditPerson ? 'Edit this musician' : 'Edit this band';
+        nodeCardEditBtn.setAttribute('aria-label', label);
+        nodeCardEditBtn.setAttribute('title', label);
+        nodeCardEditBtn.onclick = canEdit
+          ? (ev) => {
+              ev.stopPropagation();
+              if (canEditPerson) return openEditPersonPopover(node);
+              return openEditBandPopover(node);
+            }
+          : null;
       }
       if (nodeCardSigninHint) {
         nodeCardSigninHint.hidden = !showSigninHint;
+      }
+      if (nodeCardSigninHintText) {
+        nodeCardSigninHintText.textContent = isPerson ? 'to edit this musician.' : 'to edit this band.';
       }
       if (nodeCardSigninLink) {
         // Route the inline "Sign in" link through the same trigger the
