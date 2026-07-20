@@ -10,5 +10,8 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "@netlify/blobs": "^8.1.0"
+  },
+  "devDependencies": {
+    "d3": "^7.9.0"
   }
 }

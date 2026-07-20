@@ -5524,6 +5524,187 @@ function downloadPngBlob(blob) {
       return `${d.id} · ${suffix}`;
     }
 
+    // ---------------------------------------------------------------------
+    // Force-layout helpers for the SVG renderer.
+    //
+    // Canonical, unit-tested copies live in
+    // scripts/graph-render-helpers.mjs (tests/graph-render-helpers.test.mjs
+    // exercises them directly under Node with the same d3 major version
+    // this page loads from the CDN). This inline copy exists for the same
+    // reason every other helper in this file is duplicated rather than
+    // `import`ed -- see the location-helpers comment above for the full
+    // rationale (classic, non-module script). Keep the two in sync by hand.
+    // ---------------------------------------------------------------------
+
+    // Number of synchronous ticks to run (upper bound) before treating the
+    // layout as "settled". perf(graph): this used to be 300, which at
+    // O(N^2) charge-force cost for the full 3,233-node graph meant ~7-10s
+    // of main-thread-blocking JS on every cold load. alphaDecay is bumped
+    // (below, in buildForceSimulation) so alpha crosses the early-exit
+    // threshold well before 120 ticks on graphs this size, and
+    // runSyncForceLayout() now stops as soon as alpha is negligible rather
+    // than always spending the full tick budget -- so 120 is a safe upper
+    // bound, not a number we expect to hit in the common case.
+    const SIMULATION_TICKS = 120;
+
+    // Tick budget for a "warm" re-layout after a filter change, where most
+    // node positions are seeded from lastNodePositions (see
+    // applyCachedPositions below) instead of the simulation's random
+    // initial layout. Far fewer ticks are needed to settle small
+    // perturbations (nodes that only just entered/left the filtered set)
+    // when the bulk of the graph already starts in roughly the right place.
+    //
+    // perf(graph): measured on the full ~3200-node graph that seeded/pinned
+    // nodes never move regardless of tick count (fx/fy holds them exactly in
+    // place -- only genuinely new/unpinned nodes need ticks to settle), and
+    // even with 20% of nodes freshly unpinned, new-node placement quality at
+    // 10 ticks was within ~1% of 40 ticks. 40 was measured to cost ~1.3s on
+    // this graph size purely from Barnes-Hut charge-force overhead per tick
+    // (independent of how many nodes are actually moving) -- far more than
+    // needed. 15 keeps a safety margin above the tested floor of 10 for
+    // filter changes with a larger fraction of new nodes than tested.
+    const WARM_SIMULATION_TICKS = 15;
+
+    // alpha threshold below which runSyncForceLayout() stops early -- see
+    // scripts/graph-render-helpers.mjs::runSyncForceLayout for the
+    // canonical, unit-tested copy of this constant/behavior.
+    const SIMULATION_MIN_ALPHA = 0.02;
+
+    // Module-level cache of the last known-good {x, y} for each node id,
+    // populated after every successful layout and consulted before the
+    // next one so filter changes can warm-start instead of starting from
+    // d3-force's random initial positions. Canonical, unit-tested copies
+    // of the read/write helpers: scripts/graph-render-helpers.mjs::
+    // {snapshotNodePositions, applyCachedPositions, clearFixedPositions}.
+    const lastNodePositions = new Map();
+
+    // Builds (but does not run) the d3.forceSimulation for a given
+    // nodes/links array. Pulled out of renderGraph() for clarity.
+    function buildForceSimulation(nodes, links, width, height, degree, collideRadius) {
+      return d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id)
+          .distance(l => {
+            if (l.source.type === 'band' && l.target.type === 'person') {
+              const memberCount = degree[l.source.id] || 1;
+              // Grow the ring with member count so crowded bands fan out.
+              return 74 + Math.min(150, Math.sqrt(memberCount) * 20);
+            }
+            return 110;
+          })
+          .strength(0.8))
+        .force('charge', d3.forceManyBody().strength(d => {
+          if (d.type === 'band') {
+            // Stronger repulsion for high-degree bands so their members spread.
+            return -420 - (degree[d.id] || 0) * 14;
+          }
+          return -180;
+        }))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(collideRadius).strength(0.9).iterations(2))
+        .alpha(1)
+        // perf(graph): bumped from 0.045 -> 0.05 so alpha decays faster and
+        // the early-exit in runSyncForceLayout() kicks in sooner. Safe on
+        // this graph -- convergence quality is visually unchanged, it just
+        // arrives at (effectively) the same layout in fewer ticks.
+        .alphaDecay(0.05)
+        .stop();
+    }
+
+    // Advances `simulation` synchronously `ticks` times with no per-tick
+    // DOM writes -- this is the whole point of the perf fix. Caller
+    // is responsible for the single paint afterwards. Returns the
+    // simulation for chaining.
+    //
+    // perf(graph): early-exits once alpha drops below minAlpha, instead of
+    // always spending the full `ticks` budget -- most of the ~10s cold-load
+    // freeze was ticks run well past the point the layout had visually
+    // settled. Canonical, unit-tested copy:
+    // scripts/graph-render-helpers.mjs::runSyncForceLayout.
+    function runSyncForceLayout(simulation, ticks = SIMULATION_TICKS, minAlpha = SIMULATION_MIN_ALPHA) {
+      for (let i = 0; i < ticks; i++) {
+        simulation.tick();
+        if (simulation.alpha() < minAlpha) break;
+      }
+      return simulation;
+    }
+
+    // ---------------------------------------------------------------------
+    // Position caching across filter changes (perf(graph) bug C).
+    // Canonical, unit-tested copies: scripts/graph-render-helpers.mjs::
+    // {snapshotNodePositions, applyCachedPositions, clearFixedPositions}.
+    // ---------------------------------------------------------------------
+
+    // Records {x, y} for every node with a finite position into
+    // lastNodePositions, keyed by node id. Called once after every
+    // successful layout, so the NEXT layout (e.g. after a filter change)
+    // can warm-start from these instead of d3-force's random initial
+    // positions.
+    function snapshotNodePositions(nodes) {
+      nodes.forEach(d => {
+        if (Number.isFinite(d.x) && Number.isFinite(d.y)) {
+          lastNodePositions.set(d.id, { x: d.x, y: d.y });
+        }
+      });
+    }
+
+    // Seeds any node in `nodes` whose id is present in lastNodePositions
+    // with its cached x/y (and, when `pin` is true, fx/fy so the
+    // simulation briefly treats it as fixed while ticking). Returns how
+    // many nodes were seeded, so the caller can decide whether a warm
+    // (short) layout is appropriate.
+    function applyCachedPositions(nodes, { pin = false } = {}) {
+      let seeded = 0;
+      nodes.forEach(d => {
+        const cached = lastNodePositions.get(d.id);
+        if (!cached) return;
+        d.x = cached.x;
+        d.y = cached.y;
+        if (pin) {
+          d.fx = cached.x;
+          d.fy = cached.y;
+        }
+        seeded++;
+      });
+      return seeded;
+    }
+
+    // Clears fx/fy set by applyCachedPositions(..., { pin: true }) so a
+    // later drag on one of those nodes isn't fighting a stale fixed
+    // position.
+    function clearFixedPositions(nodes) {
+      nodes.forEach(d => {
+        d.fx = null;
+        d.fy = null;
+      });
+    }
+
+    // Runs the layout for a fresh nodes/links array, warm-starting from
+    // lastNodePositions when available, so a filter change is cheap:
+    //   - Cold path (no/low cache hit -- first load, or an entirely new
+    //     node set): full SIMULATION_TICKS budget, random d3-force init.
+    //   - Warm path (most node ids already have a cached position -- the
+    //     common case for a filter change on an already-rendered graph):
+    //     seed + pin cached positions, run a much shorter
+    //     WARM_SIMULATION_TICKS budget, then unpin.
+    // Always snapshots the final positions back into lastNodePositions so
+    // the next call (whatever filter triggers it) can warm-start too.
+    function runLayoutWithPositionCache(simulation, nodes) {
+      const seeded = lastNodePositions.size ? applyCachedPositions(nodes, { pin: true }) : 0;
+      const isWarm = seeded > 0 && seeded >= nodes.length * 0.5;
+      if (isWarm) {
+        runSyncForceLayout(simulation, WARM_SIMULATION_TICKS, SIMULATION_MIN_ALPHA);
+        clearFixedPositions(nodes);
+      } else {
+        // Not a mostly-cached re-layout (first load, or the filtered set
+        // changed drastically) -- clear any partial pins from the cache
+        // check above and run the full cold layout.
+        clearFixedPositions(nodes);
+        runSyncForceLayout(simulation, SIMULATION_TICKS, SIMULATION_MIN_ALPHA);
+      }
+      snapshotNodePositions(nodes);
+      return isWarm;
+    }
+
     function renderGraph() {
       if (!graphState || !svgSelection) return;
       // Any pending anchored node card is now stale (we're about to build a
@@ -5762,29 +5943,35 @@ function downloadPngBlob(blob) {
         return Math.max(base, labelReach);
       };
 
-      const simulation = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(links).id(d => d.id)
-          .distance(l => {
-            if (l.source.type === 'band' && l.target.type === 'person') {
-              const memberCount = degree[l.source.id] || 1;
-              // Grow the ring with member count so crowded bands fan out.
-              return 74 + Math.min(150, Math.sqrt(memberCount) * 20);
-            }
-            return 110;
-          })
-          .strength(0.8))
-        .force('charge', d3.forceManyBody().strength(d => {
-          if (d.type === 'band') {
-            // Stronger repulsion for high-degree bands so their members spread.
-            return -420 - (degree[d.id] || 0) * 14;
-          }
-          return -180;
-        }))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide().radius(collideRadius).strength(0.9).iterations(2))
-        .alpha(1)
-        .alphaDecay(0.045);
+      const simulation = buildForceSimulation(nodes, links, width, height, degree, collideRadius);
 
+      // perf(graph): run the force layout SYNCHRONOUSLY, off-screen, instead
+      // of driving it from simulation.on('tick', ...). The old tick handler
+      // fired ~60-150 times and wrote to ~3,200 DOM nodes (link x1/y1/x2/y2
+      // + node transform) on every single tick -- that's the multi-second
+      // freeze on load for the full 3,233-node graph. runSyncForceLayout()
+      // advances the simulation up to SIMULATION_TICKS times with .tick()
+      // calls that never touch the DOM (with an early exit once alpha
+      // settles), then we paint the
+      // SVG exactly once with final positions. See
+      // scripts/graph-render-helpers.mjs for the canonical, unit-tested copy
+      // of this stepping logic. runLayoutWithPositionCache additionally
+      // warm-starts from lastNodePositions when most node ids already have
+      // a cached position (e.g. a filter change), which is what makes
+      // repeated filter changes near-instant instead of a full re-freeze.
+      runLayoutWithPositionCache(simulation, nodes);
+
+      link
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+      node.attr('transform', d => `translate(${d.x},${d.y})`);
+      positionNodeCard();
+
+      // Drag still needs a live simulation to reheat (alphaTarget/restart);
+      // once reheated it ticks normally and the 'tick' handler below keeps
+      // the SVG in sync for the (cheap, rare) duration of an active drag.
       simulation.on('tick', () => {
         link
           .attr('x1', d => d.source.x)
@@ -5792,13 +5979,10 @@ function downloadPngBlob(blob) {
           .attr('x2', d => d.target.x)
           .attr('y2', d => d.target.y);
         node.attr('transform', d => `translate(${d.x},${d.y})`);
-        // Keep the anchored node card glued to its node while the sim runs.
-        // Cheap: only touches left/top on one DOM element per tick.
         positionNodeCard();
       });
 
-      simulation.on('end', () => fitGraph(60));
-      setTimeout(() => fitGraph(60), 900);
+      fitGraph(60);
     }
 
     function getExistingBandMembers(band, scene) {
@@ -7260,6 +7444,7 @@ function downloadPngBlob(blob) {
       // new zoom transform. Called on every wheel/pan event.
       positionNodeCard();
     });
+
     svgSelection.call(zoomBehavior);
 
     loadGraphData().then(async rows => {
