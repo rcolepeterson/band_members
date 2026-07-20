@@ -68,6 +68,23 @@ export default async (req) => {
       `,
     ]);
 
+    // perf(api): response compression. This payload is ~215KB uncompressed
+    // (full bands + members + memberships graph as of 2026-07), which is
+    // worth gzip/brotli-ing on the wire for the mobile clients this PR's
+    // canvas renderer work is targeting. No code-level compression was
+    // added here because Netlify's platform already does it for us:
+    // Netlify Functions v2 responses (this one included) get automatic
+    // Brotli/gzip compression at the CDN edge based on the request's
+    // Accept-Encoding header -- verified empirically against the live
+    // endpoint:
+    //   curl -s -D - -o /dev/null https://bandmembers.netlify.app/api/bands \
+    //     -H "Accept-Encoding: gzip"     -> content-encoding: gzip
+    //   curl -s -D - -o /dev/null https://bandmembers.netlify.app/api/bands \
+    //     -H "Accept-Encoding: gzip, br, deflate" -> content-encoding: br
+    // This holds even though ok() sets Cache-Control: no-store below --
+    // compression and caching are independent concerns at the edge. If
+    // Netlify's platform behavior ever changes, revisit this; until then,
+    // adding manual gzip here would just duplicate what the platform does.
     return ok({ bands, members, memberships });
   } catch (err) {
     console.error('bands_neon GET failed', err);
