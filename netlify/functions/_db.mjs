@@ -95,8 +95,12 @@ export function generateToken() {
 // Kept here (not inside individual endpoints) so authorization is uniform.
 export async function findUserByToken(sql, token) {
   if (!token) return null;
+  // NOTE: city/state/country/instrument were added in signup-profile-fields.
+  // The migration adds them nullable so existing rows keep working; new
+  // signups populate them via signup.mjs's validation.
   const rows = await sql`
-    select id, email, name, token, bands_added, bands_edited, created_at
+    select id, email, name, token, bands_added, bands_edited, created_at,
+           city, state, country, instrument
     from users
     where token = ${token}
     limit 1
@@ -130,4 +134,36 @@ export function isPlausibleEmail(email) {
 export function normalizeName(raw) {
   if (typeof raw !== 'string') return '';
   return raw.replace(/\s+/g, ' ').trim().slice(0, 100);
+}
+
+// --- Profile field normalizers ----------------------------------------------
+// City / state / country / instrument are stored on the users row as of PR
+// (signup-profile-fields). They're all short free-text values with the same
+// shape as `name`: trim, collapse internal whitespace, length-cap. We keep
+// separate exports (instead of one shared helper) so each call site reads
+// clearly and so we can tune each cap independently later (e.g. country codes
+// might get their own stricter validator).
+//
+// Length caps:
+//   city        80   -- generous; e.g. "Sault Ste. Marie" fits comfortably
+//   state       80   -- "state / region / province" free-text bucket
+//   country     80   -- full country name OR ISO code, user's choice
+//   instrument  60   -- covers unusual entries like "pedal steel guitar"
+//
+// All four intentionally allow non-ASCII (e.g. "Zürich", "São Paulo", "Bandurria").
+export function normalizeCity(raw) {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+export function normalizeState(raw) {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+export function normalizeCountry(raw) {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+export function normalizeInstrument(raw) {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/\s+/g, ' ').trim().slice(0, 60);
 }

@@ -160,6 +160,71 @@ test('signup returns 400 when name is missing', async () => {
   }
 });
 
+// --- signup profile-field validation (added in PR signup-profile-fields) ----
+// Each required profile field returns a 400 with a matching `field` value
+// when omitted or whitespace-only. Order in the handler is email -> name ->
+// city -> state -> country -> instrument, so we build a "valid up to this
+// field" body for each test and drop just that one field.
+
+function validSignupBody(overrides = {}) {
+  return {
+    email:      'a@b.co',
+    name:       'Jane Musician',
+    city:       'Seattle',
+    state:      'WA',
+    country:    'USA',
+    instrument: 'Guitar',
+    ...overrides,
+  };
+}
+
+for (const field of ['city', 'state', 'country', 'instrument']) {
+  test(`signup returns 400 when ${field} is missing`, async () => {
+    process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
+    try {
+      const body = validSignupBody({ [field]: undefined });
+      const r = await signup(req('POST', {}, body));
+      assert.equal(r.status, 400);
+      const j = await r.json();
+      assert.equal(j.field, field, `expected field=${field} in 400 response`);
+    } finally {
+      delete process.env[DB_URL_ENV];
+    }
+  });
+
+  test(`signup returns 400 when ${field} is whitespace-only`, async () => {
+    process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
+    try {
+      const body = validSignupBody({ [field]: '   ' });
+      const r = await signup(req('POST', {}, body));
+      assert.equal(r.status, 400);
+      const j = await r.json();
+      assert.equal(j.field, field);
+    } finally {
+      delete process.env[DB_URL_ENV];
+    }
+  });
+}
+
+test('signup instrument error message hints at Music listener alternative', async () => {
+  process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
+  try {
+    const r = await signup(req('POST', {}, validSignupBody({ instrument: '' })));
+    assert.equal(r.status, 400);
+    const j = await r.json();
+    assert.equal(j.field, 'instrument');
+    // Copy check: the hint helps non-players find the right entry. If the
+    // wording changes, update this test intentionally.
+    assert.match(
+      j.error,
+      /Music listener|Music connoisseur/,
+      'instrument error should hint at "Music listener" / "Music connoisseur"'
+    );
+  } finally {
+    delete process.env[DB_URL_ENV];
+  }
+});
+
 // --- contributions input validation ----------------------------------------
 
 test('contributions returns 400 when action is invalid', async () => {

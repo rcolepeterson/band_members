@@ -37,6 +37,10 @@ import {
   generateToken,
   normalizeEmail,
   normalizeName,
+  normalizeCity,
+  normalizeState,
+  normalizeCountry,
+  normalizeInstrument,
   isPlausibleEmail,
 } from './_db.mjs';
 
@@ -57,17 +61,47 @@ export default async (req) => {
 
   const body = await parseJsonBody(req);
   if (!body || typeof body !== 'object') {
-    return badRequest('request body must be JSON with { email, name }');
+    return badRequest(
+      'request body must be JSON with { email, name, city, state, country, instrument }'
+    );
   }
 
-  const email = normalizeEmail(body.email);
-  const name = normalizeName(body.name);
+  const email      = normalizeEmail(body.email);
+  const name       = normalizeName(body.name);
+  const city       = normalizeCity(body.city);
+  const state      = normalizeState(body.state);
+  const country    = normalizeCountry(body.country);
+  const instrument = normalizeInstrument(body.instrument);
 
   if (!isPlausibleEmail(email)) {
     return badRequest('email is required and must be a valid address', { field: 'email' });
   }
   if (!name) {
     return badRequest('name is required', { field: 'name' });
+  }
+
+  // Profile fields are required at signup as of PR signup-profile-fields
+  // (product decision 2026-07-19). We validate presence, but keep the columns
+  // themselves nullable in the DB so pre-existing users don't need a backfill.
+  //
+  // `instrument` accepts free-text — people who don't play an instrument are
+  // expected to type something like 'Music listener' or 'Music connoisseur'.
+  // The client shows that hint in its placeholder; the server just enforces
+  // non-empty.
+  if (!city) {
+    return badRequest('city is required', { field: 'city' });
+  }
+  if (!state) {
+    return badRequest('state or region is required', { field: 'state' });
+  }
+  if (!country) {
+    return badRequest('country is required', { field: 'country' });
+  }
+  if (!instrument) {
+    return badRequest(
+      'instrument is required (enter "Music listener" or "Music connoisseur" if you don\'t play)',
+      { field: 'instrument' }
+    );
   }
 
   const sql = getSql();
@@ -83,7 +117,8 @@ export default async (req) => {
     // (preserve the existing token on conflict) is easier to read as an
     // explicit branch.
     const existing = await sql`
-      select id, email, name, token, bands_added, bands_edited, created_at
+      select id, email, name, token, bands_added, bands_edited, created_at,
+             city, state, country, instrument
       from users
       where lower(email) = lower(${email})
       limit 1
@@ -92,13 +127,30 @@ export default async (req) => {
     let user;
     let created;
     if (existing[0]) {
-      // Returning user. Update name if changed; token stays the same.
+      // Returning user. Update profile fields when they've changed; token
+      // stays the same. We always write all four profile fields (plus name)
+      // so people can correct typos or move cities on their next signup.
+      // This is the same "re-signup keeps the token" contract described in
+      // the file-level comments above — we just carry more mutable state now.
       const current = existing[0];
-      if (current.name !== name) {
+      const changed =
+        current.name       !== name       ||
+        current.city       !== city       ||
+        current.state      !== state      ||
+        current.country    !== country    ||
+        current.instrument !== instrument;
+      if (changed) {
         const updated = await sql`
-          update users set name = ${name}, updated_at = now()
+          update users set
+            name       = ${name},
+            city       = ${city},
+            state      = ${state},
+            country    = ${country},
+            instrument = ${instrument},
+            updated_at = now()
           where id = ${current.id}
-          returning id, email, name, token, bands_added, bands_edited, created_at
+          returning id, email, name, token, bands_added, bands_edited, created_at,
+                    city, state, country, instrument
         `;
         user = updated[0];
       } else {
@@ -108,9 +160,10 @@ export default async (req) => {
     } else {
       const token = generateToken();
       const inserted = await sql`
-        insert into users (email, name, token)
-        values (${email}, ${name}, ${token})
-        returning id, email, name, token, bands_added, bands_edited, created_at
+        insert into users (email, name, token, city, state, country, instrument)
+        values (${email}, ${name}, ${token}, ${city}, ${state}, ${country}, ${instrument})
+        returning id, email, name, token, bands_added, bands_edited, created_at,
+                  city, state, country, instrument
       `;
       user = inserted[0];
       created = true;
@@ -128,6 +181,10 @@ export default async (req) => {
         bands_added: user.bands_added,
         bands_edited: user.bands_edited,
         created_at: user.created_at,
+        city: user.city,
+        state: user.state,
+        country: user.country,
+        instrument: user.instrument,
       },
     });
   } catch (err) {
