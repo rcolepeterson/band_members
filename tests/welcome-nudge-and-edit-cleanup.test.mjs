@@ -102,7 +102,7 @@ test('node card has a "Sign in to edit this band" hint for signed-out visitors',
   );
 });
 
-test('renderEditAffordances shows the pencil OR the hint, never both', () => {
+test('renderEditAffordances shows the pencil OR the hint, never both (band and musician nodes alike)', () => {
   // Grab the function body.
   const fnMatch = INDEX_HTML.match(
     /function\s+renderEditAffordances\s*\(\s*node\s*\)\s*\{([\s\S]*?)\n\s{4}\}/
@@ -110,25 +110,42 @@ test('renderEditAffordances shows the pencil OR the hint, never both', () => {
   assert.ok(fnMatch, 'Expected function renderEditAffordances(node) in index.html.');
   const body = fnMatch[1];
 
-  // The two visibility branches must be mutually exclusive: canEdit gates
-  // the pencil, showSigninHint gates the hint, and showSigninHint is
-  // signed-out band nodes only. Musician nodes get neither.
+  // edit-person-bio PR: the pencil + sign-in hint were extended from
+  // band-only to band-OR-musician nodes (see tests/edit-person-ui.test.mjs
+  // for the dedicated coverage of that extension). The invariant THIS test
+  // protects -- the pencil and the sign-in hint are still mutually
+  // exclusive, for either node type -- must continue to hold.
   assert.match(
     body,
     /const\s+isBand\s*=\s*node\.type\s*===\s*['"]band['"]/,
-    'renderEditAffordances must gate on node.type === "band". ' +
-      'Musician nodes should not see edit affordances or the sign-in hint.'
+    'renderEditAffordances must still gate band-editing on node.type === "band".'
   );
   assert.match(
     body,
-    /const\s+canEdit\s*=\s*isBand\s*&&\s*signedIn/,
-    'canEdit must require both isBand and signedIn.'
+    /const\s+isPerson\s*=\s*node\.type\s*===\s*['"]person['"]/,
+    'renderEditAffordances must gate musician-editing on node.type === "person".'
   );
   assert.match(
     body,
-    /const\s+showSigninHint\s*=\s*isBand\s*&&\s*!signedIn/,
-    'showSigninHint must require isBand and NOT signedIn — otherwise ' +
-      'signed-in users see the hint alongside the pencil.'
+    /const\s+canEdit\s*=\s*canEditBand\s*\|\|\s*canEditPerson/,
+    'canEdit must be true when EITHER canEditBand or canEditPerson is true.'
+  );
+  assert.match(
+    body,
+    /canEditBand\s*=\s*isBand\s*&&\s*signedIn/,
+    'canEditBand must require both isBand and signedIn.'
+  );
+  assert.match(
+    body,
+    /canEditPerson\s*=\s*isPerson\s*&&\s*signedIn/,
+    'canEditPerson must require both isPerson and signedIn.'
+  );
+  assert.match(
+    body,
+    /const\s+showSigninHint\s*=\s*\(isBand\s*\|\|\s*isPerson\)\s*&&\s*!signedIn/,
+    'showSigninHint must require (isBand OR isPerson) and NOT signedIn — ' +
+      'otherwise signed-in users would see the hint alongside the pencil, ' +
+      'or a node type with no edit affordance would show the hint anyway.'
   );
   // The hint's inline "Sign in" link must route through openSignupPopover
   // so the welcome-nudge CTA and the in-card hint share one code path.
