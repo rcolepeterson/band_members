@@ -175,7 +175,13 @@ test('opening the edit-person panel hides the underlying node card, and closing 
   const closeIdx = INDEX_HTML.indexOf('function closeEditPersonPopover');
   const closeEnd = INDEX_HTML.indexOf('\n    }', closeIdx);
   const closeBlock = INDEX_HTML.slice(closeIdx, closeEnd);
-  assert.ok(closeBlock.includes('openNodeCard(nodeToReopen)'), 'Expected the close handler to reopen the previously-hidden node card.');
+  // The reopen goes through selectMemberNode (the unified musician-selection
+  // entry point) rather than openNodeCard directly, so the member's band
+  // highlight is restored along with the card. See member-selection.test.mjs.
+  assert.ok(
+    closeBlock.includes('selectMemberNode(nodeToReopen'),
+    'Expected the close handler to reopen the previously-hidden node card for the same node.'
+  );
 });
 
 // -----------------------------------------------------------------------
