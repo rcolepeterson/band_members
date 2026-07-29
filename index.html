@@ -43,10 +43,18 @@
   <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=boska@400,500,700&display=swap">
   <style>
     :root, [data-theme="light"] {
-      --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
-      --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
-      --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
-      --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+      /* Type ramp. Every step below --text-xl was raised by 1px at both ends
+         of its clamp() in the legibility pass (tester report: "the text is
+         very small"). The ramp — not html{font-size} — is the scale knob,
+         because the spacing and radius tokens are rem-based too, so bumping
+         the root would grow gaps and corners as well, while the many
+         fixed-px min-heights (26/32/44/48px) would not grow at all, cramping
+         text inside boxes that stay put. The two display steps below are
+         already 24-56px and are left alone. */
+      --text-xs: clamp(0.8125rem, 0.7625rem + 0.25vw, 0.9375rem);
+      --text-sm: clamp(0.9375rem, 0.8625rem + 0.35vw, 1.0625rem);
+      --text-base: clamp(1.0625rem, 1.0125rem + 0.25vw, 1.1875rem);
+      --text-lg: clamp(1.1875rem, 1.0625rem + 0.75vw, 1.5625rem);
       --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
       --text-2xl: clamp(2rem, 1.2rem + 2.5vw, 3.5rem);
       --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
@@ -117,13 +125,13 @@
     .graph-stats-badge__group{display:inline-flex;align-items:baseline;gap:0.3rem}
     .graph-stats-badge__value{color:#d4e8f4;font-weight:600;letter-spacing:0;text-transform:none}
     .graph-stats-badge__sep{opacity:0.35}
-    .graph-stats-badge__status{font-size:10px;color:rgba(212,232,244,0.72);letter-spacing:.09em}
+    .graph-stats-badge__status{font-size:12px;color:rgba(212,232,244,0.72);letter-spacing:.09em}
     /* Mobile: hamburger lives top-right so drop the badge to the top-left
        instead. Keep it compact so it can't collide with the ROCK BAND
        FAMILY TREE title on very small phones. */
-    @media (max-width:720px){.graph-stats-badge{right:auto;top:var(--space-3);left:var(--space-3);padding:0.35rem 0.6rem;font-size:10px;gap:0.15rem;align-items:flex-start;text-align:left}.graph-stats-badge__counts{gap:0.35rem}.graph-stats-badge__group{gap:0.22rem}.graph-stats-badge__status{font-size:9px}}
+    @media (max-width:720px){.graph-stats-badge{right:auto;top:var(--space-3);left:var(--space-3);padding:0.35rem 0.6rem;font-size:12px;gap:0.15rem;align-items:flex-start;text-align:left}.graph-stats-badge__counts{gap:0.35rem}.graph-stats-badge__group{gap:0.22rem}.graph-stats-badge__status{font-size:11px}}
     .sidebar{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-5)}.stack{padding:var(--space-5);display:grid;gap:var(--space-4)}.section-label{font-size:var(--text-xs);letter-spacing:.18em;text-transform:uppercase;color:var(--color-text-muted)}
-    .metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2)}.metric-card{padding:0.45rem var(--space-3);border-radius:var(--radius-md);background:linear-gradient(180deg, rgba(86,109,128,0.38), rgba(43,57,71,0.46));border:1px solid rgba(159,187,204,0.16);min-height:42px;display:grid;align-content:center;gap:0.08rem}.metric-value{font-size:var(--text-sm);font-weight:700;line-height:1.05}.metric-label{font-size:0.68rem;line-height:1;color:rgba(237,241,247,0.72);text-transform:uppercase;letter-spacing:.08em}
+    .metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2)}.metric-card{padding:0.45rem var(--space-3);border-radius:var(--radius-md);background:linear-gradient(180deg, rgba(86,109,128,0.38), rgba(43,57,71,0.46));border:1px solid rgba(159,187,204,0.16);min-height:42px;display:grid;align-content:center;gap:0.08rem}.metric-value{font-size:var(--text-sm);font-weight:700;line-height:1.05}.metric-label{font-size:0.78rem;line-height:1;color:rgba(237,241,247,0.72);text-transform:uppercase;letter-spacing:.08em}
     .detail-card{padding:var(--space-4);border-radius:var(--radius-lg);background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);display:grid;gap:var(--space-2);min-width:0}.detail-title{font-size:var(--text-sm);font-weight:700}.detail-copy{font-size:var(--text-sm);color:var(--color-text-muted)}
     .detail-stat{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-3);font-size:var(--text-sm);padding:0.55rem 0;border-bottom:1px solid rgba(255,255,255,0.06);min-width:0}.detail-stat:last-child{border-bottom:none}.detail-stat span:first-child{color:var(--color-text-muted);flex:0 0 84px}.detail-stat strong{flex:1 1 auto;min-width:0;text-align:right}.detail-stat span:last-child{color:var(--color-text-muted)}
     .form-grid{display:grid;gap:var(--space-3)}label{font-size:var(--text-xs);letter-spacing:.1em;text-transform:uppercase;color:var(--color-text-muted)}
@@ -178,7 +186,7 @@
 
 .node-label {
   fill: #e7f3fb;
-  font-size: 11px;
+  font-size: 13px;
   font-family: var(--font-body);
   pointer-events: none;
 }{filter:brightness(1.08)}
@@ -444,7 +452,7 @@ body {
   border-radius: 999px;
   background: rgba(143, 232, 246, 0.18);
   color: #effcff;
-  font-size: 0.85em;
+  font-size: 0.9em;
   line-height: 1.5;
   max-width: 12rem;
   overflow: hidden;
@@ -489,7 +497,7 @@ body {
 .field-note-inline {
   /* Softer, smaller text used inside a <label> to note optional fields. */
   font-weight: 400;
-  font-size: 0.8em;
+  font-size: 0.85em;
   color: var(--color-text-muted, rgba(225, 244, 255, 0.5));
   margin-left: 0.35em;
 }
@@ -638,7 +646,7 @@ body {
 .popover-down.popover-wide { width: min(460px, calc(100vw - 2rem)); }
 .filter-popover__label {
   display: block;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.09em;
   opacity: 0.75;
@@ -676,7 +684,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 0.95rem;
+  font-size: 1rem;
   padding: 0.7rem 1rem;
   /* Slightly brighter than a regular tool-chip so it reads as the
      primary action of the sheet. */
@@ -708,7 +716,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 0.95rem;
+  font-size: 1rem;
   padding: 0.7rem 1rem;
   background: linear-gradient(180deg, rgba(143,232,246,0.20), rgba(143,232,246,0.08));
   border-color: rgba(143, 232, 246, 0.55);
@@ -732,7 +740,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 0.95rem;
+  font-size: 1rem;
   padding: 0.7rem 1rem;
 }
 .mobile-sheet-add-band .mobile-send-feedback-btn svg { flex-shrink: 0; }
@@ -822,7 +830,7 @@ body {
    Small caps, muted, tight tracking to visually separate the two groups
    of buttons without adding heavy dividers. */
 .share-section-label {
-  font-size: 10.5px;
+  font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: rgba(225, 244, 255, 0.6);
@@ -1260,7 +1268,7 @@ body {
   }
 
   .mobile-sheet-title {
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--color-text-muted);
@@ -1306,7 +1314,7 @@ body {
     border: none;
     background: transparent;
     color: var(--color-text-muted);
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     cursor: pointer;
     min-height: 44px;
     text-align: center;
@@ -1333,7 +1341,7 @@ body {
   .mobile-sheet .mobile-sheet-tools .primary-btn {
     min-height: 44px;
     padding: 0 1rem;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
   }
 
   .mobile-sheet .mobile-sheet-filter-row {
@@ -1342,7 +1350,7 @@ body {
   }
 
   .mobile-sheet .mobile-sheet-filter-row label {
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--color-text-muted);
@@ -1356,13 +1364,16 @@ body {
     padding: 0.6rem 0.9rem;
   }
 
-  /* Bigger, more legible node labels on mobile. */
+  /* Bigger, more legible node labels on mobile — one step above the desktop
+     15px/13px because phones are held further from the eye than they are
+     from the viewport width these sizes are derived from. !important is
+     required to beat the inline font-size D3 sets per datum. */
   #graph-svg text {
-    font-size: 14px !important;
+    font-size: 16px !important;
   }
 
   #graph-svg text.node-label-person {
-    font-size: 12px !important;
+    font-size: 14px !important;
   }
 
   /* Bottom floating chips: bump touch targets + add safe-area padding. */
@@ -1374,7 +1385,7 @@ body {
   .graph-toolbar-bottom .panel-toggle-btn {
     min-height: 46px;
     padding: 0 1rem;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
   }
 
   /* Popover -> bottom sheet look on mobile. Reuse existing popover markup
@@ -1691,23 +1702,28 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 /* Keep the graph badge unobtrusive above the graph. */
 .graph-badge { z-index: 9; }
 
-/* ---- Half-size toolbar pills (top row + bottom toggles + header) ----
-   Keep the frosted-glass + bracket-corner styling; only shrink the box. */
+/* ---- Compact toolbar pills (top row + bottom toggles + header) ----
+   Keep the frosted-glass + bracket-corner styling; only shrink the box.
+   These labels sat at 0.72rem/11.5px and 0.62rem/9.9px, below the 12px
+   floor, and this !important block bypasses the --text-* ramp entirely, so
+   the legibility pass has to raise them here. The min-heights stay as they
+   are: they are floors, not caps, so a pill just grows if its taller label
+   needs the room. */
 .tool-chip,
 .header-btn,
 .primary-btn.share-btn,
 .panel-toggle-btn {
   min-height: 26px !important;
   padding: 0 0.85rem !important;
-  font-size: 0.72rem !important;
+  font-size: 0.85rem !important;
   gap: 0.3rem !important;
 }
 .graph-version-pill {
   min-height: 24px !important;
   padding: 0.1rem 0.8rem !important;
-  font-size: 0.62rem !important;
+  font-size: 0.75rem !important;
 }
-.graph-panel-head .panel-title { font-size: 0.72rem !important; }
+.graph-panel-head .panel-title { font-size: 0.85rem !important; }
 .graph-toolbar-left { gap: 0.4rem !important; }
 .graph-toolbar-bottom { gap: 0.4rem !important; }
 
@@ -1752,7 +1768,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   opacity: 0;
   transition: opacity 120ms ease-out;
   pointer-events: none;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.35;
 }
 .node-card.is-open {
@@ -1810,7 +1826,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 */
 .node-card__signin-hint {
   margin-top: 10px;
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(230, 236, 243, 0.6);
   letter-spacing: 0.01em;
 }
@@ -1873,14 +1889,14 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   transform: rotate(45deg);
 }
 .welcome-nudge__title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #fff;
   margin-bottom: 4px;
 }
 .welcome-nudge__body {
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.45;
   margin: 0 0 10px;
   color: rgba(230, 236, 243, 0.82);
@@ -1894,7 +1910,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 .welcome-nudge__cta {
   min-height: 32px;
   padding: 0 12px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.02em;
   border-radius: 999px;
@@ -2065,7 +2081,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   padding-right: 46px;   /* leave room for the close button + edit pencil */
 }
 .node-card__name {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   line-height: 1.25;
   color: #fff;
@@ -2073,7 +2089,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 }
 .node-card__sub {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(230, 236, 243, 0.72);
   overflow-wrap: anywhere;
 }
@@ -2085,13 +2101,13 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   align-items: baseline;
 }
 .node-card__rows > .k {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(230, 236, 243, 0.55);
 }
 .node-card__rows > .v {
-  font-size: 13px;
+  font-size: 14px;
   color: rgba(230, 236, 243, 0.92);
   overflow-wrap: anywhere;
 }
@@ -2101,7 +2117,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .node-card__row-label {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(230, 236, 243, 0.55);
@@ -2120,7 +2136,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   color: #e6ecf3;
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
   line-height: 1.1;
 }
@@ -2139,7 +2155,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   font-weight: 500;
 }
 .node-card__chip-years {
-  font-size: 11px;
+  font-size: 12px;
   color: rgba(230, 236, 243, 0.60);
   padding-left: 6px;
   border-left: 1px solid rgba(255, 255, 255, 0.10);
@@ -3634,7 +3650,7 @@ function downloadPngBlob(blob) {
         .link { stroke: rgba(161, 204, 228, 0.34); stroke-opacity: 0.75; }
         .node.band circle { fill: #f7fbff; stroke: #8fe8f6; stroke-width: 2.1; }
         .node.person circle { fill: #0b1722; stroke: #98aec0; stroke-width: 1.8; }
-        .node-label { fill: #e7f3fb; font-size: 11px; font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
+        .node-label { fill: #e7f3fb; font-size: 13px; font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
       `;
       const svgClone = svg.cloneNode(true);
       svgClone.insertBefore(inlineStyle, svgClone.firstChild);
@@ -6264,8 +6280,14 @@ function downloadPngBlob(blob) {
     .attr("stroke-width", getNodeStrokeWidth(d));
 });
 
+      // Single source of truth for label size, read by both the inline
+      // font-size and the labelHeight bookkeeping below so the two cannot
+      // drift. The mobile bump lives in the <=900px media query keyed off
+      // .node-label-band / .node-label-person.
+      const nodeLabelPx = d => d.type === 'band' ? 15 : 13;
+
       node.append('text')
-        .attr('class', 'node-label')
+        .attr('class', d => d.type === 'band' ? 'node-label node-label-band' : 'node-label node-label-person')
         .attr('x', d => getNodeOuterRadius(d) + 6)
         .attr('y', 4)
         .text(d => {
@@ -6273,15 +6295,14 @@ function downloadPngBlob(blob) {
           const instruments = [d.instrument1, d.instrument2].filter(Boolean).join(', ');
           return instruments ? `${d.id} — ${instruments}` : d.id;
         })
-        .style('font-size', d => d.type === 'band' ? '12px' : '10px')
+        .style('font-size', d => `${nodeLabelPx(d)}px`)
         .style('opacity', d => d.type === 'band' ? 0.98 : 0.8)
         // Record each label's rendered footprint so the collision force can
         // reserve horizontal room for the text (which sits to the right of the
         // node), preventing neighbouring members' labels from overlapping.
         .each(function(d) {
-          const fontPx = d.type === 'band' ? 12 : 10;
           d.labelWidth = this.getComputedTextLength() || 0;
-          d.labelHeight = fontPx;
+          d.labelHeight = nodeLabelPx(d);
         });
 
       node.on('click', (_, d) => {
