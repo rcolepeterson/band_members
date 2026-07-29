@@ -68,9 +68,11 @@ const REQUIRED_PARITY = [
 // ("Musicians only") were retired on both platforms — see the
 // dedicated removal test in tests/toolbar-ui-cleanup.test.mjs.
 const REQUIRED_CHIP_PARITY = [
-  { attr: 'data-filter', value: 'all' },
   { attr: 'data-action', value: 'fit' },
   { attr: 'data-action', value: 'clear' },
+  // "Reset view" replaced the old data-filter="all" ("All nodes") chip.
+  { attr: 'data-action', value: 'reset' },
+  { attr: 'data-action', value: 'recent' },
 ];
 
 // Controls that used to live in the desktop toolbar but were

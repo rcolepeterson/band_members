@@ -52,8 +52,13 @@ export default async (req) => {
     // separate avoids repeating every band/member column once per
     // membership row over the wire.
     const [bands, members, memberships] = await Promise.all([
+      // created_at powers the client's Recently-added filter. Selected for
+      // every band rather than pushed down as a `where created_at > ...`
+      // clause: the client already holds the whole graph in memory and
+      // filters scene/genre/search there, so a server-side window would give
+      // it a graph it couldn't un-filter without a second round trip.
       sql`
-        select id, name, city, state, country, genre, years_active, label, albums, csv_origin
+        select id, name, city, state, country, genre, years_active, label, albums, csv_origin, created_at
         from bands
         order by name
       `,
