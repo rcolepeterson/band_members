@@ -122,7 +122,6 @@
        instead. Keep it compact so it can't collide with the ROCK BAND
        FAMILY TREE title on very small phones. */
     @media (max-width:720px){.graph-stats-badge{right:auto;top:var(--space-3);left:var(--space-3);padding:0.35rem 0.6rem;font-size:10px;gap:0.15rem;align-items:flex-start;text-align:left}.graph-stats-badge__counts{gap:0.35rem}.graph-stats-badge__group{gap:0.22rem}.graph-stats-badge__status{font-size:9px}}
-    .graph-note{display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--space-3);font-size:var(--text-sm);color:var(--color-text-muted)}
     .sidebar{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-5)}.stack{padding:var(--space-5);display:grid;gap:var(--space-4)}.section-label{font-size:var(--text-xs);letter-spacing:.18em;text-transform:uppercase;color:var(--color-text-muted)}
     .metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2)}.metric-card{padding:0.45rem var(--space-3);border-radius:var(--radius-md);background:linear-gradient(180deg, rgba(86,109,128,0.38), rgba(43,57,71,0.46));border:1px solid rgba(159,187,204,0.16);min-height:42px;display:grid;align-content:center;gap:0.08rem}.metric-value{font-size:var(--text-sm);font-weight:700;line-height:1.05}.metric-label{font-size:0.68rem;line-height:1;color:rgba(237,241,247,0.72);text-transform:uppercase;letter-spacing:.08em}
     .detail-card{padding:var(--space-4);border-radius:var(--radius-lg);background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);display:grid;gap:var(--space-2);min-width:0}.detail-title{font-size:var(--text-sm);font-weight:700}.detail-copy{font-size:var(--text-sm);color:var(--color-text-muted)}
@@ -150,7 +149,6 @@
     .stage-title{font-family:var(--font-display);font-size:clamp(2rem,1.2rem + 2vw,3.5rem);line-height:1;color:var(--color-text)}
     .stage-tagline{max-width:54ch;color:rgba(237,241,247,0.76);padding-inline:var(--space-4)}
     .stage-toolbar{position:absolute;left:50%;bottom:var(--space-5);transform:translateX(-50%);z-index:4;display:flex;flex-wrap:wrap;justify-content:center;gap:var(--space-3);padding:0 var(--space-4);width:min(100%,920px)}
-    .graph-shell-footer{padding:0 var(--space-2)}
     body.hero-condensed .hero{display:none}
     .stage-header-spacer{height:240px}
     @media (max-width: 720px){.stage-header-spacer{height:210px}.stage-logo{width:min(220px,58vw)}.stage-title{font-size:clamp(1.65rem,1.15rem + 1.6vw,2.4rem)}.stage-tagline{font-size:var(--text-sm)}}
@@ -934,8 +932,7 @@ body {
 }
 
 .graph-panel-head,
-.filter-row,
-.graph-shell-footer {
+.filter-row {
   padding-left: clamp(1rem, 2vw, 1.75rem);
   padding-right: clamp(1rem, 2vw, 1.75rem);
 }
@@ -1091,12 +1088,6 @@ body {
 
 .graph-badge {
   z-index: 6;
-}
-
-.graph-shell-footer {
-  padding-top: 0.7rem;
-  padding-left: clamp(1rem, 2vw, 1.75rem);
-  padding-right: clamp(1rem, 2vw, 1.75rem);
 }
 
 @media (max-width: 900px) {
@@ -1586,10 +1577,6 @@ main.layout {
   height: 100% !important;
 }
 
-.graph-shell-footer {
-  flex: 0 0 auto;
-}
-
 /* Header no longer holds a site-name block: keep the remaining controls
    aligned to the right so the bar still reads as intentional. */
 .header-inner {
@@ -1639,7 +1626,6 @@ main.layout {
 main.layout { padding: 0 !important; gap: 0 !important; }
 #graph-workspace.workspace,
 .graph-panel { min-height: 0 !important; }
-.graph-shell-footer { display: none !important; }
 
 /* Header: a thin, transparent bar of pills floating at the top. */
 .site-header {
@@ -1932,6 +1918,80 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   background: #74c9d0;
   border-color: #74c9d0;
 }
+/*
+  Search-miss empty state ("No Rawk Found"). Backlog item #21.
+
+  Deliberately a DOM overlay inside .graph-stage rather than anything drawn
+  into #graph-svg: renderGraph() clears the <g> and early-returns as soon as
+  the filtered node set is empty (and again if the stage measures smaller
+  than 50x50), so anything appended to the SVG for a zero-result search
+  would either never be drawn or be wiped on the next render. Living in the
+  same overlay layer as the toolbars/HUD makes visibility independent of
+  what the renderer decides to do.
+
+  Positioned absolute + centered in the stage, so it works unchanged on
+  desktop and mobile -- unlike .graph-overlay-top, which is display:none
+  under 900px and would have stranded the CTA on phones (the PR #42/#44
+  bug). z-index 11 puts it above the graph and #graph-badge but below the
+  popovers (15) and the mobile sheet (70), so opening the Add-band flow
+  layers correctly on top of it.
+*/
+.graph-empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 11;
+  width: min(360px, calc(100vw - 32px));
+  padding: 20px 22px 18px;
+  text-align: center;
+  background: rgba(18, 22, 30, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  color: rgba(230, 236, 243, 0.92);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+}
+.graph-empty-state__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 1.1rem + 1vw, 1.9rem);
+  line-height: 1.1;
+  color: #fff;
+  margin-bottom: 6px;
+}
+.graph-empty-state__sub {
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0 0 14px;
+  color: rgba(230, 236, 243, 0.82);
+}
+.graph-empty-state__query {
+  color: #fff;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.graph-empty-state__cta {
+  min-height: 36px;
+  padding: 0 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  cursor: pointer;
+  color: #0b0f14;
+  background: rgba(82, 174, 182, 0.95);
+  border: 1px solid rgba(82, 174, 182, 0.95);
+}
+.graph-empty-state__cta:hover {
+  background: #74c9d0;
+  border-color: #74c9d0;
+}
+@media (max-width: 720px) {
+  .graph-empty-state { padding: 16px 18px 14px; }
+  .graph-empty-state__sub { font-size: 12.5px; }
+}
+
 /*
   PR 4b: cross-check verification UI. .node-card__name-wrap lets the band
   name and the silver-star score chip sit on one line without the chip
@@ -2743,6 +2803,29 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     </div>
 
     <!--
+      Search-miss empty state (backlog item #21). Shown only when the user
+      has a non-empty search term AND the filtered graph has zero nodes --
+      see syncSearchEmptyState(), called from renderGraph().
+
+      It is a sibling of #graph-svg, not SVG content, on purpose:
+      renderGraph() clears the graph group and returns early for an empty
+      node set, so an in-SVG empty state would be erased by the very render
+      that needs to show it. See the .graph-empty-state CSS comment.
+
+      #graph-empty-state-cta routes through openSignupPopover() -- the same
+      funnel the welcome nudge and the node-card "Sign in to edit" hint use
+      -- so signed-out visitors hit the existing sign-up gate and signed-in
+      visitors land straight on the Add-band form. No parallel gate.
+    -->
+    <div class="graph-empty-state" id="graph-empty-state" role="status" aria-live="polite" hidden>
+      <div class="graph-empty-state__title">No Rawk Found</div>
+      <p class="graph-empty-state__sub">
+        Nothing in the tree matches <span class="graph-empty-state__query" id="graph-empty-state-query"></span>. Want to add them?
+      </p>
+      <button type="button" class="graph-empty-state__cta" id="graph-empty-state-cta">Add this band →</button>
+    </div>
+
+    <!--
       Always-on graph stats badge (top-right of the stage). Two lines: the
       first is Nodes / Links / Scenes counts, the second is a live filter
       status readout ("Full graph" when no filters, e.g. "Grunge ·
@@ -2897,12 +2980,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 
   </div>
 
-  <div class="graph-shell-footer">
-    <div class="graph-note">
-      <span id="graph-note-left">Building the network from your source-of-truth CSV.</span>
-      <span id="graph-note-right">Ready for your next pass: real filters, print views, and add/edit actions.</span>
-    </div>
-  </div>
 </article>
       </section>
     </main>
@@ -2953,8 +3030,8 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 
     
 
-    const noteLeft = document.getElementById('graph-note-left');
-    const noteRight = document.getElementById('graph-note-right');
+    const graphEmptyState = document.getElementById('graph-empty-state');
+    const graphEmptyStateQuery = document.getElementById('graph-empty-state-query');
     const toolChips = Array.from(document.querySelectorAll('.tool-chip'));
 
     let svgSelection = null;
@@ -5956,6 +6033,69 @@ function downloadPngBlob(blob) {
       return isWarm;
     }
 
+    // ---------------------------------------------------------------------
+    // Search-miss empty state (backlog item #21).
+    //
+    // Single source of truth for "your search matched nothing": the
+    // #graph-empty-state overlay. #graph-badge (the status line inside
+    // #graph-stats-badge) is deliberately NOT part of this -- it reports
+    // which filters are *active* ("Search: heart · Grunge"), which is
+    // orthogonal to whether the result set came back empty, and it stays
+    // useful when a scene/genre filter empties the graph too. The old
+    // #graph-note-left span was the third surface in this area and was
+    // removed with the rest of .graph-shell-footer (globally
+    // display:none since the full-screen-stage pass, so its "No matches
+    // yet" text had been unreachable for a while).
+    //
+    // Gated on currentSearch specifically: a zero-result *filter*
+    // combination should not offer to add a band, because the band the
+    // user is looking for may well be in the tree and just filtered out.
+    // Search is the only filter where "not found" plausibly means "not in
+    // the tree yet".
+    //
+    // Follow-up (not in this PR): search is plain case-insensitive
+    // substring matching, so a typo ("Perl Jam") lands here even though
+    // the band exists. Fuzzy matching would cut the false-positive rate.
+    function syncSearchEmptyState(matchCount) {
+      if (!graphEmptyState) return;
+      const show = Boolean(currentSearch) && matchCount === 0;
+      if (show && graphEmptyStateQuery) graphEmptyStateQuery.textContent = `“${currentSearch}”`;
+      graphEmptyState.hidden = !show;
+    }
+
+    // Pre-fills the Add-band form's band-name field with the search term
+    // the user just came up empty on, then fires an 'input' event so the
+    // form's own canonical-match / duplicate-detection pass
+    // (validateSubmissionForm) sees the value.
+    function prefillAddBandName(name) {
+      const field = document.getElementById('band-name');
+      if (!field || !name) return;
+      field.value = name;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      field.focus();
+    }
+
+    // Empty-state CTA. Routes through openSignupPopover() so signed-out
+    // visitors get the existing sign-up gate and signed-in visitors get
+    // the Add-band form -- no parallel gate. Pre-fill only applies to the
+    // signed-in case; for a signed-out visitor the form is behind the gate
+    // and the field would be cleared by the time they reach it.
+    function openAddBandFromEmptyState() {
+      const popover = document.getElementById('add-band-popover');
+      // openSignupPopover() clicks the Add-your-band trigger, which TOGGLES
+      // the popover -- clicking it while already open would close it.
+      if (!popover || popover.hidden) openSignupPopover();
+      if (loadCurrentUser()) prefillAddBandName(currentSearch);
+    }
+
+    document.getElementById('graph-empty-state-cta')?.addEventListener('click', event => {
+      // Same reason as the mobile Add-your-band trigger: stop the
+      // document-level "click outside → close popovers" handler from
+      // dismissing the popover we are about to open.
+      event.stopPropagation();
+      openAddBandFromEmptyState();
+    });
+
     function renderGraph() {
       if (!graphState || !svgSelection) return;
       // Any pending anchored node card is now stale (we're about to build a
@@ -6014,7 +6154,7 @@ function downloadPngBlob(blob) {
       })();
       syncFilterBtn('scene-btn', 'scene-btn-value', currentScene !== 'all', sceneLabel);
       syncFilterBtn('genre-btn', 'genre-btn-value', currentGenre && currentGenre !== 'all', currentGenre);
-      noteLeft.textContent = filtered.nodes.length ? `Showing ${filtered.links.length} relationships from your uploaded CSV.` : 'No matches yet. Try clearing or relaxing the filters.';
+      syncSearchEmptyState(filtered.nodes.length);
 
       graphGroup.selectAll('*').remove();
       if (!nodes.length) return;
@@ -8723,14 +8863,16 @@ function downloadPngBlob(blob) {
         setTimeout(() => fitGraph(60), 700);
         updateSubmissionPreview();
       });
-      noteRight.textContent = 'You can now filter the tree by node type, scene, or search term without changing the underlying graph behavior.';
     }).catch(error => {
       console.error(error);
+      // Both the /api/bands (Neon) load and the local-CSV fallback failed.
+      // #graph-fallback carries the full explanation; the badge just needs
+      // to say the graph isn't there. (The two #graph-note-* spans that
+      // used to repeat this lived in .graph-shell-footer, which was
+      // display:none, so they were never actually read by anyone.)
       const fallback = document.getElementById('graph-fallback');
       fallback.style.display = 'flex';
-      graphBadge.textContent = 'CSV missing';
-      noteLeft.textContent = 'The local CSV could not be loaded in this tab.';
-      noteRight.textContent = 'Keep the HTML and seattle_band_members-2-2.csv in the same local folder and serve with python -m http.server.';
+      graphBadge.textContent = 'Graph unavailable';
     });
   </script>
 </body>
