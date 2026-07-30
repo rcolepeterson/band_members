@@ -6410,14 +6410,38 @@ function downloadPngBlob(blob) {
       syncFilterBtn('genre-btn', 'genre-btn-value', currentGenre && currentGenre !== 'all', currentGenre);
       syncSearchEmptyState(filtered.nodes.length);
 
-      graphGroup.selectAll('*').remove();
-      if (!nodes.length) return;
+      // Every early return below this point must leave the already-painted
+      // graph on screen. The wipe used to sit ABOVE these checks, so a
+      // render that bailed erased the graph with nothing left to repaint --
+      // the one mechanism in this file that can blank #graph-svg. Keep the
+      // wipe as the last thing before the first append.
+      if (!nodes.length) {
+        // Instrumentation for the "graph disappeared" beta reports: log the
+        // filter combination that produced an empty set so a tester can
+        // paste it back to us. The empty-state UX itself lives elsewhere.
+        console.warn('renderGraph: no nodes after filtering; keeping the current graph on screen.', {
+          filter: currentFilter,
+          scene: currentScene,
+          genre: currentGenre,
+          search: currentSearch,
+        });
+        return;
+      }
 
       const stage = document.querySelector('.graph-stage');
+      if (!stage) {
+        console.warn('renderGraph: .graph-stage is missing; keeping the current graph on screen.');
+        return;
+      }
       const rect = stage.getBoundingClientRect();
+      // Clamped, so a collapsed stage still gets a usable 420x520 viewBox.
+      // A `width < 50 || height < 50` bail used to sit here; the clamps make
+      // it unreachable, so it was deleted rather than left as dead code
+      // implying a guard that can never fire.
       const width = Math.max(rect.width, 420);
       const height = Math.max(rect.height, 520);
-      if (width < 50 || height < 50) return;
+
+      graphGroup.selectAll('*').remove();
       svgSelection.attr('viewBox', [0, 0, width, height]);
 
       const link = graphGroup.append('g')
