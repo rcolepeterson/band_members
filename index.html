@@ -782,7 +782,7 @@ body {
   border: 1px solid rgba(143, 232, 246, 0.55);
   background: linear-gradient(180deg, rgba(143,232,246,0.22), rgba(143,232,246,0.08));
   color: #f0fbff;
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
@@ -6490,11 +6490,13 @@ function downloadPngBlob(blob) {
         // Instrumentation for the "graph disappeared" beta reports: log the
         // filter combination that produced an empty set so a tester can
         // paste it back to us. The empty-state UX itself lives elsewhere.
+        // Every key here must be a live binding: this payload is built on the
+        // zero-result path, so an undeclared read throws instead of warning.
         console.warn('renderGraph: no nodes after filtering; keeping the current graph on screen.', {
-          filter: currentFilter,
           scene: currentScene,
           genre: currentGenre,
           search: currentSearch,
+          recentOnly,
         });
         return;
       }

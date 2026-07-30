@@ -416,8 +416,11 @@ test('fitGraph is only reachable from render and the explicit Fit action', () =>
   const callSites = (INDEX_HTML.match(/^\s*(?:setTimeout\(\(\) => )?fitGraph\(\d/gm) || []).length;
   assert.equal(
     callSites,
-    3,
-    'Expected exactly 3 fitGraph() calls: renderGraph\'s tail, the Fit chip, and the post-load settle.'
+    4,
+    "Expected exactly 4 fitGraph() calls: renderGraph's tail, the Fit chip, resetView(), "
+      + 'and the post-load settle. resetView() joined the list when PR #69 repurposed the '
+      + '"All nodes" chip as "Reset view"; recent-filter-ui.test.mjs requires it to refit. '
+      + 'All four are renders or explicit user camera actions — never a selection.'
   );
 });
 
