@@ -5654,6 +5654,12 @@ function downloadPngBlob(blob) {
     // rationale (classic, non-module script). Keep the two in sync by hand.
     // ---------------------------------------------------------------------
 
+    // Every constant below is mirrored in
+    // scripts/graph-render-helpers.mjs::FORCE_LAYOUT, and
+    // tests/graph-render-helpers.test.mjs asserts the two agree -- so the
+    // module is the single source of truth even though the values are
+    // written twice.
+    //
     // Number of synchronous ticks to run (upper bound) before treating the
     // layout as "settled". perf(graph): this used to be 300, which at
     // O(N^2) charge-force cost for the full 3,233-node graph meant ~7-10s
@@ -5688,6 +5694,20 @@ function downloadPngBlob(blob) {
     // canonical, unit-tested copy of this constant/behavior.
     const SIMULATION_MIN_ALPHA = 0.02;
 
+    // Minimum fraction of the new node set that must already have a cached
+    // position for a warm re-layout to be considered.
+    const WARM_CACHE_HIT_RATIO = 0.5;
+
+    // ...and how far the new node count may differ from the node count that
+    // produced the cache before the cached geometry is considered stale.
+    // See canWarmStartLayout below for why the hit ratio alone isn't enough.
+    const WARM_NODE_COUNT_TOLERANCE = 0.25;
+
+    // alphaTarget a drag reheats the simulation to. Applied on the first
+    // real pointer *movement*, not on mousedown -- see the d3.drag wiring in
+    // renderGraph().
+    const DRAG_REHEAT_ALPHA_TARGET = 0.3;
+
     // Module-level cache of the last known-good {x, y} for each node id,
     // populated after every successful layout and consulted before the
     // next one so filter changes can warm-start instead of starting from
@@ -5695,6 +5715,12 @@ function downloadPngBlob(blob) {
     // of the read/write helpers: scripts/graph-render-helpers.mjs::
     // {snapshotNodePositions, applyCachedPositions, clearFixedPositions}.
     const lastNodePositions = new Map();
+
+    // Shape of the layout that produced lastNodePositions: node count plus
+    // the stage dimensions it was laid out in. Consulted by
+    // canWarmStartLayout() to decide whether those cached coordinates still
+    // describe a usable geometry. Null until the first layout completes.
+    let lastLayoutShape = null;
 
     // Builds (but does not run) the d3.forceSimulation for a given
     // nodes/links array. Pulled out of renderGraph() for clarity.
@@ -5796,30 +5822,75 @@ function downloadPngBlob(blob) {
       });
     }
 
+    // How many of `nodes` have a cached position, without mutating anything,
+    // so the warm/cold decision can be made BEFORE the cache is applied.
+    // Canonical, unit-tested copy:
+    // scripts/graph-render-helpers.mjs::countCachedPositions.
+    function countCachedPositions(nodes) {
+      let hits = 0;
+      nodes.forEach(d => {
+        if (lastNodePositions.has(d.id)) hits++;
+      });
+      return hits;
+    }
+
+    // Whether the cached coordinates in lastNodePositions still describe a
+    // geometry worth reusing for this re-layout.
+    //
+    // perf(graph) / "stretched then snap": a high cache-hit ratio alone is
+    // NOT enough. Cached coordinates encode the global *extent* of the
+    // layout that produced them, and the warm path pins them with fx/fy, so
+    // that extent is frozen and no force can correct it. Filtering the full
+    // ~3,200-node graph down to a single scene leaves every survivor cached
+    // (100% hit ratio) but still spread across the full graph's extent with
+    // holes where the removed nodes were -- a handful of nodes strung thinly
+    // across a huge area, which fitGraph() then frames as-is. It stays that
+    // way until something reheats the simulation, at which point the forces
+    // finally pull it compact: the "snaps to a usable shape". Same problem
+    // if the stage was resized, since the cached coordinates were centred on
+    // a different d3.forceCenter(width / 2, height / 2).
+    //
+    // Falling back to a cold layout in those cases is also what makes
+    // repeated filtering *consistent*: d3-force seeds missing x/y from a
+    // fixed phyllotaxis spiral, so a cold layout of the same node set is
+    // deterministic. Canonical, unit-tested copy:
+    // scripts/graph-render-helpers.mjs::canWarmStartLayout.
+    function canWarmStartLayout({ hits, nodeCount, previous, current }) {
+      if (!nodeCount || !hits) return false;
+      if (hits < nodeCount * WARM_CACHE_HIT_RATIO) return false;
+      if (!previous || !current || !Number.isFinite(previous.count)) return false;
+      if (previous.width !== current.width || previous.height !== current.height) return false;
+      const countRatio = Math.min(previous.count, nodeCount) / Math.max(previous.count, nodeCount);
+      if (countRatio < 1 - WARM_NODE_COUNT_TOLERANCE) return false;
+      return true;
+    }
+
     // Runs the layout for a fresh nodes/links array, warm-starting from
-    // lastNodePositions when available, so a filter change is cheap:
-    //   - Cold path (no/low cache hit -- first load, or an entirely new
-    //     node set): full SIMULATION_TICKS budget, random d3-force init.
-    //   - Warm path (most node ids already have a cached position -- the
-    //     common case for a filter change on an already-rendered graph):
-    //     seed + pin cached positions, run a much shorter
-    //     WARM_SIMULATION_TICKS budget, then unpin.
-    // Always snapshots the final positions back into lastNodePositions so
-    // the next call (whatever filter triggers it) can warm-start too.
-    function runLayoutWithPositionCache(simulation, nodes) {
-      const seeded = lastNodePositions.size ? applyCachedPositions(nodes, { pin: true }) : 0;
-      const isWarm = seeded > 0 && seeded >= nodes.length * 0.5;
+    // lastNodePositions when canWarmStartLayout() says the cached geometry
+    // still applies:
+    //   - Warm path (same node set and stage as the cached layout -- e.g. a
+    //     re-render triggered by a badge/bio update, or a filter change that
+    //     barely moves the node count): seed + pin cached positions, run a
+    //     much shorter WARM_SIMULATION_TICKS budget, then unpin.
+    //   - Cold path (first load, resized stage, or a materially different
+    //     node set): ignore the cache entirely -- don't even seed x/y -- and
+    //     run the full SIMULATION_TICKS budget from d3-force's own initial
+    //     positions.
+    // Always snapshots the final positions and the layout's shape so the
+    // next call can warm-start when it legitimately can.
+    function runLayoutWithPositionCache(simulation, nodes, current) {
+      const hits = lastNodePositions.size ? countCachedPositions(nodes) : 0;
+      const isWarm = canWarmStartLayout({ hits, nodeCount: nodes.length, previous: lastLayoutShape, current });
       if (isWarm) {
+        applyCachedPositions(nodes, { pin: true });
         runSyncForceLayout(simulation, WARM_SIMULATION_TICKS, SIMULATION_MIN_ALPHA);
         clearFixedPositions(nodes);
       } else {
-        // Not a mostly-cached re-layout (first load, or the filtered set
-        // changed drastically) -- clear any partial pins from the cache
-        // check above and run the full cold layout.
         clearFixedPositions(nodes);
         runSyncForceLayout(simulation, SIMULATION_TICKS, SIMULATION_MIN_ALPHA);
       }
       snapshotNodePositions(nodes);
+      lastLayoutShape = current ? { ...current, count: nodes.length } : null;
       return isWarm;
     }
 
@@ -5906,12 +5977,24 @@ function downloadPngBlob(blob) {
         .join('g')
         .attr('class', d => `node ${d.type}`)
         .call(d3.drag()
+          // Reheat on the first real pointer MOVEMENT, not on mousedown.
+          // d3.drag fires 'start' for every pointerdown, including the plain
+          // clicks that open a node card -- so reheating here meant every
+          // click restarted the simulation at alphaTarget 0.3 and visibly
+          // re-settled the whole graph. That reheat is the "then it snaps to
+          // a usable shape" half of the layout-inconsistency report; the
+          // stretched state it snapped out of came from a stale warm start
+          // (see canWarmStartLayout). Pinning fx/fy on 'start' is harmless
+          // while the simulation is stopped, and is still needed so a drag
+          // that does move has something to grab.
           .on('start', (event, d) => {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
             d.fx = d.x;
             d.fy = d.y;
           })
           .on('drag', (event, d) => {
+            if (simulation.alphaTarget() < DRAG_REHEAT_ALPHA_TARGET) {
+              simulation.alphaTarget(DRAG_REHEAT_ALPHA_TARGET).restart();
+            }
             d.fx = event.x;
             d.fy = event.y;
           })
@@ -6076,8 +6159,10 @@ function downloadPngBlob(blob) {
       // of this stepping logic. runLayoutWithPositionCache additionally
       // warm-starts from lastNodePositions when most node ids already have
       // a cached position (e.g. a filter change), which is what makes
-      // repeated filter changes near-instant instead of a full re-freeze.
-      runLayoutWithPositionCache(simulation, nodes);
+      // repeated filter changes near-instant instead of a full re-freeze --
+      // but only when the cached geometry still fits this node set and stage
+      // (see canWarmStartLayout).
+      runLayoutWithPositionCache(simulation, nodes, { width, height });
 
       link
         .attr('x1', d => d.source.x)
