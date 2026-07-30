@@ -296,10 +296,15 @@ test("PR F's setAuthMode copy-swap flow is untouched", () => {
 // ---------------------------------------------------------------------
 
 test('the stats badge clears the auth strip on desktop', () => {
-  // .graph-stage is position:fixed/inset:0, so the badge's top-right and the
-  // fixed header's top-right are the same physical corner. The auth strip
-  // occupies roughly 0-50px (var(--space-3) padding + a 26px control +
-  // padding), so var(--space-5) alone (20px) ran straight into it.
+  // .graph-stage is position:fixed/inset:0, so the badge and the fixed header
+  // share the same physical corners. The auth strip occupies roughly 0-50px
+  // (var(--space-3) padding + a 26px control + padding), so var(--space-5)
+  // alone (20px) ran straight into it.
+  //
+  // The badge has since moved to the top-LEFT, out of the auth strip's column
+  // entirely (see tests/stats-badge-placement.test.mjs), but the vertical
+  // clearance is still asserted here: it is the floor this rule exists to
+  // guarantee, and a future move back to the right must not silently lose it.
   const rule = sliceBetween(INDEX_HTML, /@media \(min-width: 721px\) \{/, '}');
   assert.ok(rule.includes('.graph-stats-badge'), 'Expected a desktop-only stats-badge offset.');
 
@@ -324,8 +329,12 @@ test('the desktop offset is scoped so it cannot undo the mobile placement', () =
   assert.ok(desktopIdx > mobileIdx, 'Sanity: the desktop override is the later rule.');
 });
 
-test('the badge is not moved horizontally', () => {
-  // Only vertical spacing was the problem; both elements keep their corner.
+test('the desktop media block stays a vertical-only adjustment', () => {
+  // Horizontal placement is owned by the base .graph-stats-badge rule in the
+  // critical CSS (now top-left) and by the <=720px rule on mobile. This block
+  // must not re-introduce a `right:` — that would drag the badge back under
+  // the toolbar's right cluster, which is exactly the overlap the badge was
+  // moved to escape.
   const rule = sliceBetween(INDEX_HTML, /@media \(min-width: 721px\) \{/, '}');
   assert.ok(!/\b(right|left)\s*:/.test(rule), 'Expected a vertical-only adjustment.');
 });

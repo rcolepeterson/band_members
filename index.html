@@ -110,7 +110,7 @@
     .graph-panel{padding:0;min-height:780px;display:grid;grid-template-rows:auto 1fr auto;gap:var(--space-4);background:transparent;border:none;box-shadow:none}
     .panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4)}.graph-panel-head{margin-bottom:var(--space-3)}.graph-toolbar{align-items:center}.graph-version-pill{margin-left:auto;min-height:40px;display:inline-flex;align-items:center}.panel-title{font-size:var(--text-lg);font-weight:700}.panel-copy{font-size:var(--text-sm);color:var(--color-text-muted);max-width:56ch}
     .status-pill{padding:0.4rem 0.8rem;border-radius:var(--radius-full);background:rgba(82,174,182,0.12);color:var(--color-primary-hover);font-size:var(--text-xs);letter-spacing:.1em;text-transform:uppercase}
-    .toolbar{display:flex;flex-wrap:wrap;gap:var(--space-3)}.graph-toolbar{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--space-3);row-gap:var(--space-3)}.graph-toolbar-left{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;min-width:0}.graph-version-pill{justify-self:end;white-space:nowrap}.tool-chip{min-height:40px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);background:rgba(255,255,255,0.02);font-size:var(--text-sm)}.tool-chip.active{background:rgba(82,174,182,0.12);border-color:rgba(82,174,182,0.35);color:var(--color-primary-hover)}.graph-status-chip{display:inline-flex;align-items:center;justify-content:center;cursor:default;pointer-events:none;opacity:.9;color:var(--color-text-muted)}.country-chip-row{margin-top:var(--space-2)}.country-chip{min-height:32px;padding:0 var(--space-3);font-size:var(--text-xs)}.scene-popover-divider{height:1px;background:var(--color-border);margin:var(--space-3) 0;opacity:.5}#scene-popover .country-chip-row{max-height:200px;overflow-y:auto}
+    .toolbar{display:flex;flex-wrap:wrap;gap:var(--space-3)}.graph-toolbar{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--space-3);row-gap:var(--space-3)}.graph-toolbar-left{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;min-width:0}.graph-version-pill{justify-self:end;white-space:nowrap}.tool-chip{min-height:40px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);background:rgba(255,255,255,0.02);font-size:var(--text-sm)}.tool-chip.active{background:rgba(82,174,182,0.12);border-color:rgba(82,174,182,0.35);color:var(--color-primary-hover)}.country-chip-row{margin-top:var(--space-2)}.country-chip{min-height:32px;padding:0 var(--space-3);font-size:var(--text-xs)}.scene-popover-divider{height:1px;background:var(--color-border);margin:var(--space-3) 0;opacity:.5}#scene-popover .country-chip-row{max-height:200px;overflow-y:auto}
     .graph-stage{position:relative;border-radius:calc(var(--radius-xl) + var(--space-2));overflow:hidden;background:radial-gradient(circle at top, rgba(82,174,182,0.08), transparent 34%),linear-gradient(180deg, rgba(10,14,20,0.92), rgba(8,11,17,0.98));border:none;min-height:720px;box-shadow:0 30px 80px rgba(0,0,0,0.34)}
     #graph-svg{width:100%;height:100%;min-height:520px}
     /* Legacy .graph-badge kept invisible: some JS still writes to
@@ -118,9 +118,9 @@
        status line, but any older selector matching .graph-badge as a
        standalone pill in the corner would just render nothing. */
     .graph-badge{display:none}
-    /* Always-on graph stats badge, top-right of the stage. Two lines:
+    /* Always-on graph stats badge, top-left of the stage. Two lines:
        counts on top, filter-status readout below. */
-    .graph-stats-badge{position:absolute;right:var(--space-5);top:var(--space-5);padding:0.5rem 0.85rem;border-radius:var(--radius-xl);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;background:rgba(9,11,17,0.72);border:1px solid rgba(255,255,255,0.08);color:var(--color-text-muted);pointer-events:none;display:flex;flex-direction:column;gap:0.22rem;align-items:flex-end;z-index:9;white-space:nowrap;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);text-align:right}
+    .graph-stats-badge{position:absolute;left:var(--space-5);top:var(--space-5);padding:0.5rem 0.85rem;border-radius:var(--radius-xl);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;background:rgba(9,11,17,0.72);border:1px solid rgba(255,255,255,0.08);color:var(--color-text-muted);pointer-events:none;display:flex;flex-direction:column;gap:0.22rem;align-items:flex-start;z-index:9;white-space:nowrap;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);text-align:left}
     .graph-stats-badge__counts{display:inline-flex;align-items:center;gap:0.55rem}
     .graph-stats-badge__group{display:inline-flex;align-items:baseline;gap:0.3rem}
     .graph-stats-badge__value{color:#d4e8f4;font-weight:600;letter-spacing:0;text-transform:none}
@@ -825,21 +825,38 @@ body {
 .mobile-sheet-add-band[hidden] { display: none !important; }
 
 /* --------------------------------------------------------------------
-   Stats HUD vs. auth strip (tester feedback after #68-#75).
-   .graph-stage is position:fixed/inset:0, so the stage's top-right and
-   the fixed .site-header's top-right are the same physical corner. The
-   badge sat at top:var(--space-5) (20px) while the auth strip occupies
-   roughly 0-50px (var(--space-3) padding + a 26px control + padding),
-   so the two ran together into one dense block. Pushing the badge below
-   the strip is enough -- neither element needs to move horizontally.
+   Stats HUD vs. the top toolbar (tester feedback after #76).
+   .graph-stage is position:fixed/inset:0, so the stage's corners are the
+   viewport's corners. #76 pushed the badge below the auth strip, but the
+   badge was still in the top-RIGHT, where .graph-overlay-top's right
+   cluster (Share / Add your band / Send feedback / version pill) sits.
+   The overlay is z-index 10 against the badge's 9, so the chips painted
+   over it and only the badge's leading characters were readable. Extra
+   vertical offset could not fix that: the overlay is inset:0 0 auto 0,
+   i.e. full-width, so there is no clear column on the right at all.
+
+   The badge is now top-LEFT (see the base rule in the critical CSS) and
+   drops below the toolbar. Vertical budget:
+     - overlay padding-top    clamp(4.25rem, 7vh, 4.5rem) -> 68-72px
+     - toolbar row            .tool-chip min-height        -> 26px
+     - toolbar row-gap        .graph-toolbar gap 0.5rem    -> 8px
+   The toolbar is a single wrapping flex row. It fits on one line on wide
+   desktops and wraps to two below ~1300px (the right cluster drops), so
+   its worst-case bottom edge is 72 + 26*2 + 8 = 132px. A third row would
+   need the content box under ~790px, and .graph-overlay-top is
+   display:none at <=900px, so two rows is the desktop worst case.
+   top:142px clears it by ~10px at every desktop width, and stays far
+   below the auth strip's ~50px, so #76's clearance still holds.
 
    Deliberately min-width:721px only: the 720px breakpoint in the
-   critical CSS re-homes the badge to the top-LEFT, where nothing
-   overlaps it (.header-right is display:none on mobile). That rule is
-   earlier in source order, so an unscoped override here would undo it.
+   critical CSS re-homes the badge tight to the top-left corner, where
+   nothing overlaps it (.header-right and .graph-overlay-top are both
+   display:none on phones, so the badge needs no toolbar clearance).
+   That rule is earlier in source order, so an unscoped override here
+   would undo it.
    -------------------------------------------------------------------- */
 @media (min-width: 721px) {
-  .graph-stats-badge { top: calc(var(--space-5) + 44px); }
+  .graph-stats-badge { top: calc(var(--space-5) + 122px); }
 }
 
 .tool-chip::before,
@@ -2613,7 +2630,11 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     <div class="graph-overlay graph-overlay-top">
       <div class="toolbar graph-toolbar" aria-label="Graph controls">
         <div class="graph-toolbar-left">
-          <span class="tool-chip graph-status-chip" id="graph-total-chip" aria-hidden="true">Loading tree…</span>
+          <!--
+            The leading live node-count pill was removed once the stats badge
+            moved to the upper-left: the badge already opens with the same
+            number, so the pill was a duplicate a few pixels away.
+          -->
           <!--
             "Reset view" replaces the old "All nodes" chip, which by the time it
             was retired only re-asserted a view filter that no longer existed.
@@ -3043,9 +3064,10 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     </div>
 
     <!--
-      Always-on graph stats badge (top-right of the stage). Two lines: the
-      first is Nodes / Links / Scenes counts, the second is a live filter
-      status readout ("Full graph" when no filters, e.g. "Grunge ·
+      Always-on graph stats badge (top-left of the stage, dropped below the
+      filter toolbar on desktop). Two lines: the first is Nodes / Links /
+      Scenes counts, the second is a live filter status readout ("Full
+      graph" when no filters, e.g. "Grunge ·
       Seattle" when filters are applied). The status line used to
       live in a separate #graph-badge pill in the bottom-right corner —
       merged in here so the stage only has one summary badge. Purely
@@ -3237,7 +3259,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     const metricNodes = document.getElementById('metric-nodes');
     const metricLinks = document.getElementById('metric-links');
     const metricScenes = document.getElementById('metric-scenes');
-    const graphTotalChip = document.getElementById('graph-total-chip');
     const graphBadge = document.getElementById('graph-badge');
     const sharePopover = document.getElementById('share-popover');
     const shareGraphBtn = document.getElementById('share-graph-btn');
@@ -3588,7 +3609,7 @@ function downloadPngBlob(blob) {
     // Bottom-floating panel toggles (Add your band). Same click-to-open,
     // click-outside-to-close pattern as the share popover. Project Pulse
     // used to live here alongside — replaced by the always-on
-    // #graph-stats-badge in the top-right of the stage.
+    // #graph-stats-badge in the top-left of the stage.
     // All click-open / click-outside-to-close popovers on the top toolbar
     // share one registry. Add-band still uses the same button+popover pair;
     // the three filter popovers (Search/Scene/Genre) piggy-back on the same
@@ -6625,7 +6646,6 @@ function downloadPngBlob(blob) {
       metricNodes.textContent = filtered.nodes.length;
       metricLinks.textContent = filtered.links.length;
       metricScenes.textContent = new Set(filtered.nodes.map(d => locationKey(d)).filter(Boolean)).size;
-      if (graphTotalChip && graphState?.master?.nodes) { graphTotalChip.textContent = `${graphState.master.nodes.length} nodes in tree`; }
       const badgeParts = [];
       if (currentScene !== 'all') {
         if (currentScene.startsWith('country:')) {
@@ -7423,10 +7443,10 @@ function downloadPngBlob(blob) {
       chip.addEventListener('click', () => {
         // Guard: this handler is meant only for filter/action chips.
         // Other .tool-chip elements exist in the page (popover
-        // triggers like #search-btn/#scene-btn/#genre-btn, primary
-        // mobile actions like #mobile-share-btn/#mobile-add-band-btn,
-        // and the aria-hidden #graph-total-chip status pill) and they
-        // all have their own click handlers registered elsewhere.
+        // triggers like #search-btn/#scene-btn/#genre-btn, and primary
+        // mobile actions like #mobile-share-btn/#mobile-add-band-btn)
+        // and they all have their own click handlers registered
+        // elsewhere.
         // Without this guard we'd re-sync the filter chips and
         // call renderGraph() on every one of their clicks, which was
         // the root cause of the "mobile Share and Add-your-band
