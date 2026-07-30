@@ -331,7 +331,10 @@ test('index.html defines runLayoutWithPositionCache wiring warm/cold layouts thr
 
 test('index.html renderGraph calls runLayoutWithPositionCache (not a bare runSyncForceLayout call)', () => {
   const fn = extract('renderGraph');
-  assert.match(fn, /runLayoutWithPositionCache\(simulation, nodes\)/);
+  // The stage dimensions are passed in so canWarmStartLayout() can reject a
+  // warm start whose cached coordinates came from a different-sized stage --
+  // see tests/graph-layout-settle.test.mjs.
+  assert.match(fn, /runLayoutWithPositionCache\(simulation, nodes, \{ width, height \}\)/);
 });
 
 test('index.html WARM_SIMULATION_TICKS is tuned low (<=20) since pinned/seeded nodes do not move regardless of tick count', () => {
