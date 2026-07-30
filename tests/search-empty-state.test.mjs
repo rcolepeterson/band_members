@@ -216,16 +216,18 @@ test('syncSearchEmptyState shows the card only for a non-empty search with zero 
 
 test('renderGraph syncs the empty state BEFORE its empty-node-set early return', () => {
   const callIndex = INDEX_HTML.indexOf('syncSearchEmptyState(filtered.nodes.length)');
-  const earlyReturnIndex = INDEX_HTML.indexOf('if (!nodes.length) return;');
+  // Matched on the condition alone, not `if (!nodes.length) return;`: the
+  // guard is now a block that logs the filter combination before returning.
+  const earlyReturnIndex = INDEX_HTML.indexOf('if (!nodes.length)');
   assert.ok(
     callIndex > -1,
     'Expected renderGraph() to call syncSearchEmptyState(filtered.nodes.length).'
   );
-  assert.ok(earlyReturnIndex > -1, "Expected renderGraph()'s `if (!nodes.length) return;` early return.");
+  assert.ok(earlyReturnIndex > -1, "Expected renderGraph()'s `if (!nodes.length)` early return.");
   assert.ok(
     callIndex < earlyReturnIndex,
-    'syncSearchEmptyState() must be called BEFORE `if (!nodes.length) return;`. ' +
-      'That early return is exactly the zero-result case the empty state ' +
+    'syncSearchEmptyState() must be called BEFORE the `if (!nodes.length)` early ' +
+      'return. That early return is exactly the zero-result case the empty state ' +
       'exists for — calling after it means the card never appears.'
   );
 });

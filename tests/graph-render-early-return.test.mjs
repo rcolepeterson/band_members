@@ -53,8 +53,13 @@ const RENDER_GRAPH_CODE = RENDER_GRAPH_SRC.replace(/^\s*\/\/.*$/gm, '');
 const DEPS = [
   'graphState', 'svgSelection', 'graphGroup', 'closeNodeCard', 'nodeCardState',
   'getFilteredGraph', 'metricNodes', 'metricLinks', 'metricScenes', 'locationKey',
-  'graphTotalChip', 'currentFilter', 'currentScene', 'currentGenre', 'currentSearch',
+  'graphTotalChip', 'currentScene', 'currentGenre', 'currentSearch',
   'graphBadge', 'noteLeft', 'document', 'console',
+  // The Recently-added filter and the "No Rawk Found" empty state both read
+  // free identifiers above the early returns. Omitting any of them makes
+  // renderGraph throw a ReferenceError before reaching the code under test.
+  'recentOnly', 'describeRecentSelection', 'selectRecentBandIds',
+  'syncSearchEmptyState',
 ];
 
 // A stand-in for the d3 selection wrapping the <g> that holds the painted
@@ -90,12 +95,15 @@ function runRenderGraph({ nodes = [], links = [], stage = { width: 1200, height:
     metricScenes: textSink(),
     locationKey: () => '',
     graphTotalChip: textSink(),
-    currentFilter: 'all',
     currentScene: 'all',
     currentGenre: 'all',
     currentSearch: '',
     graphBadge: textSink(),
     noteLeft: textSink(),
+    recentOnly: false,
+    describeRecentSelection: () => '',
+    selectRecentBandIds: () => [],
+    syncSearchEmptyState: () => {},
     // syncFilterBtn and the scene-label lookup both null-check their reads.
     document: {
       getElementById: () => null,
@@ -130,8 +138,10 @@ test('renderGraph warns (with the active filter state) when it bails on an empty
   assert.match(String(message), /no nodes after filtering/i);
   assert.deepEqual(
     Object.keys(context).sort(),
-    ['filter', 'genre', 'scene', 'search'],
-    'The warn payload must carry the filter combination so a tester can report it back.'
+    ['genre', 'recentOnly', 'scene', 'search'],
+    'The warn payload must carry the filter combination so a tester can report it back. ' +
+      'The retired per-type `filter` was replaced by `recentOnly` — see ' +
+      'tests/toolbar-ui-cleanup.test.mjs, which forbids reading currentFilter at all.'
   );
 });
 
