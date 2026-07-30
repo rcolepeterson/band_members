@@ -786,11 +786,60 @@ body {
   font-weight: 700;
   letter-spacing: 0.04em;
 }
-.header-user-name strong { color: var(--color-text); }
+.header-user-name strong { color: var(--color-text); font-weight: 600; }
+/* Discreet middot between the identity and the Sign-out control. Without a
+   separator the name and "Sign out" read as one run-on phrase, which is the
+   readability half of the tester's header complaint. */
+.header-user-sep { opacity: 0.4; }
+.header-user .link-btn { font-size: var(--text-xs); }
 /* Below ~1100px the name text crowds the graph toolbar beneath it; the
-   initials chip alone still identifies the account. */
+   initials chip alone still identifies the account. The separator goes with
+   it -- a middot floating between the chip and Sign out is just noise. */
 @media (max-width: 1100px) {
-  .header-user-name { display: none; }
+  .header-user-name,
+  .header-user-sep { display: none; }
+}
+
+/* --------------------------------------------------------------------
+   Auth-strip mutual exclusivity (tester feedback after #68-#75).
+   The signed-out Sign In button and the signed-in identity strip were
+   BOTH on screen at once in production.
+
+   Root cause: `hidden` is only a UA-stylesheet `display: none`, so any
+   author rule that sets `display` on the same element silently defeats
+   it -- and all three of these affordances have one:
+     .header-btn          -> display: inline-flex  (critical CSS)
+     .header-user         -> display: inline-flex  (above)
+     .mobile-sheet-add-band -> display: flex       (mobile sheet rows)
+   setSignedInState() was setting `.hidden` correctly the whole time; the
+   attribute simply had no rendering effect, so the markup's initial
+   `hidden` never held either. Restoring `display: none` for [hidden]
+   makes setSignedInState() the real owner of visibility again.
+
+   Scoped to the three affected classes rather than a blanket
+   `[hidden] { display: none !important }` so this cannot retroactively
+   hide anything else on the page that relies on the same (bad) pattern.
+   -------------------------------------------------------------------- */
+.header-btn[hidden],
+.header-user[hidden],
+.mobile-sheet-add-band[hidden] { display: none !important; }
+
+/* --------------------------------------------------------------------
+   Stats HUD vs. auth strip (tester feedback after #68-#75).
+   .graph-stage is position:fixed/inset:0, so the stage's top-right and
+   the fixed .site-header's top-right are the same physical corner. The
+   badge sat at top:var(--space-5) (20px) while the auth strip occupies
+   roughly 0-50px (var(--space-3) padding + a 26px control + padding),
+   so the two ran together into one dense block. Pushing the badge below
+   the strip is enough -- neither element needs to move horizontally.
+
+   Deliberately min-width:721px only: the 720px breakpoint in the
+   critical CSS re-homes the badge to the top-LEFT, where nothing
+   overlaps it (.header-right is display:none on mobile). That rule is
+   earlier in source order, so an unscoped override here would undo it.
+   -------------------------------------------------------------------- */
+@media (min-width: 721px) {
+  .graph-stats-badge { top: calc(var(--space-5) + 44px); }
 }
 
 .tool-chip::before,
@@ -2371,9 +2420,10 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             grow into account management — see the PR description for the
             deferred user-menu follow-up.
           -->
-          <div class="header-user" id="header-user" hidden>
+          <div class="header-user" id="header-user" role="group" aria-label="Signed-in account" hidden>
             <span class="header-user-chip" id="header-user-initials" aria-hidden="true"></span>
-            <span class="header-user-name">Signed in as <strong data-current-user-name>—</strong></span>
+            <span class="header-user-name"><strong data-current-user-name>—</strong></span>
+            <span class="header-user-sep" aria-hidden="true">·</span>
             <button type="button" class="link-btn" id="header-sign-out-btn">Sign out</button>
           </div>
         </div>
@@ -5829,10 +5879,126 @@ function downloadPngBlob(blob) {
       container.appendChild(chip);
     }
 
+    // ---------------------------------------------------------------------
+    // Highlight-aware node-card placement.
+    //
+    // Tester feedback after #68-#75 (test case: Duff McKagan): clicking a
+    // musician glows their bands with amber #ffb454 lines, but the card is
+    // anchored right over the source node, so the very lines the highlight
+    // exists to show pass underneath it. Two fixes were on the table --
+    // move the card, or make the card see-through / drop it below the edges
+    // in z-order. Moving it wins: the card is dense text on a near-opaque
+    // panel and lowering its contrast to reveal lines behind it trades one
+    // unreadable thing for another. The card only moves while a member
+    // highlight is active; band clicks keep the anchored behavior below.
+    //
+    // The offset mirrors the 18px in .node-card's transform
+    // (translate(-50%, calc(-100% - 18px)) / translate(-50%, 18px)), so the
+    // docked card lands flush in its corner rather than 18px out of it.
+    // tests/node-card-highlight-position.test.mjs pins the two together.
+    const NODE_CARD_ANCHOR_OFFSET = 18;
+
+    // Half-width of the keep-clear box around the clicked musician. Covers
+    // the node, its halo, and its label so the card never sits on top of the
+    // thing the card is describing.
+    const NODE_CARD_SOURCE_CLEARANCE = 64;
+
+    // Overlap area of two {x0,y0,x1,y1} boxes in px². 0 when disjoint.
+    function rectOverlapArea(a, b) {
+      if (!a || !b) return 0;
+      const w = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
+      const h = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+      return w > 0 && h > 0 ? w * h : 0;
+    }
+
+    // The card's on-screen box for a given anchor, mirroring the CSS
+    // transforms. `left`/`top` are what positionNodeCard() writes to the
+    // element; the card is centered on `left` and sits above `top` unless
+    // the --below flip is on.
+    function nodeCardBox(left, top, below, cardW, cardH) {
+      const y0 = below
+        ? top + NODE_CARD_ANCHOR_OFFSET
+        : top - NODE_CARD_ANCHOR_OFFSET - cardH;
+      return { x0: left - cardW / 2, y0, x1: left + cardW / 2, y1: y0 + cardH };
+    }
+
+    // The four stage corners the card can dock to. Bottom corners come
+    // first so ties resolve downward: the top of the stage is already spoken
+    // for by the header auth strip, the graph toolbar, and the stats HUD.
+    function nodeCardDockPlacements({ stageW, stageH, cardW, cardH, gutter }) {
+      const halfW = cardW / 2;
+      const leftX = gutter + halfW;
+      const rightX = stageW - gutter - halfW;
+      const bottomY = stageH - gutter + NODE_CARD_ANCHOR_OFFSET;
+      const topY = gutter - NODE_CARD_ANCHOR_OFFSET;
+      return [
+        { left: rightX, top: bottomY, below: false },
+        { left: leftX, top: bottomY, below: false },
+        { left: rightX, top: topY, below: true },
+        { left: leftX, top: topY, below: true },
+      ];
+    }
+
+    // Pick the corner that hides the least of the highlight. `avoid` is the
+    // screen-space bounding box of the source musician plus every band
+    // glowing amber; `source` is the clicked musician's screen point.
+    //
+    // Covering the source node is scored as strictly worse than any amount
+    // of line overlap -- for a heavily-connected musician the highlight
+    // bbox can span the whole stage, and in that case every corner overlaps
+    // it, so raw overlap area alone would happily dock back on top of the
+    // node. That is the exact regression the tester reported.
+    function chooseNodeCardDock(options) {
+      const { cardW, cardH, avoid, source } = options;
+      const pad = NODE_CARD_SOURCE_CLEARANCE;
+      const sourceBox = source ? {
+        x0: source.x - pad, y0: source.y - pad,
+        x1: source.x + pad, y1: source.y + pad,
+      } : null;
+      let best = null;
+      let bestScore = Infinity;
+      nodeCardDockPlacements(options).forEach(candidate => {
+        const box = nodeCardBox(candidate.left, candidate.top, candidate.below, cardW, cardH);
+        const score = rectOverlapArea(box, avoid)
+          + (rectOverlapArea(box, sourceBox) > 0 ? 1e9 : 0);
+        if (score < bestScore) { bestScore = score; best = candidate; }
+      });
+      return best;
+    }
+
+    // Screen-space bounding box of the active member highlight, or null when
+    // no musician is selected. Derived from the live SVG selection rather
+    // than a parallel state variable, so it cannot fall out of sync with the
+    // CSS-class toggle highlightMemberBands() performs.
+    function memberHighlightExtent() {
+      if (!graphGroup || !svgSelection) return null;
+      const bands = graphGroup.selectAll('g.node.' + MEMBER_HIGHLIGHT_CLASS).data();
+      if (!bands || !bands.length) return null;
+      const t = d3.zoomTransform(svgSelection.node());
+      const points = [];
+      const push = d => {
+        if (d && Number.isFinite(d.x) && Number.isFinite(d.y)) {
+          points.push({ x: t.applyX(d.x), y: t.applyY(d.y) });
+        }
+      };
+      bands.forEach(push);
+      // The source musician anchors one end of every amber line.
+      push(nodeCardState.node);
+      if (!points.length) return null;
+      const xs = points.map(p => p.x);
+      const ys = points.map(p => p.y);
+      return {
+        x0: Math.min.apply(null, xs), y0: Math.min.apply(null, ys),
+        x1: Math.max.apply(null, xs), y1: Math.max.apply(null, ys),
+      };
+    }
+
     function positionNodeCard() {
       // Skip the geometry work on mobile — CSS turns the card into a
       // fixed-position bottom sheet there, so left/top from JS would
       // conflict with the media-query rules (!important overrides them).
+      // The highlight-aware docking below is skipped for the same reason:
+      // the bottom sheet is already clear of the graph (PR #44).
       if (window.matchMedia('(max-width: 700px)').matches) return;
       const node = nodeCardState.node;
       if (!node || nodeCardEl.hidden) return;
@@ -5855,6 +6021,24 @@ function downloadPngBlob(blob) {
       const cardW = nodeCardEl.offsetWidth || 300;
       const cardH = nodeCardEl.offsetHeight || 180;
       const gutter = 8;
+
+      // Member highlight active → dock to the least-obstructive corner
+      // instead of anchoring over the node. Band clicks clear the highlight
+      // (see selectBandNode), so they fall through to the anchored path.
+      const highlight = memberHighlightExtent();
+      if (highlight) {
+        const dock = chooseNodeCardDock({
+          stageW: stageRect.width,
+          stageH: stageRect.height,
+          cardW, cardH, gutter,
+          avoid: highlight,
+          source: { x: sx, y: sy },
+        });
+        nodeCardEl.classList.toggle('node-card--below', dock.below);
+        nodeCardEl.style.left = dock.left + 'px';
+        nodeCardEl.style.top = dock.top + 'px';
+        return;
+      }
 
       // Flip below the node if the card would go above the stage top.
       const spaceAbove = sy - 18;
@@ -6022,8 +6206,14 @@ function downloadPngBlob(blob) {
       if (!node || node.type === 'band') return null;
       const linkedNames = visibleConnectionNames(node.id);
       updateSelection(node, linkedNames.length || getNodeConnections(node.id).length, linkedNames, []);
-      openNodeCard(node);
+      // Highlight BEFORE opening the card: openNodeCard() positions the card,
+      // and positionNodeCard() reads the highlight to decide whether to dock
+      // out of the way. With the old order the card was placed over the node
+      // and only corrected on the next simulation tick -- which never comes
+      // for a settled graph. Still after updateSelection(), which is allowed
+      // to re-render and would wipe the highlight classes.
       highlightMemberBands(node.id);
+      openNodeCard(node);
       return node;
     }
 
