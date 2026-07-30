@@ -894,6 +894,35 @@ body {
   stroke: rgba(161, 204, 228, 0.24);
 }
 
+/* Member-selection highlight: clicking a musician glows the bands they
+   played in and the memberships connecting them, without moving the camera.
+
+   Color choice -- amber #ffb454. The graph already spends cyan (#8fe8f6,
+   var(--color-primary)) on "selected node" glow and band halos, and silver
+   (#c0c0c0) on the verification star, so neither could carry a third meaning
+   without being ambiguous. Amber is the only warm hue on the stage, reads
+   clearly against the near-black background, and stays distinguishable from
+   silver for red-green color vision deficiency (the two differ in lightness
+   and saturation, not just hue).
+
+   These are class-toggle-only rules by design: no geometry, no re-render,
+   no simulation restart (see the PR #65 sync-layout note in renderGraph). */
+.node.member-highlight .node-core,
+.node.member-highlight .node-ring {
+  stroke: #ffb454;
+  stroke-width: 2.6;
+  filter: drop-shadow(0 0 12px rgba(255, 180, 84, 0.85));
+}
+
+.node.member-highlight .node-halo {
+  fill: rgba(255, 180, 84, 0.18);
+}
+
+.link.member-highlight {
+  stroke: rgba(255, 180, 84, 0.85);
+  stroke-opacity: 1;
+}
+
 
 /* PASS 2: immersive full-stage graph */
 
@@ -5080,7 +5109,7 @@ function downloadPngBlob(blob) {
         button.className = 'member-chip';
         const instruments = [person.instrument1, person.instrument2].filter(Boolean).join(', ');
         button.textContent = instruments ? `${person.id} — ${instruments}` : person.id;
-        button.addEventListener('click', () => updateSelection(person, getNodeConnections(person.id).length));
+        button.addEventListener('click', () => selectMemberNode(person, { source: 'chip' }));
         container.appendChild(button);
       });
     }
@@ -5132,59 +5161,6 @@ function downloadPngBlob(blob) {
       } else {
         renderBandMemberButtons([], 'Select a band to see its members');
       }
-    }
-
-    function renderConnectionChips(containerId, items, emptyText = 'No connections yet') {
-      const container = document.getElementById(containerId);
-      if (!container) return;
-      container.innerHTML = '';
-      if (!items.length) {
-        const chip = document.createElement('span');
-        chip.textContent = emptyText;
-        container.appendChild(chip);
-        return;
-      }
-      items.forEach(item => {
-        const chip = document.createElement('span');
-        chip.textContent = item;
-        container.appendChild(chip);
-      });
-    }
-
-    function getBandMembers(bandId) {
-      if (!graphState || !graphState.master) return [];
-      return graphState.master.links
-        .filter(link => {
-          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-          return sourceId === bandId;
-        })
-        .map(link => {
-          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-          return graphState.master.nodes.find(node => node.id === targetId);
-        })
-        .filter(Boolean)
-        .sort((a, b) => a.id.localeCompare(b.id));
-    }
-
-    function renderBandMemberButtons(members, emptyText = 'Select a band to see its members') {
-      const container = document.getElementById('selected-band-members');
-      if (!container) return;
-      container.innerHTML = '';
-      if (!members.length) {
-        const chip = document.createElement('span');
-        chip.textContent = emptyText;
-        container.appendChild(chip);
-        return;
-      }
-      members.forEach(person => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'member-chip';
-        const instruments = [person.instrument1, person.instrument2].filter(Boolean).join(', ');
-        button.textContent = instruments ? `${person.id} — ${instruments}` : person.id;
-        button.addEventListener('click', () => updateSelection(person, getNodeConnections(person.id).length));
-        container.appendChild(button);
-      });
     }
 
     // ---------------------------------------------------------------------
@@ -5333,7 +5309,7 @@ function downloadPngBlob(blob) {
         if (memberRows.length) {
           nodeCardConnLabel.textContent = memberRows.length === 1 ? 'Member' : 'Members';
           memberRows.forEach(({ person, tenure }) => {
-            appendTenureChip(nodeCardConn, person.id, tenure, () => openNodeCard(person));
+            appendTenureChip(nodeCardConn, person.id, tenure, () => selectMemberNode(person, { source: 'chip' }));
           });
           nodeCardConnWrap.hidden = false;
         }
@@ -5358,7 +5334,7 @@ function downloadPngBlob(blob) {
         if (bandRows.length) {
           nodeCardConnLabel.textContent = bandRows.length === 1 ? 'Band' : 'Bands';
           bandRows.forEach(({ band, tenure }) => {
-            appendTenureChip(nodeCardConn, band.id, tenure, () => openNodeCard(band));
+            appendTenureChip(nodeCardConn, band.id, tenure, () => selectBandNode(band, { source: 'chip' }));
           });
           nodeCardConnWrap.hidden = false;
         }
@@ -5712,14 +5688,19 @@ function downloadPngBlob(blob) {
       const stage = document.querySelector('.graph-stage');
       if (!stage || !svgSelection || !graphGroup) return;
 
-      // graph coords → zoomed coords via the group's current d3.zoomTransform
-      const t = d3.zoomTransform(svgSelection.node());
-      const sx = t.applyX(node.x || 0);
-      const sy = t.applyY(node.y || 0);
-
       // Clamp inside the stage so the card never floats off-screen. The
       // card's box is roughly 300×cardHeight; assume ~180px height budget.
       const stageRect = stage.getBoundingClientRect();
+
+      // graph coords → zoomed coords via the group's current d3.zoomTransform.
+      // A node with no coordinates is one the active filter has excluded from
+      // the render (reachable via a member chip listing someone who is off
+      // screen). Anchoring it at graph origin threw the card into the corner,
+      // so those get centered in the stage instead.
+      const t = d3.zoomTransform(svgSelection.node());
+      const anchored = Number.isFinite(node.x) && Number.isFinite(node.y);
+      const sx = anchored ? t.applyX(node.x) : stageRect.width / 2;
+      const sy = anchored ? t.applyY(node.y) : stageRect.height / 2;
       const cardW = nodeCardEl.offsetWidth || 300;
       const cardH = nodeCardEl.offsetHeight || 180;
       const gutter = 8;
@@ -5768,10 +5749,157 @@ function downloadPngBlob(blob) {
       nodeCardState.node = null;
       nodeCardEl.classList.remove('is-open');
       nodeCardEl.setAttribute('aria-hidden', 'true');
+      // The band highlight belongs to a musician selection, and the card is
+      // the only thing on screen that names which musician it belongs to.
+      // Tying its lifetime to the card's means Escape, the X button, the
+      // empty-space click, and renderGraph() (Reset view / any filter
+      // change) all clear it without each needing its own call.
+      clearMemberHighlight();
       // Hide after the fade so it doesn't intercept clicks during animation.
       setTimeout(() => {
         if (!nodeCardState.node) nodeCardEl.hidden = true;
       }, 160);
+    }
+
+    // ---------------------------------------------------------------------
+    // Member selection: highlight the bands, open the card, leave the
+    // camera alone.
+    //
+    // Tester feedback (Matt Ashman): "I don't expect clicking on a band
+    // member to change the graph view. Only clicking on a band should do
+    // that." Clicking a musician therefore never pans, zooms, or refits --
+    // it only opens that musician's card and glows the bands they played in.
+    //
+    // Highlighting is deliberately a CSS class toggle on the already-rendered
+    // <g>/<line> elements. It must never re-render or reheat the simulation:
+    // PR #65 moved the force layout to a single synchronous pass precisely to
+    // avoid multi-second freezes on the full 3,233-node graph, and a
+    // highlight is not worth paying that cost.
+    // ---------------------------------------------------------------------
+    const MEMBER_HIGHLIGHT_CLASS = 'member-highlight';
+
+    // Data bound to the live SVG, i.e. the post-filter copies renderGraph()
+    // made. Reading these rather than graphState.master keeps highlighting
+    // honest under an active filter -- we can only glow what is on screen.
+    function renderedNodeData() {
+      return graphGroup ? graphGroup.selectAll('g.node').data() : [];
+    }
+    function renderedLinkData() {
+      return graphGroup ? graphGroup.selectAll('line.link').data() : [];
+    }
+
+    function linkEndpointIds(link) {
+      return [
+        typeof link.source === 'object' ? link.source.id : link.source,
+        typeof link.target === 'object' ? link.target.id : link.target,
+      ];
+    }
+
+    // Prefer the node object currently bound to the SVG: only those carry the
+    // live x/y that the card anchors to. Falls back to the master node so a
+    // member chip for someone the active filter has hidden still opens a card
+    // (positionNodeCard centers cards with no coordinates).
+    function resolveGraphNode(idOrNode) {
+      const id = typeof idOrNode === 'string' ? idOrNode : (idOrNode && idOrNode.id);
+      if (!id) return null;
+      const rendered = renderedNodeData().find(d => d.id === id);
+      if (rendered) return rendered;
+      const master = graphState && graphState.master
+        ? graphState.master.nodes.find(n => n.id === id)
+        : null;
+      return master || (typeof idOrNode === 'object' ? idOrNode : null);
+    }
+
+    // Bands a musician belongs to, from the rendered link set, checking BOTH
+    // link directions and confirming the other end is a band node. The CSV
+    // pipeline happens to always write band -> person, but the rest of this
+    // file's person-side helpers (getPersonBandsWithTenure) already handle
+    // either direction, and assuming a direction here would silently drop
+    // highlights for any membership row written the other way round.
+    function memberBandIds(personId) {
+      const bandIds = new Set(renderedNodeData().filter(d => d.type === 'band').map(d => d.id));
+      const result = new Set();
+      renderedLinkData().forEach(link => {
+        const [sourceId, targetId] = linkEndpointIds(link);
+        const other = sourceId === personId ? targetId : (targetId === personId ? sourceId : null);
+        if (other && bandIds.has(other)) result.add(other);
+      });
+      return result;
+    }
+
+    function clearMemberHighlight() {
+      if (!graphGroup) return;
+      graphGroup.selectAll('.' + MEMBER_HIGHLIGHT_CLASS).classed(MEMBER_HIGHLIGHT_CLASS, false);
+    }
+
+    function highlightMemberBands(personId) {
+      clearMemberHighlight();
+      if (!graphGroup) return;
+      const bandIds = memberBandIds(personId);
+      if (!bandIds.size) return;
+      graphGroup.selectAll('g.node')
+        .classed(MEMBER_HIGHLIGHT_CLASS, d => d.type === 'band' && bandIds.has(d.id));
+      graphGroup.selectAll('line.link')
+        .classed(MEMBER_HIGHLIGHT_CLASS, d => {
+          const [sourceId, targetId] = linkEndpointIds(d);
+          return (sourceId === personId && bandIds.has(targetId))
+            || (targetId === personId && bandIds.has(sourceId));
+        });
+    }
+
+    // Connection names for a node from the rendered link set, so the count in
+    // the card agrees with what the user can actually see. updateSelection()
+    // falls back to the master graph when this comes back empty.
+    function visibleConnectionNames(nodeId) {
+      const names = [];
+      renderedLinkData().forEach(link => {
+        const [sourceId, targetId] = linkEndpointIds(link);
+        if (sourceId === nodeId) names.push(targetId);
+        else if (targetId === nodeId) names.push(sourceId);
+      });
+      return names;
+    }
+
+    // THE single entry point for "a musician was selected", shared by the SVG
+    // graph click and every member chip. These used to diverge: chips called
+    // updateSelection() alone (no card, no highlight) while graph clicks also
+    // opened the card, so the same musician behaved differently depending on
+    // where you clicked them. `source` is informational -- both callers must
+    // produce identical results, and the tests assert that.
+    function selectMemberNode(idOrNode, options = {}) {
+      const node = resolveGraphNode(idOrNode);
+      if (!node || node.type === 'band') return null;
+      const linkedNames = visibleConnectionNames(node.id);
+      updateSelection(node, linkedNames.length || getNodeConnections(node.id).length, linkedNames, []);
+      openNodeCard(node);
+      highlightMemberBands(node.id);
+      return node;
+    }
+
+    // Band counterpart. Band click behavior is unchanged (detail panel + card,
+    // no camera move); the one addition is dropping any member highlight left
+    // over from a previous musician selection, since the highlight describes a
+    // musician's bands and would be misleading next to a band card.
+    function selectBandNode(idOrNode, options = {}) {
+      const node = resolveGraphNode(idOrNode);
+      if (!node) return null;
+      clearMemberHighlight();
+      const linkedNames = visibleConnectionNames(node.id);
+      const members = renderedLinkData()
+        .filter(link => linkEndpointIds(link)[0] === node.id)
+        .map(link => (typeof link.target === 'object' ? link.target : resolveGraphNode(link.target)))
+        .filter(member => member && member.type === 'person');
+      updateSelection(node, linkedNames.length || getNodeConnections(node.id).length, linkedNames, members);
+      openNodeCard(node);
+      return node;
+    }
+
+    function selectGraphNode(idOrNode, options = {}) {
+      const node = resolveGraphNode(idOrNode);
+      if (!node) return null;
+      return node.type === 'band'
+        ? selectBandNode(node, options)
+        : selectMemberNode(node, options);
     }
 
     if (nodeCardCloseBtn) nodeCardCloseBtn.addEventListener('click', closeNodeCard);
@@ -5792,47 +5920,6 @@ function downloadPngBlob(blob) {
       // a node <g>, and not on the card itself).
       if (e.target === svg) closeNodeCard();
     });
-
-    function updateSelection(node, degree = 0) {
-      if (!node) {
-        selectedName.textContent = 'Waiting for selection';
-        selectedCopy.textContent = 'Click any band or musician in the graph to inspect details here.';
-        selectedType.textContent = '—';
-        selectedScene.textContent = '—';
-        selectedDegree.textContent = '—';
-        selectedInstrument.textContent = '—';
-        if (selectedGenre) selectedGenre.textContent = '—';
-        setSelectedGenreVisible(false);
-        selectedBio.textContent = '—';
-        renderConnectionChips('selected-node-connections', [], 'No connections selected');
-    renderBandMemberButtons([]);
-        renderBandMemberButtons([]);
-        return;
-      }
-      selectedName.textContent = node.id;
-      selectedCopy.textContent = node.type === 'band'
-        ? 'Band node selected. Use this card to track scene, total relationships, and prepare deeper drill-down views.'
-        : 'Musician node selected. This is a good place for bio details, instruments, and future profile notes.';
-      selectedType.textContent = node.type;
-      selectedScene.textContent = locationLabel(node) || '—';
-      // Genre row: bands only. Hidden for musicians so the panel doesn't show
-      // an always-blank field for every person clicked.
-      if (node.type === 'band') {
-        setSelectedGenreVisible(true);
-        if (selectedGenre) selectedGenre.textContent = node.genre || '—';
-      } else {
-        setSelectedGenreVisible(false);
-      }
-      selectedDegree.textContent = degree;
-      selectedInstrument.textContent = [node.instrument1, node.instrument2].filter(Boolean).join(', ') || '—';
-      selectedBio.textContent = node.bio || '—';
-      renderConnectionChips('selected-node-connections', getNodeConnections(node.id), 'No linked bands or members');
-      if (node.type === 'band') {
-        renderBandMemberButtons(getBandMembers(node.id), 'No member list available');
-      } else {
-        renderBandMemberButtons([]);
-      }
-    }
 
     function fitGraph(padding = 80) {
       if (!graphGroup || !zoomBehavior || !svgSelection) return;
@@ -6305,34 +6392,12 @@ function downloadPngBlob(blob) {
           d.labelHeight = nodeLabelPx(d);
         });
 
-      node.on('click', (_, d) => {
-        const linkedNames = links
-          .filter(link => {
-            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-            return sourceId === d.id || targetId === d.id;
-          })
-          .map(link => {
-            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-            return sourceId === d.id ? targetId : sourceId;
-          });
-        const bandMembers = d.type === 'band'
-          ? links
-              .filter(link => {
-                const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-                return sourceId === d.id;
-              })
-              .map(link => typeof link.target === 'object' ? link.target : nodes.find(node => node.id === link.target))
-              .filter(Boolean)
-          : [];
-        updateSelection(d, linkedNames.length, linkedNames, bandMembers);
-        // The floating card is the primary detail surface (Zillow/Redfin
-        // pattern). updateSelection() still populates the Pulse panel's
-        // now-hidden detail rows as a harmless side-effect until it's
-        // simplified further; that's tracked separately from this feature.
-        openNodeCard(d);
-      });
+      // Both node types route through selectGraphNode so a graph click and a
+      // member/band chip click are literally the same code path. Musicians
+      // open a card + glow their bands; bands keep their existing behavior.
+      // Neither branch touches the zoom transform -- fitGraph() is only ever
+      // called on render and from the explicit Fit chip.
+      node.on('click', (_, d) => selectGraphNode(d, { source: 'graph' }));
 
       // Count connections per node so bands with many members can push those
       // members onto a proportionally larger ring (more angular separation =>
@@ -7940,13 +8005,16 @@ function downloadPngBlob(blob) {
         panel.setAttribute('aria-hidden', 'true');
       }
       // Restore the musician's node card so the user returns to the
-      // context they were in (and can see the freshly-saved bio).
+      // context they were in (and can see the freshly-saved bio). Routed
+      // through selectMemberNode rather than openNodeCard so the band
+      // highlight comes back too -- opening the editor closed the card,
+      // which cleared it.
       const nodeToReopen = editPersonState.reopenNodeAfterClose;
       editPersonState.node = null;
       editPersonState.personId = null;
       editPersonState.reopenNodeAfterClose = null;
-      if (nodeToReopen && typeof openNodeCard === 'function') {
-        openNodeCard(nodeToReopen);
+      if (nodeToReopen && typeof selectMemberNode === 'function') {
+        selectMemberNode(nodeToReopen, { source: 'chip' });
       }
     }
 
