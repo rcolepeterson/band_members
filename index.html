@@ -1676,6 +1676,19 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   z-index: 10;
   padding-top: clamp(3.2rem, 7vh, 4.5rem) !important;
 }
+
+/* Chrome and Edge draw the Ctrl+F "find in page" bar as a floating overlay
+   pinned to the top-right of the content area (~40px tall), i.e. directly on
+   top of this toolbar's right-hand cluster (Share / Add your band / Send
+   feedback / version pill). The shared floor above (3.2rem ≈ 51px) left only
+   ~11px of clearance, and that vanishes at browser zoom below 100% because
+   the find bar is browser chrome and does not scale with the page. Raise the
+   floor for the top overlay only so the first toolbar row always clears it;
+   the bottom HUD keeps the original spacing. */
+.graph-overlay-top {
+  padding-top: clamp(4.25rem, 7vh, 4.5rem) !important;
+}
+
 .graph-overlay-bottom { z-index: 12; }
 
 /* Keep the graph badge unobtrusive above the graph. */
@@ -2196,8 +2209,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       </div>
       <div class="mobile-sheet-tools" id="mobile-sheet-tools" aria-label="Graph filters">
         <button class="tool-chip active" type="button" data-filter="all">All nodes</button>
-        <button class="tool-chip" type="button" data-filter="band">Bands only</button>
-        <button class="tool-chip" type="button" data-filter="person">Musicians only</button>
         <button class="tool-chip" type="button" data-action="fit">Fit graph</button>
         <button class="tool-chip" type="button" data-action="clear">Clear filters</button>
       </div>
@@ -2321,8 +2332,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         <div class="graph-toolbar-left">
           <span class="tool-chip graph-status-chip" id="graph-total-chip" aria-hidden="true">Loading tree…</span>
           <button class="tool-chip active" type="button" data-filter="all">All nodes</button>
-          <button class="tool-chip" type="button" data-filter="band">Bands only</button>
-          <button class="tool-chip" type="button" data-filter="person">Musicians only</button>
           <span class="toolbar-divider" aria-hidden="true"></span>
           <button class="tool-chip" type="button" data-action="fit">Fit graph</button>
           <button class="tool-chip" type="button" data-action="clear">Clear filters</button>
@@ -2716,8 +2725,8 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     <!--
       Always-on graph stats badge (top-right of the stage). Two lines: the
       first is Nodes / Links / Scenes counts, the second is a live filter
-      status readout ("Full graph" when no filters, e.g. "Bands only ·
-      Grunge · Seattle" when filters are applied). The status line used to
+      status readout ("Full graph" when no filters, e.g. "Grunge ·
+      Seattle" when filters are applied). The status line used to
       live in a separate #graph-badge pill in the bottom-right corner —
       merged in here so the stage only has one summary badge. Purely
       informational: pointer-events disabled so it never intercepts clicks
@@ -2932,7 +2941,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     let graphGroup = null;
     let zoomBehavior = null;
     let graphState = null;
-    let currentFilter = 'all';
     let currentScene = 'all';
     let currentGenre = 'all';
     let currentSearch = '';
@@ -4780,12 +4788,6 @@ function downloadPngBlob(blob) {
         });
       }
 
-      if (currentFilter === 'band' || currentFilter === 'person') {
-        const typeIds = new Set(nodes.filter(node => node.type === currentFilter).map(node => node.id));
-        nodes = nodes.filter(node => typeIds.has(node.id));
-        links = links.filter(link => typeIds.has(link.source) && typeIds.has(link.target));
-      }
-
       return { nodes, links };
     }
 
@@ -5839,7 +5841,6 @@ function downloadPngBlob(blob) {
       metricScenes.textContent = new Set(filtered.nodes.map(d => locationKey(d)).filter(Boolean)).size;
       if (graphTotalChip && graphState?.master?.nodes) { graphTotalChip.textContent = `${graphState.master.nodes.length} nodes in tree`; }
       const badgeParts = [];
-      if (currentFilter !== 'all') badgeParts.push(currentFilter === 'band' ? 'Bands only' : 'Musicians only');
       if (currentScene !== 'all') {
         if (currentScene.startsWith('country:')) {
           badgeParts.push(`All ${currentScene.slice('country:'.length)}`);
@@ -6496,9 +6497,12 @@ function downloadPngBlob(blob) {
       populateCardsFromTreeContext();
     }
 
+    // "All nodes" is the only remaining view chip (Bands only / Musicians only
+    // were retired), so it is always the active one. Still a loop because it
+    // also has to clear .active off any other .tool-chip carrying it.
     function syncFilterButtons() {
       toolChips.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.filter === currentFilter || (currentFilter === 'all' && btn.dataset.filter === 'all'));
+        btn.classList.toggle('active', btn.dataset.filter === 'all');
       });
     }
 
@@ -6568,7 +6572,7 @@ function downloadPngBlob(blob) {
         // mobile actions like #mobile-share-btn/#mobile-add-band-btn,
         // and the aria-hidden #graph-total-chip status pill) and they
         // all have their own click handlers registered elsewhere.
-        // Without this guard we'd reset currentFilter to 'all' and
+        // Without this guard we'd re-sync the filter chips and
         // call renderGraph() on every one of their clicks, which was
         // the root cause of the "mobile Share and Add-your-band
         // buttons just refresh the graph" bug (see PR #44). It was
@@ -6580,7 +6584,6 @@ function downloadPngBlob(blob) {
           return;
         }
         if (chip.dataset.action === 'clear') {
-          currentFilter = 'all';
           currentScene = 'all';
           currentGenre = 'all';
           currentSearch = '';
@@ -6595,7 +6598,6 @@ function downloadPngBlob(blob) {
           renderGraph();
           return;
         }
-        currentFilter = chip.dataset.filter || 'all';
         syncFilterButtons();
         renderGraph();
       });
@@ -6854,7 +6856,6 @@ function downloadPngBlob(blob) {
       const commitToGraph = (draftToApply) => {
         const applied = applyDraftToMaster(master, draftToApply);
         if (!applied.added) return applied;
-        currentFilter = 'all';
         currentGenre = 'all';
         currentSearch = '';
         const genreSel = document.getElementById('genre-filter');
@@ -8173,9 +8174,9 @@ function downloadPngBlob(blob) {
 
         // Mobile sheet tool chips mirror desktop chip behavior via same data attrs.
         // Trigger clicks on the desktop chips so all existing behavior fires.
-        // View-filter chips (Bands only / Musicians only / All nodes) and
-        // actions (Fit / Clear) also dismiss the sheet so the user sees the
-        // result of what they just tapped.
+        // View-filter chips (All nodes) and actions (Fit / Clear) also
+        // dismiss the sheet so the user sees the result of what they
+        // just tapped.
         document.querySelectorAll('#mobile-sheet-tools .tool-chip').forEach(chip => {
           chip.addEventListener('click', () => {
             const filter = chip.dataset.filter;

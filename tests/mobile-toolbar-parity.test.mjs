@@ -63,10 +63,12 @@ const REQUIRED_PARITY = [
 // data-filter / data-action chips share the same attribute values
 // between desktop and mobile, so the mobile sheet just has to contain
 // the same value.
+//
+// data-filter="band" ("Bands only") and data-filter="person"
+// ("Musicians only") were retired on both platforms — see the
+// dedicated removal test in tests/toolbar-ui-cleanup.test.mjs.
 const REQUIRED_CHIP_PARITY = [
   { attr: 'data-filter', value: 'all' },
-  { attr: 'data-filter', value: 'band' },
-  { attr: 'data-filter', value: 'person' },
   { attr: 'data-action', value: 'fit' },
   { attr: 'data-action', value: 'clear' },
 ];
@@ -170,8 +172,8 @@ test('regression: mobile Add-your-band entry point exists (PR #42)', () => {
 // handler used to run on every .tool-chip in the document, including
 // popover triggers (#search-btn, #scene-btn, #genre-btn) and the
 // primary mobile actions (#mobile-share-btn, #mobile-add-band-btn).
-// For any chip without data-filter/data-action it would reset
-// currentFilter to 'all' and call renderGraph(), so clicking
+// For any chip without data-filter/data-action it would reset the
+// active filter state and call renderGraph(), so clicking
 // Add-your-band or Share on mobile just re-rendered the graph
 // instead of opening the intended sheet. The fix in PR #44 adds an
 // early-return guard. This test locks the guard in place.
@@ -221,7 +223,7 @@ test('regression: global toolChips handler ignores chips without data-filter/act
       'the graph instead of doing their intended thing. See PR #44.'
   );
   const firstStateTouch = handlerBody.search(
-    /(chip\.dataset\.(action|filter)|currentFilter\s*=|renderGraph\(|fitGraph\()/
+    /(chip\.dataset\.(action|filter)|current(Scene|Genre|Search)\s*=|renderGraph\(|fitGraph\()/
   );
   assert.ok(
     firstStateTouch === -1 || guardIdx < firstStateTouch,
