@@ -745,6 +745,54 @@ body {
 }
 .mobile-sheet-add-band .mobile-send-feedback-btn svg { flex-shrink: 0; }
 
+/* Mobile Sign-in button (backlog #25). Neutral glass fill like
+   Send-feedback rather than the cyan Add-your-band gradient: Add-your-band
+   stays the single primary CTA in the sheet, and two competing gradients
+   directly above each other made neither read as primary. Reuses the
+   .mobile-sheet-add-band wrapper for consistent row spacing. */
+.mobile-sheet-add-band .mobile-sign-in-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  padding: 0.7rem 1rem;
+}
+.mobile-sheet-add-band .mobile-sign-in-btn svg { flex-shrink: 0; }
+
+/* Desktop header auth strip (backlog #25). Lives in the otherwise-empty
+   .site-header slot; .header-right is display:none on mobile so these
+   never compete with the hamburger sheet's Sign-in row. */
+.header-user {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  pointer-events: auto;
+}
+.header-user-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(143, 232, 246, 0.55);
+  background: linear-gradient(180deg, rgba(143,232,246,0.22), rgba(143,232,246,0.08));
+  color: #f0fbff;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.header-user-name strong { color: var(--color-text); }
+/* Below ~1100px the name text crowds the graph toolbar beneath it; the
+   initials chip alone still identifies the account. */
+@media (max-width: 1100px) {
+  .header-user-name { display: none; }
+}
+
 .tool-chip::before,
 .tool-chip::after,
 .graph-version-pill::before,
@@ -2288,10 +2336,49 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       • Theme toggle: no longer exposed in the UI on either platform;
         both desktop and mobile follow prefers-color-scheme now
         (see script tag near bottom).
-      Leaving an empty <header> in place keeps the .site-header CSS layout
-      slot but renders nothing.
+
+      Backlog #25 re-tenanted this slot with the desktop auth strip: the
+      header was the only top-level chrome that wasn't already crowded,
+      and the project owner's placement call was "hamburger sheet on
+      mobile, header on desktop". The strip is deliberately the ONLY
+      thing here — the graph toolbar (.graph-overlay-top) stays as-is.
+
+      .header-right is display:none on mobile (see the max-width:900px
+      block), which is exactly the visibility we want: mobile users get
+      the Sign In row inside #mobile-menu-sheet instead. The header is no
+      longer aria-hidden because it now holds a real interactive control.
     -->
-    <header class="site-header" aria-hidden="true"></header>
+    <header class="site-header">
+      <div class="header-inner">
+        <div class="header-right">
+          <!--
+            Signed-out affordance. Hidden by default so the signed-out
+            state is never flashed to a user whose token is still in
+            localStorage; setSignedInState() unhides it on load once the
+            session state is known.
+          -->
+          <button class="header-btn" type="button" id="sign-in-btn" hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+              <polyline points="10 17 15 12 10 7"/>
+              <line x1="15" y1="12" x2="3" y2="12"/>
+            </svg>
+            Sign in
+          </button>
+          <!--
+            Signed-in affordance occupying the same slot. Kept minimal on
+            purpose (initials chip + name + Sign out) so this PR doesn't
+            grow into account management — see the PR description for the
+            deferred user-menu follow-up.
+          -->
+          <div class="header-user" id="header-user" hidden>
+            <span class="header-user-chip" id="header-user-initials" aria-hidden="true"></span>
+            <span class="header-user-name">Signed in as <strong data-current-user-name>—</strong></span>
+            <button type="button" class="link-btn" id="header-sign-out-btn">Sign out</button>
+          </div>
+        </div>
+      </div>
+    </header>
 
     <main id="main-content" class="layout">
       <section class="hero" aria-labelledby="hero-title">
@@ -2353,6 +2440,35 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         </div>
       </div>
       <!-- Country chips are populated inside the mobile Scene picker (see #mobile-country-chip-row below inside the scene picker wrapper). -->
+      <!--
+        Mobile Sign In row (backlog #25). Sits ABOVE Add-your-band per the
+        sheet-ordering convention established in PR #63: identity actions
+        precede contribution actions, so a returning user who cleared
+        cookies finds their way back in before being asked to contribute.
+
+        Resulting sheet order, top to bottom:
+          Sign in (signed-out only) → Add your band → Share this graph
+          → Send feedback
+        (PRs B and C insert Recently-added / Reset-view between
+        Add-your-band and Share; this row stays first either way.)
+
+        Hidden by default for the same reason as the desktop #sign-in-btn:
+        setSignedInState() owns visibility once the session is known.
+        Unlike the other mobile rows this one does NOT proxy-click a
+        desktop toolbar button — the desktop trigger lives in .site-header
+        (not the display:none .graph-overlay-top), so we call the shared
+        openSignInFlow() helper directly instead.
+      -->
+      <div class="mobile-sheet-add-band" id="mobile-sign-in-row" hidden>
+        <button class="tool-chip mobile-sign-in-btn" type="button" id="mobile-sign-in-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+            <polyline points="10 17 15 12 10 7"/>
+            <line x1="15" y1="12" x2="3" y2="12"/>
+          </svg>
+          Sign in
+        </button>
+      </div>
       <!--
         Mobile Add-your-band button. The desktop Add-your-band button
         lives inside .graph-overlay-top which was made display:none on
@@ -2585,8 +2701,14 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                 to move users through the gate, not sell them on it.
               -->
               <div data-signup-only>
-                <div class="share-popover-title">Sign up to add your band</div>
-                <p class="share-popover-copy">
+                <!--
+                  Title / copy / submit label are re-written by setAuthMode()
+                  so this one panel serves both entry points: Add-your-band
+                  (signup framing, the default) and the header / hamburger
+                  Sign-in buttons (returning-user framing). Backlog #25.
+                -->
+                <div class="share-popover-title" id="signup-panel-title">Sign up to add your band</div>
+                <p class="share-popover-copy" id="signup-panel-copy">
                   Quick one-time sign-up so we can attribute your contributions and let you edit later.
                   No password. Your email is only used for account recovery — never shared.
                 </p>
@@ -4508,9 +4630,38 @@ function downloadPngBlob(blob) {
         const signedInSection = popover.querySelector('[data-signed-in-only]');
         if (signupSection) signupSection.hidden = isSignedIn;
         if (signedInSection) signedInSection.hidden = !isSignedIn;
-        const nameSpan = popover.querySelector('[data-current-user-name]');
-        if (nameSpan && user) nameSpan.textContent = user.name || user.email || 'you';
       }
+      // [data-current-user-name] appears in the popover strip AND in the
+      // desktop header strip, so query the document rather than the popover.
+      document.querySelectorAll('[data-current-user-name]').forEach(el => {
+        if (user) el.textContent = user.name || user.email || 'you';
+      });
+
+      // Backlog #25 auth affordances. Both entry points are signed-out only;
+      // the desktop header additionally swaps in a compact identity strip.
+      // These start out `hidden` in the markup so a user with a valid token
+      // never sees a flash of "Sign in" before the session is restored.
+      const signInBtn = document.getElementById('sign-in-btn');
+      const mobileSignInRow = document.getElementById('mobile-sign-in-row');
+      const headerUser = document.getElementById('header-user');
+      if (signInBtn) signInBtn.hidden = isSignedIn;
+      if (mobileSignInRow) mobileSignInRow.hidden = isSignedIn;
+      if (headerUser) headerUser.hidden = !isSignedIn;
+      const initials = document.getElementById('header-user-initials');
+      if (initials && isSignedIn) initials.textContent = deriveUserInitials(user);
+    }
+
+    // Up to two letters from the user's name ("Jane Musician" -> "JM"), or
+    // the first letter of the email when no name is available. Purely
+    // cosmetic — the adjacent text node carries the accessible identity.
+    function deriveUserInitials(user) {
+      if (!user) return '';
+      const words = String(user.name || '').trim().split(/\s+/).filter(Boolean);
+      if (words.length) {
+        return words.slice(0, 2).map(w => w[0].toUpperCase()).join('');
+      }
+      const email = String(user.email || '').trim();
+      return email ? email[0].toUpperCase() : '?';
     }
 
     // Fire and forget contribution log. Never throws — attribution is a
@@ -7730,12 +7881,108 @@ function downloadPngBlob(blob) {
     // trigger on mobile so hookPopoverForMobile's detach-to-body /
     // bottom-sheet path runs; falls back to the desktop trigger.
     function openSignupPopover() {
+      // Reset to signup framing. Callers here (welcome nudge, node-card
+      // "Sign in to edit" hint) may fire right after the user dismissed the
+      // Sign-in panel, and stale "Welcome back" copy would be confusing.
+      // Signup framing is the safe default for both audiences because
+      // /api/signup is insert-or-return on email (see signup.mjs).
+      setAuthMode('signup');
       const isMobile = window.matchMedia('(max-width: 900px)').matches;
       const mobileBtn = document.getElementById('mobile-add-band-btn');
       const desktopBtn = document.getElementById('add-band-btn');
       const trigger = (isMobile && mobileBtn) ? mobileBtn : desktopBtn;
       if (trigger) trigger.click();
     }
+
+    // ---------------------------------------------------------------------
+    // Backlog #25: Sign-in entry point.
+    //
+    // Disambiguation approach (option "b" of the two considered): Sign In is
+    // a shortcut into the EXISTING #add-band-popover with the returning-user
+    // branch pre-selected, not a second modal and not a second endpoint.
+    // Only the panel's title / copy / submit label change.
+    //
+    // Why not hide the profile fields for returning users: /api/signup
+    // already implements insert-or-return keyed on email (it hands back the
+    // existing row + existing token when the address is known), but it still
+    // *requires* name/city/state/country/instrument on every call. An
+    // email-only sign-in would therefore need a new server lookup endpoint,
+    // which is squarely "rebuild auth" territory. Reusing the one form keeps
+    // this PR client-only: no change to the identity model, the token, or
+    // session storage. The follow-up is noted in the PR description.
+    // ---------------------------------------------------------------------
+    const AUTH_MODE_COPY = {
+      signup: {
+        title: 'Sign up to add your band',
+        copy: 'Quick one-time sign-up so we can attribute your contributions and let you edit later. ' +
+              'No password. Your email is only used for account recovery — never shared.',
+        submit: 'Sign up',
+        pending: 'Signing up…'
+      },
+      signin: {
+        title: 'Welcome back',
+        copy: 'Already have an account? Enter the same email you signed up with and we\'ll restore it — ' +
+              'no password needed. Confirm the rest so we can keep your profile current.',
+        submit: 'Sign in',
+        pending: 'Signing in…'
+      }
+    };
+    let currentAuthMode = 'signup';
+
+    function setAuthMode(mode) {
+      const copy = AUTH_MODE_COPY[mode] || AUTH_MODE_COPY.signup;
+      currentAuthMode = AUTH_MODE_COPY[mode] ? mode : 'signup';
+      const title = document.getElementById('signup-panel-title');
+      const body = document.getElementById('signup-panel-copy');
+      const submitBtn = document.getElementById('signup-submit-btn');
+      if (title) title.textContent = copy.title;
+      if (body) body.textContent = copy.copy;
+      if (submitBtn) submitBtn.textContent = copy.submit;
+    }
+
+    // Opens the shared popover in returning-user mode.
+    //
+    // Unlike openSignupPopover this does NOT proxy-click #add-band-btn. Two
+    // reasons: (1) #add-band-btn is a *toggle*, so proxy-clicking it while
+    // the popover is already open would close it; (2) the add-band triggers
+    // reset the panel back to signup framing (see the listener below), which
+    // would immediately undo setAuthMode('signin') — and because the mobile
+    // trigger awaits the sheet-close animation before forwarding the click,
+    // no ordering trick fixes that reliably.
+    //
+    // Setting popover.hidden = false directly is sufficient on both
+    // platforms: hookPopoverForMobile observes the `hidden` attribute via
+    // MutationObserver, so the detach-to-body + .is-open-mobile bottom-sheet
+    // rescue still runs on mobile. clampPopover is a no-op there.
+    function openSignInFlow() {
+      const popover = document.getElementById('add-band-popover');
+      if (!popover) return;
+      setAuthMode('signin');
+      closeBottomPopovers(popover);
+      popover.hidden = false;
+      document.getElementById('add-band-btn')?.setAttribute('aria-expanded', 'true');
+      clampPopover(popover);
+    }
+
+    document.getElementById('sign-in-btn')?.addEventListener('click', (event) => {
+      // The document-level "click outside → close popovers" handler would
+      // otherwise dismiss the panel we just opened, since #sign-in-btn lives
+      // in .site-header, outside the popover subtree.
+      event.stopPropagation();
+      openSignInFlow();
+    });
+
+    // Any Add-your-band entry point restores signup framing. The mobile row
+    // forwards to #add-band-btn, so this single listener covers both.
+    document.getElementById('add-band-btn')?.addEventListener('click', () => {
+      setAuthMode('signup');
+    });
+
+    document.getElementById('header-sign-out-btn')?.addEventListener('click', () => {
+      clearCurrentUser();
+      setSignedInState(null);
+      setAuthMode('signup');
+    });
 
     document.getElementById('edit-band-cancel-btn')?.addEventListener('click', closeEditBandPopover);
 
@@ -8440,6 +8687,23 @@ function downloadPngBlob(blob) {
           });
         }
 
+        // Mobile Sign-in button (inside the hamburger sheet, backlog #25).
+        // Closes the sheet first and waits out the animation — same reason
+        // as mobile Add-your-band: don't let the add-band bottom sheet
+        // overlap the closing hamburger sheet. Then calls openSignInFlow()
+        // directly rather than proxy-clicking a desktop button: the desktop
+        // Sign-in trigger lives in .site-header, whose .header-right is
+        // display:none on mobile, so there is nothing to forward to.
+        const mobileSignInBtn = document.getElementById('mobile-sign-in-btn');
+        if (mobileSignInBtn) {
+          mobileSignInBtn.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            closeSheet();
+            await new Promise(r => setTimeout(r, 300));
+            openSignInFlow();
+          });
+        }
+
         // Mobile Send-feedback button (inside the hamburger sheet).
         // Same pattern as mobile Add-your-band above: the desktop
         // #send-feedback-btn lives in .graph-overlay-top (display:none
@@ -8872,8 +9136,10 @@ function downloadPngBlob(blob) {
                 return;
               }
               submitBtn.disabled = true;
-              const previousLabel = submitBtn.textContent;
-              submitBtn.textContent = 'Signing up…';
+              // Same endpoint either way; only the wording follows the mode
+              // the panel was opened in (see setAuthMode / backlog #25).
+              const modeCopy = AUTH_MODE_COPY[currentAuthMode] || AUTH_MODE_COPY.signup;
+              submitBtn.textContent = modeCopy.pending;
               status.textContent = '';
               status.className = 'validation-message';
               try {
@@ -8892,7 +9158,10 @@ function downloadPngBlob(blob) {
                 let data = null;
                 try { data = await response.json(); } catch (_) {}
                 if (!response.ok || !data || !data.user || !data.user.token) {
-                  const msg = (data && (data.error || data.message)) || `Sign-up failed (${response.status}).`;
+                  const fallbackMsg = currentAuthMode === 'signin'
+                    ? `Sign-in failed (${response.status}).`
+                    : `Sign-up failed (${response.status}).`;
+                  const msg = (data && (data.error || data.message)) || fallbackMsg;
                   status.textContent = msg;
                   status.className = 'validation-message is-error';
                   return;
@@ -8913,12 +9182,20 @@ function downloadPngBlob(blob) {
                 // The signup section is now hidden; if there's any residual
                 // input we clear it for good measure.
                 form.reset();
+                // Leave the panel in its default framing so a later sign-out
+                // doesn't reopen it still saying "Welcome back".
+                setAuthMode('signup');
               } catch (error) {
                 status.textContent = 'Could not reach the server. Check your connection and try again.';
                 status.className = 'validation-message is-error';
               } finally {
                 submitBtn.disabled = false;
-                submitBtn.textContent = previousLabel;
+                // Re-read the mode rather than restoring a label captured
+                // before the request: the success path calls
+                // setAuthMode('signup'), so a captured "Sign in" would be
+                // put back and leave the panel self-contradictory.
+                submitBtn.textContent =
+                  (AUTH_MODE_COPY[currentAuthMode] || AUTH_MODE_COPY.signup).submit;
               }
             });
           }
@@ -8928,6 +9205,7 @@ function downloadPngBlob(blob) {
             signOutBtn.addEventListener('click', () => {
               clearCurrentUser();
               setSignedInState(null);
+              setAuthMode('signup');
               // Close the popover so the user sees the flipped toolbar
               // clearly instead of the now-hidden signed-in panel.
               const popover = document.getElementById('add-band-popover');
