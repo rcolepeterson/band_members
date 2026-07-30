@@ -46,10 +46,12 @@ test('the Bands-only and Musicians-only view chips are gone from both platforms'
   );
 });
 
-test('the All-nodes chip and the Fit/Clear actions survive the removal', () => {
+test('the rest of the left-hand chip cluster survives the removal', () => {
   // Guards against an over-eager cleanup taking the rest of the
-  // left-hand chip cluster with it.
-  for (const attr of ['data-filter="all"', 'data-action="fit"', 'data-action="clear"']) {
+  // left-hand chip cluster with it. The "All nodes" chip that used to be
+  // pinned here has since been replaced by "Reset view" (data-action="reset"),
+  // which is covered in detail by tests/recent-filter-ui.test.mjs.
+  for (const attr of ['data-action="reset"', 'data-action="fit"', 'data-action="clear"']) {
     assert.ok(
       INDEX_HTML.includes(attr),
       `Expected ${attr} to still exist — only the band/person toggles were retired.`

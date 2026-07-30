@@ -378,6 +378,17 @@ body {
   color: #effcff;
 }
 
+/* Recently added is disabled when the loaded graph carries no band
+   timestamps (CSV fallback) — see syncRecentFilterAvailability(). */
+.tool-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tool-chip:disabled:hover {
+  transform: none;
+}
+
 .primary-btn.share-btn,
 .share-popover-btn {
   background: linear-gradient(180deg, rgba(150,233,246,0.34), rgba(93,180,197,0.22));
@@ -2208,7 +2219,8 @@ main.layout { padding: 0 !important; gap: 0 !important; }
              locations, plus "All" and "Other…" -- see initMobileLayout(). -->
       </div>
       <div class="mobile-sheet-tools" id="mobile-sheet-tools" aria-label="Graph filters">
-        <button class="tool-chip active" type="button" data-filter="all">All nodes</button>
+        <button class="tool-chip" type="button" data-action="reset">Reset view</button>
+        <button class="tool-chip" type="button" data-action="recent" aria-pressed="false">Recently added</button>
         <button class="tool-chip" type="button" data-action="fit">Fit graph</button>
         <button class="tool-chip" type="button" data-action="clear">Clear filters</button>
       </div>
@@ -2331,7 +2343,15 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       <div class="toolbar graph-toolbar" aria-label="Graph controls">
         <div class="graph-toolbar-left">
           <span class="tool-chip graph-status-chip" id="graph-total-chip" aria-hidden="true">Loading tree…</span>
-          <button class="tool-chip active" type="button" data-filter="all">All nodes</button>
+          <!--
+            "Reset view" replaces the old "All nodes" chip, which by the time it
+            was retired only re-asserted a view filter that no longer existed.
+            Reset view clears scene / genre / search / Recently-added, dismisses
+            open popovers and the anchored node card, and refits the camera.
+            "Fit graph" is kept as the narrower camera-only action.
+          -->
+          <button class="tool-chip" type="button" data-action="reset">Reset view</button>
+          <button class="tool-chip" type="button" data-action="recent" aria-pressed="false">Recently added</button>
           <span class="toolbar-divider" aria-hidden="true"></span>
           <button class="tool-chip" type="button" data-action="fit">Fit graph</button>
           <button class="tool-chip" type="button" data-action="clear">Clear filters</button>
@@ -2944,6 +2964,10 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     let currentScene = 'all';
     let currentGenre = 'all';
     let currentSearch = '';
+    // Recently-added filter. Off on load: with a handful of beta testers a
+    // "recent" default would greet first-time visitors with a nearly empty
+    // graph. AND-combines with scene / genre / search (see getFilteredGraph).
+    let recentOnly = false;
 
     function updateHeroState() {
       const shouldCondense = window.scrollY > 180;
@@ -3918,16 +3942,21 @@ function downloadPngBlob(blob) {
         const personYearsActive = (
           row.personYearsActive || row['Person Years Active'] || row.person_years_active || ''
         ).trim();
+        // When the band row was created in Neon. Only /api/bands supplies this
+        // (see normalizeNeonToRows); CSV rows leave it blank, which the
+        // Recently-added filter treats as "not datable".
+        const bandCreatedAt = String(row.bandCreatedAt || row.created_at || '').trim();
 
         if (!nodeMap.has(source)) {
           // Genre lives on the band node only. If any row for this band has
           // a non-empty genre it wins over rows that leave the field blank.
-          nodeMap.set(source, { id: source, type: 'band', city, state, country, genre, yearsActive: bandYearsActive });
+          nodeMap.set(source, { id: source, type: 'band', city, state, country, genre, yearsActive: bandYearsActive, createdAt: bandCreatedAt });
         } else {
           const existingBand = nodeMap.get(source);
           if (genre && !existingBand.genre) existingBand.genre = genre;
           // First non-empty band yearsActive wins; later rows don't overwrite.
           if (bandYearsActive && !existingBand.yearsActive) existingBand.yearsActive = bandYearsActive;
+          if (bandCreatedAt && !existingBand.createdAt) existingBand.createdAt = bandCreatedAt;
         }
         if (!nodeMap.has(target)) {
           nodeMap.set(target, { id: target, type: 'person', city, state, country, instrument1, instrument2, bio, yearsActive: personYearsActive });
@@ -3993,6 +4022,8 @@ function downloadPngBlob(blob) {
     //   yearsActive                             -> band.years_active
     //   personYearsActive                       -> member.years_active
     //   memberYearsActive                       -> membership.tenure
+    //   bandCreatedAt                           -> band.created_at
+    //     (drives the Recently-added filter; absent in CSV-fallback mode)
     function normalizeNeonToRows(data) {
       const bandsById = new Map((data.bands || []).map(b => [b.id, b]));
       const membersById = new Map((data.members || []).map(m => [m.id, m]));
@@ -4019,7 +4050,8 @@ function downloadPngBlob(blob) {
           'Intrument 2': instrument2,
           yearsActive: band.years_active || '',
           personYearsActive: member.years_active || '',
-          memberYearsActive: membership.tenure || ''
+          memberYearsActive: membership.tenure || '',
+          bandCreatedAt: band.created_at || ''
         };
       });
     }
@@ -4603,7 +4635,11 @@ function downloadPngBlob(blob) {
       let bandNode = master.nodes.find(node => node.type === 'band'
         && normalizeKey(node.id) === normalizeKey(band));
       if (!bandNode) {
-        master.nodes.push({ id: band, type: 'band', city, state, country, genre, yearsActive, label: bandLabel, albums });
+        // savedAt is the submission timestamp, which is exactly what
+        // bands.created_at will hold once the draft reaches Neon — so a band
+        // added in this session shows up under Recently added immediately,
+        // without waiting for a reload.
+        master.nodes.push({ id: band, type: 'band', city, state, country, genre, yearsActive, label: bandLabel, albums, createdAt: String(draft.savedAt || '').trim() });
         changed = true;
       } else {
         if (!bandNode.city && city) {
@@ -4698,6 +4734,104 @@ function downloadPngBlob(blob) {
       return failed;
     }
 
+    // ---------------------------------------------------------------------
+    // Recently-added filter helpers.
+    //
+    // Canonical, unit-tested copies live in
+    // scripts/recent-filter-helpers.mjs. This inline copy exists for the
+    // same reason every other helper in this file is duplicated rather than
+    // `import`ed -- see the location-helpers comment above for the full
+    // rationale (classic, non-module script). Keep the two in sync by hand.
+    // ---------------------------------------------------------------------
+    const RECENT_WINDOW_DAYS = 30;
+    const RECENT_FALLBACK_WINDOW_DAYS = 90;
+    const RECENT_FALLBACK_COUNT = 10;
+    const RECENT_MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+    function parseCreatedAt(value) {
+      if (value === null || value === undefined || value === '') return null;
+      const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
+      return Number.isFinite(ms) ? ms : null;
+    }
+
+    function datedBandsNewestFirst(nodes) {
+      return (nodes || [])
+        .filter(node => node && node.type === 'band')
+        .map(node => ({ id: node.id, createdAtMs: parseCreatedAt(node.createdAt) }))
+        .filter(entry => entry.createdAtMs !== null)
+        .sort((a, b) => b.createdAtMs - a.createdAtMs);
+    }
+
+    function countDatedBands(nodes) {
+      return datedBandsNewestFirst(nodes).length;
+    }
+
+    // Cascade: last 30 days -> last 90 days -> newest 10 bands -> nothing.
+    // Each stage only runs if the previous one selected zero bands.
+    function selectRecentBandIds(nodes, options = {}) {
+      const {
+        now = Date.now(),
+        windowDays = RECENT_WINDOW_DAYS,
+        fallbackWindowDays = RECENT_FALLBACK_WINDOW_DAYS,
+        fallbackCount = RECENT_FALLBACK_COUNT,
+      } = options;
+
+      const dated = datedBandsNewestFirst(nodes);
+      if (!dated.length) {
+        return { ids: new Set(), mode: 'unavailable', windowDays: null, count: 0 };
+      }
+
+      for (const days of [windowDays, fallbackWindowDays]) {
+        if (!Number.isFinite(days) || days <= 0) continue;
+        const cutoff = now - days * RECENT_MS_PER_DAY;
+        const withinWindow = dated.filter(entry => entry.createdAtMs >= cutoff);
+        if (withinWindow.length) {
+          return {
+            ids: new Set(withinWindow.map(entry => entry.id)),
+            mode: days === windowDays ? 'window' : 'fallback-window',
+            windowDays: days,
+            count: withinWindow.length,
+          };
+        }
+      }
+
+      const newest = dated.slice(0, Math.max(1, fallbackCount));
+      return {
+        ids: new Set(newest.map(entry => entry.id)),
+        mode: 'fallback-count',
+        windowDays: null,
+        count: newest.length,
+      };
+    }
+
+    function describeRecentSelection(selection) {
+      if (!selection || selection.mode === 'unavailable') return 'Recently added: no dates available';
+      if (selection.mode === 'fallback-count') return `Recently added: newest ${selection.count} bands`;
+      return `Recently added: last ${selection.windowDays} days`;
+    }
+
+    // Narrows a nodes/links pair down to a set of band ids plus every person
+    // linked to one of those bands, dropping links that lose an endpoint.
+    // Shared by the genre and Recently-added stages of getFilteredGraph:
+    // both select bands by an attribute, and both need to keep the members
+    // around or the surviving graph has no edges left to look at.
+    function restrictToBandsAndMembers(nodes, links, bandIds) {
+      const keepIds = new Set(bandIds);
+      const endpoints = link => [
+        typeof link.source === 'object' ? link.source.id : link.source,
+        typeof link.target === 'object' ? link.target.id : link.target,
+      ];
+      links.forEach(link => {
+        const [sourceId, targetId] = endpoints(link);
+        if (bandIds.has(sourceId)) keepIds.add(targetId);
+        if (bandIds.has(targetId)) keepIds.add(sourceId);
+      });
+      return {
+        nodes: nodes.filter(node => keepIds.has(node.id)),
+        links: links.filter(link => endpoints(link).every(id => keepIds.has(id))),
+      };
+    }
+
     function getFilteredGraph(master) {
       if (!master) return master;
       let nodes = master.nodes.slice();
@@ -4730,20 +4864,17 @@ function downloadPngBlob(blob) {
             .filter(node => node.type === 'band' && (node.genre || '').toLowerCase() === targetGenre)
             .map(node => node.id)
         );
-        // Collect persons connected to a matching band.
-        const keepIds = new Set(matchingBandIds);
-        links.forEach(link => {
-          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-          if (matchingBandIds.has(sourceId)) keepIds.add(targetId);
-          if (matchingBandIds.has(targetId)) keepIds.add(sourceId);
-        });
-        nodes = nodes.filter(node => keepIds.has(node.id));
-        links = links.filter(link => {
-          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-          return keepIds.has(sourceId) && keepIds.has(targetId);
-        });
+        ({ nodes, links } = restrictToBandsAndMembers(nodes, links, matchingBandIds));
+      }
+
+      // Recently-added filter, AND-combined with the stages above and below
+      // so it narrows whatever the user is already looking at rather than
+      // replacing it. The recent set is computed from master.nodes, not the
+      // progressively narrowed `nodes`, so which window applied doesn't
+      // shift as the user changes scene/genre/search.
+      if (recentOnly) {
+        const selection = selectRecentBandIds(master.nodes);
+        ({ nodes, links } = restrictToBandsAndMembers(nodes, links, selection.ids));
       }
 
       if (currentSearch) {
@@ -5851,6 +5982,7 @@ function downloadPngBlob(blob) {
         }
       }
       if (currentGenre && currentGenre !== 'all') badgeParts.push(currentGenre);
+      if (recentOnly) badgeParts.push(describeRecentSelection(selectRecentBandIds(graphState.master.nodes)));
       if (currentSearch) badgeParts.push(`Search: ${currentSearch}`);
       graphBadge.textContent = badgeParts.length ? badgeParts.join(' · ') : 'Full graph';
 
@@ -6497,13 +6629,58 @@ function downloadPngBlob(blob) {
       populateCardsFromTreeContext();
     }
 
-    // "All nodes" is the only remaining view chip (Bands only / Musicians only
-    // were retired), so it is always the active one. Still a loop because it
-    // also has to clear .active off any other .tool-chip carrying it.
+    // Recently-added is the only chip with persistent state left: the
+    // band/person view toggles were retired and Reset / Fit / Clear are all
+    // momentary, so they own no .active styling of their own.
     function syncFilterButtons() {
-      toolChips.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.filter === 'all');
+      // Queried live rather than read off the toolChips snapshot so the
+      // desktop and mobile-sheet copies of the chip stay in lockstep.
+      document.querySelectorAll('.tool-chip[data-action="recent"]').forEach(btn => {
+        btn.classList.toggle('active', recentOnly);
+        btn.setAttribute('aria-pressed', String(recentOnly));
       });
+    }
+
+    // The Recently-added filter needs band timestamps to work, and the CSV
+    // fallback path has none (see normalizeNeonToRows). Rather than let the
+    // chip filter the graph down to nothing, disable it and say why.
+    function syncRecentFilterAvailability() {
+      const available = !!(graphState && graphState.master) && countDatedBands(graphState.master.nodes) > 0;
+      document.querySelectorAll('.tool-chip[data-action="recent"]').forEach(btn => {
+        btn.disabled = !available;
+        btn.title = available
+          ? `Show only bands added in the last ${RECENT_WINDOW_DAYS} days`
+          : 'Unavailable: this graph was loaded without band timestamps';
+      });
+      return available;
+    }
+
+    // Everything the "Reset view" chip does: clear every active filter, drop
+    // any open popover / anchored node card, and refit the camera.
+    function resetView() {
+      currentScene = 'all';
+      currentGenre = 'all';
+      currentSearch = '';
+      recentOnly = false;
+      const sceneSel = document.getElementById('scene-filter');
+      if (sceneSel) sceneSel.value = 'all';
+      const mobileSceneSel = document.getElementById('mobile-scene-filter');
+      if (mobileSceneSel) mobileSceneSel.value = 'all';
+      const genreSel = document.getElementById('genre-filter');
+      if (genreSel) genreSel.value = 'all';
+      const mobileGenreSel = document.getElementById('mobile-genre-filter');
+      if (mobileGenreSel) mobileGenreSel.value = 'all';
+      const searchInput = document.getElementById('node-search');
+      if (searchInput) searchInput.value = '';
+      const mobileSearchInput = document.getElementById('mobile-node-search');
+      if (mobileSearchInput) mobileSearchInput.value = '';
+      closeBottomPopovers(null);
+      toggleSharePopover(false);
+      closeNodeCard();
+      syncFilterButtons();
+      syncCountryChipButtons();
+      renderGraph();
+      fitGraph(60);
     }
 
     // Country quick-filter chips: one-click filter to every scene in a given
@@ -6579,14 +6756,32 @@ function downloadPngBlob(blob) {
         // also silently double-rendering the graph on every popover
         // open (Search / Scene / Genre) prior to this fix.
         if (!('filter' in chip.dataset) && !('action' in chip.dataset)) return;
+        // Mobile-sheet chips are proxied onto their desktop twin by the
+        // handler in initMobileLayout(), so letting this handler also run on
+        // the mobile chip means every mobile tap is applied twice. That was
+        // harmless while every chip was idempotent, but Recently-added is a
+        // toggle -- double-applying it flips the filter straight back off.
+        if (chip.closest('#mobile-sheet-tools')) return;
         if (chip.dataset.action === 'fit') {
           fitGraph(60);
+          return;
+        }
+        if (chip.dataset.action === 'reset') {
+          resetView();
+          return;
+        }
+        if (chip.dataset.action === 'recent') {
+          if (!syncRecentFilterAvailability()) return;
+          recentOnly = !recentOnly;
+          syncFilterButtons();
+          renderGraph();
           return;
         }
         if (chip.dataset.action === 'clear') {
           currentScene = 'all';
           currentGenre = 'all';
           currentSearch = '';
+          recentOnly = false;
           document.getElementById('scene-filter').value = 'all';
           const genreSel = document.getElementById('genre-filter');
           if (genreSel) genreSel.value = 'all';
@@ -6858,6 +7053,7 @@ function downloadPngBlob(blob) {
         if (!applied.added) return applied;
         currentGenre = 'all';
         currentSearch = '';
+        recentOnly = false;
         const genreSel = document.getElementById('genre-filter');
         if (genreSel) genreSel.value = 'all';
         const mobileGenreSel = document.getElementById('mobile-genre-filter');
@@ -7801,6 +7997,7 @@ function downloadPngBlob(blob) {
         });
       }
 
+      syncRecentFilterAvailability();
       syncFilterButtons();
       renderCountryChips();
 
@@ -8174,9 +8371,13 @@ function downloadPngBlob(blob) {
 
         // Mobile sheet tool chips mirror desktop chip behavior via same data attrs.
         // Trigger clicks on the desktop chips so all existing behavior fires.
-        // View-filter chips (All nodes) and actions (Fit / Clear) also
-        // dismiss the sheet so the user sees the result of what they
-        // just tapped.
+        // The actions (Reset view / Recently added / Fit / Clear) also dismiss
+        // the sheet so the user sees the result of what they just tapped.
+        //
+        // The desktop chip is the single source of truth: the main script's
+        // global toolChips handler deliberately ignores chips inside
+        // #mobile-sheet-tools so a mobile tap isn't applied twice (which would
+        // cancel out the Recently-added toggle).
         document.querySelectorAll('#mobile-sheet-tools .tool-chip').forEach(chip => {
           chip.addEventListener('click', () => {
             const filter = chip.dataset.filter;
