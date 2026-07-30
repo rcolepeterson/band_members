@@ -209,6 +209,16 @@ test('no node-count chip is left in the toolbar', () => {
     !INDEX_HTML.includes('nodes in tree'),
     'The "<n> nodes in tree" label should be gone.'
   );
+  // The pill carried an id rather than a data-action, so it was never wired to
+  // the toolbar's action dispatcher. Guard the reverse too: reintroducing the
+  // count as a dispatched action would put a second live copy of the badge's
+  // first number back in the toolbar.
+  for (const action of ['node-count', 'stats', 'total']) {
+    assert.ok(
+      !INDEX_HTML.includes(`data-action="${action}"`),
+      `No chip should dispatch data-action="${action}"; the badge owns the counts.`
+    );
+  }
 });
 
 test('the chip-only .graph-status-chip style is removed with it', () => {
