@@ -5943,8 +5943,10 @@ function downloadPngBlob(blob) {
     // move the card, or make the card see-through / drop it below the edges
     // in z-order. Moving it wins: the card is dense text on a near-opaque
     // panel and lowering its contrast to reveal lines behind it trades one
-    // unreadable thing for another. The card only moves while a member
-    // highlight is active; band clicks keep the anchored behavior below.
+    // unreadable thing for another. The card docks to a corner whenever a
+    // highlight is active — member-selection amber (source: musician) or
+    // band-selection electric blue (source: band). The docking machinery is
+    // symmetric; only the extent function differs.
     //
     // The offset mirrors the 18px in .node-card's transform
     // (translate(-50%, calc(-100% - 18px)) / translate(-50%, 18px)), so the
@@ -6047,6 +6049,32 @@ function downloadPngBlob(blob) {
       };
     }
 
+    // Band-highlight counterpart: screen-space bbox of the glowing musicians
+    // and the source band. Same live-SVG-truth discipline as
+    // memberHighlightExtent() so it cannot drift from the CSS-class toggle.
+    function bandHighlightExtent() {
+      if (!graphGroup || !svgSelection) return null;
+      const members = graphGroup.selectAll('g.node.' + BAND_HIGHLIGHT_CLASS).data();
+      if (!members || !members.length) return null;
+      const t = d3.zoomTransform(svgSelection.node());
+      const points = [];
+      const push = d => {
+        if (d && Number.isFinite(d.x) && Number.isFinite(d.y)) {
+          points.push({ x: t.applyX(d.x), y: t.applyY(d.y) });
+        }
+      };
+      members.forEach(push);
+      // The source band anchors one end of every electric-blue line.
+      push(nodeCardState.node);
+      if (!points.length) return null;
+      const xs = points.map(p => p.x);
+      const ys = points.map(p => p.y);
+      return {
+        x0: Math.min.apply(null, xs), y0: Math.min.apply(null, ys),
+        x1: Math.max.apply(null, xs), y1: Math.max.apply(null, ys),
+      };
+    }
+
     function positionNodeCard() {
       // Skip the geometry work on mobile — CSS turns the card into a
       // fixed-position bottom sheet there, so left/top from JS would
@@ -6076,10 +6104,11 @@ function downloadPngBlob(blob) {
       const cardH = nodeCardEl.offsetHeight || 180;
       const gutter = 8;
 
-      // Member highlight active → dock to the least-obstructive corner
-      // instead of anchoring over the node. Band clicks clear the highlight
-      // (see selectBandNode), so they fall through to the anchored path.
-      const highlight = memberHighlightExtent();
+      // Highlight active → dock to the least-obstructive corner instead of
+      // anchoring over the node. Either a member-selection amber highlight
+      // or a band-selection electric-blue highlight qualifies; the two are
+      // mutually exclusive so at most one extent is ever non-null at a time.
+      const highlight = memberHighlightExtent() || bandHighlightExtent();
       if (highlight) {
         const dock = chooseNodeCardDock({
           stageW: stageRect.width,

@@ -80,6 +80,7 @@ const CARD_H = 180;
 function loadPlacement({
   node = { id: 'Duff McKagan', type: 'person', x: 700, y: 440 },
   highlighted = [],
+  bandHighlighted = [],
   stageW = STAGE_W,
   stageH = STAGE_H,
   cardW = CARD_W,
@@ -102,14 +103,21 @@ function loadPlacement({
 
   const sandbox = {
     MEMBER_HIGHLIGHT_CLASS: 'member-highlight',
+    BAND_HIGHLIGHT_CLASS: 'band-highlight',
     nodeCardEl,
     nodeCardState: { node },
     svgSelection: { node: () => ({}) },
     // Only the highlighted-node query matters here; anything else returns
-    // an empty data set.
+    // an empty data set. Existing tests exercise the amber (member) path;
+    // the electric-blue (band) path lives in its own dedicated fixture, so
+    // the band-highlight selector always resolves to empty here.
     graphGroup: {
       selectAll: selector => ({
-        data: () => (selector.includes('member-highlight') ? highlighted : []),
+        data: () => {
+          if (selector.includes('member-highlight')) return highlighted;
+          if (selector.includes('band-highlight')) return bandHighlighted;
+          return [];
+        },
       }),
     },
     // Identity zoom transform: graph coords == screen coords, which keeps
@@ -131,11 +139,12 @@ function loadPlacement({
     ${extract('nodeCardDockPlacements')}
     ${extract('chooseNodeCardDock')}
     ${extract('memberHighlightExtent')}
+    ${extract('bandHighlightExtent')}
     ${extract('positionNodeCard')}
   `;
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox);
-  vm.runInContext('this.__api = { positionNodeCard, memberHighlightExtent, chooseNodeCardDock, nodeCardBox, rectOverlapArea, nodeCardDockPlacements, NODE_CARD_ANCHOR_OFFSET, NODE_CARD_SOURCE_CLEARANCE };', sandbox);
+  vm.runInContext('this.__api = { positionNodeCard, memberHighlightExtent, bandHighlightExtent, chooseNodeCardDock, nodeCardBox, rectOverlapArea, nodeCardDockPlacements, NODE_CARD_ANCHOR_OFFSET, NODE_CARD_SOURCE_CLEARANCE };', sandbox);
 
   return { ...sandbox.__api, nodeCardEl, node, stageW, stageH, cardW, cardH };
 }
@@ -318,11 +327,15 @@ test('a node with no coordinates is still centered rather than docked', () => {
   assert.equal(parseFloat(env.nodeCardEl.style.left), STAGE_W / 2);
 });
 
-test('band selection clears the member highlight, so band cards take the anchored path', () => {
+test('band selection clears the mutually-exclusive member highlight', () => {
+  // Band selection paints an electric-blue highlight of its own and, like
+  // member selection, docks its card to a corner via bandHighlightExtent().
+  // The two highlights are mutually exclusive; each selectXxxNode() clears
+  // the other so the graph never wears both colors at once.
   const src = extract('selectBandNode');
   assert.ok(
     src.includes('clearMemberHighlight()'),
-    'selectBandNode must clear the highlight, otherwise band cards would dock to a corner.'
+    'selectBandNode must clear the member highlight so the two colors do not overlap.'
   );
 });
 
@@ -385,6 +398,83 @@ test('memberHighlightExtent ignores bands the layout gave no coordinates', () =>
     highlighted: [{ id: 'Band A', type: 'band', x: 300, y: 200 }, { id: 'Coordless', type: 'band' }],
   });
   assert.deepEqual(plain(env.memberHighlightExtent()), { x0: 300, y0: 200, x1: 700, y1: 440 });
+});
+
+// ---------------------------------------------------------------------
+// 4b. Band-highlight docking (electric-blue).
+// ---------------------------------------------------------------------
+//
+// Symmetric to the amber member-highlight tests above. Band clicks now
+// paint an electric-blue highlight of their own AND dock the card to a
+// clear corner via bandHighlightExtent(), the same way member clicks do.
+
+test('bandHighlightExtent reports nothing when no member is highlighted', () => {
+  const env = loadPlacement({ bandHighlighted: [] });
+  assert.equal(env.bandHighlightExtent(), null);
+});
+
+test('bandHighlightExtent spans the source band and every highlighted member', () => {
+  const env = loadPlacement({
+    node: { id: 'Band', type: 'band', x: 700, y: 440 },
+    bandHighlighted: [
+      { id: 'Member A', type: 'person', x: 300, y: 200 },
+      { id: 'Member B', type: 'person', x: 1000, y: 700 },
+    ],
+  });
+  assert.deepEqual(plain(env.bandHighlightExtent()), { x0: 300, y0: 200, x1: 1000, y1: 700 });
+});
+
+test('bandHighlightExtent ignores members the layout gave no coordinates', () => {
+  const env = loadPlacement({
+    node: { id: 'Band', type: 'band', x: 700, y: 440 },
+    bandHighlighted: [{ id: 'Member A', type: 'person', x: 300, y: 200 }, { id: 'Coordless', type: 'person' }],
+  });
+  assert.deepEqual(plain(env.bandHighlightExtent()), { x0: 300, y0: 200, x1: 700, y1: 440 });
+});
+
+test('band selection docks the card to a corner instead of anchoring over the band', () => {
+  const env = loadPlacement({
+    node: { id: 'Band', type: 'band', x: 700, y: 440 },
+    bandHighlighted: [
+      { id: 'Member A', type: 'person', x: 300, y: 200 },
+      { id: 'Member B', type: 'person', x: 1000, y: 700 },
+    ],
+  });
+  env.positionNodeCard();
+
+  const left = parseFloat(env.nodeCardEl.style.left);
+  const top = parseFloat(env.nodeCardEl.style.top);
+  // The clicked band sits at screen (700, 440). If the card were still
+  // anchoring to the node the left/top would land somewhere near that
+  // point; the docking path pushes it to one of the four stage corners
+  // (well outside a 200px radius from the source node).
+  const distToSource = Math.hypot(left - 700, top - 440);
+  assert.ok(
+    distToSource > 200,
+    `Expected the card to dock away from the band node, got left=${left}, top=${top}.`
+  );
+});
+
+test('member and band extents are never both non-null at once (mutual exclusivity)', () => {
+  // Selection code paths clear the opposite highlight before painting, so
+  // in the live app at most one extent can be non-null at a time. This
+  // test just proves the two extent readers are independent -- feeding
+  // both fixtures in shows each one can be exercised in isolation, which
+  // is what selectMemberNode / selectBandNode rely on for the OR in
+  // positionNodeCard().
+  const memberOnly = loadPlacement({
+    node: { id: 'M', type: 'person', x: 500, y: 500 },
+    highlighted: [{ id: 'B1', type: 'band', x: 300, y: 300 }],
+  });
+  assert.ok(memberOnly.memberHighlightExtent());
+  assert.equal(memberOnly.bandHighlightExtent(), null);
+
+  const bandOnly = loadPlacement({
+    node: { id: 'B', type: 'band', x: 500, y: 500 },
+    bandHighlighted: [{ id: 'M1', type: 'person', x: 300, y: 300 }],
+  });
+  assert.equal(bandOnly.memberHighlightExtent(), null);
+  assert.ok(bandOnly.bandHighlightExtent());
 });
 
 // ---------------------------------------------------------------------
