@@ -1037,6 +1037,39 @@ body {
   stroke-opacity: 1;
 }
 
+/* Band-selection highlight: clicking a band glows the musicians who played
+   in it and the membership threads connecting them, without moving the
+   camera. Mirrors .member-highlight but flips the perspective: member click
+   -> "which bands did this person play in" (amber), band click -> "who
+   played in this band" (electric blue).
+
+   Color choice -- electric blue #27b8ff. Amber (#ffb454) is already spent on
+   member selection, cyan (#8fe8f6, var(--color-primary)) on the generic
+   "selected node" glow, silver (#c0c0c0) on the verification star. Electric
+   blue is a cool complement to amber that stays fully distinguishable from
+   the muted cyan of the base selection glow (higher saturation, harder edge)
+   and reads clearly against the near-black stage. It also holds up under
+   red-green color vision deficiency, differing from both cyan and silver in
+   saturation and lightness rather than hue alone.
+
+   Class-toggle-only, same discipline as .member-highlight: no geometry, no
+   re-render, no simulation restart (see PR #65 sync-layout note). */
+.node.band-highlight .node-core,
+.node.band-highlight .node-ring {
+  stroke: #27b8ff;
+  stroke-width: 2.6;
+  filter: drop-shadow(0 0 12px rgba(39, 184, 255, 0.85));
+}
+
+.node.band-highlight .node-halo {
+  fill: rgba(39, 184, 255, 0.18);
+}
+
+.link.band-highlight {
+  stroke: rgba(39, 184, 255, 0.9);
+  stroke-opacity: 1;
+}
+
 
 /* PASS 2: immersive full-stage graph */
 
@@ -5910,8 +5943,10 @@ function downloadPngBlob(blob) {
     // move the card, or make the card see-through / drop it below the edges
     // in z-order. Moving it wins: the card is dense text on a near-opaque
     // panel and lowering its contrast to reveal lines behind it trades one
-    // unreadable thing for another. The card only moves while a member
-    // highlight is active; band clicks keep the anchored behavior below.
+    // unreadable thing for another. The card docks to a corner whenever a
+    // highlight is active — member-selection amber (source: musician) or
+    // band-selection electric blue (source: band). The docking machinery is
+    // symmetric; only the extent function differs.
     //
     // The offset mirrors the 18px in .node-card's transform
     // (translate(-50%, calc(-100% - 18px)) / translate(-50%, 18px)), so the
@@ -6014,6 +6049,32 @@ function downloadPngBlob(blob) {
       };
     }
 
+    // Band-highlight counterpart: screen-space bbox of the glowing musicians
+    // and the source band. Same live-SVG-truth discipline as
+    // memberHighlightExtent() so it cannot drift from the CSS-class toggle.
+    function bandHighlightExtent() {
+      if (!graphGroup || !svgSelection) return null;
+      const members = graphGroup.selectAll('g.node.' + BAND_HIGHLIGHT_CLASS).data();
+      if (!members || !members.length) return null;
+      const t = d3.zoomTransform(svgSelection.node());
+      const points = [];
+      const push = d => {
+        if (d && Number.isFinite(d.x) && Number.isFinite(d.y)) {
+          points.push({ x: t.applyX(d.x), y: t.applyY(d.y) });
+        }
+      };
+      members.forEach(push);
+      // The source band anchors one end of every electric-blue line.
+      push(nodeCardState.node);
+      if (!points.length) return null;
+      const xs = points.map(p => p.x);
+      const ys = points.map(p => p.y);
+      return {
+        x0: Math.min.apply(null, xs), y0: Math.min.apply(null, ys),
+        x1: Math.max.apply(null, xs), y1: Math.max.apply(null, ys),
+      };
+    }
+
     function positionNodeCard() {
       // Skip the geometry work on mobile — CSS turns the card into a
       // fixed-position bottom sheet there, so left/top from JS would
@@ -6043,10 +6104,11 @@ function downloadPngBlob(blob) {
       const cardH = nodeCardEl.offsetHeight || 180;
       const gutter = 8;
 
-      // Member highlight active → dock to the least-obstructive corner
-      // instead of anchoring over the node. Band clicks clear the highlight
-      // (see selectBandNode), so they fall through to the anchored path.
-      const highlight = memberHighlightExtent();
+      // Highlight active → dock to the least-obstructive corner instead of
+      // anchoring over the node. Either a member-selection amber highlight
+      // or a band-selection electric-blue highlight qualifies; the two are
+      // mutually exclusive so at most one extent is ever non-null at a time.
+      const highlight = memberHighlightExtent() || bandHighlightExtent();
       if (highlight) {
         const dock = chooseNodeCardDock({
           stageW: stageRect.width,
@@ -6105,12 +6167,15 @@ function downloadPngBlob(blob) {
       nodeCardState.node = null;
       nodeCardEl.classList.remove('is-open');
       nodeCardEl.setAttribute('aria-hidden', 'true');
-      // The band highlight belongs to a musician selection, and the card is
-      // the only thing on screen that names which musician it belongs to.
-      // Tying its lifetime to the card's means Escape, the X button, the
-      // empty-space click, and renderGraph() (Reset view / any filter
-      // change) all clear it without each needing its own call.
+      // Both highlights belong to a selection, and the card is the only
+      // thing on screen that names which node they belong to. Tying their
+      // lifetime to the card's means Escape, the X button, the empty-space
+      // click, and renderGraph() (Reset view / any filter change) all clear
+      // them without each needing its own call. The two are mutually
+      // exclusive in practice, but clearing both here is cheap and keeps
+      // this the single teardown site.
       clearMemberHighlight();
+      clearBandHighlight();
       // Hide after the fade so it doesn't intercept clicks during animation.
       setTimeout(() => {
         if (!nodeCardState.node) nodeCardEl.hidden = true;
@@ -6203,6 +6268,50 @@ function downloadPngBlob(blob) {
         });
     }
 
+    // Band-selection counterpart to MEMBER_HIGHLIGHT_CLASS / highlightMemberBands.
+    // Clicking a band glows every musician who played in it (person nodes) and
+    // the membership threads connecting them. The two highlights are mutually
+    // exclusive: selectMemberNode() clears the band highlight and selectBandNode()
+    // clears the member highlight, so the graph is never wearing both colors at
+    // once. Same class-toggle discipline: no geometry, no re-render.
+    const BAND_HIGHLIGHT_CLASS = 'band-highlight';
+
+    // Musicians who belong to a band, from the rendered link set. Checks BOTH
+    // link directions and confirms the other end is a person node, matching
+    // the defensive symmetry of memberBandIds() -- the CSV pipeline writes
+    // band -> person today, but a membership row written the other way must
+    // still light up rather than silently drop.
+    function bandMemberIds(bandId) {
+      const personIds = new Set(renderedNodeData().filter(d => d.type === 'person').map(d => d.id));
+      const result = new Set();
+      renderedLinkData().forEach(link => {
+        const [sourceId, targetId] = linkEndpointIds(link);
+        const other = sourceId === bandId ? targetId : (targetId === bandId ? sourceId : null);
+        if (other && personIds.has(other)) result.add(other);
+      });
+      return result;
+    }
+
+    function clearBandHighlight() {
+      if (!graphGroup) return;
+      graphGroup.selectAll('.' + BAND_HIGHLIGHT_CLASS).classed(BAND_HIGHLIGHT_CLASS, false);
+    }
+
+    function highlightBandMembers(bandId) {
+      clearBandHighlight();
+      if (!graphGroup) return;
+      const memberIds = bandMemberIds(bandId);
+      if (!memberIds.size) return;
+      graphGroup.selectAll('g.node')
+        .classed(BAND_HIGHLIGHT_CLASS, d => d.type === 'person' && memberIds.has(d.id));
+      graphGroup.selectAll('line.link')
+        .classed(BAND_HIGHLIGHT_CLASS, d => {
+          const [sourceId, targetId] = linkEndpointIds(d);
+          return (sourceId === bandId && memberIds.has(targetId))
+            || (targetId === bandId && memberIds.has(sourceId));
+        });
+    }
+
     // Connection names for a node from the rendered link set, so the count in
     // the card agrees with what the user can actually see. updateSelection()
     // falls back to the master graph when this comes back empty.
@@ -6225,6 +6334,7 @@ function downloadPngBlob(blob) {
     function selectMemberNode(idOrNode, options = {}) {
       const node = resolveGraphNode(idOrNode);
       if (!node || node.type === 'band') return null;
+      clearBandHighlight();
       const linkedNames = visibleConnectionNames(node.id);
       updateSelection(node, linkedNames.length || getNodeConnections(node.id).length, linkedNames, []);
       // Highlight BEFORE opening the card: openNodeCard() positions the card,
@@ -6252,6 +6362,11 @@ function downloadPngBlob(blob) {
         .map(link => (typeof link.target === 'object' ? link.target : resolveGraphNode(link.target)))
         .filter(member => member && member.type === 'person');
       updateSelection(node, linkedNames.length || getNodeConnections(node.id).length, linkedNames, members);
+      // Highlight AFTER updateSelection() -- updateSelection is allowed to
+      // re-render the panel/chips but not the graph itself, and this matches
+      // the ordering in selectMemberNode(). openNodeCard() follows so its
+      // positioning logic can eventually be made band-highlight-aware too.
+      highlightBandMembers(node.id);
       openNodeCard(node);
       return node;
     }
