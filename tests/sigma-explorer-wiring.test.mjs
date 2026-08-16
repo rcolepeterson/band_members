@@ -185,10 +185,28 @@ test('the home-star and focus labels avoid each other when they are close', () =
   assert.match(EXPLORER, /classList\.toggle\('label-above', crowded\)/);
 });
 
-test('node sizes are density-scaled from the tested helper', () => {
-  assert.match(EXPLORER, /densitySizeScale\(view\.nodes\.length\)/);
+test('node sizes are scaled from the tested helpers, per view and on resize', () => {
+  assert.match(EXPLORER, /nodeSizeScale\(\{/);
   assert.match(EXPLORER, /state\.sizeScale/);
+  assert.match(EXPLORER, /renderer\.on\('resize', \(\) => applySizeScale\(\)\)/);
   assert.match(HELPERS, /export function densitySizeScale/);
+  assert.match(HELPERS, /export function viewportSizeScale/);
+  assert.match(HELPERS, /export function nodeSizeScale/);
+});
+
+test('label thresholds follow the drawn node size instead of a fixed 7', () => {
+  assert.match(EXPLORER, /labelSettings\(\{/);
+  assert.match(EXPLORER, /SMALLEST_NODE_SIZE \* state\.sizeScale/);
+  assert.doesNotMatch(EXPLORER, /labelRenderedSizeThreshold: 7/);
+  assert.match(HELPERS, /export function labelSettings/);
+});
+
+test('a highlight dims other nodes but keeps their names', () => {
+  // Blanking labels on dim made names appear only on click.
+  assert.match(EXPLORER, /labelColor: \{ attribute: 'labelColor', color: '#c8d3e0' \}/);
+  assert.match(EXPLORER, /res\.labelColor = DIM_LABEL_COLOR;/);
+  const code = EXPLORER.replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(code, /res\.label = '';\s*\n\s*\}\s*\n\s*\}/);
 });
 
 test('the layout allocates angles per layer rather than nesting wedges', () => {
@@ -220,4 +238,18 @@ test('the injected stylesheet contains no stray backticks', () => {
   const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `') + 19);
   const body = css.slice(0, css.indexOf('\n`;'));
   assert.ok(!body.includes('`'), 'a backtick inside STAGE_CSS would terminate the template literal');
+});
+
+test('dimmed nodes are opaque so edges cannot show through them', () => {
+  // A translucent dim fill let gold highlight edges draw through the node and
+  // read as two overlapping nodes.
+  assert.match(EXPLORER, /const DIM_NODE_COLOR = '#[0-9a-f]{6}';/);
+  assert.doesNotMatch(EXPLORER, /const DIM_NODE_COLOR = 'rgba/);
+});
+
+test('a framed view leaves room for labels', () => {
+  // At camera ratio 1 Sigma frames the nodes exactly and clips the names of
+  // everything near the edge.
+  assert.match(EXPLORER, /const FRAMED_RATIO = 1\.\d+;/);
+  assert.match(EXPLORER, /ratio: FRAMED_RATIO/);
 });

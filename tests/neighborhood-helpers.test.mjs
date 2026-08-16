@@ -599,3 +599,84 @@ test('node sizes shrink with view density but stay tappable', async () => {
   assert.equal(densitySizeScale(100000), 0.45);
   assert.equal(densitySizeScale(0), 1);
 });
+
+// ---------------------------------------------------------------------------
+// 7. Screen-space sizing and labels
+// ---------------------------------------------------------------------------
+
+test('node sizing accounts for the window, not just the node count', async () => {
+  const { viewportSizeScale, nodeSizeScale } = await import('../scripts/neighborhood-helpers.mjs');
+  const view = { extent: 330, minSeparation: 44, maxNodeSize: 13 };
+  const wide = viewportSizeScale({ ...view, viewportWidth: 1440, viewportHeight: 900 });
+  const narrow = viewportSizeScale({ ...view, viewportWidth: 1056, viewportHeight: 700 });
+  const phone = viewportSizeScale({ ...view, viewportWidth: 390, viewportHeight: 640 });
+  // The reported bug: the same 17-node view collided on a smaller window
+  // because nothing shrank. Smaller windows must now shrink nodes.
+  assert.ok(narrow < wide || wide === 1, 'a narrower window must not scale up');
+  assert.ok(phone < narrow, 'a phone must shrink more than a laptop');
+  assert.ok(phone >= 0.4, 'never below the tappable floor');
+  // A big window with a small graph leaves nodes at their designed size.
+  assert.equal(viewportSizeScale({ ...view, viewportWidth: 2560, viewportHeight: 1440 }), 1);
+  // Degenerate inputs are safe.
+  assert.equal(viewportSizeScale({}), 1);
+  assert.equal(viewportSizeScale({ extent: 0, viewportWidth: 800, viewportHeight: 600 }), 1);
+});
+
+test('the applied scale is the stricter of density and viewport', async () => {
+  const { nodeSizeScale, densitySizeScale, viewportSizeScale } = await import(
+    '../scripts/neighborhood-helpers.mjs'
+  );
+  const args = {
+    visibleCount: 220,
+    extent: 900,
+    viewportWidth: 1056,
+    viewportHeight: 700,
+    maxNodeSize: 13,
+  };
+  const combined = nodeSizeScale(args);
+  assert.equal(
+    combined,
+    Math.min(densitySizeScale(220), viewportSizeScale(args)),
+    'whichever constraint is tighter must win'
+  );
+  assert.ok(combined <= 1);
+});
+
+test('labels are not withheld from the smallest nodes', async () => {
+  const { labelSettings } = await import('../scripts/neighborhood-helpers.mjs');
+  // The bug: a fixed threshold of 7 hid every moon (5px) and asteroid (4px),
+  // so those names only appeared on click.
+  const opening = labelSettings({ visibleCount: 17, smallestNodeSize: 4 });
+  assert.ok(
+    opening.labelRenderedSizeThreshold < 4,
+    'the threshold must sit below the smallest drawn node'
+  );
+  assert.ok(opening.labelDensity > 1, 'a small view should show every name it can');
+  // Scaled-down nodes lower the threshold with them.
+  const scaled = labelSettings({ visibleCount: 17, smallestNodeSize: 1.8 });
+  assert.ok(scaled.labelRenderedSizeThreshold < 1.8);
+  assert.ok(scaled.labelRenderedSizeThreshold >= 0);
+  // Crowded views hand thinning back to Sigma's overlap culling.
+  const crowded = labelSettings({ visibleCount: 300, smallestNodeSize: 3 });
+  assert.ok(crowded.labelDensity < opening.labelDensity);
+});
+
+test('layoutExtent measures the radius the camera must frame', async () => {
+  const { layoutExtent, radialLayout } = await import('../scripts/neighborhood-helpers.mjs');
+  assert.equal(layoutExtent(new Map()), 0);
+  const { nodes, links } = fixture();
+  const view = getNeighborhood({ nodes, links, anchorId: 'Aaron McRae', maxHops: 3 });
+  const positions = radialLayout({
+    nodes: view.nodes,
+    links: view.links,
+    anchorId: 'Aaron McRae',
+    depths: view.depths,
+    spacing: 110,
+  });
+  const extent = layoutExtent(positions);
+  const maxRadius = Math.max(
+    ...[...positions.values()].map(p => Math.sqrt(p.x * p.x + p.y * p.y))
+  );
+  assert.equal(Math.round(extent), Math.round(maxRadius));
+  assert.ok(extent > 0);
+});

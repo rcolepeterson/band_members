@@ -545,6 +545,56 @@ export function radialLayout({
 }
 
 /**
+ * Largest distance from the anchor to any node in a layout, in layout units.
+ * This is the radius the camera has to frame.
+ */
+export function layoutExtent(positions) {
+  let extent = 0;
+  positions.forEach(point => {
+    extent = Math.max(extent, Math.sqrt(point.x * point.x + point.y * point.y));
+  });
+  return extent;
+}
+
+/**
+ * Chooses a node-size multiplier that keeps nodes from touching ON SCREEN.
+ *
+ * Node radii are in screen pixels while the camera frames the whole layout, so
+ * the pixels-per-layout-unit ratio depends on BOTH how big the neighborhood is
+ * and how big the window is. A view that looks well spaced on a 1440x900
+ * desktop can collide on a narrower or shorter window -- which is exactly how
+ * the first-view overlap was reported.
+ *
+ * So: convert minSeparation (a layout-unit guarantee from radialLayout) into
+ * pixels for this specific viewport, then size nodes to fit inside it with a
+ * visible gap.
+ *
+ *   pixelsPerUnit = usableViewportRadius / layoutExtent
+ *   separationPx  = minSeparation * pixelsPerUnit
+ *   scale         = separationPx / (2 * maxNodeSize + gap)
+ *
+ * Clamped to `min`..1 so nodes never grow past their designed size and never
+ * shrink below a tappable floor.
+ */
+export function viewportSizeScale({
+  extent = 0,
+  viewportWidth = 0,
+  viewportHeight = 0,
+  minSeparation = 44,
+  maxNodeSize = 13,
+  gap = 6,
+  padding = 0.86,
+  min = 0.4,
+} = {}) {
+  const usableRadius = (Math.min(viewportWidth, viewportHeight) / 2) * padding;
+  if (!extent || !usableRadius) return 1;
+  const pixelsPerUnit = usableRadius / extent;
+  const separationPx = minSeparation * pixelsPerUnit;
+  const scale = separationPx / (2 * maxNodeSize + gap);
+  return Math.max(min, Math.min(1, scale));
+}
+
+/**
  * Shrinks node radii as the visible count grows, so expanded views stay
  * legible instead of turning into overlapping blobs. Square-root scaling
  * because spacing shrinks roughly with the square root of the node count when
@@ -554,6 +604,35 @@ export function radialLayout({
 export function densitySizeScale(visibleCount, baseline = NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES) {
   if (!visibleCount || visibleCount <= baseline) return 1;
   return Math.max(0.45, Math.min(1, Math.sqrt(baseline / visibleCount)));
+}
+
+/**
+ * The size multiplier actually used by the renderer: the stricter of the
+ * density and viewport constraints, because either one alone can be the thing
+ * that would make nodes touch.
+ */
+export function nodeSizeScale({ visibleCount = 0, ...viewport } = {}) {
+  return Math.min(densitySizeScale(visibleCount), viewportSizeScale(viewport));
+}
+
+/**
+ * Label visibility settings for a view of this size.
+ *
+ * Sigma hides a label when its node is drawn smaller than
+ * labelRenderedSizeThreshold, which silently hid every moon and asteroid --
+ * names appeared only on click. In a capped local view we WANT every name, so
+ * the threshold follows the smallest node actually drawn, and label density is
+ * relaxed for small views and tightened for crowded ones (where Sigma's own
+ * overlap culling should do the thinning).
+ */
+export function labelSettings({ visibleCount = 0, smallestNodeSize = 4 } = {}) {
+  const crowded = visibleCount > NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES;
+  return {
+    // Just under the smallest drawn node, so nothing is silently nameless.
+    labelRenderedSizeThreshold: Math.max(0, smallestNodeSize - 0.5),
+    labelDensity: crowded ? 0.6 : 4,
+    labelGridCellSize: crowded ? 90 : 55,
+  };
 }
 
 /**

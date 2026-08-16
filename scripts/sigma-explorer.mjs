@@ -47,7 +47,9 @@ import {
   HOME_STAR_STYLE,
   linkEndpoints,
   normalizeAnchorKey,
-  densitySizeScale,
+  nodeSizeScale,
+  layoutExtent,
+  labelSettings,
 } from './neighborhood-helpers.mjs';
 
 // ---------------------------------------------------------------------------
@@ -68,11 +70,23 @@ const KIND_STYLE = {
   [NODE_KINDS.ASTEROID]: { color: '#5c6472', size: 4 },
 };
 
+const SMALLEST_NODE_SIZE = Math.min(...Object.values(KIND_STYLE).map(style => style.size));
+const LARGEST_NODE_SIZE = Math.max(...Object.values(KIND_STYLE).map(style => style.size));
+
 const EDGE_COLOR = 'rgba(150,170,190,0.22)';
-const DIM_NODE_COLOR = 'rgba(120,134,150,0.35)';
+const DIM_LABEL_COLOR = 'rgba(150,163,178,0.75)';
+// Dimmed nodes must be OPAQUE. A translucent fill let highlighted edges show
+// straight through them, which read as two nodes overlapping (reported from
+// the first preview) rather than as one dimmed node behind a gold thread.
+const DIM_NODE_COLOR = '#4e5865';
 const STAGE_ID = 'sigma-stage';
 
 const EXPLORE_COPY = 'You are viewing one region of a much larger music universe.';
+
+// Camera ratio for a freshly framed view. Slightly above 1 so node LABELS fit
+// on screen too: at ratio 1 Sigma frames the nodes exactly, which clipped the
+// names of every node near the edge.
+const FRAMED_RATIO = 1.22;
 
 // ---------------------------------------------------------------------------
 // Stage chrome
@@ -270,6 +284,7 @@ export function initSigmaExplorer({
     // tighter spacing than a 40-node one. Scaling size with density keeps the
     // gaps between nodes readable as views grow.
     sizeScale: 1,
+    layoutExtent: 0,
   };
 
   const viewGraph = new GraphConstructor({ type: 'undirected', multi: false, allowSelfLoops: false });
@@ -281,9 +296,12 @@ export function initSigmaExplorer({
     maxCameraRatio: 4,
     labelFont: 'Satoshi, system-ui, sans-serif',
     labelColor: { color: '#c8d3e0' },
-    labelDensity: 0.45,
-    labelGridCellSize: 90,
-    labelRenderedSizeThreshold: 7,
+    // Overwritten per view by applyLabelSettings(); these are the opening
+    // defaults so the very first frame is not label-less.
+    ...labelSettings({ visibleCount: 0, smallestNodeSize: SMALLEST_NODE_SIZE }),
+    // Per-node label colour, so dimmed nodes keep their NAME while losing
+    // emphasis. Stripping labels on dim made names appear only on click.
+    labelColor: { attribute: 'labelColor', color: '#c8d3e0' },
     defaultEdgeColor: EDGE_COLOR,
     hideEdgesOnMove: true,
     hideLabelsOnMove: true,
@@ -314,8 +332,10 @@ export function initSigmaExplorer({
         res.size = res.size * 1.25;
         res.zIndex = 2;
       } else {
+        // Dim, but keep the name: a highlight should answer "who else is
+        // connected", not blank out the rest of the constellation.
         res.color = DIM_NODE_COLOR;
-        res.label = '';
+        res.labelColor = DIM_LABEL_COLOR;
       }
     }
     return res;
@@ -325,7 +345,30 @@ export function initSigmaExplorer({
     if (!state.highlightEdges.size) return { ...attrs, color: EDGE_COLOR };
     return state.highlightEdges.has(edge)
       ? { ...attrs, color: state.highlightColor, size: 2.2, zIndex: 1 }
-      : { ...attrs, color: 'rgba(120,134,150,0.08)' };
+      : { ...attrs, color: 'rgba(120,134,150,0.10)', size: 0.8 };
+  }
+
+  // -- sizing ---------------------------------------------------------------
+
+  // Node radii are screen pixels, so how close nodes look depends on the
+  // window as much as on the node count. Recomputed per view AND on resize.
+  function applySizeScale(visibleCount = state.view ? state.view.nodes.length : 0) {
+    const rect = canvasHost.getBoundingClientRect();
+    state.sizeScale = nodeSizeScale({
+      visibleCount,
+      extent: state.layoutExtent,
+      viewportWidth: rect.width,
+      viewportHeight: rect.height,
+      maxNodeSize: LARGEST_NODE_SIZE,
+    });
+    // Label thresholds follow the smallest node ACTUALLY drawn, so shrinking
+    // nodes never silently costs a name.
+    const labels = labelSettings({
+      visibleCount,
+      smallestNodeSize: SMALLEST_NODE_SIZE * state.sizeScale,
+    });
+    Object.entries(labels).forEach(([key, value]) => renderer.setSetting(key, value));
+    renderer.refresh();
   }
 
   // -- view assembly --------------------------------------------------------
@@ -376,7 +419,8 @@ export function initSigmaExplorer({
       viewGraph.addEdge(source, target, { size: 1, relation: link.relation || 'member' });
     });
 
-    state.sizeScale = densitySizeScale(view.nodes.length);
+    state.layoutExtent = layoutExtent(positions);
+    applySizeScale(view.nodes.length);
     state.anchorId = anchorId;
     state.view = view;
     state.maxNodes = maxNodes;
@@ -387,9 +431,9 @@ export function initSigmaExplorer({
     // Search and double-click travel instead: a short animated warp that
     // lands centered on the new anchor.
     if (animate) {
-      flyTo(anchorId, { animate: true, ratio: 0.7 });
+      flyTo(anchorId, { animate: true, ratio: 0.8 });
     } else {
-      renderer.getCamera().setState({ x: 0.5, y: 0.5, ratio: 1, angle: 0 });
+      renderer.getCamera().setState({ x: 0.5, y: 0.5, ratio: FRAMED_RATIO, angle: 0 });
       positionOverlays();
     }
     return true;
@@ -580,6 +624,8 @@ export function initSigmaExplorer({
     positionOverlays();
     updateParallax();
   });
+
+  renderer.on('resize', () => applySizeScale());
 
   form.addEventListener('submit', event => {
     event.preventDefault();
