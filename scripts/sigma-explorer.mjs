@@ -47,6 +47,7 @@ import {
   HOME_STAR_STYLE,
   linkEndpoints,
   normalizeAnchorKey,
+  densitySizeScale,
 } from './neighborhood-helpers.mjs';
 
 // ---------------------------------------------------------------------------
@@ -101,6 +102,11 @@ const STAGE_CSS = `
    maintenance, and it can carry a text label. */
 #${STAGE_ID} .sigma-home-star{position:absolute;pointer-events:none;transform:translate(-50%,-50%);
   width:76px;height:76px;display:flex;align-items:center;justify-content:center}
+/* The hidden attribute must win over the display rules above and below.
+   Without this, a view that Aaron is not part of still painted his star over
+   whatever sat at the centre of the screen -- a phantom "you are here". */
+#${STAGE_ID} .sigma-home-star[hidden],
+#${STAGE_ID} .sigma-focus-ring[hidden]{display:none}
 #${STAGE_ID} .sigma-home-star::before{content:'';position:absolute;inset:0;border-radius:50%;
   background:radial-gradient(circle, ${HOME_STAR_STYLE.haloColor} 0%, transparent 68%)}
 #${STAGE_ID} .sigma-home-star .ring{position:absolute;left:0;right:0;top:50%;height:26px;
@@ -117,6 +123,10 @@ const STAGE_CSS = `
   width:58px;height:58px}
 #${STAGE_ID} .sigma-focus-ring .ring{position:absolute;inset:0;border-radius:50%;
   border:1.4px solid rgba(143,232,246,0.75);box-shadow:0 0 14px rgba(143,232,246,0.35)}
+/* When the home star and the current focus are near each other, the two
+   labels would print on top of each other; positionOverlays() flips the home
+   label above its star to keep both readable. */
+#${STAGE_ID} .sigma-home-star.label-above .home-label{top:auto;bottom:100%;margin-top:0;margin-bottom:8px}
 #${STAGE_ID} .sigma-focus-ring .focus-label{position:absolute;top:100%;left:50%;transform:translateX(-50%);
   margin-top:6px;white-space:nowrap;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;
   color:#a8d7e0;opacity:0.85}
@@ -255,6 +265,11 @@ export function initSigmaExplorer({
     highlightNodes: new Set(),
     highlightEdges: new Set(),
     highlightColor: null,
+    // Sigma node sizes are in screen pixels while the camera fits the whole
+    // view, so a 200-node neighborhood draws the same size dots at a much
+    // tighter spacing than a 40-node one. Scaling size with density keeps the
+    // gaps between nodes readable as views grow.
+    sizeScale: 1,
   };
 
   const viewGraph = new GraphConstructor({ type: 'undirected', multi: false, allowSelfLoops: false });
@@ -280,7 +295,11 @@ export function initSigmaExplorer({
 
   function reduceNode(id, attrs) {
     const style = KIND_STYLE[attrs.kind] || KIND_STYLE[NODE_KINDS.PLANET];
-    const res = { ...attrs, size: attrs.size || style.size, color: style.color };
+    const res = {
+      ...attrs,
+      size: (attrs.size || style.size) * state.sizeScale,
+      color: style.color,
+    };
     // The anchor's visual identity is the DOM ringed star overlay; the WebGL
     // node underneath is kept tiny and label-free so they don't fight.
     if (attrs.kind === NODE_KINDS.HOME_STAR) {
@@ -357,6 +376,7 @@ export function initSigmaExplorer({
       viewGraph.addEdge(source, target, { size: 1, relation: link.relation || 'member' });
     });
 
+    state.sizeScale = densitySizeScale(view.nodes.length);
     state.anchorId = anchorId;
     state.view = view;
     state.maxNodes = maxNodes;
@@ -455,6 +475,18 @@ export function initSigmaExplorer({
     const zoomScale = Math.max(0.55, Math.min(1.9, 1 / ratio));
     place(homeStarEl, homeStarId, zoomScale * HOME_STAR_STYLE.sizeMultiplier * 0.5);
     place(focusRingEl, state.anchorId === homeStarId ? null : state.anchorId, zoomScale);
+
+    // Aaron is often one hop from whatever a visitor searched for, which put
+    // "AARON MCRAE" and the focus label on top of each other. Flip the home
+    // label above its star when the two overlays are close.
+    const crowded =
+      !homeStarEl.hidden &&
+      !focusRingEl.hidden &&
+      Math.hypot(
+        parseFloat(homeStarEl.style.left) - parseFloat(focusRingEl.style.left),
+        parseFloat(homeStarEl.style.top) - parseFloat(focusRingEl.style.top)
+      ) < 120;
+    homeStarEl.classList.toggle('label-above', crowded);
   }
 
   function updateParallax() {

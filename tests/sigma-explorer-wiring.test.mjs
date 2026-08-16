@@ -22,6 +22,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -177,4 +178,46 @@ test('the explorer keeps its logic in the tested helper module', () => {
     name => assert.match(EXPLORER, new RegExp(`\\b${name}\\b`), `${name} must come from the helpers`)
   );
   assert.doesNotMatch(EXPLORER, /forceSimulation/, 'no force layout on the Sigma path');
+});
+
+test('the home-star and focus labels avoid each other when they are close', () => {
+  assert.match(EXPLORER, /\.sigma-home-star\.label-above \.home-label\{/);
+  assert.match(EXPLORER, /classList\.toggle\('label-above', crowded\)/);
+});
+
+test('node sizes are density-scaled from the tested helper', () => {
+  assert.match(EXPLORER, /densitySizeScale\(view\.nodes\.length\)/);
+  assert.match(EXPLORER, /state\.sizeScale/);
+  assert.match(HELPERS, /export function densitySizeScale/);
+});
+
+test('the layout allocates angles per layer rather than nesting wedges', () => {
+  // Recursive wedge subdivision was the expanded-view overlap bug: every
+  // generation halved its slice until members landed on identical points.
+  assert.match(HELPERS, /Angles are allocated PER LAYER/);
+  assert.doesNotMatch(HELPERS, /wedges\.set\(/);
+  assert.match(HELPERS, /minSeparation/);
+});
+
+test('hidden overlays are really hidden', () => {
+  // .sigma-home-star sets display:flex, which overrides the `hidden`
+  // attribute's default display:none unless we say otherwise -- that bug
+  // painted a phantom "you are here" star over unrelated views.
+  assert.match(EXPLORER, /\.sigma-home-star\[hidden\],\s*\n#\$\{STAGE_ID\} \.sigma-focus-ring\[hidden\]\{display:none\}/);
+});
+
+test('the explorer module parses', () => {
+  // node --test cannot import this file (it pulls sigma/graphology from the
+  // CDN), so nothing else here would catch a plain syntax error. One did slip
+  // in: a backtick inside a comment in the CSS template literal closed the
+  // string early and the whole renderer failed to boot, silently, because the
+  // flag is opt-in. `node --check` parses without executing imports.
+  execFileSync(process.execPath, ['--check', join(ROOT, 'scripts', 'sigma-explorer.mjs')]);
+  execFileSync(process.execPath, ['--check', join(ROOT, 'scripts', 'neighborhood-helpers.mjs')]);
+});
+
+test('the injected stylesheet contains no stray backticks', () => {
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `') + 19);
+  const body = css.slice(0, css.indexOf('\n`;'));
+  assert.ok(!body.includes('`'), 'a backtick inside STAGE_CSS would terminate the template literal');
 });

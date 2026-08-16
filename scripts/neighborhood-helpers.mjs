@@ -435,12 +435,15 @@ export function radialLayout({
   depths = null,
   spacing = 100,
   adjacency = null,
-  // Minimum arc length between two nodes on the same ring, in layout units.
-  minSeparation = 34,
-  // How many sub-rings a crowded wedge may spill into, and how far apart
-  // those sub-rings sit (as a fraction of `spacing`).
-  subRingLimit = 4,
-  subRingSpacing = 0.32,
+  // Minimum arc length between two neighbours on the same ring, in layout
+  // units. Each hop's radius is grown until its whole population fits at this
+  // separation, so a crowded layer moves outward instead of packing tighter.
+  minSeparation = 44,
+  // How many sub-rings a still-crowded layer may stagger across, and how far
+  // apart those sub-rings sit (as a fraction of `spacing`). Staggering breaks
+  // up the "beads on a wire" look without changing anyone's angle.
+  subRingLimit = 3,
+  subRingSpacing = 0.34,
 } = {}) {
   const positions = new Map();
   if (!anchorId || !nodes.length) return positions;
@@ -460,65 +463,97 @@ export function radialLayout({
   });
   layers.forEach(ids => ids.sort((a, b) => String(a).localeCompare(String(b))));
 
-  // The anchor owns the full circle; every later layer subdivides its
-  // parent's wedge.
-  const wedges = new Map([[anchorId, { start: 0, end: Math.PI * 2 }]]);
-  positions.set(anchorId, { x: 0, y: 0, hop: 0 });
+  // Per-hop radius. Two constraints, whichever is larger:
+  //   1. a nominal ring per hop, so distance still reads as degrees;
+  //   2. enough circumference for that layer's whole population at
+  //      minSeparation.
+  // Constraint 2 is what fixes expanded views: hop 4 of a real scene can hold
+  // a hundred musicians, and no amount of angular cleverness fits them on a
+  // ring sized for hop 1. Radii stay monotonically increasing so an outer
+  // layer can never fall inside an inner one.
+  const radii = new Map([[0, 0]]);
+  const sortedHops = Array.from(layers.keys()).filter(hop => hop > 0).sort((a, b) => a - b);
+  let previousRadius = 0;
+  sortedHops.forEach(hop => {
+    const population = (layers.get(hop) || []).length;
+    const needed = (population * minSeparation) / (2 * Math.PI);
+    const radius = Math.max(spacing * hop, needed, previousRadius + spacing * 0.75);
+    radii.set(hop, radius);
+    previousRadius = radius;
+  });
 
-  const maxHop = Math.max(...layers.keys());
-  for (let hop = 1; hop <= maxHop; hop += 1) {
+  positions.set(anchorId, { x: 0, y: 0, hop: 0 });
+  const angles = new Map([[anchorId, 0]]);
+
+  // Angles are allocated PER LAYER across the full circle, not by recursively
+  // subdividing each parent's wedge. Strict wedge nesting looks tidy for two
+  // hops and then collapses: every generation divides its slice again, so by
+  // hop 5 a band's twelve members are fighting over a hair-thin wedge and land
+  // on top of each other -- the expanded-view overlap bug.
+  //
+  // Instead each layer spreads evenly around its ring, ordered by the angle of
+  // the parent that first reached each node. Siblings stay contiguous (a band
+  // and its members still read as one solar system) and the layer's blocks
+  // appear in the same rotational order as their parents, but spacing is now
+  // uniform and guaranteed: 2 * PI * radius / population >= minSeparation.
+  sortedHops.forEach(hop => {
     const ids = layers.get(hop) || [];
-    const byParent = new Map();
+    const parentOf = new Map();
     ids.forEach(id => {
       const parents = Array.from(adj.get(id) || []).filter(
         candidate => hopOf(candidate) === hop - 1 && positions.has(candidate)
       );
       parents.sort((a, b) => String(a).localeCompare(String(b)));
-      const parent = parents[0] || anchorId;
-      if (!byParent.has(parent)) byParent.set(parent, []);
-      byParent.get(parent).push(id);
+      parentOf.set(id, parents[0] || anchorId);
     });
 
-    byParent.forEach((children, parent) => {
-      const wedge = wedges.get(parent) || { start: 0, end: Math.PI * 2 };
-      const span = wedge.end - wedge.start;
-      const baseRadius = spacing * hop;
+    const ordered = ids.slice().sort((a, b) => {
+      const angleA = angles.get(parentOf.get(a)) || 0;
+      const angleB = angles.get(parentOf.get(b)) || 0;
+      if (angleA !== angleB) return angleA - angleB;
+      const parentCompare = String(parentOf.get(a)).localeCompare(String(parentOf.get(b)));
+      return parentCompare || String(a).localeCompare(String(b));
+    });
 
-      // A narrow wedge holding many children would stack them into an
-      // unreadable smear along one radial line -- exactly what a hub band
-      // with 30 members does. When the arc each child would get is thinner
-      // than minSeparation, split the children across sub-rings just inside
-      // and outside the nominal hop radius. Still fully deterministic.
-      const arcPerChild = (span * baseRadius) / children.length;
-      const rings = Math.max(
-        1,
-        Math.min(subRingLimit, Math.ceil(minSeparation / Math.max(arcPerChild, 1)))
-      );
-      const perRing = Math.ceil(children.length / rings);
+    const count = ordered.length;
+    const step = (Math.PI * 2) / count;
+    const baseRadius = radii.get(hop);
+    // Rotate the layer so its first block starts near that block's parent,
+    // which keeps children visually under their own band instead of drifting.
+    const offset = (angles.get(parentOf.get(ordered[0])) || 0) - step * 0.5;
+    // Sub-rings only if uniform spacing still cannot reach minSeparation
+    // (very large layers); normally this resolves to a single ring.
+    const arcPerNode = step * baseRadius;
+    const rings = Math.max(
+      1,
+      Math.min(subRingLimit, Math.ceil(minSeparation / Math.max(arcPerNode, 1)))
+    );
 
-      children.forEach((id, index) => {
-        const ring = index % rings;
-        const indexInRing = Math.floor(index / rings);
-        const countInRing = Math.min(perRing, Math.ceil((children.length - ring) / rings));
-        const step = span / Math.max(countInRing, 1);
-        const start = wedge.start + step * indexInRing;
-        const end = start + step;
-        const angle = (start + end) / 2;
-        const radius = baseRadius + ring * spacing * subRingSpacing;
-        positions.set(id, {
-          x: Math.cos(angle) * radius,
-          y: Math.sin(angle) * radius,
-          hop,
-        });
-        // Narrow the wedge slightly so grandchildren do not collide with
-        // their cousins on the next ring out.
-        const inset = step * 0.05;
-        wedges.set(id, { start: start + inset, end: end - inset });
+    ordered.forEach((id, index) => {
+      const angle = offset + step * index;
+      const radius = baseRadius + (index % rings) * spacing * subRingSpacing;
+      positions.set(id, {
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+        hop,
       });
+      angles.set(id, angle);
     });
-  }
+  });
 
   return positions;
+}
+
+/**
+ * Shrinks node radii as the visible count grows, so expanded views stay
+ * legible instead of turning into overlapping blobs. Square-root scaling
+ * because spacing shrinks roughly with the square root of the node count when
+ * the camera frames a disc-shaped layout. Floored so nodes never become
+ * untappable on a phone.
+ */
+export function densitySizeScale(visibleCount, baseline = NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES) {
+  if (!visibleCount || visibleCount <= baseline) return 1;
+  return Math.max(0.45, Math.min(1, Math.sqrt(baseline / visibleCount)));
 }
 
 /**

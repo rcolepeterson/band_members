@@ -475,3 +475,127 @@ test('crowded wedges spill into sub-rings instead of stacking into a smear', asy
   );
   assert.ok(radii.size > 1, 'a crowded layer should occupy more than one radius');
 });
+
+// A scene-shaped fixture: a chain of bands, each with its own members, linked
+// by shared musicians. Deep and wide enough to reproduce the expanded-view
+// crowding that a real scene produces at 4+ degrees.
+function sceneFixture({ bands = 30, perBand = 12 } = {}) {
+  const nodes = [{ id: 'Aaron McRae', type: 'person' }];
+  const links = [];
+  for (let b = 0; b < bands; b += 1) {
+    const bandId = `Band ${String(b).padStart(2, '0')}`;
+    nodes.push({ id: bandId, type: 'band' });
+    for (let m = 0; m < perBand; m += 1) {
+      const memberId = `Member ${b}-${m}`;
+      nodes.push({ id: memberId, type: 'person' });
+      links.push({ source: bandId, target: memberId, relation: 'member' });
+      // Every band's first member also plays in the next band: the bridge
+      // that makes the graph deep instead of a bag of stars.
+      if (m === 0 && b > 0) {
+        links.push({ source: `Band ${String(b - 1).padStart(2, '0')}`, target: memberId, relation: 'member' });
+      }
+    }
+  }
+  links.push({ source: 'Band 00', target: 'Aaron McRae', relation: 'member' });
+  return { nodes, links };
+}
+
+function closestPair(positions) {
+  const points = [...positions.entries()];
+  let closest = Infinity;
+  let pair = null;
+  for (let i = 0; i < points.length; i += 1) {
+    for (let j = i + 1; j < points.length; j += 1) {
+      const dx = points[i][1].x - points[j][1].x;
+      const dy = points[i][1].y - points[j][1].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < closest) {
+        closest = dist;
+        pair = [points[i][0], points[j][0]];
+      }
+    }
+  }
+  return { closest, pair };
+}
+
+test('expanded views never stack two nodes on the same coordinates', async () => {
+  const { radialLayout } = await import('../scripts/neighborhood-helpers.mjs');
+  const { nodes, links } = sceneFixture();
+  // The exact shape of the reported bug: expand out to 4-6 degrees with a
+  // raised node budget and watch band members land on top of each other.
+  for (const [maxHops, maxNodes] of [[3, 100], [4, 160], [5, 220], [6, 400]]) {
+    const view = getNeighborhood({ nodes, links, anchorId: 'Aaron McRae', maxHops, maxNodes });
+    const positions = radialLayout({
+      nodes: view.nodes,
+      links: view.links,
+      anchorId: 'Aaron McRae',
+      depths: view.depths,
+      spacing: 110,
+    });
+    const coords = new Set([...positions.values()].map(p => `${p.x.toFixed(3)},${p.y.toFixed(3)}`));
+    assert.equal(
+      coords.size,
+      positions.size,
+      `duplicate coordinates at ${maxHops} hops / ${maxNodes} nodes`
+    );
+    const { closest, pair } = closestPair(positions);
+    assert.ok(
+      closest > 24,
+      `at ${maxHops} hops / ${view.nodes.length} nodes the closest pair (${pair}) was ${closest.toFixed(1)} apart`
+    );
+  }
+});
+
+test('a crowded layer is pushed outward instead of packed tighter', async () => {
+  const { radialLayout } = await import('../scripts/neighborhood-helpers.mjs');
+  // Fat bands: 40 members each, so a single hop really is crowded.
+  const { nodes, links } = sceneFixture({ bands: 8, perBand: 40 });
+  const view = getNeighborhood({ nodes, links, anchorId: 'Aaron McRae', maxHops: 4, maxNodes: 200 });
+  const positions = radialLayout({
+    nodes: view.nodes,
+    links: view.links,
+    anchorId: 'Aaron McRae',
+    depths: view.depths,
+    spacing: 110,
+  });
+  const radiusOf = id => {
+    const p = positions.get(id);
+    return Math.sqrt(p.x * p.x + p.y * p.y);
+  };
+  const layerRadius = hop => {
+    const ids = view.nodes.filter(node => node.hop === hop).map(node => node.id);
+    return ids.length ? Math.min(...ids.map(radiusOf)) : null;
+  };
+  // Populous layers must sit further out than the nominal spacing * hop ring.
+  const populous = [...new Set(view.nodes.map(n => n.hop))]
+    .filter(hop => hop > 0 && view.nodes.filter(n => n.hop === hop).length > 20)
+    .sort((a, b) => a - b);
+  assert.ok(populous.length, 'fixture should produce at least one crowded layer');
+  populous.forEach(hop => {
+    assert.ok(layerRadius(hop) > 110 * hop, `hop ${hop} should be pushed beyond its nominal ring`);
+  });
+  // And rings must stay ordered: no outer layer inside an inner one.
+  const hops = [...new Set(view.nodes.map(n => n.hop))].filter(h => h > 0).sort((a, b) => a - b);
+  for (let i = 1; i < hops.length; i += 1) {
+    assert.ok(
+      layerRadius(hops[i]) > layerRadius(hops[i - 1]),
+      `hop ${hops[i]} must sit outside hop ${hops[i - 1]}`
+    );
+  }
+});
+
+test('node sizes shrink with view density but stay tappable', async () => {
+  const { densitySizeScale } = await import('../scripts/neighborhood-helpers.mjs');
+  // Opening-sized views are drawn at full size.
+  assert.equal(densitySizeScale(17), 1);
+  assert.equal(densitySizeScale(NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES), 1);
+  // Bigger views shrink monotonically...
+  const at100 = densitySizeScale(100);
+  const at220 = densitySizeScale(220);
+  const at400 = densitySizeScale(400);
+  assert.ok(at100 < 1 && at220 < at100 && at400 < at220);
+  // ...but never below the floor that keeps nodes hittable on a phone.
+  assert.ok(at400 >= 0.45);
+  assert.equal(densitySizeScale(100000), 0.45);
+  assert.equal(densitySizeScale(0), 1);
+});
