@@ -3309,6 +3309,30 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     let graphGroup = null;
     let zoomBehavior = null;
     let graphState = null;
+
+    // ---------------------------------------------------------------------
+    // Sigma renderer bridge (issue #80).
+    //
+    // The Sigma neighborhood explorer lives in scripts/sigma-explorer.mjs --
+    // a real ES module, which this classic script cannot import. Rather than
+    // duplicating the data pipeline over there, we publish the master graph
+    // on window and announce it once; the module waits for that event (see
+    // bootFromPage) so both renderers always draw exactly the same data.
+    //
+    // Cost when the flag is absent: none. The module reads ?renderer= and
+    // returns immediately unless it is 'sigma'.
+    // ---------------------------------------------------------------------
+    function publishMasterGraph(master) {
+      if (!master) return;
+      try {
+        window.RBFT_MASTER_GRAPH = master;
+        window.dispatchEvent(new CustomEvent('rbft:graph-ready', {
+          detail: { nodeCount: master.nodes.length, linkCount: master.links.length }
+        }));
+      } catch (error) {
+        console.warn('Could not publish the master graph to the Sigma renderer.', error);
+      }
+    }
     let currentScene = 'all';
     let currentGenre = 'all';
     let currentSearch = '';
@@ -8597,6 +8621,7 @@ function downloadPngBlob(blob) {
         await loadGraphData().then(rows => {
           const master = buildMasterGraph(rows);
           graphState = { master };
+          publishMasterGraph(master);
           renderGraph();
         });
 
@@ -8849,6 +8874,7 @@ function downloadPngBlob(blob) {
       rebuildInstrumentDatalist();
       rebuildGenreDatalist();
       graphState = { master };
+      publishMasterGraph(master);
 
       // PR 4b: fetch every band's cached verification status in one batch
       // call, BEFORE the first renderGraph() below, so silver-star badges
@@ -9678,5 +9704,11 @@ function downloadPngBlob(blob) {
       graphBadge.textContent = 'Graph unavailable';
     });
   </script>
+
+  <!-- Sigma.js neighborhood explorer (issue #80). OFF by default: the module
+       checks ?renderer= and returns immediately unless it is 'sigma', so the
+       shipped SVG renderer is untouched for normal visitors. Opt in with
+       ?renderer=sigma; the SVG path stays reachable at ?renderer=svg. -->
+  <script type="module" src="scripts/sigma-explorer.mjs"></script>
 </body>
 </html>
