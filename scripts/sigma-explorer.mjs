@@ -77,6 +77,18 @@ const KIND_STYLE = {
   [NODE_KINDS.ASTEROID]: { color: '#5c6472', size: 4 },
 };
 
+// Hover styling. Sigma's default hover draws a WHITE rounded plate behind the
+// node and its label, which is jarring on a dark starfield and washes the label
+// out. This is the same idea done in the theme's own colours: a dark plate so
+// threads passing behind the text do not run through the letters, a thin cyan
+// edge, and a soft glow on the node itself.
+// Nearly opaque on purpose: the node's ordinary label is drawn UNDER this plate,
+// and at 0.88 it ghosted through as a second set of letters.
+const HOVER_PLATE_FILL = 'rgba(9,12,18,0.985)';
+const HOVER_PLATE_EDGE = 'rgba(143,232,246,0.45)';
+const HOVER_LABEL_COLOR = '#e8f6fa';
+const HOVER_GLOW = 'rgba(143,232,246,0.30)';
+
 const SMALLEST_NODE_SIZE = Math.min(...Object.values(KIND_STYLE).map(style => style.size));
 const LARGEST_NODE_SIZE = Math.max(...Object.values(KIND_STYLE).map(style => style.size));
 
@@ -140,7 +152,11 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-home-star .core{position:relative;width:16px;height:16px;border-radius:50%;
   background:${HOME_STAR_STYLE.color};box-shadow:0 0 18px 4px rgba(223,230,239,0.65)}
 #${STAGE_ID} .sigma-home-star .home-label{position:absolute;top:100%;margin-top:6px;white-space:nowrap;
-  font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:#c8d3e0;opacity:0.85}
+  font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:#c8d3e0;opacity:0.9;
+  /* A soft dark halo around the glyphs, so a thread passing behind the text
+     reads as behind it instead of through it. Cheaper and less boxy than a
+     plate, and it keeps the label feeling like part of the starfield. */
+  text-shadow:0 0 6px rgba(8,11,17,0.95),0 0 12px rgba(8,11,17,0.85)}
 /* Focus ring: where the camera currently sits when that is NOT Aaron. A thin
    cyan ring, deliberately quieter than the silver ringed star so the home
    star keeps its unique identity in the universe. */
@@ -154,7 +170,7 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-home-star.label-above .home-label{top:auto;bottom:100%;margin-top:0;margin-bottom:8px}
 #${STAGE_ID} .sigma-focus-ring .focus-label{position:absolute;top:100%;left:50%;transform:translateX(-50%);
   margin-top:6px;white-space:nowrap;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;
-  color:#a8d7e0;opacity:0.85}
+  color:#a8d7e0;opacity:0.9;text-shadow:0 0 6px rgba(8,11,17,0.95),0 0 12px rgba(8,11,17,0.85)}
 #${STAGE_ID} .sigma-prompt{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);
   width:min(460px,86vw);display:flex;flex-direction:column;gap:6px;z-index:4}
 #${STAGE_ID} .sigma-prompt form{display:flex;gap:8px}
@@ -323,6 +339,8 @@ export function initSigmaExplorer({
     defaultEdgeColor: EDGE_COLOR,
     hideEdgesOnMove: true,
     hideLabelsOnMove: true,
+    // Replaces the white default hover plate; see drawHover.
+    defaultDrawNodeHover: drawHover,
     nodeReducer: (id, attrs) => reduceNode(id, attrs),
     edgeReducer: (edge, attrs) => reduceEdge(edge, attrs),
   });
@@ -701,6 +719,65 @@ export function initSigmaExplorer({
       if (svg) svg.style.display = svgDisplayBefore || '';
     },
   };
+}
+
+/**
+ * Draws the hover treatment for a node: a dark rounded plate behind the label,
+ * a hairline cyan edge, and a soft glow behind the node.
+ *
+ * Signature is Sigma's `defaultDrawNodeHover(context, data, settings)`.
+ */
+function drawHover(context, data, settings) {
+  const size = settings.labelSize || 12;
+  const font = settings.labelFont || 'Satoshi, system-ui, sans-serif';
+  const weight = settings.labelWeight || 'normal';
+  const label = data.label;
+
+  context.font = `${weight} ${size}px ${font}`;
+
+  // Glow behind the node, so hovering reads as "this one" even without a label.
+  context.beginPath();
+  context.fillStyle = HOVER_GLOW;
+  context.arc(data.x, data.y, data.size + 7, 0, Math.PI * 2);
+  context.closePath();
+  context.fill();
+
+  if (!label) return;
+
+  const width = context.measureText(label).width;
+  const paddingX = 10;
+  const paddingY = 6;
+  const plateHeight = size + paddingY * 2;
+  // Starts just inside where Sigma's normal label begins, so the plate covers it
+  // completely -- otherwise the first glyph of the underlying label peeks out
+  // from behind the plate's left edge.
+  const left = data.x + data.size;
+  const top = data.y - plateHeight / 2;
+  const radius = plateHeight / 2;
+
+  context.beginPath();
+  context.fillStyle = HOVER_PLATE_FILL;
+  context.strokeStyle = HOVER_PLATE_EDGE;
+  context.lineWidth = 1;
+  // Rounded rectangle; roundRect is not available everywhere, so it is drawn by
+  // hand from arcs.
+  const right = left + width + paddingX * 2;
+  const bottom = top + plateHeight;
+  context.moveTo(left + radius, top);
+  context.lineTo(right - radius, top);
+  context.arcTo(right, top, right, top + radius, radius);
+  context.lineTo(right, bottom - radius);
+  context.arcTo(right, bottom, right - radius, bottom, radius);
+  context.lineTo(left + radius, bottom);
+  context.arcTo(left, bottom, left, bottom - radius, radius);
+  context.lineTo(left, top + radius);
+  context.arcTo(left, top, left + radius, top, radius);
+  context.closePath();
+  context.fill();
+  context.stroke();
+
+  context.fillStyle = HOVER_LABEL_COLOR;
+  context.fillText(label, left + paddingX + 2, data.y + size / 3);
 }
 
 function escapeHtml(value) {

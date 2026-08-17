@@ -278,3 +278,18 @@ test('the renderer frames views through the tested framing helper', () => {
   assert.match(EXPLORER, /ratio: framedRatio\(\)/);
   assert.match(HELPERS, /export function framingRatio/);
 });
+
+test('hover is drawn in the theme, not with Sigma default white plate', () => {
+  // Sigma's built-in hover renderer draws a white rounded plate behind the node
+  // and label, which is jarring on a dark starfield and washes the label out.
+  assert.match(EXPLORER, /defaultDrawNodeHover: drawHover/);
+  assert.match(EXPLORER, /function drawHover\(context, data, settings\)/);
+  assert.match(EXPLORER, /const HOVER_PLATE_FILL = 'rgba\(9,12,18,/);
+  assert.doesNotMatch(EXPLORER, /HOVER_PLATE_FILL = '(#fff|white|rgba\(255)/);
+});
+
+test('overlay labels carry a dark halo so threads read as behind them', () => {
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `'));
+  assert.match(css, /\.home-label\{[^}]*text-shadow:0 0 6px rgba\(8,11,17/s);
+  assert.match(css, /\.focus-label\{[^}]*text-shadow:0 0 6px rgba\(8,11,17/s);
+});
