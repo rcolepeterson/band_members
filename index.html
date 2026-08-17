@@ -6642,10 +6642,19 @@ function downloadPngBlob(blob) {
     // Data bound to the live SVG, i.e. the post-filter copies renderGraph()
     // made. Reading these rather than graphState.master keeps highlighting
     // honest under an active filter -- we can only glow what is on screen.
+    // These used to read the data bound to the live SVG. That made every consumer
+    // -- the node card's member list, the highlight sets, the connection names --
+    // silently depend on the SVG having been DRAWN, which is no longer true on the
+    // constellation. renderGraph() records the same arrays in graphState.rendered,
+    // so this now reads the view as data and falls back to the DOM only for a
+    // render that predates the state (nothing does, but the fallback costs
+    // nothing and cannot regress the SVG path).
     function renderedNodeData() {
+      if (graphState && graphState.rendered) return graphState.rendered.nodes;
       return graphGroup ? graphGroup.selectAll('g.node').data() : [];
     }
     function renderedLinkData() {
+      if (graphState && graphState.rendered) return graphState.rendered.links;
       return graphGroup ? graphGroup.selectAll('line.link').data() : [];
     }
 
@@ -7209,6 +7218,11 @@ function downloadPngBlob(blob) {
       }
       const nodes = filtered.nodes.map(d => ({ ...d }));
       const links = filtered.links.map(d => ({ ...d }));
+      // The current view, as data. These are the very objects the SVG binds and
+      // that the force layout writes x/y onto, so reading them is equivalent to
+      // reading the DOM's bound data -- and it keeps working when the SVG is not
+      // drawn at all, which is the case on the constellation.
+      graphState.rendered = { nodes, links };
 
       metricNodes.textContent = filtered.nodes.length;
       metricLinks.textContent = filtered.links.length;
@@ -7275,6 +7289,21 @@ function downloadPngBlob(blob) {
           search: currentSearch,
           recentOnly,
         });
+        return;
+      }
+
+      // On the constellation, stop here.
+      //
+      // Everything above is data and chrome -- the filtered graph handed to Sigma,
+      // the metrics, the badge, the filter pills. Everything below draws the SVG:
+      // a force simulation over every node, then roughly 16,500 SVG elements, all
+      // of it behind display:none. Measured on the full graph, that was about
+      // fifteen seconds AFTER the data had already parsed, and 89% of the
+      // elements on the page, to produce a picture nobody sees.
+      //
+      // The escape hatch keeps working because it does not set this class: at
+      // ?renderer=svg the SVG is the picture and is drawn as before.
+      if (document.body && document.body.classList.contains('rbft-sigma-boot')) {
         return;
       }
 
