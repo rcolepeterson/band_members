@@ -167,7 +167,7 @@ test('every shortcut pill has a one-word label and a sentence explaining it', ()
     actions.map(item => item.key),
     // No Sign-in pill: the page's account strip in the site header is kept as
     // the single entry point, top-right where a search homepage puts the avatar.
-    ['expand', 'reset', 'add', 'share', 'feedback'],
+    ['expand', 'reset', 'filter', 'add', 'share', 'feedback'],
   );
   actions.forEach(({ key, label, detail }) => {
     // A pill only fits a short label; two words at most ("Sign in").
@@ -189,7 +189,7 @@ test('the shortcut popover works for hover, keyboard and touch', () => {
   assert.match(EXPLORER, /aria-describedby="\$\{TIP_ID\}"/);
   assert.match(EXPLORER, /role="tooltip"/);
   // And it must be dismissable, or a tap-opened popover traps a phone user.
-  assert.match(EXPLORER, /event\.key === 'Escape'/);
+  assert.match(EXPLORER, /if \(event\.key !== 'Escape'\) return;/);
   assert.match(EXPLORER, /addEventListener\('pointerdown'/);
   // Clamped so the end pills of a centred row cannot push it off screen.
   assert.match(EXPLORER, /Math\.max\(margin, Math\.min\(left, stageBox\.width - width - margin\)\)/);
@@ -441,7 +441,7 @@ test('search suggestions are alphabetical, and cover every band', () => {
   // slice) looked random in that moment.
   assert.match(EXPLORER, /\.sort\(\(a, b\) => a\.localeCompare\(b, undefined, \{ sensitivity: 'base', numeric: true \}\)\)/);
   // Every band, not a slice of the node list.
-  assert.match(EXPLORER, /const bandNames = master\.nodes\.filter\(node => node\.type === 'band'\)/);
+  assert.match(EXPLORER, /bandNames = master\.nodes\.filter\(node => node\.type === 'band'\)/);
   assert.doesNotMatch(EXPLORER, /master\.nodes\.slice\(0, 200\)/);
   assert.match(EXPLORER, /const MAX_SUGGESTIONS = \d+;/);
 });
@@ -658,4 +658,66 @@ test('the fit ratio is deliberately not loosened to clear the chrome', () => {
   // instead. On 1440x900 that traded 2 hidden names for 5.
   const fit = EXPLORER.slice(EXPLORER.indexOf('function fitRatio()'), EXPLORER.indexOf('function framedRatio()'));
   assert.match(fit, /return FRAMED_RATIO;/);
+});
+
+test('chrome zones are measured in the renderer\'s coordinate space', () => {
+  // This one shipped a false-clean gate. graphToViewport reports positions in the
+  // RENDERER'S container, and the stage wrapper sits ~280px down the page inside
+  // .graph-stage, so converting the chrome rects against the stage shifted every
+  // zone by that much -- one zone ended up with a negative top. Labels printed
+  // across the footer on screen while both the renderer and the audit called it
+  // clean.
+  const block = EXPLORER.slice(
+    EXPLORER.indexOf('function updateLabelBlocking()'),
+    EXPLORER.indexOf('function updateParallax()'),
+  );
+  assert.match(block, /const originBox = canvasHost\.getBoundingClientRect\(\);/);
+  assert.doesNotMatch(block, /stage\.getBoundingClientRect\(\)/);
+});
+
+test('blocking is recomputed when the chrome moves, not only per frame', () => {
+  // The footer grows a line when the context text wraps, which moves the zone
+  // under labels that were already placed. Sigma does not draw a frame for a DOM
+  // reflow, so waiting for afterRender left a label across the footer.
+  assert.match(EXPLORER, /new ResizeObserver\(\(\) => updateLabelBlocking\(\)\)/);
+  assert.match(EXPLORER, /\[heroEl, footerEl, homeLabelEl\]\.forEach\(el => \{ if \(el\) chromeObserver\.observe\(el\); \}\)/);
+  assert.match(EXPLORER, /if \(chromeObserver\) chromeObserver\.disconnect\(\)/);
+  // And once more right after the chrome's own text is written.
+  const chrome = EXPLORER.slice(EXPLORER.indexOf('function updateChrome()'), EXPLORER.indexOf('// -- camera'));
+  assert.match(chrome, /updateLabelBlocking\(\);/);
+});
+
+test('filters narrow the constellation through one implementation', () => {
+  // Scene / Genre / Recently-added / search live in index.html and produce a
+  // filtered {nodes, links}. The explorer explores THAT, so there is one
+  // filtering implementation feeding two renderers.
+  assert.match(INDEX_HTML, /window\.RBFT_SIGMA\.setGraph\(filtered\)/);
+  const setGraph = EXPLORER.slice(EXPLORER.indexOf('function setGraph(next)'), EXPLORER.indexOf('// -- first paint'));
+  // An empty result is a real outcome of a narrow filter, not a crash.
+  assert.match(setGraph, /No bands match these filters\./);
+  // buildAdjacency stores a Set per node: reading .length gave undefined, every
+  // comparison was false, no anchor was ever chosen, and filtering silently did
+  // nothing at all.
+  assert.match(setGraph, /neighbours \? neighbours\.size : 0/);
+  // A filter should narrow what you are looking at, not move you.
+  assert.match(setGraph, /masterById\.has\(state\.anchorId\) \? state\.anchorId : null/);
+  // And clearing it should put you back rather than leaving you somewhere you
+  // never chose.
+  assert.match(setGraph, /state\.displacedAnchorId/);
+});
+
+test('the filter panel reuses the page\'s own controls', () => {
+  // The scene and genre <select> elements are MOVED into the panel, keeping their
+  // existing change handlers; Recently-added and Clear press the page's chips.
+  assert.match(EXPLORER, /const RELOCATED_FILTERS = \[/);
+  assert.match(EXPLORER, /selector: '#scene-filter'/);
+  assert.match(EXPLORER, /selector: '#genre-filter'/);
+  assert.match(EXPLORER, /'\.tool-chip\[data-action="recent"\]'/);
+  assert.match(EXPLORER, /'\.tool-chip\[data-action="clear"\]'/);
+  // Filter state is read from the page, never mirrored: the same filters can be
+  // changed by Reset view or a country chip.
+  assert.match(EXPLORER, /function syncFilterState\(\)/);
+  // Same click-propagation trap as the pills.
+  const panel = EXPLORER.slice(EXPLORER.indexOf("filterPanel.addEventListener('click'"), EXPLORER.indexOf('function runAction'));
+  assert.match(panel, /event\.stopPropagation\(\)/);
 });

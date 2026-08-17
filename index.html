@@ -6884,6 +6884,18 @@ function downloadPngBlob(blob) {
       // longer exists.
       if (typeof closeNodeCard === 'function' && nodeCardState.node) closeNodeCard();
       const filtered = getFilteredGraph(graphState.master);
+      // The Sigma renderer explores the same filtered graph the SVG renderer
+      // draws, so Scene / Genre / Recently-added / search narrow the
+      // constellation too. One filtering implementation, two renderers.
+      // typeof-guarded: tests exercise renderGraph's source outside a browser.
+      if (typeof window !== 'undefined' && window.RBFT_SIGMA
+          && typeof window.RBFT_SIGMA.setGraph === 'function') {
+        try {
+          window.RBFT_SIGMA.setGraph(filtered);
+        } catch (error) {
+          console.warn('Could not hand the filtered graph to the Sigma renderer.', error);
+        }
+      }
       const nodes = filtered.nodes.map(d => ({ ...d }));
       const links = filtered.links.map(d => ({ ...d }));
 
