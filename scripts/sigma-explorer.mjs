@@ -1056,9 +1056,24 @@ export function initSigmaExplorer({
     const zoomScale = Math.max(0.55, Math.min(1.9, 1 / ratio));
     const homeScale = zoomScale * HOME_STAR_STYLE.sizeMultiplier * 0.5;
     const homePoint = place(homeStarEl, homeStarId, homeScale);
+    // The ring marks a node the visitor CLICKED, not merely the node the view
+    // happens to be centred on.
+    //
+    // Anchored to state.anchorId it appeared without anyone asking: on a shared
+    // link (the way most visitors arrive), after a search, and after a filter
+    // displaced the anchor. That put two ringed, glowing objects on screen in the
+    // same visual language -- Aaron's Saturn star and this -- both saying "look
+    // here", and neither of them clicked. On page load Aaron should be the only
+    // node wearing the rings.
+    //
+    // state.selection is the right signal because it is set ONLY by
+    // highlightFrom, which runs when a node is clicked, and cleared by
+    // clearHighlight -- which every non-click path already calls: first paint,
+    // explore/search, a filter change, Reset, and a click on empty space.
+    const clickedId = state.selection ? state.selection.id : null;
     const focusPoint = place(
       focusRingEl,
-      state.anchorId === homeStarId ? null : state.anchorId,
+      clickedId && clickedId !== homeStarId ? clickedId : null,
       zoomScale
     );
 

@@ -794,3 +794,35 @@ test('the shared glass popover style carries its own padding', () => {
   const firstRule = share.slice(0, share.indexOf('}'));
   assert.match(firstRule, /padding: 1\.1rem 1\.15rem 1\.15rem;/);
 });
+
+test('the focus ring marks a clicked node, not the centre of the view', () => {
+  // Anchored to state.anchorId the ring appeared without anyone asking: on a
+  // shared link (the way most visitors arrive), after a search, and after a
+  // filter displaced the anchor. That put two ringed, glowing objects on screen
+  // in the same visual language -- Aaron's Saturn star and the focus ring --
+  // both saying "look here", neither of them clicked. On load Aaron should be
+  // the only node wearing rings.
+  const overlays = EXPLORER.slice(EXPLORER.indexOf('const zoomScale ='), EXPLORER.indexOf('function updateLabelBlocking'));
+  assert.match(overlays, /const clickedId = state\.selection \? state\.selection\.id : null;/);
+  assert.match(overlays, /clickedId && clickedId !== homeStarId \? clickedId : null/);
+  // The old behaviour, explicitly gone.
+  assert.doesNotMatch(overlays, /state\.anchorId === homeStarId \? null : state\.anchorId/);
+});
+
+test('every non-click path clears the selection the ring depends on', () => {
+  // state.selection is the right signal only because it is set ONLY by a click
+  // and cleared by clearHighlight -- which each of these already calls. If any
+  // of them stopped, a ring would appear on a node nobody chose.
+  assert.match(EXPLORER, /function clearHighlight\(\) \{\s*state\.selection = null;/);
+  // First paint, search and filters all go through renderNeighborhood.
+  const render = EXPLORER.slice(EXPLORER.indexOf('state.layoutExtent = layoutExtent(positions)'));
+  assert.match(render.slice(0, 400), /clearHighlight\(\);/);
+  // Reset.
+  const home = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function goHome()') + 300);
+  assert.match(home, /clearHighlight\(\);/);
+  // A click on empty space.
+  assert.match(EXPLORER, /renderer\.on\('clickStage', \(\) => clearHighlight\(\)\)/);
+  // And a click on a node is what sets it.
+  const highlight = EXPLORER.slice(EXPLORER.indexOf('function highlightFrom(id)'), EXPLORER.indexOf('function exploreFor'));
+  assert.match(highlight, /state\.selection = \{ id, type: entityType \}/);
+});
