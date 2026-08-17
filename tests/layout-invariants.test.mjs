@@ -253,3 +253,18 @@ test('every opened panel is counted in the audit total', () => {
   assert.match(AUDIT, /const checks = rows\.length \+ chromeRows\.length \+ labelRows\.length \+ clickRows\.length;/);
   assert.match(AUDIT, /if \(result\.problems\.length\) failures \+= 1;/);
 });
+
+test('the audit presses Share and weighs the picture it produces', () => {
+  // The share export shipped broken and no check noticed, because none of them
+  // pressed the button. A blank or zero-sized canvas still encodes to a valid
+  // PNG, just a tiny one, so the file's weight is the assertion that matters.
+  assert.match(AUDIT, /Share image/);
+  assert.match(AUDIT, /page\.waitForEvent\('download'/);
+  assert.match(AUDIT, /button:has-text\("Download PNG"\)/);
+  assert.match(AUDIT, /almost certainly blank/);
+  assert.match(AUDIT, /if \(size < 20000\)/);
+  // Downloads have to be accepted for that to be possible at all.
+  assert.match(AUDIT, /acceptDownloads: true/);
+  // And when nothing is produced, report what the page told the visitor.
+  assert.match(AUDIT, /no image was produced/);
+});

@@ -52,6 +52,7 @@
 // ---------------------------------------------------------------------------
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { stat } from 'node:fs/promises';
 
 const args = process.argv.slice(2);
 const readFlag = (name, fallback = null) => {
@@ -577,7 +578,11 @@ const labelRows = [];
 
 for (const dataset of DATASETS) {
 for (const viewport of VIEWPORTS) {
-  const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
+  const context = await browser.newContext({
+    viewport: { width: viewport.width, height: viewport.height },
+    // The share-image check below downloads a PNG.
+    acceptDownloads: true,
+  });
   // Replay production's payload into the local page. The page asks /api/bands
   // first and falls back to CSV, so fulfilling that one route is the entire
   // difference between auditing 3,194 nodes and auditing what users see.
@@ -613,6 +618,47 @@ for (const viewport of VIEWPORTS) {
   const chrome = await page.evaluate(MEASURE_CHROME);
   chromeRows.push({ label: `${dataset.label}  ${viewport.label}`, ...chrome });
   if (chrome.problems.length) failures += 1;
+
+  // Does Share actually produce a picture? This shipped broken: the export
+  // serialised #graph-svg, and once the constellation became the default that SVG
+  // was hidden -- a display:none element measures 0x0, so the canvas came out
+  // zero-sized and every share failed with "Could not generate the image". A
+  // check that presses the button and weighs the file is the only kind that
+  // would have caught it.
+  {
+    const label = `${dataset.label}  ${viewport.label} / Share image`;
+    const problems = [];
+    let metrics = null;
+    try {
+      await page.click('.sigma-action[data-key="share"]', { timeout: 5000 });
+      await page.waitForTimeout(600);
+      const pending = page.waitForEvent('download', { timeout: 30000 }).catch(() => null);
+      await page.click('button:has-text("Download PNG")', { timeout: 5000 });
+      const download = await pending;
+      if (!download) {
+        const message = await page.evaluate(() =>
+          document.querySelector('#share-feedback, .share-feedback')?.textContent?.trim() || '');
+        problems.push(`no image was produced${message ? ` -- the page said "${message}"` : ''}`);
+      } else {
+        const path = await download.path();
+        const { size } = path ? await stat(path) : { size: 0 };
+        metrics = { box: `${Math.round(size / 1024)}kB` };
+        // A blank or zero-sized canvas still encodes to a valid PNG, just a tiny
+        // one, so the weight is the assertion that matters.
+        if (size < 20000) problems.push(`the image is only ${size} bytes -- almost certainly blank`);
+      }
+    } catch (error) {
+      problems.push(`sharing failed: ${error.message.split('\n')[0]}`);
+    }
+    clickRows.push({ label, problems, metrics });
+    if (problems.length) failures += 1;
+    await page.keyboard.press('Escape').catch(() => {});
+    await page.waitForTimeout(300);
+    await page.evaluate(() => {
+      const el = document.querySelector('#share-popover');
+      if (el && !el.hidden) el.hidden = true;
+    });
+  }
 
   // Press every pill and look at what comes up. See CLICK_THROUGH.
   for (const item of CLICK_THROUGH) {
