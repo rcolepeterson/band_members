@@ -6,7 +6,18 @@
 // screen -- real node radii, real label culling, real camera framing -- across
 // the matrix that kept producing bug reports:
 //
-//   viewport sizes  x  view states  x  checks
+//   datasets  x  viewport sizes  x  view states  x  checks
+//
+// DATASETS matter, and this is a lesson learned the hard way. A local static
+// server has no /api routes, so the page falls back to the bundled CSV -- 3,194
+// nodes. Production reads Neon and serves 3,240. Different node counts mean a
+// different layout, so an audit run only against the CSV can report every check
+// clean while the live site hides labels users can see are missing. That is the
+// same shape of blind spot as measuring in the wrong coordinate space: a gate
+// that passes because it is not looking at what ships. So the production
+// payload is captured as a fixture and REPLAYED into the local page, giving
+// production's graph without depending on the network, the password gate, or
+// whatever the database happens to hold this minute.
 //
 // Viewports include a tall/narrow desktop window and a phone, because node
 // radii are screen pixels: a view that is comfortable at 1440x900 can collide
@@ -26,7 +37,10 @@
 //     page's own duplicate toolbar showing through
 //
 // Usage (needs a local Chromium and playwright-core):
-//   node scripts/layout-audit.mjs                       # against a local server
+//   node scripts/layout-audit.mjs                       # both datasets
+//   node scripts/layout-audit.mjs --data fixture        # bundled CSV only
+//   node scripts/layout-audit.mjs --data production     # replayed Neon payload
+//   node scripts/layout-audit.mjs --refresh-data        # re-capture that payload
 //   node scripts/layout-audit.mjs --url https://...      # against a deploy preview
 //   node scripts/layout-audit.mjs --shots ./audit-shots  # also save screenshots
 //
@@ -35,7 +49,7 @@
 // browser, and the geometry gate already runs there.
 // ---------------------------------------------------------------------------
 
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 const readFlag = (name, fallback = null) => {
@@ -49,6 +63,57 @@ const CHROME = readFlag(
   '--chrome',
   process.env.CHROME_PATH || '/home/user/.cache/ms-playwright/chromium-1217/chrome-linux64/chrome'
 );
+
+// Which datasets to render. Both by default: the whole point is that a pass on
+// one of them is not evidence about the other.
+const DATA_CHOICE = readFlag('--data', 'both');
+const REFRESH_DATA = args.includes('--refresh-data');
+const PRODUCTION_URL = readFlag('--production-url', 'https://bandmembers.netlify.app');
+const SNAPSHOT_PATH = new URL('./fixtures/production-bands.json', import.meta.url);
+
+// Refreshing is explicit rather than automatic: the snapshot is a fixture, and a
+// gate whose expectations silently change underneath it is not a gate.
+if (REFRESH_DATA) {
+  const endpoint = `${PRODUCTION_URL}/api/bands`;
+  const response = await fetch(endpoint);
+  if (!response.ok) {
+    console.error(`Could not refresh the production snapshot: ${endpoint} returned ${response.status}`);
+    process.exit(1);
+  }
+  const payload = await response.json();
+  if (!payload || !Array.isArray(payload.bands) || !payload.bands.length) {
+    console.error(`Refused to overwrite the snapshot: ${endpoint} returned no bands.`);
+    process.exit(1);
+  }
+  // Sorted by id so a refresh yields a reviewable diff, not whole-file churn.
+  const byId = (a, b) => (a.id > b.id ? 1 : a.id < b.id ? -1 : 0);
+  const snapshot = {
+    ok: payload.ok,
+    bands: [...payload.bands].sort(byId),
+    members: [...payload.members].sort(byId),
+    memberships: [...payload.memberships].sort(byId),
+  };
+  writeFileSync(SNAPSHOT_PATH, `${JSON.stringify(snapshot, null, 0)}\n`);
+  console.log(
+    `Snapshot refreshed from ${endpoint}: `
+    + `${snapshot.bands.length} bands, ${snapshot.members.length} members, `
+    + `${snapshot.memberships.length} memberships.`
+  );
+}
+
+const PRODUCTION_PAYLOAD = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
+
+const DATASETS = [
+  // The page's own fallback: no /api route, so it loads the bundled CSV.
+  { key: 'fixture', label: 'csv ', replay: null },
+  // Production's payload, served to the page from the fixture.
+  { key: 'production', label: 'neon', replay: PRODUCTION_PAYLOAD },
+].filter(set => DATA_CHOICE === 'both' || DATA_CHOICE === set.key);
+
+if (!DATASETS.length) {
+  console.error(`--data must be one of: fixture, production, both (got "${DATA_CHOICE}")`);
+  process.exit(1);
+}
 
 const VIEWPORTS = [
   { label: 'desktop  1440x900', width: 1440, height: 900 },
@@ -426,8 +491,19 @@ const rows = [];
 const chromeRows = [];
 const labelRows = [];
 
+for (const dataset of DATASETS) {
 for (const viewport of VIEWPORTS) {
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
+  // Replay production's payload into the local page. The page asks /api/bands
+  // first and falls back to CSV, so fulfilling that one route is the entire
+  // difference between auditing 3,194 nodes and auditing what users see.
+  if (dataset.replay) {
+    await context.route('**/api/bands', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(dataset.replay),
+    }));
+  }
   // The site is behind a shared password gate; unlock it the way a returning
   // visitor's session would be.
   await context.addInitScript(() => {
@@ -451,7 +527,7 @@ for (const viewport of VIEWPORTS) {
   await page.waitForTimeout(10000);
 
   const chrome = await page.evaluate(MEASURE_CHROME);
-  chromeRows.push({ label: viewport.label, ...chrome });
+  chromeRows.push({ label: `${dataset.label}  ${viewport.label}`, ...chrome });
   if (chrome.problems.length) failures += 1;
 
   for (const state of STATES) {
@@ -473,7 +549,7 @@ for (const viewport of VIEWPORTS) {
     const result = await page.evaluate(MEASURE, LIMITS);
     const labelResult = await page.evaluate(MEASURE_LABELS);
     const problems = result.error ? [result.error] : result.problems;
-    const label = `${viewport.label} / ${state.label}`;
+    const label = `${dataset.label}  ${viewport.label} / ${state.label}`;
     labelRows.push({ label, ...labelResult });
     if (labelResult.problems.length) failures += 1;
     rows.push({ label, result, problems: problems.concat(consoleErrors.splice(0)) });
@@ -493,16 +569,19 @@ for (const viewport of VIEWPORTS) {
 
   await context.close();
 }
+}
 
 await browser.close();
 
-console.log('\nRendered-view audit\n');
+console.log(`\nRendered-view audit  --  datasets: ${DATASETS.map(d => d.key).join(', ')}\n`);
+console.log(`  csv  = bundled seattle_band_members CSV (the local fallback)`);
+console.log(`  neon = production payload replayed from scripts/fixtures/production-bands.json\n`);
 rows.forEach(({ label, result, problems }) => {
   const summary = result.error
     ? 'DID NOT BOOT'
     : `${String(result.nodes).padStart(3)} nodes  scale ${result.sizeScale}  smallest ${result.smallestNode}px  `
       + `near-misses ${result.nearMisses}  labels hidden ${result.suppressedLabels ?? '?'}`;
-  console.log(`${problems.length ? 'FAIL' : 'ok  '}  ${label.padEnd(34)} ${summary}`);
+  console.log(`${problems.length ? 'FAIL' : 'ok  '}  ${label.padEnd(40)} ${summary}`);
   problems.slice(0, 4).forEach(problem => console.log(`        - ${problem}`));
   if (problems.length > 4) console.log(`        - ...and ${problems.length - 4} more`);
 });
@@ -510,7 +589,7 @@ rows.forEach(({ label, result, problems }) => {
 console.log('\nLabel collisions\n');
 labelRows.forEach(({ label, problems, metrics }) => {
   const summary = metrics ? `${String(metrics.labels).padStart(3)} labels drawn` : 'not measured';
-  console.log(`${problems.length ? 'FAIL' : 'ok  '}  ${label.padEnd(34)} ${summary}`);
+  console.log(`${problems.length ? 'FAIL' : 'ok  '}  ${label.padEnd(40)} ${summary}`);
   problems.slice(0, 4).forEach(problem => console.log(`        - ${problem}`));
   if (problems.length > 4) console.log(`        - ...and ${problems.length - 4} more`);
 });
@@ -520,7 +599,7 @@ chromeRows.forEach(({ label, problems, metrics }) => {
   const summary = metrics
     ? `field ${metrics.height}px  font ${metrics.font}px  offset ${metrics.offset}px  ${metrics.pills} pills`
     : 'not measured';
-  console.log(`${problems.length ? 'FAIL' : 'ok  '}  ${label.padEnd(34)} ${summary}`);
+  console.log(`${problems.length ? 'FAIL' : 'ok  '}  ${label.padEnd(40)} ${summary}`);
   problems.forEach(problem => console.log(`        - ${problem}`));
 });
 

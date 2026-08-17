@@ -7,7 +7,10 @@
   "scripts": {
     "test": "node --test tests/",
     "test:layout": "node scripts/layout-tune.mjs --current",
-    "audit:layout": "node scripts/layout-audit.mjs"
+    "audit:layout": "node scripts/layout-audit.mjs",
+    "audit:layout:csv": "node scripts/layout-audit.mjs --data fixture",
+    "audit:layout:prod": "node scripts/layout-audit.mjs --data production",
+    "audit:layout:refresh": "node scripts/layout-audit.mjs --refresh-data --data production"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
