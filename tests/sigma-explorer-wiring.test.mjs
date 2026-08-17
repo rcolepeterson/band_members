@@ -942,3 +942,59 @@ test('an unmapped band still offers to add it', () => {
   // The footer line stays terse so the screen does not say it twice.
   assert.match(EXPLORER, /No match for <strong>\$\{escapeHtml\(rawQuery\)\}<\/strong> in the tree yet\./);
 });
+
+test('the share image is captured from the constellation, not the hidden SVG', () => {
+  // "Could not generate the image. Try again in a moment." The export serialised
+  // #graph-svg, and hiding that SVG when the constellation became the default
+  // left a display:none element measuring 0x0 -- so the export canvas came out
+  // zero-sized and every share failed. Capturing Sigma is also the right picture
+  // rather than merely a working one: it is what the visitor is looking at.
+  assert.match(INDEX_HTML, /function captureSigmaCanvas\(\)/);
+  const capture = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('function captureSigmaCanvas()'),
+    INDEX_HTML.indexOf('async function renderGraphPngBlob()')
+  );
+  // WebGL discards its drawing buffer after compositing, so read it in the same
+  // turn as a fresh paint.
+  assert.match(capture, /renderer\.refresh\(\);/);
+  assert.match(capture, /renderer\.getCanvases\(\)/);
+  // Edges under nodes under labels; interaction layers excluded, because they
+  // carry a hover plate for wherever the pointer happened to be resting.
+  // Assert the DRAW LIST specifically -- the prose above it names the excluded
+  // layers, so scanning the whole function would match its own comment.
+  const drawList = capture.match(/\[(('|")[a-zA-Z]+\2,?\s*)+\]\.forEach/);
+  assert.ok(drawList, 'the capture should draw an explicit list of layers');
+  assert.equal(drawList[0], "['edges', 'edgeLabels', 'nodes', 'labels'].forEach");
+  // The starfield is CSS, so the field colour has to be painted in or the graph
+  // lands on transparency.
+  assert.match(capture, /target\.fillStyle = '#070b12'/);
+  // ?renderer=svg keeps the old path.
+  assert.match(capture, /if \(!renderer \|\| typeof renderer\.getCanvases !== 'function'\) return null;/);
+});
+
+test('the export sizes itself from the stage that is on screen', () => {
+  const png = INDEX_HTML.slice(INDEX_HTML.indexOf('async function renderGraphPngBlob()'));
+  assert.match(png, /sigmaCanvas && sigmaStage\s*\n\s*\? sigmaStage\.getBoundingClientRect\(\)/);
+  // A zero-sized rect is what produced the failure; refuse it outright.
+  assert.match(png, /if \(!rect\.width \|\| !rect\.height\) return null;/);
+  // Serialising the SVG clones three thousand nodes, so skip it entirely when
+  // the constellation is the picture.
+  assert.match(png, /const drawGraph = async \(\) => \{[\s\S]*?if \(sigmaCanvas\) \{/);
+});
+
+test('the shared picture includes the star, ring and gold label', () => {
+  // They are DOM overlays layered over the canvas, so a canvas capture misses
+  // them: the first working export had Aaron as an unmarked white dot. On a
+  // picture whose job is to advertise a shared link, the ringed star and the
+  // name are the subject.
+  const overlays = INDEX_HTML.slice(INDEX_HTML.indexOf('const drawOverlays = () =>'), INDEX_HTML.indexOf('try {\n        await drawGraph();'));
+  assert.match(overlays, /\.sigma-home-star/);
+  assert.match(overlays, /\.sigma-focus-ring/);
+  assert.match(overlays, /\.sigma-home-label/);
+  assert.match(overlays, /#ffc978/);           // the same gold as on screen
+  assert.match(overlays, /ctx\.ellipse\(/);    // the tilted ring
+  // Geometry is read from the live elements so it cannot drift from where they
+  // actually are.
+  assert.match(overlays, /getBoundingClientRect\(\)/);
+  assert.match(INDEX_HTML, /await drawGraph\(\);\s*\n\s*drawOverlays\(\);/);
+});

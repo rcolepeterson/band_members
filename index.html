@@ -4143,11 +4143,58 @@ function downloadPngBlob(blob) {
     // long comment in the old exporter for the rationale on inlining
     // the SVG stylesheet before serialization — external CSS doesn't
     // apply when an SVG is loaded back into an <img> for drawImage.
+    /**
+     * Flattens Sigma's layered canvases into one image.
+     *
+     * The share image used to be built by serialising #graph-svg, which stopped
+     * working the moment the constellation became the default and that SVG was
+     * hidden: a display:none element measures 0x0, so the export canvas came out
+     * zero-sized and every share failed with "Could not generate the image".
+     *
+     * Capturing Sigma is also the right picture rather than merely a working one
+     * -- it is what the visitor is looking at. Returns null if Sigma is not the
+     * active renderer, so ?renderer=svg keeps the SVG path.
+     */
+    function captureSigmaCanvas() {
+      const controller = window.RBFT_SIGMA;
+      const renderer = controller && controller.renderer;
+      if (!renderer || typeof renderer.getCanvases !== 'function') return null;
+      // WebGL discards its drawing buffer after compositing unless asked not to,
+      // so read it in the same turn as a fresh paint.
+      renderer.refresh();
+      const layers = renderer.getCanvases();
+      const reference = layers.nodes || layers.edges;
+      if (!reference || !reference.width) return null;
+      const out = document.createElement('canvas');
+      out.width = reference.width;
+      out.height = reference.height;
+      const target = out.getContext('2d');
+      // The starfield and the scrims are CSS, not canvas, so the field colour has
+      // to be painted in or the graph lands on transparency.
+      target.fillStyle = '#070b12';
+      target.fillRect(0, 0, out.width, out.height);
+      // Edges under nodes under labels. 'hovers' and 'mouse' are interaction
+      // layers: they carry a hover plate for whatever the pointer happened to be
+      // resting on, which must not be baked into a picture someone shares.
+      ['edges', 'edgeLabels', 'nodes', 'labels'].forEach(key => {
+        const layer = layers[key];
+        if (layer && layer.width) target.drawImage(layer, 0, 0, out.width, out.height);
+      });
+      return out;
+    }
+
     async function renderGraphPngBlob() {
+      const sigmaCanvas = captureSigmaCanvas();
       const svg = document.getElementById('graph-svg');
-      if (!svg) return null;
+      if (!sigmaCanvas && !svg) return null;
       const siteUrl = shareableUrl();
-      const rect = svg.getBoundingClientRect();
+      // On the constellation the SVG is hidden and measures 0x0; size the export
+      // from the stage that is actually on screen.
+      const sigmaStage = document.getElementById('sigma-stage');
+      const rect = sigmaCanvas && sigmaStage
+        ? sigmaStage.getBoundingClientRect()
+        : svg.getBoundingClientRect();
+      if (!rect.width || !rect.height) return null;
 
       // Aspect-ratio-preserving sizing. Previous version used
       // Math.max(1200, ...) and Math.max(900, ...) as floors which
@@ -4196,22 +4243,25 @@ function downloadPngBlob(blob) {
       ctx.font = `600 ${Math.round(19 * scale)}px "Inter", "Segoe UI", system-ui, sans-serif`;
       ctx.fillText('Rock Band Family Tree', canvas.width / 2, headerH / 2);
 
-      // Serialize the live SVG with inline stylesheet.
-      const serializer = new XMLSerializer();
-      const inlineStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-      inlineStyle.textContent = `
-        .link { stroke: rgba(161, 204, 228, 0.34); stroke-opacity: 0.75; }
-        .node.band circle { fill: #f7fbff; stroke: #8fe8f6; stroke-width: 2.1; }
-        .node.person circle { fill: #0b1722; stroke: #98aec0; stroke-width: 1.8; }
-        .node-label { fill: #e7f3fb; font-size: 13px; font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
-      `;
-      const svgClone = svg.cloneNode(true);
-      svgClone.insertBefore(inlineStyle, svgClone.firstChild);
-      const source = serializer.serializeToString(svgClone);
-      const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-      const svgObjUrl = URL.createObjectURL(svgBlob);
-
-      try {
+      // Serialising the SVG means cloning three thousand nodes, so it is only
+      // done when the SVG is actually the picture being shared.
+      const drawGraph = async () => {
+        if (sigmaCanvas) {
+          ctx.drawImage(sigmaCanvas, 0, headerH, graphW, graphH);
+          return;
+        }
+        const serializer = new XMLSerializer();
+        const inlineStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+        inlineStyle.textContent = `
+          .link { stroke: rgba(161, 204, 228, 0.34); stroke-opacity: 0.75; }
+          .node.band circle { fill: #f7fbff; stroke: #8fe8f6; stroke-width: 2.1; }
+          .node.person circle { fill: #0b1722; stroke: #98aec0; stroke-width: 1.8; }
+          .node-label { fill: #e7f3fb; font-size: 13px; font-family: "Inter", "Segoe UI", system-ui, sans-serif; }
+        `;
+        const svgClone = svg.cloneNode(true);
+        svgClone.insertBefore(inlineStyle, svgClone.firstChild);
+        const source = serializer.serializeToString(svgClone);
+        const svgObjUrl = URL.createObjectURL(new Blob([source], { type: 'image/svg+xml;charset=utf-8' }));
         await new Promise((resolve, reject) => {
           const img = new Image();
           img.onload = () => {
@@ -4222,6 +4272,85 @@ function downloadPngBlob(blob) {
           img.onerror = (e) => { URL.revokeObjectURL(svgObjUrl); reject(e); };
           img.src = svgObjUrl;
         });
+      };
+
+      /**
+       * Paints the overlays Sigma does not draw.
+       *
+       * The home star, its focus ring and the gold "you are here" label are DOM
+       * elements layered over the canvas, so a canvas capture misses them
+       * entirely -- the first working export came out with Aaron as an unmarked
+       * white dot. On a picture whose whole job is to advertise a shared link,
+       * the ringed star and the name are the subject.
+       *
+       * Geometry is read from the live elements rather than recomputed, so this
+       * cannot drift out of step with where they actually are on screen.
+       */
+      const drawOverlays = () => {
+        if (!sigmaCanvas || !sigmaStage) return;
+        const stageBox = sigmaStage.getBoundingClientRect();
+        const toCanvas = box => ({
+          x: (box.left + box.width / 2 - stageBox.left) * scale,
+          y: (box.top + box.height / 2 - stageBox.top) * scale + headerH,
+        });
+        const visible = el => el && !el.hidden && el.getBoundingClientRect().width > 0;
+
+        const star = sigmaStage.querySelector('.sigma-home-star');
+        if (visible(star)) {
+          const box = star.getBoundingClientRect();
+          const at = toCanvas(box);
+          const core = (box.width * scale) / 2 * 0.32;
+          // Glow, then the white core, then the tilted ring: the same order the
+          // CSS paints them in.
+          const glow = ctx.createRadialGradient(at.x, at.y, 0, at.x, at.y, core * 5);
+          glow.addColorStop(0, 'rgba(226,240,255,0.55)');
+          glow.addColorStop(1, 'rgba(226,240,255,0)');
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(at.x, at.y, core * 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#eef5ff';
+          ctx.beginPath();
+          ctx.arc(at.x, at.y, core, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.save();
+          ctx.translate(at.x, at.y);
+          ctx.rotate(-0.32);
+          ctx.strokeStyle = 'rgba(226,236,248,0.85)';
+          ctx.lineWidth = Math.max(1, 1.6 * scale);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, core * 3.1, core * 1.05, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        const ring = sigmaStage.querySelector('.sigma-focus-ring');
+        if (visible(ring)) {
+          const box = ring.getBoundingClientRect();
+          const at = toCanvas(box);
+          ctx.strokeStyle = 'rgba(143,232,246,0.75)';
+          ctx.lineWidth = Math.max(1, 1.4 * scale);
+          ctx.beginPath();
+          ctx.arc(at.x, at.y, (box.width * scale) / 2, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        const label = sigmaStage.querySelector('.sigma-home-label');
+        if (visible(label) && label.textContent.trim()) {
+          const box = label.getBoundingClientRect();
+          const at = toCanvas(box);
+          const size = parseFloat(getComputedStyle(label).fontSize) || 14;
+          ctx.fillStyle = '#ffc978';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = `500 ${Math.round(size * scale)}px "Inter", "Segoe UI", system-ui, sans-serif`;
+          ctx.fillText(label.textContent.trim(), at.x, at.y);
+        }
+      };
+
+      try {
+        await drawGraph();
+        drawOverlays();
 
         // Footer strip (bottom): site URL so viewers know where to go.
         const footerY = headerH + graphH;
