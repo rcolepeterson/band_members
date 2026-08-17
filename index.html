@@ -660,6 +660,114 @@ body {
   --radius-control: 8px;
 }
 
+/* -------------------------------------------------------------------------
+ * Boot state for the constellation.
+ *
+ * The Sigma chrome used to be applied when its module mounted, which is AFTER
+ * the band data has been fetched and the SVG graph drawn -- about nine seconds
+ * on a real connection. For those nine seconds a visitor got the entire old
+ * interface: toolbar, stats badge, version pill, the sign-up nudge and a full
+ * 3,194-node SVG render, all of it then replaced. This class is set by a
+ * synchronous inline script before first paint, so none of that ever appears.
+ *
+ * It is deliberately duplicated here rather than imported from the module's
+ * injected stylesheet: that stylesheet does not exist until the module loads,
+ * which is the very gap this is closing.
+ * ---------------------------------------------------------------------- */
+body.rbft-sigma-boot .hero,
+body.rbft-sigma-boot .graph-overlay-top,
+body.rbft-sigma-boot .graph-stats-badge,
+body.rbft-sigma-boot .graph-panel-head,
+body.rbft-sigma-boot .graph-version-pill,
+body.rbft-sigma-boot .welcome-nudge,
+body.rbft-sigma-boot .site-footer,
+/* The SVG graph still renders (filters and the node card are driven from it),
+   but it must not be seen: the constellation is the picture now. */
+body.rbft-sigma-boot .graph-stage > svg {
+  display: none !important;
+}
+/* Full-bleed dark field from the first frame, so there is no panel seam and no
+   flash of a lighter page before the starfield arrives. */
+body.rbft-sigma-boot .graph-panel {
+  min-height: 100dvh;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  padding: 0;
+}
+body.rbft-sigma-boot .graph-stage {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 100dvh;
+}
+body.rbft-sigma-boot .site-header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: auto;
+  width: auto;
+  background: none;
+  border: 0;
+  z-index: 20;
+}
+body.rbft-sigma-boot .site-header .header-inner { padding: 0; max-width: none; }
+
+/* The placeholder that stands in for the real chrome while the graph loads.
+ * Same wordmark, same field geometry, same starfield -- so the page a visitor
+ * lands on IS the new look, and the constellation simply fills in behind it.
+ * Removed by the module once the live chrome is mounted. */
+.rbft-boot-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: none;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(24,42,64,0.55), transparent 62%),
+    linear-gradient(180deg, #070b12 0%, #05080d 100%);
+}
+body.rbft-sigma-boot .rbft-boot-shell { display: block; }
+body.rbft-sigma-chrome .rbft-boot-shell { display: none !important; }
+.rbft-boot-shell__inner {
+  position: absolute;
+  left: 50%;
+  top: clamp(16px, 3.4vh, 40px);
+  transform: translateX(-50%);
+  width: min(620px, 92vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(10px, 1.6vh, 16px);
+}
+.rbft-boot-shell__wordmark {
+  margin: 0;
+  font-size: clamp(15px, 2.2vw, 26px);
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #dbe6f2;
+  text-align: center;
+}
+.rbft-boot-shell__field {
+  width: 100%;
+  height: clamp(52px, 5.6vw, 62px);
+  border-radius: 999px;
+  border: 1px solid rgba(190, 206, 224, 0.28);
+  background: rgba(10, 14, 20, 0.55);
+  display: flex;
+  align-items: center;
+  padding: 0 clamp(18px, 2vw, 24px);
+  color: #7f8fa1;
+  font-size: clamp(16px, 1.5vw, 18px);
+  font-style: italic;
+}
+.rbft-boot-shell__note {
+  color: #64748b;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
 /* Downward-opening popovers (mirror of .popover-up used elsewhere). */
 .popover-down {
   position: absolute;
@@ -2431,6 +2539,39 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 </head>
 <body>
  <!--
+   Decide the renderer BEFORE first paint and mark the document accordingly.
+   Sigma is the default, so this is what nearly every visitor gets; the class
+   suppresses the old chrome and the SVG drawing so neither is ever seen, and
+   shows a placeholder in the new style until the real chrome mounts. Inline and
+   synchronous on purpose -- an external script or a DOMContentLoaded handler
+   would run after the browser has already painted the old interface, which is
+   the entire problem this solves. Mirrors rendererFromSearch() in
+   scripts/neighborhood-helpers.mjs; a test keeps the two in step.
+ -->
+ <script>
+   (function () {
+     try {
+       var requested = (new URLSearchParams(window.location.search).get('renderer') || '')
+         .trim().toLowerCase();
+       // Unknown or absent values fall back to the default, exactly as the
+       // module does, so a typo in a shared link still gets the new look.
+       var renderer = (requested === 'svg' || requested === 'sigma') ? requested : 'sigma';
+       if (renderer === 'sigma') document.body.classList.add('rbft-sigma-boot');
+     } catch (error) {
+       /* No URL API: fall through to the old chrome rather than a blank page. */
+     }
+   })();
+ </script>
+
+ <!-- Stands in for the constellation chrome until the module mounts. -->
+ <div class="rbft-boot-shell" aria-hidden="true">
+   <div class="rbft-boot-shell__inner">
+     <p class="rbft-boot-shell__wordmark">Rock Band Family Tree</p>
+     <div class="rbft-boot-shell__field">Who&rsquo;s your favorite band?</div>
+     <p class="rbft-boot-shell__note">Mapping the universe&hellip;</p>
+   </div>
+ </div>
+ <!--
    Hidden static form for Netlify Forms build-time discovery. Netlify's
    form parser only sees forms present in the deployed HTML at build time,
    which excludes the visible feedback form that lives inside a
@@ -3402,6 +3543,24 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         const value = source.get(key);
         if (value) kept.set(key, value);
       });
+      // The address bar no longer follows travel, so it cannot be the source of
+      // truth for what to share -- it still names the view this visit STARTED
+      // from. Read the anchor off the live constellation instead, so Share
+      // always sends the band on screen right now. The alternative spellings are
+      // dropped here for the same reason syncAddressBar drops them: a stale
+      // ?band= alongside a fresh ?anchor= would contradict it.
+      try {
+        const live = window.RBFT_SIGMA
+          && window.RBFT_SIGMA.state
+          && window.RBFT_SIGMA.state.anchorId;
+        if (live) {
+          ['band', 'member', 'node', 'person'].forEach(key => kept.delete(key));
+          kept.set('anchor', live);
+        }
+      } catch (error) {
+        // Fall back to whatever the URL carried; a share link is better stale
+        // than missing.
+      }
       const query = kept.toString();
       return query ? `${base}?${query}` : base;
     }

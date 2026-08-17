@@ -24,6 +24,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { RENDERERS, DEFAULT_RENDERER } from '../scripts/neighborhood-helpers.mjs';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -825,4 +826,73 @@ test('every non-click path clears the selection the ring depends on', () => {
   // And a click on a node is what sets it.
   const highlight = EXPLORER.slice(EXPLORER.indexOf('function highlightFrom(id)'), EXPLORER.indexOf('function exploreFor'));
   assert.match(highlight, /state\.selection = \{ id, type: entityType \}/);
+});
+
+test('the old chrome is stood down before first paint, not on mount', () => {
+  // The Sigma chrome used to be applied when its module mounted -- after the
+  // band data was fetched AND the SVG graph drawn, about nine seconds. For those
+  // nine seconds a visitor got the whole old interface: toolbar, stats badge,
+  // version pill, sign-up nudge and a full 3,194-node SVG render, then all of it
+  // replaced. A synchronous inline script now marks the document first.
+  assert.match(INDEX_HTML, /document\.body\.classList\.add\('rbft-sigma-boot'\)/);
+  // Inline and synchronous is the whole point: a module or a DOMContentLoaded
+  // handler runs after the browser has already painted the old interface.
+  const bodyStart = INDEX_HTML.indexOf('<body>');
+  const bootScript = INDEX_HTML.indexOf("classList.add('rbft-sigma-boot')");
+  const firstModule = INDEX_HTML.indexOf('<script type="module"', bodyStart);
+  assert.ok(bootScript > bodyStart, 'the boot script belongs inside <body>');
+  assert.ok(firstModule === -1 || bootScript < firstModule, 'it must run before any module');
+  // The rules cannot live in the module's injected stylesheet, which does not
+  // exist yet at that moment.
+  const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
+  assert.match(css, /body\.rbft-sigma-boot \.graph-overlay-top,/);
+  assert.match(css, /body\.rbft-sigma-boot \.graph-stage > svg \{/);
+});
+
+test('the boot script mirrors rendererFromSearch', () => {
+  // If these drift, ?renderer=svg would get the new chrome bolted over the old
+  // interface, or every visitor would get a flash of the thing we just hid.
+  const script = INDEX_HTML.slice(
+    INDEX_HTML.indexOf("new URLSearchParams(window.location.search).get('renderer')"),
+    INDEX_HTML.indexOf("classList.add('rbft-sigma-boot')")
+  );
+  assert.match(script, /requested === 'svg' \|\| requested === 'sigma'/);
+  assert.match(script, /: 'sigma'/);          // unknown values fall back, as the module does
+  assert.deepEqual(RENDERERS, ['svg', 'sigma'], 'a new renderer needs adding to the boot script too');
+  assert.equal(DEFAULT_RENDERER, 'sigma');
+});
+
+test('a placeholder holds the new look until the real chrome mounts', () => {
+  // Hiding the old chrome without this would leave an empty page for the whole
+  // data load. Same wordmark, same field geometry, so the page a visitor lands
+  // on IS the new look and the constellation fills in behind it.
+  assert.match(INDEX_HTML, /class="rbft-boot-shell"/);
+  assert.match(INDEX_HTML, /rbft-boot-shell__wordmark/);
+  assert.match(INDEX_HTML, /Who&rsquo;s your favorite band\?/);
+  // And it must get out of the way the moment the real chrome is up.
+  assert.match(INDEX_HTML, /body\.rbft-sigma-chrome \.rbft-boot-shell \{ display: none !important; \}/);
+});
+
+test('the address bar names the view you arrived on, not the last node clicked', () => {
+  // Travelling used to rewrite ?anchor= on every move, so a refresh reopened the
+  // last node clicked and there was no way back to the start short of Reset --
+  // and the opening view was no longer Aaron's.
+  assert.match(EXPLORER, /\/\/ NOT syncAddressBar\(\)/);
+  const chrome = EXPLORER.slice(EXPLORER.indexOf('function updateChrome()'), EXPLORER.indexOf('// -- camera'));
+  assert.doesNotMatch(chrome, /^\s*syncAddressBar\(\);/m);
+  // Written exactly once, after the opening view, to canonicalise the inbound
+  // link (?band= / ?member= / ?node= / ?person= all collapse to ?anchor=).
+  const firstPaint = EXPLORER.slice(EXPLORER.indexOf('// -- first paint'));
+  assert.match(firstPaint, /syncAddressBar\(\);/);
+  assert.equal((EXPLORER.match(/^\s*syncAddressBar\(\);/gm) || []).length, 1, 'exactly one call site');
+});
+
+test('Share reads the live view, since the URL no longer follows travel', () => {
+  // Otherwise Share would send whatever view the visit STARTED from -- for most
+  // visitors, Aaron rather than the band they are looking at.
+  const share = INDEX_HTML.slice(INDEX_HTML.indexOf('function shareableUrl()'), INDEX_HTML.indexOf('let sigmaSelectionBound'));
+  assert.match(share, /window\.RBFT_SIGMA\.state\.anchorId/);
+  assert.match(share, /kept\.set\('anchor', live\)/);
+  // A stale ?band= alongside a fresh ?anchor= would contradict it.
+  assert.match(share, /\['band', 'member', 'node', 'person'\]\.forEach\(key => kept\.delete\(key\)\)/);
 });

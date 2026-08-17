@@ -929,7 +929,10 @@ export function initSigmaExplorer({
     }
     positionOverlays();
 
-    syncAddressBar();
+    // NOT syncAddressBar() -- see below. The address bar is written once, for the
+    // view the visitor opened with, and then left alone: a refresh should return
+    // you to where you came in, not to the last node you happened to click.
+    // Share builds its link from the live view instead (see shareableUrl).
     // The footer's text just changed, and a longer context line makes it taller.
     // That moves the zone labels are measured against, so the blocking has to be
     // recomputed here as well as per frame -- Sigma does not draw a frame when
@@ -966,6 +969,12 @@ export function initSigmaExplorer({
    * exploring does not bury the visitor's previous page under a hundred history
    * entries; travel is not navigation.
    */
+  // Called ONCE, after the opening view is drawn, to canonicalise the link the
+  // visitor arrived on -- ?band= / ?member= / ?node= / ?person= all collapse to a
+  // single ?anchor=. It is deliberately not called again: travelling used to
+  // rewrite the URL, which made a refresh reopen the last node clicked and left
+  // no way back to the start short of pressing Reset. Aaron is the opening view
+  // again, and the ringed star is his alone.
   function syncAddressBar() {
     if (!win || !win.history || typeof win.history.replaceState !== 'function') return;
     try {
@@ -1600,6 +1609,9 @@ export function initSigmaExplorer({
     maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
     animate: false,
   });
+  // The one and only write: canonicalise the link this visit arrived on. From
+  // here the address bar stays put, so a refresh returns to this view.
+  syncAddressBar();
 
   return {
     stage,
