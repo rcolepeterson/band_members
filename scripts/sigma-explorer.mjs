@@ -242,8 +242,13 @@ const STAGE_CSS = `
   #${STAGE_ID} > .share-popover{width:94vw;max-height:82vh}
 }
 
-#${STAGE_ID} .sigma-filters{position:absolute;left:50%;transform:translateX(-50%);
-  top:calc(100% + 10px);width:min(420px,92vw);z-index:7;padding:16px 18px 18px;
+/* left/top are set by positionFilters() from the Filter pill's own rect, the
+   same way the shortcut popover is placed. They used to be
+   left:50%;top:calc(100% + 10px), which reads like "hang below my trigger" but
+   this panel is a child of the STAGE, not of the pill row -- so 100% meant the
+   full height of a 100dvh stage and the panel opened just below the bottom of
+   the window. It was doing everything else correctly, entirely off screen. */
+#${STAGE_ID} .sigma-filters{position:absolute;width:min(420px,92vw);z-index:8;padding:16px 18px 18px;
   border-radius:var(--radius-card,12px);border:1px solid rgba(143,232,246,0.3);background:rgba(9,12,18,0.97);
   box-shadow:0 18px 44px rgba(3,6,10,0.7);display:flex;flex-direction:column;gap:12px;
   text-align:left}
@@ -929,6 +934,10 @@ export function initSigmaExplorer({
     }
     positionOverlays();
 
+    stage.dispatchEvent(new CustomEvent('rbft:sigma-view', {
+      bubbles: true,
+      detail: { anchorId: state.anchorId, nodes: state.view.nodes.length },
+    }));
     // NOT syncAddressBar() -- see below. The address bar is written once, for the
     // view the visitor opened with, and then left alone: a refresh should return
     // you to where you came in, not to the last node you happened to click.
@@ -1245,9 +1254,10 @@ export function initSigmaExplorer({
     const exact = master.nodes.find(node => normalizeAnchorKey(node.id) === query);
     const partial = exact || master.nodes.find(node => normalizeAnchorKey(node.id).includes(query));
     if (!partial) {
+      // Terse on purpose: the "No Rawk Found" panel makes the offer to add the
+      // band, and two copies of the same sentence on one screen read as a fault.
       contextEl.innerHTML =
-        `We have not mapped <strong>${escapeHtml(rawQuery)}</strong> yet. ` +
-        `Add it to the universe from the Add-band flow.`;
+        `No match for <strong>${escapeHtml(rawQuery)}</strong> in the tree yet.`;
       stage.dispatchEvent(
         new CustomEvent('rbft:sigma-search-miss', { bubbles: true, detail: { query: rawQuery } })
       );
@@ -1333,7 +1343,11 @@ export function initSigmaExplorer({
     updateParallax();
   });
 
-  renderer.on('resize', () => applySizeScale());
+  renderer.on('resize', () => {
+    applySizeScale();
+    // The pill row rewraps on a narrow window, which moves the trigger.
+    positionFilters();
+  });
 
   // Any reflow of the chrome moves the zones labels are measured against.
   const chromeObserver = typeof ResizeObserver === 'function'
@@ -1399,6 +1413,21 @@ export function initSigmaExplorer({
     button.setAttribute('aria-expanded', 'true');
   }
 
+  // Under the Filter pill, clamped inside the stage. Measured after the panel is
+  // visible, because a hidden element has no width to centre.
+  function positionFilters() {
+    const button = actionButtons.get('filter');
+    if (!button || !filterPanel || filterPanel.hidden) return;
+    const stageBox = stage.getBoundingClientRect();
+    const box = button.getBoundingClientRect();
+    const width = filterPanel.offsetWidth;
+    const margin = 10;
+    let left = box.left - stageBox.left + box.width / 2 - width / 2;
+    left = Math.max(margin, Math.min(left, stageBox.width - width - margin));
+    filterPanel.style.left = `${left}px`;
+    filterPanel.style.top = `${box.bottom - stageBox.top + 10}px`;
+  }
+
   function hideTip() {
     tip.hidden = true;
     actionButtons.forEach(button => button.removeAttribute('aria-expanded'));
@@ -1412,7 +1441,10 @@ export function initSigmaExplorer({
     filterPanel.hidden = !open;
     const pill = actionButtons.get('filter');
     if (pill) pill.setAttribute('aria-expanded', String(open));
-    if (open) syncFilterState();
+    if (open) {
+      syncFilterState();
+      positionFilters();
+    }
   }
 
   /**
