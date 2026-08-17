@@ -85,19 +85,24 @@ function wideFixture(memberCount) {
 // 1. Feature flag
 // ---------------------------------------------------------------------------
 
-test('renderer flag defaults to the shipped SVG renderer', () => {
+test('the constellation is what a visitor gets by default', () => {
   assert.equal(RENDERER_FLAG, 'renderer');
-  assert.equal(DEFAULT_RENDERER, 'svg');
-  assert.equal(rendererFromSearch(''), 'svg');
-  assert.equal(rendererFromSearch('?band=Nirvana'), 'svg');
+  assert.equal(DEFAULT_RENDERER, 'sigma');
+  assert.equal(rendererFromSearch(''), 'sigma');
+  // A shared deep link with no renderer named still opens the constellation.
+  assert.equal(rendererFromSearch('?band=Nirvana'), 'sigma');
 });
 
-test('renderer flag opts into sigma, and unknown values fall back', () => {
+test('the original renderer stays reachable, and unknown values fall back', () => {
+  // ?renderer=svg is a deliberate escape hatch: it is the only way to reach the
+  // scene and genre filters and Recently-added until those are rebuilt on the
+  // Sigma path, and it is what to reach for if the constellation misbehaves in
+  // production.
+  assert.equal(rendererFromSearch('?renderer=svg'), 'svg');
   assert.equal(rendererFromSearch('?renderer=sigma'), 'sigma');
   assert.equal(rendererFromSearch('renderer=SIGMA'), 'sigma');
-  assert.equal(rendererFromSearch('?renderer=svg'), 'svg');
-  assert.equal(rendererFromSearch('?renderer=webgl2000'), 'svg');
-  assert.equal(rendererFromSearch('?renderer='), 'svg');
+  assert.equal(rendererFromSearch('?renderer=webgl2000'), 'sigma');
+  assert.equal(rendererFromSearch('?renderer='), 'sigma');
 });
 
 // ---------------------------------------------------------------------------
