@@ -539,3 +539,42 @@ test('pill copy does not name the default anchor', () => {
     assert.doesNotMatch(detail, /Aaron|McRae/i, `pill copy names the anchor: "${detail}"`);
   });
 });
+
+test('Reset returns to the view the visitor arrived on', () => {
+  // Most people arrive on a link shared by another user, so "start over" means
+  // the band in THAT link. Sending them to the project's default anchor would
+  // drop them somewhere they have never been.
+  assert.match(EXPLORER, /state\.openingAnchorId = resolved\.anchorId;/);
+  const goHome = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function showTip'));
+  assert.match(goHome, /state\.openingAnchorId \|\| homeStarId \|\| NEIGHBORHOOD_BUDGET\.DEFAULT_ANCHOR/);
+});
+
+test('the address bar follows the current view', () => {
+  // Share reads the query string, so the URL has to describe what is on screen;
+  // it also makes reload and copy-from-the-bar work.
+  const sync = EXPLORER.slice(EXPLORER.indexOf('function syncAddressBar()'), EXPLORER.indexOf('// -- camera'));
+  assert.match(sync, /url\.searchParams\.set\('anchor', state\.anchorId\)/);
+  // replaceState, not pushState: travelling is not navigation, and a hundred
+  // history entries would bury whatever page the visitor came from.
+  assert.match(sync, /win\.history\.replaceState/);
+  assert.doesNotMatch(sync, /pushState/);
+  // The inbound spellings are cleared so a stale one cannot contradict the view.
+  assert.match(sync, /\['band', 'member', 'node', 'person'\]\.forEach\(key => url\.searchParams\.delete\(key\)\)/);
+  // Called from the same place the rest of the chrome is updated.
+  assert.match(EXPLORER, /syncAddressBar\(\);/);
+});
+
+test('a shared link carries the view, not just the site', () => {
+  // Sharing is the main way people arrive. This used to be
+  // origin + pathname, which threw the query string away: whatever you were
+  // centred on, the person you sent it to landed on the default anchor.
+  assert.match(INDEX_HTML, /function shareableUrl\(\)/);
+  assert.match(INDEX_HTML, /const SHAREABLE_PARAMS = \['renderer', 'anchor', 'band', 'member', 'node', 'person'\]/);
+  // Every share path must go through it.
+  const shareSites = INDEX_HTML.match(/const siteUrl = [^;]+;/g) || [];
+  assert.ok(shareSites.length >= 4, `expected several share call sites, found ${shareSites.length}`);
+  shareSites.forEach(line => assert.match(line, /shareableUrl\(\)/));
+  // And it must not carry arbitrary query parameters onward.
+  const helper = INDEX_HTML.slice(INDEX_HTML.indexOf('function shareableUrl()'), INDEX_HTML.indexOf('function publishMasterGraph'));
+  assert.match(helper, /SHAREABLE_PARAMS\.forEach/);
+});

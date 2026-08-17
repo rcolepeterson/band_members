@@ -439,6 +439,9 @@ export function initSigmaExplorer({
   mount = null,
   doc = typeof document !== 'undefined' ? document : null,
   search = typeof window !== 'undefined' ? window.location.search : '',
+  // Injectable so the address-bar sync is testable, and so a document without a
+  // window (jsdom fragments, tests) simply skips it.
+  win = typeof window !== 'undefined' ? window : null,
   SigmaConstructor = Sigma,
   GraphConstructor = Graph,
 } = {}) {
@@ -733,6 +736,8 @@ export function initSigmaExplorer({
     }
     positionOverlays();
 
+    syncAddressBar();
+
     // Search suggestions, in alphabetical order.
     //
     // The list used to be ordered by relevance -- the frontier first, then an
@@ -751,6 +756,30 @@ export function initSigmaExplorer({
       .slice(0, MAX_SUGGESTIONS)
       .map(id => `<option value="${escapeHtml(id)}"></option>`)
       .join('');
+  }
+
+  /**
+   * Keeps the address bar pointing at the current view.
+   *
+   * Three things depend on it: copying the URL out of the bar, reloading without
+   * losing your place, and Share -- which reads the query string to build the
+   * link it hands to someone else. replaceState rather than pushState, so
+   * exploring does not bury the visitor's previous page under a hundred history
+   * entries; travel is not navigation.
+   */
+  function syncAddressBar() {
+    if (!win || !win.history || typeof win.history.replaceState !== 'function') return;
+    try {
+      const url = new URL(win.location.href);
+      // One canonical parameter for the anchor. The other accepted spellings
+      // (?band=, ?member=, ?node=, ?person=) are inbound-only, and are cleared
+      // so a stale one cannot contradict the view being shown.
+      ['band', 'member', 'node', 'person'].forEach(key => url.searchParams.delete(key));
+      url.searchParams.set('anchor', state.anchorId);
+      win.history.replaceState(win.history.state, '', url);
+    } catch (error) {
+      // A malformed or opaque location is not worth breaking exploration over.
+    }
   }
 
   // -- camera ---------------------------------------------------------------
@@ -983,7 +1012,11 @@ export function initSigmaExplorer({
     state.maxHops = NEIGHBORHOOD_BUDGET.MAX_HOPS;
     state.anchorSource = 'default';
     clearHighlight();
-    const home = homeStarId || NEIGHBORHOOD_BUDGET.DEFAULT_ANCHOR;
+    // The view they OPENED with, which is not necessarily the default anchor.
+    // Most visitors arrive on a link shared by another user, so for them
+    // "start over" means the band in that link -- sending them to the project's
+    // default anchor instead would drop them somewhere they have never been.
+    const home = state.openingAnchorId || homeStarId || NEIGHBORHOOD_BUDGET.DEFAULT_ANCHOR;
     renderNeighborhood({
       anchorId: home,
       maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
@@ -1082,6 +1115,7 @@ export function initSigmaExplorer({
   const resolved = resolveAnchor({ search, nodes: master.nodes, links: master.links, adjacency });
   state.anchorSource = resolved.source;
   if (!resolved.anchorId) return null;
+  state.openingAnchorId = resolved.anchorId;
   renderNeighborhood({
     anchorId: resolved.anchorId,
     maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
@@ -1197,7 +1231,7 @@ export function bootFromPage(win = typeof window !== 'undefined' ? window : null
   const start = () => {
     const master = win.RBFT_MASTER_GRAPH;
     if (!master) return false;
-    win.RBFT_SIGMA = initSigmaExplorer({ master, search: win.location.search });
+    win.RBFT_SIGMA = initSigmaExplorer({ master, search: win.location.search, win });
     return Boolean(win.RBFT_SIGMA);
   };
   if (!start()) win.addEventListener('rbft:graph-ready', start, { once: true });
