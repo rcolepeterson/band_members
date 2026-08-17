@@ -384,8 +384,7 @@ body {
 .primary-btn.share-btn,
 .share-popover-btn {
   position: relative;
-  border-radius: 0;
-  clip-path: polygon(0 7px, 7px 0, calc(100% - 7px) 0, 100% 7px, 100% calc(100% - 7px), calc(100% - 7px) 100%, 7px 100%, 0 calc(100% - 7px));
+  border-radius: var(--radius-full, 999px);
   backdrop-filter: blur(14px) saturate(130%);
   -webkit-backdrop-filter: blur(14px) saturate(130%);
   box-shadow: 0 10px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12);
@@ -487,8 +486,7 @@ body {
 /* Give the Add-your-band button the same emphasis as Share */
 .primary-btn.add-band-btn {
   position: relative;
-  border-radius: 0;
-  clip-path: polygon(0 7px, 7px 0, calc(100% - 7px) 0, 100% 7px, 100% calc(100% - 7px), calc(100% - 7px) 100%, 7px 100%, 0 calc(100% - 7px));
+  border-radius: var(--radius-full, 999px);
   backdrop-filter: blur(14px) saturate(130%);
   -webkit-backdrop-filter: blur(14px) saturate(130%);
   box-shadow: 0 10px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12);
@@ -557,8 +555,7 @@ body {
   z-index: 500;
   background: linear-gradient(180deg, rgba(214,239,251,0.18), rgba(148,183,209,0.08));
   border: 1px solid rgba(225, 244, 255, 0.24);
-  border-radius: 0;
-  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  border-radius: var(--radius-card);
   backdrop-filter: blur(18px) saturate(130%);
   -webkit-backdrop-filter: blur(18px) saturate(130%);
   box-shadow: 0 16px 34px rgba(0,0,0,0.4);
@@ -651,6 +648,18 @@ body {
 #feedback-status.is-error { color: #ff9b9b; }
 #feedback-status.is-success { color: #9befcf; }
 
+/* Corner radii, in one place.
+ *
+ * These used to be border-radius:0 plus a clip-path polygon that chamfered the
+ * corners at 45 degrees. Two problems: the shape read as a cut-off rectangle
+ * rather than a card, and the chamfer sliced diagonally through the padding, so
+ * text near a corner sat closer to the visible edge than the box model claimed.
+ * Real radii instead: square with radiused corners, one value per role. */
+:root {
+  --radius-card: 12px;
+  --radius-control: 8px;
+}
+
 /* Downward-opening popovers (mirror of .popover-up used elsewhere). */
 .popover-down {
   position: absolute;
@@ -680,8 +689,7 @@ body {
   background: rgba(7,12,18,0.55);
   border: 1px solid rgba(225,244,255,0.24);
   color: var(--color-text);
-  border-radius: 0;
-  clip-path: polygon(0 6px, 6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px));
+  border-radius: var(--radius-control);
 }
 @media (max-width: 900px) {
   /* Hide the desktop toolbar entirely on mobile — mobile users go through
@@ -903,44 +911,17 @@ body {
   .graph-stats-badge { top: calc(var(--space-5) + 122px); }
 }
 
-.tool-chip::before,
-.tool-chip::after,
-.graph-version-pill::before,
-.graph-version-pill::after,
-.primary-btn.share-btn::before,
-.primary-btn.share-btn::after,
-.share-popover-btn::before,
-.share-popover-btn::after {
-  content: "";
-  position: absolute;
-  top: 6px;
-  bottom: 6px;
-  width: 6px;
-  pointer-events: none;
-}
-
-.tool-chip::before,
-.graph-version-pill::before,
-.primary-btn.share-btn::before,
-.share-popover-btn::before {
-  left: 4px;
-  border-left: 2px solid rgba(207, 231, 245, 0.95);
-}
-
-.tool-chip::after,
-.graph-version-pill::after,
-.primary-btn.share-btn::after,
-.share-popover-btn::after {
-  right: 4px;
-  border-right: 2px solid rgba(207, 231, 245, 0.95);
-}
-
+/* The bracket ticks that used to sit inside each button's left and right edges
+   are gone. They were drawn as ::before / ::after borders and belonged to the
+   chamfered console look: against a rounded pill they read as a second, squarer
+   border just inside the real one. The generous side padding went with them --
+   it existed to keep the label clear of the ticks. */
 .tool-chip,
 .graph-version-pill,
 .primary-btn.share-btn,
 .share-popover-btn {
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
+  padding-left: 0.95rem;
+  padding-right: 0.95rem;
 }
 
 .graph-stage {
@@ -977,8 +958,13 @@ body {
 .share-popover {
   background: linear-gradient(180deg, rgba(214,239,251,0.18), rgba(148,183,209,0.08));
   border: 1px solid rgba(225, 244, 255, 0.24);
-  border-radius: 0;
-  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  border-radius: var(--radius-card);
+  /* This card carried no padding at all: every line of "Share this graph" sat
+     one pixel off the border. Padding belongs on the shared glass style rather
+     than on each of the three panels that use it, which is how it went missing.
+     The extra top-right room is for the close button that floats in that corner
+     -- the heading has to stop before it, not run underneath it. */
+  padding: 1.1rem 1.15rem 1.15rem;
   backdrop-filter: blur(18px) saturate(130%);
   -webkit-backdrop-filter: blur(18px) saturate(130%);
   box-shadow: 0 16px 34px rgba(0,0,0,0.4);
@@ -1714,8 +1700,7 @@ body {
   color: #effcff;
   background: rgba(7, 12, 18, 0.5);
   border: 1px solid rgba(225, 244, 255, 0.24);
-  border-radius: 0;
-  clip-path: polygon(0 6px, 6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px));
+  border-radius: var(--radius-control);
 }
 
 .popover-close:hover {
@@ -1981,7 +1966,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   background: rgba(11, 15, 22, 0.96);
   color: var(--color-text, #e6ecf3);
   border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(8px);
   transform: translate(-50%, calc(-100% - 18px));
@@ -6211,6 +6196,19 @@ function downloadPngBlob(blob) {
       // The highlight-aware docking below is skipped for the same reason:
       // the bottom sheet is already clear of the graph (PR #44).
       if (window.matchMedia('(max-width: 700px)').matches) return;
+      // On the constellation, the card docks to a fixed corner instead of
+      // chasing its node. Clicking a node now both flies the camera and opens
+      // the card, so a node-anchored card would slide across the screen during
+      // the flight and land wherever the node ended up -- including under the
+      // hero or the footer. A corner is calm, always in the same place, and
+      // leaves the constellation itself unobscured. CSS owns the position, so
+      // any inline left/top from a previous SVG-path placement is cleared.
+      if (document.body && document.body.classList.contains('rbft-sigma-chrome')) {
+        nodeCardEl.classList.remove('node-card--below');
+        nodeCardEl.style.left = '';
+        nodeCardEl.style.top = '';
+        return;
+      }
       const node = nodeCardState.node;
       if (!node || nodeCardEl.hidden) return;
       const stage = document.querySelector('.graph-stage');
@@ -9494,8 +9492,23 @@ function downloadPngBlob(blob) {
           function detachToBody() {
             if (popover.parentNode !== document.body) document.body.appendChild(popover);
           }
+          // "Home" is not fixed for the life of the page. The Sigma chrome MOVES
+          // these panels into its stage and hides the toolbar they came from, so
+          // restoring the startup parent posted them back into a
+          // display:none ancestor -- the Add and Feedback pills opened a panel
+          // that measured 0x0 and never appeared. Share was never hooked here,
+          // which is exactly why Share was the only one that worked.
+          function currentHome() {
+            const stage = document.getElementById('sigma-stage');
+            if (stage && document.body.classList.contains('rbft-sigma-chrome')) return stage;
+            return homeParent;
+          }
           function restoreHome() {
-            if (popover.parentNode !== homeParent) homeMarker.parentNode.insertBefore(popover, homeMarker.nextSibling);
+            const home = currentHome();
+            if (popover.parentNode === home) return;
+            // The marker keeps DOM order on the toolbar path; the stage appends.
+            if (home === homeParent) homeMarker.parentNode.insertBefore(popover, homeMarker.nextSibling);
+            else home.appendChild(popover);
           }
 
           const observer = new MutationObserver(() => {
