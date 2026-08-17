@@ -112,28 +112,6 @@ const MEASURE = limits => {
     t = Math.max(0, Math.min(1, t));
     return Math.hypot(p.x - (a.x + t * vx), p.y - (a.y + t * vy));
   };
-  // Mirrors Sigma's edge-curve control point so the measurement matches the
-  // pixels: midpoint pushed perpendicular by curvature * length.
-  const curved = (p, a, b, curvature) => {
-    if (!curvature) return straight(p, a, b);
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const cx = (a.x + b.x) / 2 - dy * curvature;
-    const cy = (a.y + b.y) / 2 + dx * curvature;
-    let best = Infinity;
-    let previous = a;
-    for (let i = 1; i <= 16; i += 1) {
-      const t = i / 16;
-      const u = 1 - t;
-      const current = {
-        x: u * u * a.x + 2 * u * t * cx + t * t * b.x,
-        y: u * u * a.y + 2 * u * t * cy + t * t * b.y,
-      };
-      best = Math.min(best, straight(p, previous, current));
-      previous = current;
-    }
-    return best;
-  };
 
   const byId = new Map(points.map(point => [point.id, point]));
   const problems = [];
@@ -157,7 +135,9 @@ const MEASURE = limits => {
       const a = byId.get(source);
       const b = byId.get(target);
       if (!a || !b) return;
-      const gap = curved(point, a, b, attrs.curvature || 0) - point.r;
+      // Straight lines only: the constellation dropped curved edges, so the
+      // clearance from a node to a thread is a point-to-segment distance.
+      const gap = straight(point, a, b) - point.r;
       const message = `${point.id} sits ${gap.toFixed(1)}px from ${source} -- ${target}`;
       if (gap <= limits.edgeGapHard) problems.push(message);
       else if (gap <= limits.edgeGapSoft) nearMisses.push(message);

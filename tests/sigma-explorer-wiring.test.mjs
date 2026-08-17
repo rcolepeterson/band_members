@@ -177,7 +177,14 @@ test('CDN versions are pinned in the import map, matching package.json', () => {
     INDEX_HTML.includes(`https://esm.sh/sigma@${version(sigma)}`),
     'the import map must pin the same sigma version as package.json'
   );
-  assert.match(INDEX_HTML, /"@sigma\/edge-curve": "https:\/\/esm\.sh\/@sigma\/edge-curve@/);
+  // @sigma/edge-curve was removed when the constellation went to straight
+  // lines: curved threads crossed each other and read as tangled tension. Its
+  // absence is the invariant now -- if it comes back, so do the curves.
+  assert.doesNotMatch(INDEX_HTML, /@sigma\/edge-curve/);
+  assert.ok(
+    !PACKAGE.devDependencies['@sigma/edge-curve'],
+    'edge-curve must stay out of package.json: the constellation uses straight lines',
+  );
   assert.match(EXPLORER, /^import Sigma from 'sigma';$/m);
   assert.match(EXPLORER, /^import Graph from 'graphology';$/m);
 });
@@ -269,13 +276,19 @@ test('a framed view leaves room for labels', () => {
   // At camera ratio 1 Sigma frames the nodes exactly and clips the names of
   // everything near the edge.
   assert.match(EXPLORER, /const FRAMED_RATIO = 1\.\d+;/);
+  // The framed ratio is compared with a tolerance rather than for equality,
+  // because framingRatio() may return a smaller (zoomed-in) ratio on dense
+  // views and the "already framed" branch must not fire on a float wobble.
   assert.match(EXPLORER, /ratio >= FRAMED_RATIO - 1e-6/);
-  assert.match(EXPLORER, /ratio: FRAMED_RATIO/);
 });
 
 test('the renderer frames views through the tested framing helper', () => {
+  // The renderer must not compute its own camera ratio: framingRatio() in the
+  // helpers is the unit-tested owner of "how far out should this view sit",
+  // and the renderer reaches it through the local framedRatio() wrapper.
   assert.match(EXPLORER, /framingRatio\(\{/);
-  assert.match(EXPLORER, /ratio: framedRatio\(\)/);
+  assert.match(EXPLORER, /function framedRatio\(\)/);
+  assert.match(EXPLORER, /const ratio = framedRatio\(\);/);
   assert.match(HELPERS, /export function framingRatio/);
 });
 
@@ -297,6 +310,9 @@ test('overlay labels carry a dark halo so threads read as behind them', () => {
 test('overlay labels are not shouted in uppercase', () => {
   const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `'));
   const labelRules = css.match(/\.(home|focus)-label\{[^}]*\}/gs) || [];
-  assert.equal(labelRules.length, 2, 'expected both overlay label rules');
+  // Not a fixed count: besides the two base rules there is a .label-above
+  // variant that repositions the home label when it would collide with the
+  // focus label. Every rule that touches these labels has to stay un-shouted.
+  assert.ok(labelRules.length >= 2, `expected both overlay label rules, found ${labelRules.length}`);
   labelRules.forEach(rule => assert.doesNotMatch(rule, /text-transform:\s*uppercase/));
 });

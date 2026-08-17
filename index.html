@@ -43,10 +43,10 @@
   <!-- Import map for the Sigma renderer's ES modules (issue #80).
        Bare specifiers, in one reviewable place, pinned to the same versions as
        the devDependencies in package.json (asserted by
-       tests/sigma-explorer-wiring.test.mjs). @sigma/edge-curve imports
-       "sigma/rendering" internally, which only resolves with a map like this --
-       and mapping "sigma" once also guarantees every module shares ONE Sigma
-       instance rather than each CDN URL pulling its own copy.
+       tests/sigma-explorer-wiring.test.mjs). Mapping "sigma" once guarantees
+       every module shares ONE Sigma instance rather than each CDN URL pulling
+       its own copy, and the trailing-slash entries let a module import a
+       subpath like "sigma/rendering" through the same pinned copy.
        Inert for anyone not using ?renderer=sigma: an import map costs nothing
        until a module actually imports something. -->
   <script type="importmap">
@@ -836,13 +836,37 @@ body {
    `hidden` never held either. Restoring `display: none` for [hidden]
    makes setSignedInState() the real owner of visibility again.
 
-   Scoped to the three affected classes rather than a blanket
+   Scoped to the affected classes rather than a blanket
    `[hidden] { display: none !important }` so this cannot retroactively
    hide anything else on the page that relies on the same (bad) pattern.
+
+   Two more instances of the identical bug, found by
+   tests/hidden-attribute.test.mjs after the pencil was reported visible
+   while signed out:
+
+     .node-card__edit     -> display: inline-flex  (node card)
+     .member-row-remove   -> display: inline-flex  (submission form rows)
+
+   .node-card__edit: renderEditAffordances() sets `.hidden = !canEdit`, so
+   the "Edit this band" pencil was correctly marked hidden for signed-out
+   visitors and rendered anyway -- and since the same function only binds
+   onclick when the user can edit, clicking it did nothing at all. A
+   visitor reads that as the app being broken.
+
+   .member-row-remove: the first member row's remove button ships hidden in
+   the markup precisely so the only row cannot be deleted (addMemberRow()
+   un-hides it on every row after the first). With the attribute inert, the
+   x has been showing on that first row, letting someone empty the roster.
+
+   Scoping is now safe to keep, because the test above enforces the
+   invariant for every markup-hidden element on the page instead of relying
+   on someone remembering this comment.
    -------------------------------------------------------------------- */
 .header-btn[hidden],
 .header-user[hidden],
-.mobile-sheet-add-band[hidden] { display: none !important; }
+.mobile-sheet-add-band[hidden],
+.node-card__edit[hidden],
+.member-row-remove[hidden] { display: none !important; }
 
 /* --------------------------------------------------------------------
    Stats HUD vs. the top toolbar (tester feedback after #76).
