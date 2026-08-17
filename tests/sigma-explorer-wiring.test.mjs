@@ -293,3 +293,10 @@ test('overlay labels carry a dark halo so threads read as behind them', () => {
   assert.match(css, /\.home-label\{[^}]*text-shadow:0 0 6px rgba\(8,11,17/s);
   assert.match(css, /\.focus-label\{[^}]*text-shadow:0 0 6px rgba\(8,11,17/s);
 });
+
+test('overlay labels are not shouted in uppercase', () => {
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `'));
+  const labelRules = css.match(/\.(home|focus)-label\{[^}]*\}/gs) || [];
+  assert.equal(labelRules.length, 2, 'expected both overlay label rules');
+  labelRules.forEach(rule => assert.doesNotMatch(rule, /text-transform:\s*uppercase/));
+});

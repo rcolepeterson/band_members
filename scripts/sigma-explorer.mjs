@@ -152,7 +152,9 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-home-star .core{position:relative;width:16px;height:16px;border-radius:50%;
   background:${HOME_STAR_STYLE.color};box-shadow:0 0 18px 4px rgba(223,230,239,0.65)}
 #${STAGE_ID} .sigma-home-star .home-label{position:absolute;top:100%;margin-top:6px;white-space:nowrap;
-  font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:#c8d3e0;opacity:0.9;
+  /* Sentence case, not uppercase: this is a person's name, and shouting it was
+     never the point -- the ring and the glow already say "you are here". */
+  font-size:11.5px;letter-spacing:0.02em;color:#c8d3e0;opacity:0.9;
   /* A soft dark halo around the glyphs, so a thread passing behind the text
      reads as behind it instead of through it. Cheaper and less boxy than a
      plate, and it keeps the label feeling like part of the starfield. */
@@ -169,7 +171,7 @@ const STAGE_CSS = `
    label above its star to keep both readable. */
 #${STAGE_ID} .sigma-home-star.label-above .home-label{top:auto;bottom:100%;margin-top:0;margin-bottom:8px}
 #${STAGE_ID} .sigma-focus-ring .focus-label{position:absolute;top:100%;left:50%;transform:translateX(-50%);
-  margin-top:6px;white-space:nowrap;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;
+  margin-top:6px;white-space:nowrap;font-size:11.5px;letter-spacing:0.02em;
   color:#a8d7e0;opacity:0.9;text-shadow:0 0 6px rgba(8,11,17,0.95),0 0 12px rgba(8,11,17,0.85)}
 #${STAGE_ID} .sigma-prompt{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);
   width:min(460px,86vw);display:flex;flex-direction:column;gap:6px;z-index:4}
