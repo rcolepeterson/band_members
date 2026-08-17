@@ -409,6 +409,435 @@ export function toGraphologyGraph({ nodes = [], links = [] } = {}, GraphConstruc
 }
 
 // ---------------------------------------------------------------------------
+// Constellation relaxation
+// ---------------------------------------------------------------------------
+
+/**
+ * Deterministic scatter, from a node's id.
+ *
+ * Perfect concentric rings read as a bullseye, not a constellation. Nudging each
+ * node off its ring by a stable amount derived from its own name breaks that up
+ * while keeping the layout reproducible -- the same view always looks the same,
+ * and a shared link looks the same for everybody who opens it.
+ */
+export function scatterSeed(id) {
+  let hash = 2166136261;
+  const text = String(id);
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  // Two independent values in [-1, 1) from the one hash.
+  const a = ((hash >>> 8) & 0xffff) / 32768 - 1;
+  const b = ((hash >>> 20) & 0xfff) / 2048 - 1;
+  return { angular: a, radial: b };
+}
+
+/**
+ * Relaxes a seeded layout until nodes stop overlapping each other and the edges.
+ *
+ * Why a solver instead of more geometry rules: the constraints that matter are
+ * "no two nodes touch" and "no edge passes through a node", and those are
+ * properties of the whole drawing, not of any single placement rule. Successive
+ * attempts to guarantee them by construction -- nested wedges, per-layer slots,
+ * parent sectors -- each satisfied one constraint by breaking another. Stating
+ * the constraints and letting a solver satisfy them directly is both simpler and
+ * far more robust, and it happens to look better: the result keeps the organic,
+ * scattered constellation feel rather than snapping to concentric rings.
+ *
+ * Forces, in order of authority:
+ *   1. separation   nodes push each other apart when closer than minSeparation
+ *   2. clearance    a node is pushed off any edge it is not part of
+ *   3. radial       a soft pull back toward the node's hop radius, so distance
+ *                   from the anchor still reads as degrees of separation
+ *   4. cohesion     a soft pull toward the average of its neighbours, so bands
+ *                   and their members stay visually grouped
+ *
+ * Fully deterministic: fixed iteration count, no randomness, no time-dependence.
+ * The anchor never moves.
+ *
+ * Mutates and returns `positions`.
+ */
+/**
+ * Relaxation passes to spend on a view of this size.
+ *
+ * A pass costs time in proportion to the node count, so a fixed count would make
+ * the largest expansions the slowest interaction in the app. Budgeting keeps the
+ * solve roughly constant-time: small views get plenty of passes, big ones get
+ * enough to resolve their overlaps and no more.
+ */
+export function relaxIterations(nodeCount = 0) {
+  if (!nodeCount) return 0;
+  return Math.max(220, Math.min(900, Math.round(90000 / nodeCount)));
+}
+
+// How often the spatial index is rebuilt, in passes.
+const REINDEX_EVERY = 4;
+// Constraint slack, in layout units, at which a view counts as settled.
+const TOLERANCE = 0.5;
+
+export function relaxLayout({
+  positions = new Map(),
+  links = [],
+  anchorId = null,
+  minSeparation = 64,
+  // How far nodes are nudged off their ring before relaxing, as a fraction of
+  // their ring slot. 0 gives clean concentric rings; the default gives a
+  // scattered constellation.
+  scatter = 1,
+  // Whether to run the collision solver. Off only for tests that want to inspect
+  // the raw seed.
+  relax = true,
+  edgeClearance = 26,
+  // Passes are budgeted per view rather than fixed: a pass costs time roughly in
+  // proportion to the node count, so a constant count would make the biggest
+  // expansions the slowest thing in the app. See relaxIterations.
+  iterations = null,
+  radialStiffness = 0.06,
+  // A node may drift this far in or out of its seeded ring radius, as a
+  // fraction. Enforced as a hard clamp, not a spring: "further from the anchor
+  // means more degrees of separation" is the one thing the picture has to keep
+  // saying, and a spring can be overpowered by a crowd of separation pushes.
+  radialBand = 0.16,
+  // Cohesion (pulling a node toward the average of its neighbours) is OFF by
+  // default and probably should stay that way: the seed layout already places
+  // children near their parents, and an attractive force that acts at every
+  // distance beats separation, which only acts on contact. With it enabled, a
+  // band's forty members were dragged onto the band faster than they could be
+  // pushed apart -- the solver compressed the drawing instead of relaxing it.
+  cohesion = 0,
+  spacing = 150,
+} = {}) {
+  const ids = Array.from(positions.keys());
+  if (ids.length < 2) return positions;
+  const passes = iterations || relaxIterations(ids.length);
+
+  const targetRadius = new Map();
+  ids.forEach(id => {
+    const point = positions.get(id);
+    targetRadius.set(id, Math.hypot(point.x, point.y));
+  });
+
+  const neighbours = new Map(ids.map(id => [id, []]));
+  const edgeList = [];
+  links.forEach(link => {
+    const [source, target] = linkEndpoints(link);
+    if (!positions.has(source) || !positions.has(target) || source === target) return;
+    neighbours.get(source).push(target);
+    neighbours.get(target).push(source);
+    edgeList.push([source, target]);
+  });
+
+  const clampToBand = (point, target) => {
+    if (!target) return;
+    const radius = Math.hypot(point.x, point.y);
+    const low = target * (1 - radialBand);
+    const high = target * (1 + radialBand);
+    if (radius >= low && radius <= high) return;
+    const wanted = radius < low ? low : high;
+    const scale = wanted / (radius || 1e-6);
+    point.x *= scale;
+    point.y *= scale;
+  };
+
+  const cell = Math.max(minSeparation, edgeClearance) * 2;
+  const key = (x, y) => `${Math.floor(x / cell)}:${Math.floor(y / cell)}`;
+  const grid = new Map();
+  // Worst constraint violation seen in a pass, used to stop early.
+  let worstViolation = 0;
+
+  // The last quarter of the passes is a SETTLE phase: separation and edge
+  // clearance only, with the shaping forces switched off, so the drawing ends on
+  // the constraints that matter rather than mid-tug-of-war with them.
+  const settleFrom = Math.floor(passes * 0.6);
+
+  for (let pass = 0; pass < passes; pass += 1) {
+    const settling = pass >= settleFrom;
+    worstViolation = 0;
+    // Cooling: big corrections early, fine adjustments later -- but never so
+    // gentle that a remaining overlap cannot be resolved before the last pass.
+    const strength = 0.55 - 0.25 * (pass / passes);
+    const shift = new Map(ids.map(id => [id, { x: 0, y: 0 }]));
+
+    // Spatial index. Rebuilt every few passes rather than every pass: nodes move
+    // a fraction of a cell per pass, and the cell is twice the largest constraint
+    // distance, so a slightly stale index still finds every real interaction.
+    if (pass % REINDEX_EVERY === 0) {
+      grid.clear();
+      ids.forEach(id => {
+        const point = positions.get(id);
+        const k = key(point.x, point.y);
+        if (!grid.has(k)) grid.set(k, []);
+        grid.get(k).push(id);
+      });
+    }
+
+    // 1. Separation.
+    ids.forEach(id => {
+      const point = positions.get(id);
+      const cx = Math.floor(point.x / cell);
+      const cy = Math.floor(point.y / cell);
+      for (let ox = -1; ox <= 1; ox += 1) {
+        for (let oy = -1; oy <= 1; oy += 1) {
+          const bucket = grid.get(`${cx + ox}:${cy + oy}`);
+          if (!bucket) continue;
+          bucket.forEach(other => {
+            if (other === id) return;
+            const b = positions.get(other);
+            let dx = point.x - b.x;
+            let dy = point.y - b.y;
+            let distance = Math.hypot(dx, dy);
+            if (distance >= minSeparation) return;
+            if (distance < 1e-6) {
+              // Exactly coincident: separate along a stable direction derived
+              // from the ids rather than a random one.
+              const seed = scatterSeed(id);
+              dx = Math.cos(seed.angular * Math.PI);
+              dy = Math.sin(seed.angular * Math.PI);
+              distance = 1;
+            }
+            worstViolation = Math.max(worstViolation, minSeparation - distance);
+            const push = ((minSeparation - distance) / distance) * 0.5 * strength;
+            const s = shift.get(id);
+            s.x += dx * push;
+            s.y += dy * push;
+          });
+        }
+      }
+    });
+
+    // 2. Edge clearance: push a node off any edge it is not an endpoint of, and
+    // nudge that edge's endpoints the other way so the fix is shared.
+    edgeList.forEach(([source, target]) => {
+      const a = positions.get(source);
+      const b = positions.get(target);
+      const minX = Math.min(a.x, b.x) - edgeClearance;
+      const maxX = Math.max(a.x, b.x) + edgeClearance;
+      const minY = Math.min(a.y, b.y) - edgeClearance;
+      const maxY = Math.max(a.y, b.y) + edgeClearance;
+      for (let cx = Math.floor(minX / cell); cx <= Math.floor(maxX / cell); cx += 1) {
+        for (let cy = Math.floor(minY / cell); cy <= Math.floor(maxY / cell); cy += 1) {
+          const bucket = grid.get(`${cx}:${cy}`);
+          if (!bucket) continue;
+          bucket.forEach(id => {
+            if (id === source || id === target) return;
+            const point = positions.get(id);
+            const vx = b.x - a.x;
+            const vy = b.y - a.y;
+            const len2 = vx * vx + vy * vy;
+            if (!len2) return;
+            let t = ((point.x - a.x) * vx + (point.y - a.y) * vy) / len2;
+            t = Math.max(0, Math.min(1, t));
+            const px = a.x + t * vx;
+            const py = a.y + t * vy;
+            let dx = point.x - px;
+            let dy = point.y - py;
+            let distance = Math.hypot(dx, dy);
+            if (distance >= edgeClearance) return;
+            if (distance < 1e-6) {
+              // Sitting exactly on the line: step off it perpendicular.
+              const norm = Math.hypot(vx, vy) || 1;
+              dx = -vy / norm;
+              dy = vx / norm;
+              distance = 1;
+            }
+            // Edges get extra authority while settling: their endpoints keep
+            // moving during the shaping phase, so clearance is the constraint
+            // most likely to be left half-resolved at the end.
+            worstViolation = Math.max(worstViolation, edgeClearance - distance);
+            const push = ((edgeClearance - distance) / distance) * strength * (settling ? 1.6 : 1);
+            const s = shift.get(id);
+            s.x += dx * push;
+            s.y += dy * push;
+            // Endpoints yield a little, weighted by how close the crossing is to
+            // each of them.
+            const sa = shift.get(source);
+            const sb = shift.get(target);
+            sa.x -= dx * push * 0.25 * (1 - t);
+            sa.y -= dy * push * 0.25 * (1 - t);
+            sb.x -= dx * push * 0.25 * t;
+            sb.y -= dy * push * 0.25 * t;
+          });
+        }
+      }
+    });
+
+    // 3 + 4. Soft radial and cohesion pulls (skipped while settling).
+    if (!settling) ids.forEach(id => {
+      if (id === anchorId) return;
+      const point = positions.get(id);
+      const s = shift.get(id);
+      const radius = Math.hypot(point.x, point.y) || 1e-6;
+      const target = targetRadius.get(id);
+      const radial = (target - radius) * radialStiffness;
+      s.x += (point.x / radius) * radial;
+      s.y += (point.y / radius) * radial;
+
+      const group = neighbours.get(id);
+      if (group && group.length) {
+        let mx = 0;
+        let my = 0;
+        group.forEach(other => {
+          const o = positions.get(other);
+          mx += o.x;
+          my += o.y;
+        });
+        mx /= group.length;
+        my /= group.length;
+        s.x += (mx - point.x) * cohesion;
+        s.y += (my - point.y) * cohesion;
+      }
+    });
+
+    // Apply, with a per-pass cap so one crowded spot cannot fling a node across
+    // the view, then clamp back into the node's radial band.
+    const maxStep = spacing * 0.4;
+    ids.forEach(id => {
+      if (id === anchorId) return;
+      const point = positions.get(id);
+      const s = shift.get(id);
+      const magnitude = Math.hypot(s.x, s.y);
+      const scale = magnitude > maxStep ? maxStep / magnitude : 1;
+      point.x += s.x * scale;
+      point.y += s.y * scale;
+      clampToBand(point, targetRadius.get(id));
+    });
+
+    // Early exit. Once every constraint is satisfied there is nothing left for
+    // more passes to do, and most views reach that state long before the
+    // iteration ceiling -- which is what keeps this affordable in the browser.
+    // Only checked once the shaping forces are out of the way, since they can
+    // legitimately create a violation for separation to resolve.
+    if (settling && worstViolation <= TOLERANCE) break;
+  }
+
+  enforceSeparation({ positions, ids, anchorId, minSeparation, clampToBand, targetRadius });
+  enforceEdgeClearance({
+    positions,
+    ids,
+    edgeList,
+    anchorId,
+    clearance: Math.max(minSeparation * 0.45, 1),
+    clampToBand,
+    targetRadius,
+  });
+  // Separation has the final word: nudging nodes off edges can bring two of them
+  // together, and an edge grazing a node is less damaging than two nodes merging.
+  enforceSeparation({ positions, ids, anchorId, minSeparation, clampToBand, targetRadius, rounds: 20 });
+
+  return positions;
+}
+
+/**
+ * Last word on edge clearance.
+ *
+ * Same idea as enforceSeparation: one constraint, pushed until it holds. A node
+ * lying on an edge it has nothing to do with is the single most misleading thing
+ * this drawing can do -- it invents a band membership -- so it gets a dedicated
+ * pass rather than being left to the balance of forces.
+ */
+function enforceEdgeClearance({
+  positions,
+  ids,
+  edgeList,
+  anchorId,
+  clearance,
+  clampToBand,
+  targetRadius,
+  rounds = 40,
+}) {
+  for (let round = 0; round < rounds; round += 1) {
+    let worst = 0;
+    edgeList.forEach(([source, target]) => {
+      const a = positions.get(source);
+      const b = positions.get(target);
+      ids.forEach(id => {
+        if (id === source || id === target) return;
+        const point = positions.get(id);
+        const vx = b.x - a.x;
+        const vy = b.y - a.y;
+        const len2 = vx * vx + vy * vy;
+        if (!len2) return;
+        let t = ((point.x - a.x) * vx + (point.y - a.y) * vy) / len2;
+        t = Math.max(0, Math.min(1, t));
+        let dx = point.x - (a.x + t * vx);
+        let dy = point.y - (a.y + t * vy);
+        let distance = Math.hypot(dx, dy);
+        if (distance >= clearance) return;
+        if (distance < 1e-6) {
+          const norm = Math.hypot(vx, vy) || 1;
+          dx = -vy / norm;
+          dy = vx / norm;
+          distance = 1e-6;
+        }
+        worst = Math.max(worst, clearance - distance);
+        const push = (clearance - distance) / distance;
+        if (id !== anchorId) {
+          point.x += dx * push * 0.8;
+          point.y += dy * push * 0.8;
+          clampToBand(point, targetRadius.get(id));
+        }
+      });
+    });
+    if (worst <= TOLERANCE) break;
+  }
+}
+
+/**
+ * Last word on node separation.
+ *
+ * The main loop balances several constraints at once, so a stubborn pair can end
+ * up a few units short. This pass cares about one thing only -- no two nodes
+ * closer than minSeparation -- and pushes pairs apart until that holds, keeping
+ * every node inside its radial band. Bounded, so a genuinely impossible
+ * configuration ends as good as it can be rather than looping forever.
+ */
+function enforceSeparation({
+  positions,
+  ids,
+  anchorId,
+  minSeparation,
+  clampToBand,
+  targetRadius,
+  rounds = 60,
+}) {
+  for (let round = 0; round < rounds; round += 1) {
+    let worst = 0;
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) {
+        const a = positions.get(ids[i]);
+        const b = positions.get(ids[j]);
+        let dx = a.x - b.x;
+        let dy = a.y - b.y;
+        let distance = Math.hypot(dx, dy);
+        if (distance >= minSeparation) continue;
+        if (distance < 1e-6) {
+          const seed = scatterSeed(ids[i]);
+          dx = Math.cos(seed.angular * Math.PI);
+          dy = Math.sin(seed.angular * Math.PI);
+          distance = 1e-6;
+        }
+        worst = Math.max(worst, minSeparation - distance);
+        const push = (minSeparation - distance) / distance / 2;
+        const mx = dx * push;
+        const my = dy * push;
+        if (ids[i] !== anchorId) {
+          a.x += mx;
+          a.y += my;
+          clampToBand(a, targetRadius.get(ids[i]));
+        }
+        if (ids[j] !== anchorId) {
+          b.x -= mx;
+          b.y -= my;
+          clampToBand(b, targetRadius.get(ids[j]));
+        }
+      }
+    }
+    if (worst <= TOLERANCE) break;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Layout
 // ---------------------------------------------------------------------------
 
@@ -428,6 +857,70 @@ export function toGraphologyGraph({ nodes = [], links = [] } = {}, GraphConstruc
  *
  * Returns Map(id -> { x, y, hop }).
  */
+// Widest arc, in radians, that one branch may fan its children across. The
+// anchor's ring gets the whole circle; deeper branches stay narrow and centred
+// on their parent, so a member is always drawn outward from its band rather
+// than swung around to the far side of it.
+export const MAX_BRANCH_SPAN = Math.PI * 1.5;
+
+// How much larger than its ring's nominal radius a single branch may push
+// itself to fit its children, before it starts using sub-rings instead. A
+// branch whose parent sits on a crowded ring inherits a very narrow sector, and
+// the only geometrically honest answers are "further out" or "across more
+// sub-rings" -- refusing both is what let children of adjacent members collide.
+export const MAX_BRANCH_RADIUS_GROWTH = 6;
+
+// Most sub-rings one branch may stagger its children across.
+export const MAX_SUB_RINGS = 6;
+
+// Narrowest sector a branch may be given, in radians. Only a guard against
+// division by zero: a genuinely tiny sector is respected, and the branch moves
+// outward instead of spilling into its neighbours.
+export const MIN_SECTOR_WIDTH = 0.004;
+
+/**
+ * The slice of angle each node on a ring owns: from the midpoint to its
+ * counter-clockwise neighbour to the midpoint to its clockwise neighbour,
+ * shrunk slightly for margin. A lone node on a ring owns the whole circle.
+ *
+ * Children placed inside their parent's sector cannot drift sideways past a
+ * neighbouring band, which is what keeps membership edges from crossing over
+ * unrelated nodes on the way out.
+ */
+export function sectorsForRing(ids = [], anglesByNode = new Map(), margin = 0.86) {
+  const sectors = new Map();
+  const ring = ids
+    .filter(id => anglesByNode.has(id))
+    .map(id => ({ id, angle: normalizeAngle(anglesByNode.get(id)) }))
+    .sort((a, b) => a.angle - b.angle);
+  if (!ring.length) return sectors;
+  if (ring.length === 1) {
+    sectors.set(ring[0].id, { center: ring[0].angle, width: Math.PI * 2 });
+    return sectors;
+  }
+  ring.forEach((entry, index) => {
+    const previous = ring[(index - 1 + ring.length) % ring.length];
+    const next = ring[(index + 1) % ring.length];
+    const gapBefore = normalizeAngle(entry.angle - previous.angle) || Math.PI * 2;
+    const gapAfter = normalizeAngle(next.angle - entry.angle) || Math.PI * 2;
+    // The SMALLER gap sets the width, not the average: a sector is centred on
+    // its node, so a window sized by the average would reach past the closer
+    // neighbour and let two branches interleave.
+    //
+    // The floor matters: two ring nodes at (nearly) the same angle would
+    // otherwise hand a branch a zero-width sector, collapsing every child in it
+    // onto a single point.
+    const width = Math.max(Math.min(gapBefore, gapAfter) * margin, MIN_SECTOR_WIDTH);
+    sectors.set(entry.id, { center: entry.angle, width });
+  });
+  return sectors;
+}
+
+export function normalizeAngle(angle) {
+  const full = Math.PI * 2;
+  return ((angle % full) + full) % full;
+}
+
 export function radialLayout({
   nodes = [],
   links = [],
@@ -436,14 +929,27 @@ export function radialLayout({
   spacing = 100,
   adjacency = null,
   // Minimum arc length between two neighbours on the same ring, in layout
-  // units. Each hop's radius is grown until its whole population fits at this
-  // separation, so a crowded layer moves outward instead of packing tighter.
-  minSeparation = 44,
-  // How many sub-rings a still-crowded layer may stagger across, and how far
-  // apart those sub-rings sit (as a fraction of `spacing`). Staggering breaks
-  // up the "beads on a wire" look without changing anyone's angle.
-  subRingLimit = 3,
+  // units. Each ring's radius is grown until its whole population fits at this
+  // separation, so a crowded ring moves outward instead of packing tighter.
+  //
+  // Raised from 44 after the invariant sweep (scripts/layout-tune.mjs): more
+  // room between neighbours is also more room for the chords that pass between
+  // them, and since the camera frames whatever the layout produces, a larger
+  // number costs nothing visually.
+  minSeparation = 64,
+  // How far nodes are nudged off their ring before relaxing, as a fraction of
+  // their ring slot. 0 gives clean concentric rings; the default gives a
+  // scattered constellation.
+  scatter = 1,
+  // Whether to run the collision solver. Off only for tests that want to inspect
+  // the raw seed.
+  relax = true,
+  // How many sub-rings a still-crowded branch may stagger across, and how far
+  // apart those sub-rings sit (as a fraction of `spacing`).
   subRingSpacing = 0.34,
+  // Fraction of its available angular gap a node actually uses for children,
+  // leaving a little breathing room between neighbouring branches.
+  sectorMargin = 0.78,
 } = {}) {
   const positions = new Map();
   if (!anchorId || !nodes.length) return positions;
@@ -462,86 +968,296 @@ export function radialLayout({
     layers.get(hop).push(node.id);
   });
   layers.forEach(ids => ids.sort((a, b) => String(a).localeCompare(String(b))));
-
-  // Per-hop radius. Two constraints, whichever is larger:
-  //   1. a nominal ring per hop, so distance still reads as degrees;
-  //   2. enough circumference for that layer's whole population at
-  //      minSeparation.
-  // Constraint 2 is what fixes expanded views: hop 4 of a real scene can hold
-  // a hundred musicians, and no amount of angular cleverness fits them on a
-  // ring sized for hop 1. Radii stay monotonically increasing so an outer
-  // layer can never fall inside an inner one.
-  const radii = new Map([[0, 0]]);
   const sortedHops = Array.from(layers.keys()).filter(hop => hop > 0).sort((a, b) => a - b);
-  let previousRadius = 0;
+
+  // ----- 1. BFS tree -------------------------------------------------------
+  // Each node is attached to the first node one hop closer to the anchor
+  // (alphabetically, for determinism). Non-tree edges still exist in the data
+  // -- a musician in three bands only gets one tree parent -- they are simply
+  // not what drives placement.
+  const parentOf = new Map();
+  const childrenOf = new Map([[anchorId, []]]);
   sortedHops.forEach(hop => {
-    const population = (layers.get(hop) || []).length;
-    const needed = (population * minSeparation) / (2 * Math.PI);
-    const radius = Math.max(spacing * hop, needed, previousRadius + spacing * 0.75);
-    radii.set(hop, radius);
+    (layers.get(hop) || []).forEach(id => {
+      const parents = Array.from(adj.get(id) || []).filter(candidate => hopOf(candidate) === hop - 1);
+      parents.sort((a, b) => String(a).localeCompare(String(b)));
+      const parent = parents[0] || anchorId;
+      parentOf.set(id, parent);
+      if (!childrenOf.has(parent)) childrenOf.set(parent, []);
+      childrenOf.get(parent).push(id);
+      if (!childrenOf.has(id)) childrenOf.set(id, []);
+    });
+  });
+
+  // ----- 2. Subtree weights ------------------------------------------------
+  // Leaves weigh 1; a branch weighs the sum of its leaves. Weights decide how
+  // much of the circle each branch is given, which is what makes per-node
+  // spacing come out roughly uniform without any node drifting away from its
+  // own band.
+  const weightOf = new Map();
+  [...sortedHops].reverse().concat([0]).forEach(hop => {
+    (hop === 0 ? [anchorId] : layers.get(hop) || []).forEach(id => {
+      const kids = childrenOf.get(id) || [];
+      const weight = kids.reduce((sum, kid) => sum + (weightOf.get(kid) || 1), 0);
+      weightOf.set(id, Math.max(1, weight));
+    });
+  });
+
+  // ----- 3. Rings and placement --------------------------------------------
+  //
+  // Angles are allocated PER RING, uniformly, ordered by the angle of each
+  // node's tree parent. That combination is what satisfies both properties that
+  // fought each other through several rewrites:
+  //
+  //   SEPARATION  A ring of n nodes gives every node the same slot, 2*PI/n, and
+  //               the ring's radius is grown until that slot is worth at least
+  //               minSeparation of arc. So spacing is guaranteed by
+  //               construction -- not inherited, not divided down, and immune to
+  //               the cascade where two crowded nodes collapse together and
+  //               every descendant collapses with them.
+  //   LOCALITY    Ordering by parent angle keeps siblings contiguous and keeps
+  //               each block in the same rotational order as the parents that
+  //               spawned them, so a band and its members still read as one
+  //               solar system and membership edges stay short.
+  //
+  // Residual long chords -- a musician in eight bands cannot be adjacent to all
+  // of them -- are handled by bowing edges away from nodes, see
+  // chooseEdgeCurvatures.
+  const nodeAngles = new Map([[anchorId, 0]]);
+  positions.set(anchorId, { x: 0, y: 0, hop: 0 });
+  let previousRadius = 0;
+
+  sortedHops.forEach(hop => {
+    const ids = layers.get(hop) || [];
+    if (!ids.length) return;
+
+    // Ring radius: far enough out that every slot on it is worth minSeparation,
+    // never inside the previous ring, and still reading as one more degree out.
+    const slot = (Math.PI * 2) / ids.length;
+    const radius = Math.max(
+      spacing * hop,
+      minSeparation / slot,
+      previousRadius + spacing * 0.75
+    );
+
+    // Order: by parent angle, then by the parent's own name, then the node's --
+    // stable, and grouped so siblings sit together.
+    const ordered = ids.slice().sort((a, b) => {
+      const parentA = parentOf.get(a);
+      const parentB = parentOf.get(b);
+      const angleA = nodeAngles.has(parentA) ? nodeAngles.get(parentA) : 0;
+      const angleB = nodeAngles.has(parentB) ? nodeAngles.get(parentB) : 0;
+      if (angleA !== angleB) return angleA - angleB;
+      const byParent = String(parentA).localeCompare(String(parentB));
+      return byParent || String(a).localeCompare(String(b));
+    });
+
+    // Rotate the ring so the first block starts near its own parent, which keeps
+    // children under their band instead of drifting a fixed offset away.
+    const firstParent = parentOf.get(ordered[0]);
+    const offset = (nodeAngles.has(firstParent) ? nodeAngles.get(firstParent) : 0) - slot / 2;
+
+    ordered.forEach((id, index) => {
+      const angle = offset + slot * index;
+      positions.set(id, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, hop });
+      nodeAngles.set(id, angle);
+    });
+
     previousRadius = radius;
   });
 
-  positions.set(anchorId, { x: 0, y: 0, hop: 0 });
-  const angles = new Map([[anchorId, 0]]);
-
-  // Angles are allocated PER LAYER across the full circle, not by recursively
-  // subdividing each parent's wedge. Strict wedge nesting looks tidy for two
-  // hops and then collapses: every generation divides its slice again, so by
-  // hop 5 a band's twelve members are fighting over a hair-thin wedge and land
-  // on top of each other -- the expanded-view overlap bug.
-  //
-  // Instead each layer spreads evenly around its ring, ordered by the angle of
-  // the parent that first reached each node. Siblings stay contiguous (a band
-  // and its members still read as one solar system) and the layer's blocks
-  // appear in the same rotational order as their parents, but spacing is now
-  // uniform and guaranteed: 2 * PI * radius / population >= minSeparation.
-  sortedHops.forEach(hop => {
-    const ids = layers.get(hop) || [];
-    const parentOf = new Map();
-    ids.forEach(id => {
-      const parents = Array.from(adj.get(id) || []).filter(
-        candidate => hopOf(candidate) === hop - 1 && positions.has(candidate)
-      );
-      parents.sort((a, b) => String(a).localeCompare(String(b)));
-      parentOf.set(id, parents[0] || anchorId);
+  // ----- 4. Scatter and relax ----------------------------------------------
+  // The rings above are a SEED, not the finished drawing: they encode "distance
+  // from the anchor means degrees of separation" and nothing else. Scattering
+  // each node off its ring by a stable amount derived from its own id turns the
+  // bullseye into a constellation, and relaxLayout then resolves whatever that
+  // scatter (and the graph's own cross-links) would have overlapped.
+  if (scatter > 0) {
+    const slots = new Map();
+    layers.forEach((ids, hop) => slots.set(hop, (Math.PI * 2) / Math.max(ids.length, 1)));
+    positions.forEach((point, id) => {
+      if (id === anchorId) return;
+      const seed = scatterSeed(id);
+      const radius = Math.hypot(point.x, point.y);
+      const angle = Math.atan2(point.y, point.x);
+      const slot = slots.get(point.hop) || 0;
+      const nextAngle = angle + seed.angular * slot * scatter * 0.5;
+      const nextRadius = radius * (1 + seed.radial * scatter * 0.18);
+      point.x = Math.cos(nextAngle) * nextRadius;
+      point.y = Math.sin(nextAngle) * nextRadius;
     });
+  }
 
-    const ordered = ids.slice().sort((a, b) => {
-      const angleA = angles.get(parentOf.get(a)) || 0;
-      const angleB = angles.get(parentOf.get(b)) || 0;
-      if (angleA !== angleB) return angleA - angleB;
-      const parentCompare = String(parentOf.get(a)).localeCompare(String(parentOf.get(b)));
-      return parentCompare || String(a).localeCompare(String(b));
+  if (relax) {
+    relaxLayout({
+      positions,
+      links,
+      anchorId,
+      minSeparation,
+      // Aiming well beyond the strict minimum: the solver has to satisfy many
+      // constraints at once, so a generous target is what leaves every one of
+      // them comfortably met at the end.
+      edgeClearance: minSeparation * 2,
+      spacing,
     });
-
-    const count = ordered.length;
-    const step = (Math.PI * 2) / count;
-    const baseRadius = radii.get(hop);
-    // Rotate the layer so its first block starts near that block's parent,
-    // which keeps children visually under their own band instead of drifting.
-    const offset = (angles.get(parentOf.get(ordered[0])) || 0) - step * 0.5;
-    // Sub-rings only if uniform spacing still cannot reach minSeparation
-    // (very large layers); normally this resolves to a single ring.
-    const arcPerNode = step * baseRadius;
-    const rings = Math.max(
-      1,
-      Math.min(subRingLimit, Math.ceil(minSeparation / Math.max(arcPerNode, 1)))
-    );
-
-    ordered.forEach((id, index) => {
-      const angle = offset + step * index;
-      const radius = baseRadius + (index % rings) * spacing * subRingSpacing;
-      positions.set(id, {
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius,
-        hop,
-      });
-      angles.set(id, angle);
-    });
-  });
+  }
 
   return positions;
+}
+
+/**
+ * Distance from a point to a quadratic Bezier, sampled.
+ *
+ * Mirrors how Sigma's edge-curve program draws a curved edge: the control point
+ * is the midpoint pushed perpendicular to the chord by curvature * length.
+ */
+export function curveDistance(point, a, b, curvature = 0, samples = 20) {
+  const segment = straightDistance;
+  if (!curvature) return segment(point, a, b);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const control = { x: (a.x + b.x) / 2 - dy * curvature, y: (a.y + b.y) / 2 + dx * curvature };
+  let best = Infinity;
+  let previous = a;
+  for (let i = 1; i <= samples; i += 1) {
+    const t = i / samples;
+    const u = 1 - t;
+    const current = {
+      x: u * u * a.x + 2 * u * t * control.x + t * t * b.x,
+      y: u * u * a.y + 2 * u * t * control.y + t * t * b.y,
+    };
+    best = Math.min(best, segment(point, previous, current));
+    previous = current;
+  }
+  return best;
+}
+
+/**
+ * Picks which way -- and how far -- each edge should bow.
+ *
+ * A curved edge only helps if it curves AWAY from the nodes near its chord, by
+ * enough to actually clear them. Both halves of that matter, and both were
+ * learned the hard way: a fixed sign left edges drawn tangent to unrelated
+ * musicians, and a fixed magnitude left dense views with nodes sitting on
+ * threads they have nothing to do with.
+ *
+ * For each edge: walk candidate bows from gentle to pronounced, in both
+ * directions, and take the first that clears every non-endpoint node by
+ * `targetClearance`. If nothing reaches the target, keep whichever candidate
+ * came closest, so a hopeless case still ends up as good as it can be rather
+ * than arbitrary.
+ *
+ * Coordinates must be in the same handedness as the renderer (screen space, y
+ * pointing down); a sign chosen in y-up space bows every edge the wrong way.
+ *
+ * Ties break deterministically, so a shared link always looks identical.
+ *
+ * Returns Map("source\u0000target" -> signed curvature).
+ */
+export function chooseEdgeCurvatures({
+  links = [],
+  positions = new Map(),
+  curvature = 0.18,
+  // Multiples of the base curvature to try, gentlest first.
+  // A hub musician in eight bands sends long chords across the graph, and a
+  // gentle bow is not enough to clear the bands those chords sweep past, so the
+  // ladder reaches well beyond a subtle curve before giving up.
+  magnitudes = [1, 1.4, 1.9, 2.6, 3.6, 5, 7, 9, 12],
+  // Layout-unit clearance we are aiming for between a curve and any unrelated
+  // node. Roughly a third of the layout's separation floor.
+  // Aiming above the strict invariant (a third of the separation floor) leaves
+  // margin: an edge that only just satisfies the chooser can still be visually
+  // tangent to the anchor, which is the most conspicuous node on screen.
+  targetClearance = 30,
+  // Nodes that must be cleared even at the cost of a worse average: in practice
+  // the anchor, which is the node every visitor is looking at and the one place
+  // a stray thread reads as a real connection.
+  protect = [],
+  protectClearance = 30,
+  samples = 14,
+} = {}) {
+  const chosen = new Map();
+  const entries = Array.from(positions.entries());
+
+  links.forEach(link => {
+    const [source, target] = linkEndpoints(link);
+    const key = `${source}\u0000${target}`;
+    const a = positions.get(source);
+    const b = positions.get(target);
+    if (!a || !b) {
+      chosen.set(key, curvature);
+      return;
+    }
+
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    const maxMagnitude = Math.max(...magnitudes) * curvature;
+    // Only nodes near the straight chord can possibly interfere with any of the
+    // candidate curves, and a straight-line test is cheap. Everything else is
+    // skipped, which keeps this affordable on a 200-node view.
+    const cutoff = maxMagnitude * length + targetClearance * 2;
+    const nearby = [];
+    entries.forEach(([id, point]) => {
+      if (id === source || id === target) return;
+      if (straightDistance(point, a, b) <= cutoff) nearby.push({ id, point });
+    });
+    if (!nearby.length) {
+      chosen.set(key, curvature);
+      return;
+    }
+
+    const protectedIds = new Set(protect);
+    const scoreFor = signed => {
+      let worst = Infinity;
+      let worstProtected = Infinity;
+      for (const entry of nearby) {
+        const distance = curveDistance(entry.point, a, b, signed, samples);
+        if (distance < worst) worst = distance;
+        if (protectedIds.has(entry.id) && distance < worstProtected) worstProtected = distance;
+      }
+      return { worst, worstProtected };
+    };
+
+    const parity = (source.length + target.length) % 2 === 0 ? 1 : -1;
+    let best = { value: parity * curvature, worst: -Infinity, worstProtected: -Infinity };
+    for (const multiple of magnitudes) {
+      const magnitude = multiple * curvature;
+      // Try the parity-preferred side first so ties stay stable.
+      for (const sign of [parity, -parity]) {
+        const signed = sign * magnitude;
+        const score = scoreFor(signed);
+        // A candidate that clears the protected nodes always beats one that does
+        // not, however good its average.
+        const betterProtected =
+          Math.min(score.worstProtected, protectClearance) >
+          Math.min(best.worstProtected, protectClearance);
+        const sameProtected =
+          Math.min(score.worstProtected, protectClearance) ===
+          Math.min(best.worstProtected, protectClearance);
+        if (betterProtected || (sameProtected && score.worst > best.worst)) {
+          best = { value: signed, ...score };
+        }
+        if (score.worst >= targetClearance && score.worstProtected >= protectClearance) {
+          chosen.set(key, signed);
+          return;
+        }
+      }
+    }
+    chosen.set(key, best.value);
+  });
+
+  return chosen;
+}
+
+/**
+ * Distance from a point to a straight segment.
+ */
+export function straightDistance(p, a, b) {
+  const vx = b.x - a.x;
+  const vy = b.y - a.y;
+  const len2 = vx * vx + vy * vy;
+  let t = len2 ? ((p.x - a.x) * vx + (p.y - a.y) * vy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * vx), p.y - (a.y + t * vy));
 }
 
 /**
@@ -584,7 +1300,7 @@ export function viewportSizeScale({
   maxNodeSize = 13,
   gap = 6,
   padding = 0.86,
-  min = 0.4,
+  min = 0.6,
 } = {}) {
   const usableRadius = (Math.min(viewportWidth, viewportHeight) / 2) * padding;
   if (!extent || !usableRadius) return 1;
@@ -592,6 +1308,42 @@ export function viewportSizeScale({
   const separationPx = minSeparation * pixelsPerUnit;
   const scale = separationPx / (2 * maxNodeSize + gap);
   return Math.max(min, Math.min(1, scale));
+}
+
+/**
+ * Camera ratio to open a view at.
+ *
+ * Fitting the whole neighborhood on screen is only the right move while the
+ * result stays legible. Past that point -- a 220-node expansion on a phone --
+ * fitting everything forces nodes below a usable size and they collide no matter
+ * how small they are drawn. The honest answer is to stop fitting: keep a minimum
+ * pixels-per-layout-unit and show a REGION, which is what the explorer is for
+ * anyway. The frontier count and expand affordance already tell people there is
+ * more graph beyond the edge of the screen.
+ *
+ * Returns a Sigma camera ratio: baseRatio when everything fits, smaller (zoomed
+ * in) when fitting would cost legibility.
+ */
+export function framingRatio({
+  extent = 0,
+  viewportWidth = 0,
+  viewportHeight = 0,
+  minSeparation = 44,
+  maxNodeSize = 13,
+  // Breathing room between two adjacent node rims, in pixels. Generous on
+  // purpose: selection grows a node by a quarter, and a gap of a pixel or two
+  // reads as a collision anyway.
+  gap = 10,
+  padding = 0.86,
+  baseRatio = 1.22,
+} = {}) {
+  const usableRadius = (Math.min(viewportWidth, viewportHeight) / 2) * padding;
+  if (!extent || !usableRadius) return baseRatio;
+  // Pixels per layout unit needed for two adjacent nodes to clear each other.
+  const requiredPixelsPerUnit = (2 * maxNodeSize + gap) / minSeparation;
+  const requiredRadius = extent * requiredPixelsPerUnit;
+  if (requiredRadius <= usableRadius) return baseRatio;
+  return baseRatio * (usableRadius / requiredRadius);
 }
 
 /**
@@ -603,7 +1355,9 @@ export function viewportSizeScale({
  */
 export function densitySizeScale(visibleCount, baseline = NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES) {
   if (!visibleCount || visibleCount <= baseline) return 1;
-  return Math.max(0.45, Math.min(1, Math.sqrt(baseline / visibleCount)));
+  // Floor raised from 0.45 once framingRatio took over responsibility for
+  // legibility: nodes should stay tappable, and the camera should zoom instead.
+  return Math.max(0.6, Math.min(1, Math.sqrt(baseline / visibleCount)));
 }
 
 /**

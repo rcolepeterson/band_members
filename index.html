@@ -39,6 +39,27 @@
   <meta name="twitter:image" content="https://bandmembers.netlify.app/og-image.png" />
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <!-- Import map for the Sigma renderer's ES modules (issue #80).
+       Bare specifiers, in one reviewable place, pinned to the same versions as
+       the devDependencies in package.json (asserted by
+       tests/sigma-explorer-wiring.test.mjs). @sigma/edge-curve imports
+       "sigma/rendering" internally, which only resolves with a map like this --
+       and mapping "sigma" once also guarantees every module shares ONE Sigma
+       instance rather than each CDN URL pulling its own copy.
+       Inert for anyone not using ?renderer=sigma: an import map costs nothing
+       until a module actually imports something. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "sigma": "https://esm.sh/sigma@3.0.3",
+      "sigma/": "https://esm.sh/sigma@3.0.3/",
+      "graphology": "https://esm.sh/graphology@0.26.0",
+      "graphology/": "https://esm.sh/graphology@0.26.0/",
+      "@sigma/edge-curve": "https://esm.sh/@sigma/edge-curve@3.1.0?external=sigma,graphology"
+    }
+  }
+  </script>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=boska@400,500,700&display=swap">
   <style>

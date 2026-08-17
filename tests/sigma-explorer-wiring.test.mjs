@@ -159,15 +159,27 @@ test('stage chrome is not hidden on small screens', () => {
   assert.doesNotMatch(mobileBlock, /display:\s*none/);
 });
 
-test('CDN versions are pinned to the same majors as package.json', () => {
+test('CDN versions are pinned in the import map, matching package.json', () => {
+  // The explorer imports bare specifiers now; index.html's import map is the
+  // single place the versions live, so that is what has to agree with
+  // package.json (and what makes one shared Sigma instance possible).
   const graphology = PACKAGE.devDependencies.graphology;
   const sigma = PACKAGE.devDependencies.sigma;
   assert.ok(graphology, 'graphology must be a devDependency for the test suite');
   assert.ok(sigma, 'sigma must be a devDependency so the CDN pin is reviewable');
-  const major = range => String(range).replace(/^[^0-9]*/, '').split('.')[0];
-  const minor = range => String(range).replace(/^[^0-9]*/, '').split('.')[1];
-  assert.match(EXPLORER, new RegExp(`graphology@${major(graphology)}\\.${minor(graphology)}`));
-  assert.match(EXPLORER, new RegExp(`sigma@${major(sigma)}\\.`));
+  const version = range => String(range).replace(/^[^0-9]*/, '');
+  assert.match(INDEX_HTML, /<script type="importmap">/);
+  assert.ok(
+    INDEX_HTML.includes(`https://esm.sh/graphology@${version(graphology)}`),
+    'the import map must pin the same graphology version as package.json'
+  );
+  assert.ok(
+    INDEX_HTML.includes(`https://esm.sh/sigma@${version(sigma)}`),
+    'the import map must pin the same sigma version as package.json'
+  );
+  assert.match(INDEX_HTML, /"@sigma\/edge-curve": "https:\/\/esm\.sh\/@sigma\/edge-curve@/);
+  assert.match(EXPLORER, /^import Sigma from 'sigma';$/m);
+  assert.match(EXPLORER, /^import Graph from 'graphology';$/m);
 });
 
 test('the explorer keeps its logic in the tested helper module', () => {
@@ -209,12 +221,18 @@ test('a highlight dims other nodes but keeps their names', () => {
   assert.doesNotMatch(code, /res\.label = '';\s*\n\s*\}\s*\n\s*\}/);
 });
 
-test('the layout allocates angles per layer rather than nesting wedges', () => {
+test('the layout is a proportional radial tree, not recursive wedge nesting', () => {
   // Recursive wedge subdivision was the expanded-view overlap bug: every
   // generation halved its slice until members landed on identical points.
-  assert.match(HELPERS, /Angles are allocated PER LAYER/);
-  assert.doesNotMatch(HELPERS, /wedges\.set\(/);
+  // Uniform per-layer slots replaced it and fixed overlap, but let a member
+  // drift far from its own band, drawing membership edges across the middle.
+  // The current design: a BFS tree where each child sits inside a window
+  // centred on its parent, sized by what that subtree needs.
+  assert.match(HELPERS, /BFS tree/);
+  assert.match(HELPERS, /export const MAX_BRANCH_SPAN/);
+  assert.match(HELPERS, /Subtree weights/);
   assert.match(HELPERS, /minSeparation/);
+  assert.doesNotMatch(HELPERS, /wedges\.set\(/);
 });
 
 test('hidden overlays are really hidden', () => {
@@ -251,5 +269,12 @@ test('a framed view leaves room for labels', () => {
   // At camera ratio 1 Sigma frames the nodes exactly and clips the names of
   // everything near the edge.
   assert.match(EXPLORER, /const FRAMED_RATIO = 1\.\d+;/);
+  assert.match(EXPLORER, /ratio >= FRAMED_RATIO - 1e-6/);
   assert.match(EXPLORER, /ratio: FRAMED_RATIO/);
+});
+
+test('the renderer frames views through the tested framing helper', () => {
+  assert.match(EXPLORER, /framingRatio\(\{/);
+  assert.match(EXPLORER, /ratio: framedRatio\(\)/);
+  assert.match(HELPERS, /export function framingRatio/);
 });

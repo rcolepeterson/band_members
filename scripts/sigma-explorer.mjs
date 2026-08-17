@@ -26,13 +26,21 @@
 //     rotation, NO orbit, NO CAD-style pilot mode. Depth comes from scale,
 //     glow, halo and fog, not from a third axis.
 //
-// Deps come from the CDN as ES modules, mirroring how the page already loads
-// d3 from a CDN script tag; package.json pins the same major versions so the
-// test suite and the browser agree.
+// Deps come from the CDN as ES modules via the import map in index.html,
+// mirroring how the page already loads d3 from a CDN script tag; package.json
+// pins the same versions so the test suite and the browser agree.
 // ---------------------------------------------------------------------------
 
-import Graph from 'https://esm.sh/graphology@0.26.0';
-import Sigma from 'https://esm.sh/sigma@3.0.3';
+import Graph from 'graphology';
+import Sigma from 'sigma';
+// Curved edges. Specifiers are bare and resolved by the import map in
+// index.html, which pins the versions and guarantees one shared Sigma instance
+// (two copies would give us a renderer that silently draws nothing).
+// Curves matter for more than looks: a straight chord between
+// two bands can pass exactly through an unrelated musician's node, which reads
+// as a membership that does not exist ("Charlie is sitting on the Sweet Water
+// string"). A bowed edge leaves the node alone.
+import EdgeCurveProgram from '@sigma/edge-curve';
 
 import {
   rendererFromSearch,
@@ -50,6 +58,8 @@ import {
   nodeSizeScale,
   layoutExtent,
   labelSettings,
+  chooseEdgeCurvatures,
+  framingRatio,
 } from './neighborhood-helpers.mjs';
 
 // ---------------------------------------------------------------------------
@@ -75,6 +85,12 @@ const LARGEST_NODE_SIZE = Math.max(...Object.values(KIND_STYLE).map(style => sty
 
 const EDGE_COLOR = 'rgba(150,170,190,0.22)';
 const DIM_LABEL_COLOR = 'rgba(150,163,178,0.75)';
+// How far an edge bows away from the straight line between its endpoints.
+// Enough to clear a node that happens to sit on the chord, small enough that
+// the graph still reads as a network rather than a bowl of noodles.
+const EDGE_CURVATURE = 0.18;
+// How much a selected node grows. Used both when drawing and when framing.
+const HIGHLIGHT_GROWTH = 1.25;
 // Dimmed nodes must be OPAQUE. A translucent fill let highlighted edges show
 // straight through them, which read as two nodes overlapping (reported from
 // the first preview) rather than as one dimmed node behind a gold thread.
@@ -83,10 +99,12 @@ const STAGE_ID = 'sigma-stage';
 
 const EXPLORE_COPY = 'You are viewing one region of a much larger music universe.';
 
-// Camera ratio for a freshly framed view. Slightly above 1 so node LABELS fit
-// on screen too: at ratio 1 Sigma frames the nodes exactly, which clipped the
-// names of every node near the edge.
-const FRAMED_RATIO = 1.22;
+// Base camera ratio for a freshly framed view. Comfortably above 1 because Sigma
+// frames NODES, and a node's label extends well past it -- at 1.0 every name
+// near the edge was cut off, and at 1.22 the longest ones still were.
+// framingRatio() reduces this (zooms in) when fitting the whole view would push
+// nodes into each other.
+const FRAMED_RATIO = 1.5;
 
 // ---------------------------------------------------------------------------
 // Stage chrome
@@ -285,14 +303,21 @@ export function initSigmaExplorer({
     // gaps between nodes readable as views grow.
     sizeScale: 1,
     layoutExtent: 0,
+    // Exposed so scripts/layout-audit.mjs can catch a phantom overlay: a star
+    // drawn for a node that is not in the current view.
+    homeStarId: null,
   };
+
+  state.homeStarId = homeStarId;
 
   const viewGraph = new GraphConstructor({ type: 'undirected', multi: false, allowSelfLoops: false });
 
   const renderer = new SigmaConstructor(viewGraph, canvasHost, {
     // 2.5D contract: pan and zoom only. Sigma's camera rotation stays off.
     enableCameraRotation: false,
-    minCameraRatio: 0.08,
+    // Deliberately tiny: framingRatio() zooms in hard on big views, and a floor
+    // here would silently cap that zoom and let nodes touch again.
+    minCameraRatio: 0.005,
     maxCameraRatio: 4,
     labelFont: 'Satoshi, system-ui, sans-serif',
     labelColor: { color: '#c8d3e0' },
@@ -303,6 +328,8 @@ export function initSigmaExplorer({
     // emphasis. Stripping labels on dim made names appear only on click.
     labelColor: { attribute: 'labelColor', color: '#c8d3e0' },
     defaultEdgeColor: EDGE_COLOR,
+    defaultEdgeType: 'curve',
+    edgeProgramClasses: { curve: EdgeCurveProgram },
     hideEdgesOnMove: true,
     hideLabelsOnMove: true,
     nodeReducer: (id, attrs) => reduceNode(id, attrs),
@@ -329,7 +356,7 @@ export function initSigmaExplorer({
     if (state.highlightNodes.size) {
       if (state.highlightNodes.has(id) || id === (state.selection && state.selection.id)) {
         res.color = state.highlightColor;
-        res.size = res.size * 1.25;
+        res.size = res.size * HIGHLIGHT_GROWTH;
         res.zIndex = 2;
       } else {
         // Dim, but keep the name: a highlight should answer "who else is
@@ -349,6 +376,21 @@ export function initSigmaExplorer({
   }
 
   // -- sizing ---------------------------------------------------------------
+
+  // How far out to sit for the current view: fit everything when that is
+  // legible, otherwise show a region at a usable scale and let people pan.
+  function framedRatio() {
+    const rect = canvasHost.getBoundingClientRect();
+    return framingRatio({
+      extent: state.layoutExtent,
+      viewportWidth: rect.width,
+      viewportHeight: rect.height,
+      // Selection grows a node by a quarter (see reduceNode), so frame for the
+      // biggest a node can ever be drawn, not its resting size.
+      maxNodeSize: LARGEST_NODE_SIZE * state.sizeScale * HIGHLIGHT_GROWTH,
+      baseRatio: FRAMED_RATIO,
+    });
+  }
 
   // Node radii are screen pixels, so how close nodes look depends on the
   // window as much as on the node count. Recomputed per view AND on resize.
@@ -389,8 +431,28 @@ export function initSigmaExplorer({
       links: view.links,
       anchorId,
       depths: view.depths,
-      spacing: 110,
+      spacing: 150,
       adjacency,
+    });
+
+    // Which way each edge should bow, decided against the actual node positions
+    // so a curve never lands on an unrelated musician.
+    //
+    // Note the y flip: layout space has y pointing up, the screen has y
+    // pointing down, and a curvature sign means the opposite side of the chord
+    // in each. Choosing the sign in layout space and handing it straight to
+    // Sigma bows every edge the WRONG way -- measurably worse than not choosing
+    // at all, which is how this was caught.
+    const screenSpacePositions = new Map(
+      Array.from(positions.entries()).map(([id, point]) => [id, { x: point.x, y: -point.y }])
+    );
+    const curvatures = chooseEdgeCurvatures({
+      links: view.links,
+      positions: screenSpacePositions,
+      curvature: EDGE_CURVATURE,
+      // The anchor is what the visitor is looking at; a thread grazing it reads
+      // as a connection it does not have.
+      protect: [anchorId],
     });
 
     viewGraph.clear();
@@ -416,7 +478,11 @@ export function initSigmaExplorer({
       const [source, target] = linkEndpoints(link);
       if (!viewGraph.hasNode(source) || !viewGraph.hasNode(target)) return;
       if (viewGraph.hasEdge(source, target)) return;
-      viewGraph.addEdge(source, target, { size: 1, relation: link.relation || 'member' });
+      viewGraph.addEdge(source, target, {
+        size: 1,
+        relation: link.relation || 'member',
+        curvature: curvatures.get(`${source}\u0000${target}`) ?? EDGE_CURVATURE,
+      });
     });
 
     state.layoutExtent = layoutExtent(positions);
@@ -426,15 +492,23 @@ export function initSigmaExplorer({
     state.maxNodes = maxNodes;
     clearHighlight();
     updateChrome();
-    // First paint / expansion: let Sigma's default camera frame the whole
-    // capped view, which is exactly what we want when the view changes size.
-    // Search and double-click travel instead: a short animated warp that
-    // lands centered on the new anchor.
+    // Framing, in two cases:
+    //
+    //   FITS      The whole view is legible on this screen, so frame the whole
+    //             view -- centred on its bounding box, not on the anchor. The
+    //             relaxed layout is an asymmetric cloud, so centring on the
+    //             anchor clipped whatever was furthest from it.
+    //   ZOOMED IN Fitting would push nodes into each other, so show a region at
+    //             a usable scale. Now the anchor IS the right thing to centre on:
+    //             it is what the visitor came for.
+    const ratio = framedRatio();
     if (animate) {
-      flyTo(anchorId, { animate: true, ratio: 0.8 });
-    } else {
-      renderer.getCamera().setState({ x: 0.5, y: 0.5, ratio: FRAMED_RATIO, angle: 0 });
+      flyTo(anchorId, { animate: true, ratio: Math.min(0.8, ratio) });
+    } else if (ratio >= FRAMED_RATIO - 1e-6) {
+      renderer.getCamera().setState({ x: 0.5, y: 0.5, ratio, angle: 0 });
       positionOverlays();
+    } else {
+      flyTo(anchorId, { animate: false, ratio });
     }
     return true;
   }
