@@ -119,6 +119,12 @@ const STAGE_ACTIONS = [
     action: 'home',
   },
   {
+    key: 'filter',
+    label: 'Filter',
+    detail: 'Narrow the tree to one scene, one genre, or the most recently added bands.',
+    action: 'filters',
+  },
+  {
     key: 'add',
     label: 'Add',
     detail: 'Add a band and its line-up to the tree. Requires signing in.',
@@ -235,6 +241,32 @@ const STAGE_CSS = `
 @media (max-width:720px){
   #${STAGE_ID} > .share-popover{width:94vw;max-height:82vh}
 }
+
+#${STAGE_ID} .sigma-filters{position:absolute;left:50%;transform:translateX(-50%);
+  top:calc(100% + 10px);width:min(420px,92vw);z-index:7;padding:16px 18px 18px;
+  border-radius:16px;border:1px solid rgba(143,232,246,0.3);background:rgba(9,12,18,0.97);
+  box-shadow:0 18px 44px rgba(3,6,10,0.7);display:flex;flex-direction:column;gap:12px;
+  text-align:left}
+#${STAGE_ID} .sigma-filters[hidden]{display:none}
+#${STAGE_ID} .sigma-filters__title{margin:0;font-size:14px;color:#e6f1f8;letter-spacing:0.01em}
+#${STAGE_ID} .sigma-filters__close{position:absolute;top:8px;right:10px;width:28px;height:28px;
+  border:0;background:none;color:#93a1b2;font-size:20px;line-height:1;cursor:pointer;padding:0}
+#${STAGE_ID} .sigma-filters__close:hover{color:#e6f1f8}
+#${STAGE_ID} .sigma-filters__slot label{display:block;margin-bottom:5px;font-size:12px;color:#93a1b2}
+#${STAGE_ID} .sigma-filters__slot select{width:100%;min-height:42px;margin:0;
+  border-radius:10px;border:1px solid rgba(190,206,224,0.24);background:rgba(14,19,26,0.92);
+  color:#e2ecf5;font-size:14px;padding:0 10px}
+#${STAGE_ID} .sigma-filters__row{display:flex;gap:8px;flex-wrap:wrap}
+#${STAGE_ID} .sigma-filters__row button{flex:1;min-width:130px;min-height:42px;margin:0;
+  border-radius:999px;border:1px solid rgba(190,206,224,0.24);background:rgba(14,19,26,0.9);
+  color:#c3d0de;font-size:13px;cursor:pointer}
+#${STAGE_ID} .sigma-filters__row button:hover{color:#eaf4fb;border-color:rgba(143,232,246,0.6)}
+#${STAGE_ID} .sigma-filters__row button[aria-pressed="true"]{color:#0b1016;
+  background:rgba(143,232,246,0.9);border-color:rgba(143,232,246,0.9)}
+/* A dot on the pill when anything is filtering, so a narrowed tree is never a
+   mystery -- the count in the footer tells you how many nodes, but not why. */
+#${STAGE_ID} .sigma-action[data-active="true"]::after{content:'';width:6px;height:6px;
+  margin-left:7px;border-radius:50%;background:#8fe8f6;display:inline-block}
 
 /* Threads and nodes pass under the chrome, since the starfield is the whole
    page. These gradients sink the graph slightly behind the hero and the footer
@@ -413,6 +445,22 @@ function buildStage(doc, mount) {
       </div>
     </div>
     <div class="sigma-tip" id="${TIP_ID}" role="tooltip" hidden></div>
+    <!-- The page's own scene and genre <select> elements are MOVED in here at
+         boot (see RELOCATED_FILTERS). They keep their existing change handlers,
+         so there is one filtering implementation rather than a second one that
+         drifts. Recently-added and Clear press the page's chips for the same
+         reason. -->
+    <div class="sigma-filters" role="dialog" aria-label="Filter the tree" hidden>
+      <button type="button" class="sigma-filters__close" data-filter-action="close"
+              aria-label="Close filters">&times;</button>
+      <p class="sigma-filters__title">Filter the tree</p>
+      <div class="sigma-filters__slot" data-slot="scene"></div>
+      <div class="sigma-filters__slot" data-slot="genre"></div>
+      <div class="sigma-filters__row">
+        <button type="button" data-filter-action="recent" aria-pressed="false">Recently added</button>
+        <button type="button" data-filter-action="clear">Clear all</button>
+      </div>
+    </div>
     <div class="sigma-footer">
       <p class="sigma-context" aria-live="polite"></p>
       <p class="sigma-hint">${EXPLORE_COPY}</p>
@@ -435,6 +483,7 @@ function buildStage(doc, mount) {
  * the feature flag has to be reversible in a live tab.
  */
 export function initSigmaExplorer({
+  // Reassigned by setGraph() when the page applies a filter.
   master,
   mount = null,
   doc = typeof document !== 'undefined' ? document : null,
@@ -464,6 +513,13 @@ export function initSigmaExplorer({
   // put back by destroy(), which keeps their existing handlers intact -- listeners
   // are bound to the elements, not to where they sit in the tree.
   const RELOCATED_PANELS = ['#add-band-popover', '#share-popover', '#feedback-popover'];
+  // The page's real filter widgets, moved into the stage's filter panel. Moving
+  // them rather than rebuilding them keeps their existing change handlers -- and
+  // therefore one filtering implementation instead of two that drift apart.
+  const RELOCATED_FILTERS = [
+    { slot: 'scene', selector: '#scene-filter', label: 'Scene' },
+    { slot: 'genre', selector: '#genre-filter', label: 'Genre' },
+  ];
   const relocated = [];
 
   RELOCATED_PANELS.forEach(selector => {
@@ -478,6 +534,19 @@ export function initSigmaExplorer({
 
   const heroEl = stage.querySelector('.sigma-hero');
   const footerEl = stage.querySelector('.sigma-footer');
+  const filterPanel = stage.querySelector('.sigma-filters');
+  RELOCATED_FILTERS.forEach(({ slot, selector, label }) => {
+    const field = doc.querySelector(selector);
+    const target = filterPanel.querySelector(`[data-slot="${slot}"]`);
+    if (!field || !target || !field.parentNode) return;
+    relocated.push({ panel: field, parent: field.parentNode, next: field.nextSibling });
+    const caption = doc.createElement('label');
+    caption.textContent = label;
+    caption.setAttribute('for', field.id);
+    target.appendChild(caption);
+    target.appendChild(field);
+  });
+
   const actionRow = stage.querySelector('.sigma-actions');
   const actionButtons = new Map(
     [...stage.querySelectorAll('.sigma-action')].map(el => [el.dataset.key, el])
@@ -494,10 +563,11 @@ export function initSigmaExplorer({
   // Retires the page's duplicate controls for as long as this renderer is up.
   doc.body.classList.add(BODY_ACTIVE_CLASS);
 
-  const adjacency = buildAdjacency(master.nodes, master.links);
-  const masterById = new Map(master.nodes.map(node => [node.id, node]));
+  // Reassignable, not const: setGraph() swaps all four when a filter changes.
+  let adjacency = buildAdjacency(master.nodes, master.links);
+  let masterById = new Map(master.nodes.map(node => [node.id, node]));
   // Computed once: updateChrome() runs on every view change, and this does not.
-  const bandNames = master.nodes.filter(node => node.type === 'band').map(node => node.id);
+  let bandNames = master.nodes.filter(node => node.type === 'band').map(node => node.id);
 
   // The silver ringed star belongs to ONE musician -- the project's default
   // anchor -- not to "wherever the camera happens to be". Someone who lands on
@@ -515,6 +585,7 @@ export function initSigmaExplorer({
   const canonical = toGraphologyGraph(master, GraphConstructor);
 
   const state = {
+    displacedAnchorId: null,
     labelBlocked: new Set(),
     anchorId: null,
     anchorSource: 'none',
@@ -838,6 +909,12 @@ export function initSigmaExplorer({
     positionOverlays();
 
     syncAddressBar();
+    // The footer's text just changed, and a longer context line makes it taller.
+    // That moves the zone labels are measured against, so the blocking has to be
+    // recomputed here as well as per frame -- Sigma does not draw a frame when
+    // only the DOM chrome moved, so waiting for afterRender left a label sitting
+    // across the footer with nothing to correct it.
+    updateLabelBlocking();
 
     // Search suggestions, in alphabetical order.
     //
@@ -994,16 +1071,21 @@ export function initSigmaExplorer({
    */
   function updateLabelBlocking() {
     const zones = [];
-    const stageBox = stage.getBoundingClientRect();
+    // Relative to the CANVAS, not the stage. graphToViewport returns coordinates
+    // in the renderer's own container, and the stage wrapper sits ~280px down the
+    // page inside .graph-stage -- converting the chrome into stage space shifted
+    // every zone by that much, so the zones sat where nothing was drawn (one had
+    // a negative top) and labels printed across the footer unchallenged.
+    const originBox = canvasHost.getBoundingClientRect();
     const addZone = el => {
       if (!el || el.hidden) return;
       const r = el.getBoundingClientRect();
       if (!r.width || !r.height) return;
       zones.push({
-        left: r.left - stageBox.left,
-        right: r.right - stageBox.left,
-        top: r.top - stageBox.top,
-        bottom: r.bottom - stageBox.top,
+        left: r.left - originBox.left,
+        right: r.right - originBox.left,
+        top: r.top - originBox.top,
+        bottom: r.bottom - originBox.top,
       });
     };
     addZone(heroEl);
@@ -1194,6 +1276,14 @@ export function initSigmaExplorer({
 
   renderer.on('resize', () => applySizeScale());
 
+  // Any reflow of the chrome moves the zones labels are measured against.
+  const chromeObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(() => updateLabelBlocking())
+    : null;
+  if (chromeObserver) {
+    [heroEl, footerEl, homeLabelEl].forEach(el => { if (el) chromeObserver.observe(el); });
+  }
+
   form.addEventListener('submit', event => {
     event.preventDefault();
     exploreFor(input.value);
@@ -1246,10 +1336,69 @@ export function initSigmaExplorer({
     actionButtons.forEach(button => button.removeAttribute('aria-expanded'));
   }
 
+  /**
+   * Opens or closes the filter panel, and keeps the pill's state dot honest.
+   */
+  function toggleFilters(force = null) {
+    const open = force === null ? filterPanel.hidden : force;
+    filterPanel.hidden = !open;
+    const pill = actionButtons.get('filter');
+    if (pill) pill.setAttribute('aria-expanded', String(open));
+    if (open) syncFilterState();
+  }
+
+  /**
+   * Reflects the page's filter state in the panel and on the pill.
+   *
+   * Read from the page rather than tracked here: the same filters can be changed
+   * from the SVG renderer's own controls, from Reset view, or by a country chip,
+   * and a second copy of that state would drift.
+   */
+  function syncFilterState() {
+    const recentChip = doc.querySelector('.tool-chip[data-action="recent"]');
+    const recentOn = recentChip ? recentChip.getAttribute('aria-pressed') === 'true' : false;
+    const recentBtn = filterPanel.querySelector('[data-filter-action="recent"]');
+    if (recentBtn) {
+      recentBtn.setAttribute('aria-pressed', String(recentOn));
+      // The page disables Recently-added when the data carries no timestamps.
+      recentBtn.disabled = !recentChip || recentChip.disabled;
+    }
+    const scene = doc.querySelector('#scene-filter');
+    const genre = doc.querySelector('#genre-filter');
+    const active =
+      recentOn ||
+      (scene && scene.value && scene.value !== 'all') ||
+      (genre && genre.value && genre.value !== 'all');
+    const pill = actionButtons.get('filter');
+    if (pill) pill.setAttribute('data-active', String(Boolean(active)));
+  }
+
+  filterPanel.addEventListener('click', event => {
+    const button = event.target.closest('[data-filter-action]');
+    if (!button) return;
+    // The page closes its popovers on any outside click; this panel is outside
+    // them, so the press must not travel (same trap as the pills).
+    event.stopPropagation();
+    const action = button.dataset.filterAction;
+    if (action === 'close') return toggleFilters(false);
+    // Recently-added and Clear press the page's own chips, so the behaviour and
+    // the mutual exclusions stay in one place.
+    const selector = action === 'recent'
+      ? '.tool-chip[data-action="recent"]'
+      : '.tool-chip[data-action="clear"]';
+    const chip = doc.querySelector(selector);
+    if (chip) chip.click();
+    syncFilterState();
+  });
+  // A change to either select re-filters through the page's own handler; this
+  // only needs to catch up the pill's dot.
+  filterPanel.addEventListener('change', () => syncFilterState());
+
   /** Runs a pill's action: a Sigma function, or the page's own button. */
   function runAction(item) {
     if (item.action === 'expand') return expand();
     if (item.action === 'home') return goHome();
+    if (item.action === 'filters') return toggleFilters();
     if (!item.target) return;
     const target = doc.querySelector(item.target);
     if (target) target.click();
@@ -1278,9 +1427,16 @@ export function initSigmaExplorer({
 
   // Escape closes the popover, and so does a press anywhere else -- without
   // this, a tap-opened popover on a phone has no way out.
-  doc.addEventListener('keydown', event => { if (event.key === 'Escape') hideTip(); });
+  doc.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    hideTip();
+    toggleFilters(false);
+  });
   doc.addEventListener('pointerdown', event => {
     if (!actionRow.contains(event.target)) hideTip();
+    if (!actionRow.contains(event.target) && !filterPanel.contains(event.target)) {
+      toggleFilters(false);
+    }
   });
 
   /**
@@ -1307,6 +1463,73 @@ export function initSigmaExplorer({
     if (header) authObserver.observe(header, { attributes: true, subtree: true, childList: true });
   }
 
+  /**
+   * Replaces the graph being explored -- the page calls this every time a filter
+   * changes, with the same filtered {nodes, links} the SVG renderer draws.
+   *
+   * The anchor is preserved when it survives the filter, because a filter should
+   * narrow what you are looking at rather than move you somewhere else. When it
+   * does not survive, the default anchor is tried, then the most connected node
+   * left, so a filtered view still opens somewhere meaningful instead of nowhere.
+   */
+  function setGraph(next) {
+    if (!next || !Array.isArray(next.nodes)) return false;
+    if (!next.nodes.length) {
+      // An empty result is a real outcome of a narrow filter, not a failure.
+      contextEl.textContent = 'No bands match these filters.';
+      frontierEl.textContent = '';
+      viewGraph.clear();
+      renderer.refresh();
+      state.view = { nodes: [], links: [], frontier: [], depths: new Map() };
+      return true;
+    }
+
+    master = next;
+    adjacency = buildAdjacency(master.nodes, master.links);
+    masterById = new Map(master.nodes.map(node => [node.id, node]));
+    bandNames = master.nodes.filter(node => node.type === 'band').map(node => node.id);
+
+    let anchorId = masterById.has(state.anchorId) ? state.anchorId : null;
+
+    // A filter that excludes where you were standing moves you somewhere else,
+    // which is unavoidable -- but clearing it should put you back rather than
+    // leaving you on a node you never chose. The displaced anchor is remembered
+    // for exactly that.
+    if (!anchorId && !state.displacedAnchorId) state.displacedAnchorId = state.anchorId;
+    if (anchorId && state.displacedAnchorId && masterById.has(state.displacedAnchorId)) {
+      anchorId = state.displacedAnchorId;
+      state.displacedAnchorId = null;
+    }
+
+    if (!anchorId && masterById.has(NEIGHBORHOOD_BUDGET.DEFAULT_ANCHOR)) {
+      anchorId = NEIGHBORHOOD_BUDGET.DEFAULT_ANCHOR;
+    }
+    if (!anchorId) {
+      // Most connected survivor: the busiest node is the most useful place to
+      // land in a narrowed graph.
+      let best = null;
+      let bestDegree = -1;
+      master.nodes.forEach(node => {
+        // buildAdjacency stores a Set per node, so this is .size -- reading
+        // .length gave undefined, every comparison was false, and no anchor was
+        // ever chosen, so a filtered graph silently did nothing.
+        const neighbours = adjacency.get(node.id);
+        const degree = neighbours ? neighbours.size : 0;
+        if (degree > bestDegree) { best = node.id; bestDegree = degree; }
+      });
+      anchorId = best;
+    }
+    if (!anchorId) return false;
+
+    state.maxHops = NEIGHBORHOOD_BUDGET.MAX_HOPS;
+    clearHighlight();
+    return renderNeighborhood({
+      anchorId,
+      maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
+      animate: false,
+    });
+  }
+
   // -- first paint ----------------------------------------------------------
 
   const resolved = resolveAnchor({ search, nodes: master.nodes, links: master.links, adjacency });
@@ -1326,6 +1549,7 @@ export function initSigmaExplorer({
     state,
     exploreFor,
     travelTo,
+    setGraph,
     expand,
     flyTo,
     highlightFrom,
@@ -1333,6 +1557,7 @@ export function initSigmaExplorer({
     destroy() {
       renderer.kill();
       if (authObserver) authObserver.disconnect();
+      if (chromeObserver) chromeObserver.disconnect();
       // Panels go home before the stage is dropped, or they would be removed
       // with it and the SVG renderer would come back without them.
       relocated.forEach(({ panel, parent, next }) => {

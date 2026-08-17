@@ -384,12 +384,18 @@ const MEASURE_LABELS = () => {
   }
 
   // 2. Node label against the gold you-are-here label, which is DOM.
-  const stageBox = stage.getBoundingClientRect();
+  // Chrome rects have to be expressed in the same space as the label boxes, which
+  // graphToViewport reports relative to the RENDERER'S CONTAINER. Measuring them
+  // against the stage wrapper (~280px further down the page, inside .graph-stage)
+  // is what let this check pass while a label printed across the footer on screen.
+  const originBox = (renderer.getContainer
+    ? renderer.getContainer()
+    : stage.querySelector('.sigma-canvas-host')).getBoundingClientRect();
   const toStage = rect => ({
-    left: rect.left - stageBox.left,
-    right: rect.right - stageBox.left,
-    top: rect.top - stageBox.top,
-    bottom: rect.bottom - stageBox.top,
+    left: rect.left - originBox.left,
+    right: rect.right - originBox.left,
+    top: rect.top - originBox.top,
+    bottom: rect.bottom - originBox.top,
   });
   const overlayEl = stage.querySelector('.sigma-home-label');
   if (overlayEl && !overlayEl.hidden) {
