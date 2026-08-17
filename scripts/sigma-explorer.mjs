@@ -473,8 +473,11 @@ export function initSigmaExplorer({
     stage.appendChild(panel);
   });
 
+  // Node ids whose label would collide with the chrome. See updateLabelBlocking.
   const homeLabelEl = stage.querySelector('.sigma-home-label');
 
+  const heroEl = stage.querySelector('.sigma-hero');
+  const footerEl = stage.querySelector('.sigma-footer');
   const actionRow = stage.querySelector('.sigma-actions');
   const actionButtons = new Map(
     [...stage.querySelectorAll('.sigma-action')].map(el => [el.dataset.key, el])
@@ -512,6 +515,7 @@ export function initSigmaExplorer({
   const canonical = toGraphologyGraph(master, GraphConstructor);
 
   const state = {
+    labelBlocked: new Set(),
     anchorId: null,
     anchorSource: 'none',
     maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
@@ -577,6 +581,11 @@ export function initSigmaExplorer({
       res.label = '';
       return res;
     }
+    // A name that would be drawn across the wordmark, the search field or the
+    // footer is dropped: chrome text wins over a node label. Computed from
+    // geometry in updateLabelBlocking(), not from what is currently drawn, so it
+    // cannot oscillate frame to frame.
+    if (state.labelBlocked.has(id)) res.label = '';
     if (state.highlightNodes.size) {
       if (state.highlightNodes.has(id) || id === (state.selection && state.selection.id)) {
         res.color = state.highlightColor;
@@ -873,6 +882,98 @@ export function initSigmaExplorer({
     placeLabel(homeLabelEl, homePoint, homeStarEl, homeScale, crowded);
   }
 
+  // One canvas context, reused, for measuring label widths.
+  const labelMetrics = doc.createElement('canvas').getContext('2d');
+
+  /**
+   * Works out which node labels would be drawn across the chrome, and asks for a
+   * refresh when that set changes.
+   *
+   * Measured for EVERY labelled node rather than for the labels Sigma currently
+   * displays: suppressing a label removes it from the displayed set, so reading
+   * that set would make the answer depend on the previous frame and oscillate.
+   * Geometry does not move when a label is hidden, so this is stable.
+   *
+   * Boxes are reconstructed the way Sigma draws them: x + size + 3, baseline at
+   * y + labelSize/3.
+   */
+  function updateLabelBlocking() {
+    const zones = [];
+    const stageBox = stage.getBoundingClientRect();
+    const addZone = el => {
+      if (!el || el.hidden) return;
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      zones.push({
+        left: r.left - stageBox.left,
+        right: r.right - stageBox.left,
+        top: r.top - stageBox.top,
+        bottom: r.bottom - stageBox.top,
+      });
+    };
+    addZone(heroEl);
+    addZone(footerEl);
+    addZone(homeLabelEl);
+
+    const size = renderer.getSetting('labelSize') || 12;
+    labelMetrics.font = `${renderer.getSetting('labelWeight') || 'normal'} ${size}px `
+      + `${renderer.getSetting('labelFont') || 'sans-serif'}`;
+
+    const hits = (a, b) =>
+      Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
+      Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+
+    const candidates = [];
+    viewGraph.forEachNode((id, attrs) => {
+      if (!attrs.label) return;
+      const display = renderer.getNodeDisplayData(id);
+      if (!display) return;
+      const point = renderer.graphToViewport({ x: attrs.x, y: attrs.y });
+      const left = point.x + display.size + 3;
+      candidates.push({
+        id,
+        size: display.size,
+        box: {
+          left,
+          right: left + labelMetrics.measureText(attrs.label).width,
+          top: point.y + size / 3 - size * 0.78,
+          bottom: point.y + size / 3 + size * 0.24,
+        },
+      });
+    });
+
+    // Bigger nodes keep their names when two would collide -- bands outrank
+    // touring members -- and the id breaks ties so the same view always resolves
+    // the same way rather than flickering between two equally good answers.
+    candidates.sort((a, b) => b.size - a.size || (a.id < b.id ? -1 : 1));
+
+    const blocked = new Set();
+    const placed = [];
+    candidates.forEach(candidate => {
+      // Chrome first: no label may print across the wordmark, field or footer.
+      if (zones.some(zone => hits(candidate.box, zone))) {
+        blocked.add(candidate.id);
+        return;
+      }
+      // A selected node always keeps its name: it is the thing being read.
+      const selected = state.selection && state.selection.id === candidate.id;
+      if (!selected && placed.some(box => hits(candidate.box, box))) {
+        blocked.add(candidate.id);
+        return;
+      }
+      placed.push(candidate.box);
+    });
+
+    const changed =
+      blocked.size !== state.labelBlocked.size ||
+      [...blocked].some(id => !state.labelBlocked.has(id));
+    if (!changed) return;
+    state.labelBlocked = blocked;
+    // refresh() re-runs the reducers, which is what applies the suppression.
+    // skipIndexation because nothing about the graph's structure changed.
+    renderer.refresh({ skipIndexation: true });
+  }
+
   function updateParallax() {
     const camera = renderer.getCamera().getState();
     const drift = 40;
@@ -992,6 +1093,7 @@ export function initSigmaExplorer({
   // camera flights.
   renderer.on('afterRender', () => {
     positionOverlays();
+    updateLabelBlocking();
     updateParallax();
   });
 

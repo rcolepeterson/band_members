@@ -16,6 +16,8 @@
 //   - node/node collisions in drawn pixels
 //   - node/edge clearance against the straight thread that is drawn
 //   - unnamed nodes (labels silently culled by size threshold)
+//   - label collisions: text against text, against the overlay labels, and
+//     against the chrome
 //   - nodes rendered outside the viewport (camera framing too tight)
 //   - phantom overlays (an anchor star drawn for a node not in the view)
 //   - console errors and failed module loads
@@ -147,9 +149,17 @@ const MEASURE = limits => {
     });
   });
 
-  // Silently unnamed nodes. The anchor is exempt: its name is carried by the
-  // ringed-star overlay instead of a Sigma label.
-  const unnamed = points.filter(point => !point.label && point.id !== controller.state.anchorId);
+  // Silently unnamed nodes. Two exemptions, both deliberate:
+  //   - the anchor, whose name is carried by the ringed-star overlay, and
+  //   - labels dropped by updateLabelBlocking() because they would have printed
+  //     across the chrome or across a bigger node's name. Those are a decision,
+  //     not a fault, and are reported as a count instead. The distinction
+  //     matters: silently losing a name to a size threshold is the bug this
+  //     check was written for, and it would be masked by a blanket exemption.
+  const suppressed = controller.state.labelBlocked || new Set();
+  const unnamed = points.filter(
+    point => !point.label && point.id !== controller.state.anchorId && !suppressed.has(point.id),
+  );
   unnamed.forEach(point => problems.push(`no name rendered: ${point.id}`));
 
   // Framing. A view that CLAIMS to fit everything must not clip a node; a view
@@ -192,6 +202,7 @@ const MEASURE = limits => {
   }
 
   return {
+    suppressedLabels: suppressed.size,
     nodes: points.length,
     edges: graph.size,
     anchor: controller.state.anchorId,
@@ -297,9 +308,117 @@ const MEASURE_CHROME = () => {
 };
 /* c8 ignore stop */
 
+/**
+ * Measures the TEXT, which nothing else here does.
+ *
+ * The node/node and node/thread checks passed while two real collisions shipped
+ * to production: a band name printed across the gold you-are-here label, and
+ * another printed across the footer. Both are text against text, which no
+ * geometry check could see -- so this measures drawn label boxes against each
+ * other, against the overlay labels, and against the chrome.
+ *
+ * Label boxes are reconstructed the way Sigma draws them (x + size + 3, baseline
+ * at y + labelSize/3) and only for labels Sigma actually displayed, which
+ * getNodeDisplayedLabels() reports after its own grid culling -- guessing at
+ * that culling would produce false collisions for labels that were never drawn.
+ */
+/* c8 ignore start */
+const MEASURE_LABELS = () => {
+  const controller = window.RBFT_SIGMA;
+  const stage = document.getElementById('sigma-stage');
+  if (!controller || !stage) return { problems: ['no sigma renderer on the page'] };
+  const renderer = controller.renderer;
+  const displayed = renderer.getNodeDisplayedLabels();
+  if (!displayed) return { problems: ['sigma did not report which labels it drew'] };
+
+  const size = renderer.getSetting('labelSize');
+  const font = renderer.getSetting('labelFont');
+  const weight = renderer.getSetting('labelWeight');
+  const context = document.createElement('canvas').getContext('2d');
+  context.font = `${weight} ${size}px ${font}`;
+
+  const graph = renderer.getGraph();
+  const boxes = [];
+  displayed.forEach(key => {
+    const data = renderer.getNodeDisplayData(key);
+    if (!data || !data.label) return;
+    // Display-data x/y are framed graph coordinates, not pixels -- reading them
+    // directly put every label in the same place and reported every pair as a
+    // collision. graphToViewport is the same conversion the node checks use.
+    const point = renderer.graphToViewport({
+      x: graph.getNodeAttribute(key, 'x'),
+      y: graph.getNodeAttribute(key, 'y'),
+    });
+    const width = context.measureText(data.label).width;
+    const left = point.x + data.size + 3;
+    const baseline = point.y + size / 3;
+    boxes.push({
+      key,
+      label: data.label,
+      left,
+      right: left + width,
+      // Ascent/descent around the baseline, close enough for a collision test.
+      top: baseline - size * 0.78,
+      bottom: baseline + size * 0.24,
+    });
+  });
+
+  const overlap = (a, b) => {
+    const x = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+    const y = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+    return x > 1 && y > 1 ? { x, y } : null;
+  };
+  const problems = [];
+
+  // 1. Node label against node label.
+  for (let i = 0; i < boxes.length; i += 1) {
+    for (let j = i + 1; j < boxes.length; j += 1) {
+      const hit = overlap(boxes[i], boxes[j]);
+      if (hit) {
+        problems.push(
+          `labels overlap (${hit.x.toFixed(0)}x${hit.y.toFixed(0)}px): `
+          + `"${boxes[i].label}" / "${boxes[j].label}"`,
+        );
+      }
+    }
+  }
+
+  // 2. Node label against the gold you-are-here label, which is DOM.
+  const stageBox = stage.getBoundingClientRect();
+  const toStage = rect => ({
+    left: rect.left - stageBox.left,
+    right: rect.right - stageBox.left,
+    top: rect.top - stageBox.top,
+    bottom: rect.bottom - stageBox.top,
+  });
+  const overlayEl = stage.querySelector('.sigma-home-label');
+  if (overlayEl && !overlayEl.hidden) {
+    const overlayBox = toStage(overlayEl.getBoundingClientRect());
+    boxes.forEach(box => {
+      if (overlap(box, overlayBox)) {
+        problems.push(`"${box.label}" prints across the you-are-here label`);
+      }
+    });
+  }
+
+  // 3. Node label against the chrome it would print over.
+  [['hero', '.sigma-hero'], ['footer', '.sigma-footer']].forEach(([name, selector]) => {
+    const el = stage.querySelector(selector);
+    if (!el) return;
+    const chromeBox = toStage(el.getBoundingClientRect());
+    boxes.forEach(box => {
+      if (overlap(box, chromeBox)) problems.push(`"${box.label}" prints across the ${name}`);
+    });
+  });
+
+  return { problems, metrics: { labels: boxes.length } };
+};
+/* c8 ignore stop */
+
 let failures = 0;
 const rows = [];
 const chromeRows = [];
+const labelRows = [];
 
 for (const viewport of VIEWPORTS) {
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -346,8 +465,11 @@ for (const viewport of VIEWPORTS) {
     }
 
     const result = await page.evaluate(MEASURE, LIMITS);
+    const labelResult = await page.evaluate(MEASURE_LABELS);
     const problems = result.error ? [result.error] : result.problems;
     const label = `${viewport.label} / ${state.label}`;
+    labelRows.push({ label, ...labelResult });
+    if (labelResult.problems.length) failures += 1;
     rows.push({ label, result, problems: problems.concat(consoleErrors.splice(0)) });
     if (rows[rows.length - 1].problems.length) failures += 1;
 
@@ -372,7 +494,16 @@ console.log('\nRendered-view audit\n');
 rows.forEach(({ label, result, problems }) => {
   const summary = result.error
     ? 'DID NOT BOOT'
-    : `${String(result.nodes).padStart(3)} nodes  scale ${result.sizeScale}  smallest ${result.smallestNode}px  near-misses ${result.nearMisses}`;
+    : `${String(result.nodes).padStart(3)} nodes  scale ${result.sizeScale}  smallest ${result.smallestNode}px  `
+      + `near-misses ${result.nearMisses}  labels hidden ${result.suppressedLabels ?? '?'}`;
+  console.log(`${problems.length ? 'FAIL' : 'ok  '}  ${label.padEnd(34)} ${summary}`);
+  problems.slice(0, 4).forEach(problem => console.log(`        - ${problem}`));
+  if (problems.length > 4) console.log(`        - ...and ${problems.length - 4} more`);
+});
+
+console.log('\nLabel collisions\n');
+labelRows.forEach(({ label, problems, metrics }) => {
+  const summary = metrics ? `${String(metrics.labels).padStart(3)} labels drawn` : 'not measured';
   console.log(`${problems.length ? 'FAIL' : 'ok  '}  ${label.padEnd(34)} ${summary}`);
   problems.slice(0, 4).forEach(problem => console.log(`        - ${problem}`));
   if (problems.length > 4) console.log(`        - ...and ${problems.length - 4} more`);
@@ -387,6 +518,6 @@ chromeRows.forEach(({ label, problems, metrics }) => {
   problems.forEach(problem => console.log(`        - ${problem}`));
 });
 
-const checks = rows.length + chromeRows.length;
+const checks = rows.length + chromeRows.length + labelRows.length;
 console.log(`\n${checks - failures}/${checks} checks clean`);
 process.exit(failures ? 1 : 0);
