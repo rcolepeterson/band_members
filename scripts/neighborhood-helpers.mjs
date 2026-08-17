@@ -41,7 +41,11 @@ export const RENDERER_FLAG = 'renderer';
 // The renderer the page uses when no flag is present. Flipping this constant
 // to 'sigma' is the ship switch for the migration; the SVG renderer stays
 // reachable via ?renderer=svg until it is deleted.
-export const DEFAULT_RENDERER = 'svg';
+// The constellation is now what a visitor gets. ?renderer=svg still reaches the
+// original force-directed renderer -- kept deliberately as an escape hatch while
+// the Sigma path settles in production, and because a few things only it can do
+// (scene and genre filters, Recently-added) have not been rebuilt yet.
+export const DEFAULT_RENDERER = 'sigma';
 
 export const RENDERERS = ['svg', 'sigma'];
 

@@ -3379,6 +3379,35 @@ main.layout { padding: 0 !important; gap: 0 !important; }
      * reads (see resolveAnchor / rendererFromSearch), so a link cannot smuggle
      * anything else along.
      */
+    /**
+     * Bridges Sigma selection to the node card.
+     *
+     * The card is where a band's city, years, line-up, albums and verification
+     * live, and it carries the edit pencil -- so without this the Sigma renderer
+     * cannot be the default: a visitor could look at the graph but not read a
+     * band or contribute a correction, which is the whole point of signing in.
+     *
+     * The Sigma renderer owns highlighting and travel; it fires this event and
+     * lets the page do what it already does well. selectBandNode /
+     * selectMemberNode resolve an id through graphState.master, so they do not
+     * need the SVG render to have happened.
+     */
+    function bindSigmaSelectionToNodeCard() {
+      window.addEventListener('rbft:sigma-select', event => {
+        const detail = (event && event.detail) || {};
+        if (!detail.id) return;
+        try {
+          if (detail.type === 'band') selectBandNode(detail.id, { source: 'sigma' });
+          else selectMemberNode(detail.id, { source: 'sigma' });
+        } catch (error) {
+          console.warn('Could not open the node card for a Sigma selection.', detail.id, error);
+        }
+      });
+      // Travelling to a new centre invalidates whatever card was open: the view
+      // it described is gone.
+      window.addEventListener('rbft:sigma-travel', () => closeNodeCard());
+    }
+
     const SHAREABLE_PARAMS = ['renderer', 'anchor', 'band', 'member', 'node', 'person'];
     function shareableUrl() {
       const base = window.location.origin + window.location.pathname;
@@ -3392,9 +3421,15 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       return query ? `${base}?${query}` : base;
     }
 
+    let sigmaSelectionBound = false;
+
     function publishMasterGraph(master) {
       if (!master) return;
       try {
+        if (!sigmaSelectionBound) {
+          bindSigmaSelectionToNodeCard();
+          sigmaSelectionBound = true;
+        }
         window.RBFT_MASTER_GRAPH = master;
         window.dispatchEvent(new CustomEvent('rbft:graph-ready', {
           detail: { nodeCount: master.nodes.length, linkCount: master.links.length }

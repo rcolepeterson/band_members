@@ -48,9 +48,22 @@ test('index.html loads the explorer as a module and nothing else changes rendere
   assert.match(INDEX_HTML, /https:\/\/d3js\.org\/d3\.v7\.min\.js/);
 });
 
-test('the module self-boots only for ?renderer=sigma', () => {
+test('the module self-boots unless the SVG renderer was asked for', () => {
   assert.match(EXPLORER, /rendererFromSearch\(win\.location\.search\) !== 'sigma'\) return;/);
-  assert.match(HELPERS, /export const DEFAULT_RENDERER = 'svg';/);
+  assert.match(HELPERS, /export const DEFAULT_RENDERER = 'sigma';/);
+});
+
+test('the node card is bound to Sigma selection before the flip', () => {
+  // Without this the constellation cannot be the default: the card is where a
+  // band's city, years, line-up, albums and verification live, and it carries
+  // the edit pencil, so a visitor could look but neither read nor contribute.
+  assert.match(INDEX_HTML, /window\.addEventListener\('rbft:sigma-select'/);
+  assert.match(INDEX_HTML, /selectBandNode\(detail\.id, \{ source: 'sigma' \}\)/);
+  assert.match(INDEX_HTML, /selectMemberNode\(detail\.id, \{ source: 'sigma' \}\)/);
+  // Travelling invalidates the open card: the view it described is gone.
+  assert.match(INDEX_HTML, /window\.addEventListener\('rbft:sigma-travel', \(\) => closeNodeCard\(\)\)/);
+  // Bound once, when the graph first becomes available.
+  assert.match(INDEX_HTML, /if \(!sigmaSelectionBound\) \{/);
 });
 
 // ---------------------------------------------------------------------------
