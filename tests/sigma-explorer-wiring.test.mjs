@@ -221,7 +221,10 @@ test('the wordmark stays on screen above the search field', () => {
 });
 
 test('a search miss invites the visitor to add the band', () => {
-  assert.match(EXPLORER, /have not mapped/);
+  // The footer line is deliberately terse now: the "No Rawk Found" panel carries
+  // the offer to add the band, and two copies of that sentence on one screen
+  // read as a fault. The invitation itself is asserted in the empty-state test.
+  assert.match(EXPLORER, /No match for/);
   assert.match(EXPLORER, /rbft:sigma-search-miss/);
 });
 
@@ -321,7 +324,9 @@ test('Aaron\'s name moves aside when the focus ring is close', () => {
 test('node sizes are scaled from the tested helpers, per view and on resize', () => {
   assert.match(EXPLORER, /nodeSizeScale\(\{/);
   assert.match(EXPLORER, /state\.sizeScale/);
-  assert.match(EXPLORER, /renderer\.on\('resize', \(\) => applySizeScale\(\)\)/);
+  // The resize handler also repositions the filter panel now, so it is a block
+  // rather than a one-liner.
+  assert.match(EXPLORER, /renderer\.on\('resize', \(\) => \{\s*\n\s*applySizeScale\(\);/);
   assert.match(HELPERS, /export function densitySizeScale/);
   assert.match(HELPERS, /export function viewportSizeScale/);
   assert.match(HELPERS, /export function nodeSizeScale/);
@@ -895,4 +900,45 @@ test('Share reads the live view, since the URL no longer follows travel', () => 
   assert.match(share, /kept\.set\('anchor', live\)/);
   // A stale ?band= alongside a fresh ?anchor= would contradict it.
   assert.match(share, /\['band', 'member', 'node', 'person'\]\.forEach\(key => kept\.delete\(key\)\)/);
+});
+
+test('the filter panel is placed under its pill, not off the bottom of the stage', () => {
+  // It was left:50%; top:calc(100% + 10px), which reads like "hang below my
+  // trigger" -- but the panel is a child of the STAGE, not of the pill row. So
+  // 100% meant the full height of a 100dvh stage and the panel opened just below
+  // the bottom of the window: measured at top:910 in a 900px viewport. It was
+  // doing everything else correctly, entirely off screen, which is why driving
+  // the selects directly in a test found nothing wrong.
+  assert.match(EXPLORER, /function positionFilters\(\)/);
+  const css = EXPLORER.slice(EXPLORER.indexOf('.sigma-filters{'), EXPLORER.indexOf('.sigma-filters[hidden]'));
+  assert.doesNotMatch(css, /top:calc\(100% \+ 10px\)/);
+  assert.doesNotMatch(css, /left:50%/);
+  // Placed from the pill's own rect, and clamped inside the stage.
+  const fn = EXPLORER.slice(EXPLORER.indexOf('function positionFilters()'), EXPLORER.indexOf('function hideTip()'));
+  assert.match(fn, /actionButtons\.get\('filter'\)/);
+  assert.match(fn, /box\.bottom - stageBox\.top \+ 10/);
+  assert.match(fn, /Math\.max\(margin, Math\.min\(left, stageBox\.width - width - margin\)\)/);
+  // Opening it places it; a resize rewraps the pill row and moves the trigger.
+  const toggle = EXPLORER.slice(EXPLORER.indexOf('function toggleFilters'), EXPLORER.indexOf('Reflects the page'));
+  assert.match(toggle, /positionFilters\(\);/);
+  assert.match(EXPLORER, /applySizeScale\(\);\s*\n\s*\/\/ The pill row rewraps[\s\S]*?positionFilters\(\);/);
+});
+
+test('an unmapped band still offers to add it', () => {
+  // The "No Rawk Found" panel and its CTA already existed, driven by
+  // syncSearchEmptyState() off the SVG renderer's search field. The
+  // constellation's search box goes through exploreFor() instead, which reported
+  // a miss only as a line of footer text -- so the offer looked deleted. Nothing
+  // listened for the event the module was already firing.
+  assert.match(INDEX_HTML, /window\.addEventListener\('rbft:sigma-search-miss', event => \{/);
+  assert.match(INDEX_HTML, /graphEmptyState\.hidden = false;/);
+  // The CTA pre-fills the Add-band form from currentSearch, which the
+  // constellation's search box never sets.
+  assert.match(INDEX_HTML, /currentSearch = query;/);
+  // And a drawn view retires the message -- one event rather than a list that
+  // has to keep up with every way the view can change.
+  assert.match(EXPLORER, /'rbft:sigma-view'/);
+  assert.match(INDEX_HTML, /window\.addEventListener\('rbft:sigma-view', \(\) => \{/);
+  // The footer line stays terse so the screen does not say it twice.
+  assert.match(EXPLORER, /No match for <strong>\$\{escapeHtml\(rawQuery\)\}<\/strong> in the tree yet\./);
 });

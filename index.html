@@ -2179,6 +2179,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   color: rgba(230, 236, 243, 0.92);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(14px) saturate(1.1);
+  /* Matches every other card and popover. */
   -webkit-backdrop-filter: blur(14px) saturate(1.1);
   opacity: 0;
   transform: translateY(-6px);
@@ -2276,7 +2277,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   text-align: center;
   background: rgba(18, 22, 30, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   color: rgba(230, 236, 243, 0.92);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(14px) saturate(1.1);
@@ -3532,6 +3533,30 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       // Travelling to a new centre invalidates whatever card was open: the view
       // it described is gone.
       window.addEventListener('rbft:sigma-travel', () => closeNodeCard());
+
+      // "No Rawk Found", with the offer to add the band.
+      //
+      // This panel and its CTA already existed, driven by syncSearchEmptyState()
+      // off the SVG renderer's own search field. The constellation's search box
+      // goes through the module's exploreFor() instead, which reported a miss
+      // only as a line of footer text -- so the prompt looked like it had been
+      // removed. Nothing listened for the event the module was already firing.
+      window.addEventListener('rbft:sigma-search-miss', event => {
+        const query = ((event && event.detail) || {}).query || '';
+        if (!graphEmptyState) return;
+        if (graphEmptyStateQuery) graphEmptyStateQuery.textContent = `“${query}”`;
+        graphEmptyState.hidden = false;
+        // The CTA pre-fills the Add-band form from currentSearch, which the
+        // constellation's own search box never sets. Keep them in step so the
+        // band name a visitor just typed is waiting in the form.
+        currentSearch = query;
+      });
+      // Any drawn view means the miss is stale. One event covers explore, Reset,
+      // travel, expand and filter changes rather than a list that has to be kept
+      // in step with every way the view can change.
+      window.addEventListener('rbft:sigma-view', () => {
+        if (graphEmptyState) graphEmptyState.hidden = true;
+      });
     }
 
     const SHAREABLE_PARAMS = ['renderer', 'anchor', 'band', 'member', 'node', 'person'];
