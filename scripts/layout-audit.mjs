@@ -14,11 +14,12 @@
 // highlighting changes node sizes and label visibility. Checks include:
 //
 //   - node/node collisions in drawn pixels
-//   - node/edge clearance against the CURVE that is drawn
+//   - node/edge clearance against the straight thread that is drawn
 //   - unnamed nodes (labels silently culled by size threshold)
 //   - nodes rendered outside the viewport (camera framing too tight)
 //   - phantom overlays (an anchor star drawn for a node not in the view)
 //   - console errors and failed module loads
+//   - the stage chrome: prompt controls same height, same row, no clipping
 //
 // Usage (needs a local Chromium and playwright-core):
 //   node scripts/layout-audit.mjs                       # against a local server
@@ -200,8 +201,69 @@ const MEASURE = limits => {
 };
 /* c8 ignore stop */
 
+/**
+ * Checks the stage chrome rather than the graph: the controls a visitor actually
+ * aims at. Runs in the page.
+ *
+ * Added after the search field and the Explore button turned out to be the same
+ * size but 8px out of vertical alignment -- the page's global form styling
+ * (input{margin-top:...}, written for stacked labelled fields) leaked into the
+ * prompt. Nothing in the node-collision measurement could see that, and eyeballing
+ * a screenshot had already missed it once.
+ */
+/* c8 ignore start */
+const MEASURE_CHROME = () => {
+  const stage = document.getElementById('sigma-stage');
+  if (!stage) return { problems: ['no sigma stage on the page'] };
+  const form = stage.querySelector('.sigma-prompt form');
+  const input = form && form.querySelector('input');
+  const button = form && form.querySelector('button');
+  if (!input || !button) return { problems: ['the search prompt is missing its input or button'] };
+
+  const problems = [];
+  const ri = input.getBoundingClientRect();
+  const rb = button.getBoundingClientRect();
+  const centre = r => (r.top + r.bottom) / 2;
+
+  // Same row: a pill that sits even a few pixels high reads as a mistake.
+  const offset = Math.abs(centre(ri) - centre(rb));
+  if (offset > 1) problems.push(`prompt controls are ${offset.toFixed(1)}px out of vertical alignment`);
+
+  // Same height.
+  const heightGap = Math.abs(ri.height - rb.height);
+  if (heightGap > 1) {
+    problems.push(`prompt controls differ in height by ${heightGap.toFixed(1)}px `
+      + `(field ${ri.height.toFixed(0)}px, button ${rb.height.toFixed(0)}px)`);
+  }
+
+  // iOS Safari zooms the page when a focused input's text is under 16px.
+  const fontSize = parseFloat(getComputedStyle(input).fontSize);
+  if (fontSize < 16) problems.push(`input font is ${fontSize}px; under 16px makes iOS zoom on focus`);
+
+  // Nothing clipped or wrapped, and the label on one line.
+  if (button.scrollWidth > button.clientWidth + 1) problems.push('the Explore label is clipped');
+  // Count the label's own line boxes. Deriving lines from the button's height
+  // does not work now that it has an explicit height taller than its text.
+  const range = document.createRange();
+  range.selectNodeContents(button);
+  const textLines = range.getClientRects().length;
+  if (textLines > 1) problems.push(`the Explore label wrapped onto ${textLines} lines`);
+  if (ri.left < 0 || rb.right > window.innerWidth) problems.push('the prompt overflows the viewport');
+
+  return {
+    problems,
+    metrics: {
+      offset: +offset.toFixed(1),
+      height: +ri.height.toFixed(0),
+      font: fontSize,
+    },
+  };
+};
+/* c8 ignore stop */
+
 let failures = 0;
 const rows = [];
+const chromeRows = [];
 
 for (const viewport of VIEWPORTS) {
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -226,6 +288,10 @@ for (const viewport of VIEWPORTS) {
   const url = `${BASE_URL}${BASE_URL.includes('?') ? '&' : '?'}renderer=sigma`;
   await page.goto(url, { waitUntil: 'load', timeout: 90000 });
   await page.waitForTimeout(10000);
+
+  const chrome = await page.evaluate(MEASURE_CHROME);
+  chromeRows.push({ label: viewport.label, ...chrome });
+  if (chrome.problems.length) failures += 1;
 
   for (const state of STATES) {
     for (const [action, argument] of state.steps) {
@@ -276,5 +342,15 @@ rows.forEach(({ label, result, problems }) => {
   if (problems.length > 4) console.log(`        - ...and ${problems.length - 4} more`);
 });
 
-console.log(`\n${rows.length - failures}/${rows.length} views clean`);
+console.log('\nStage chrome\n');
+chromeRows.forEach(({ label, problems, metrics }) => {
+  const summary = metrics
+    ? `field ${metrics.height}px  font ${metrics.font}px  row offset ${metrics.offset}px`
+    : 'not measured';
+  console.log(`${problems.length ? 'FAIL' : 'ok  '}  ${label.padEnd(34)} ${summary}`);
+  problems.forEach(problem => console.log(`        - ${problem}`));
+});
+
+const checks = rows.length + chromeRows.length;
+console.log(`\n${checks - failures}/${checks} checks clean`);
 process.exit(failures ? 1 : 0);

@@ -341,6 +341,12 @@ test('the search prompt is sized as the primary action, and never zooms iOS', ()
   assert.match(buttonRules, /height:clamp\(/);
   const inputRules = (css.match(/[^{}]*\.sigma-prompt input[^{]*\{[^}]*\}/gs) || []).join('\n');
   assert.match(inputRules, /height:clamp\(/);
+  // The page's global form styling (input,select,textarea{margin-top:...}) is
+  // written for stacked labelled fields and leaked in here, dropping the field
+  // 8px below the button: same size, different row. scripts/layout-audit.mjs
+  // measures the rendered result; this keeps the reset itself from being lost.
+  assert.match(inputRules, /margin:0/);
+  assert.match(buttonRules, /margin:0/);
 });
 
 test('search suggestions are alphabetical, and cover every band', () => {

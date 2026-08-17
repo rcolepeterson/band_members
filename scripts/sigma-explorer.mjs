@@ -190,7 +190,13 @@ const STAGE_CSS = `
    the same way an input's does, and the two ended up 8px apart. Horizontal
    padding only; vertical centring is done by the flex/line box. */
 #${STAGE_ID} .sigma-prompt input,
-#${STAGE_ID} .sigma-prompt button{height:clamp(48px,5.4vw,58px);box-sizing:border-box}
+#${STAGE_ID} .sigma-prompt button{height:clamp(48px,5.4vw,58px);box-sizing:border-box;
+  /* margin:0 is load-bearing. The page's global form styling
+     (input,select,textarea{margin-top:var(--space-2)}) is written for stacked
+     fields with a label above, and it leaked in here: the field sat 8px lower
+     than the Explore button, so the two pills were the same size but not on the
+     same row. Reset on both controls so neither can drift again. */
+  margin:0;vertical-align:middle}
 #${STAGE_ID} .sigma-prompt input{flex:1;min-width:0;
   padding:0 clamp(18px,2vw,24px);border-radius:999px;
   border:1px solid rgba(143,232,246,0.38);background:rgba(10,14,20,0.86);color:#e8eef6;
