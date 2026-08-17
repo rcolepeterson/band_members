@@ -774,9 +774,15 @@ test('labels are not withheld from the smallest nodes', async () => {
   const scaled = labelSettings({ visibleCount: 17, smallestNodeSize: 1.8 });
   assert.ok(scaled.labelRenderedSizeThreshold < 1.8);
   assert.ok(scaled.labelRenderedSizeThreshold >= 0);
-  // Crowded views hand thinning back to Sigma's overlap culling.
+  // Thinning is NOT handed to Sigma's grid culling any more, in any view. That
+  // culling drops labels per grid cell, which cannot prevent collisions across
+  // cell boundaries and hid names that had room -- the "a couple of names are
+  // missing" report. The renderer's updateLabelBlocking() owns the decision now:
+  // it measures every label box and drops only the ones that would really
+  // overlap the chrome or a bigger node's name.
   const crowded = labelSettings({ visibleCount: 300, smallestNodeSize: 3 });
-  assert.ok(crowded.labelDensity < opening.labelDensity);
+  assert.equal(crowded.labelDensity, opening.labelDensity);
+  assert.ok(crowded.labelDensity >= 1000, 'grid culling should be effectively off');
 });
 
 test('layoutExtent measures the radius the camera must frame', async () => {

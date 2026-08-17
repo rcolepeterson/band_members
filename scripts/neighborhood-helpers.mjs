@@ -1363,7 +1363,13 @@ export function labelSettings({ visibleCount = 0, smallestNodeSize = 4 } = {}) {
   return {
     // Just under the smallest drawn node, so nothing is silently nameless.
     labelRenderedSizeThreshold: Math.max(0, smallestNodeSize - 0.5),
-    labelDensity: crowded ? 0.6 : 4,
+    // Sigma's grid culling is deliberately switched off (a very high density
+    // allowance). It thins labels by grid cell, which cannot prevent collisions
+    // across cell boundaries and hid names that had room -- exactly the "a
+    // couple of names are missing" report. The renderer's updateLabelBlocking()
+    // owns the decision instead: it measures every label box and drops only the
+    // ones that would actually overlap chrome or a bigger node's name.
+    labelDensity: 1000,
     labelGridCellSize: crowded ? 90 : 55,
   };
 }

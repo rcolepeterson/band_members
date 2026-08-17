@@ -591,3 +591,35 @@ test('a shared link carries the view, not just the site', () => {
   const helper = INDEX_HTML.slice(INDEX_HTML.indexOf('function shareableUrl()'), INDEX_HTML.indexOf('function publishMasterGraph'));
   assert.match(helper, /SHAREABLE_PARAMS\.forEach/);
 });
+
+test('label placement is measured, collision-free and stable', () => {
+  // Two label collisions reached production -- a band name printed across the
+  // gold you-are-here label, and another across the footer -- because every
+  // check measured node geometry and none measured text.
+  const block = EXPLORER.slice(
+    EXPLORER.indexOf('function updateLabelBlocking()'),
+    EXPLORER.indexOf('function updateParallax()'),
+  );
+  // Boxes are reconstructed the way Sigma draws a label.
+  assert.match(block, /point\.x \+ display\.size \+ 3/);
+  assert.match(block, /labelMetrics\.measureText\(attrs\.label\)\.width/);
+  // Chrome zones: the wordmark/field/pills block, the footer, and the gold label.
+  assert.match(block, /addZone\(heroEl\)/);
+  assert.match(block, /addZone\(footerEl\)/);
+  assert.match(block, /addZone\(homeLabelEl\)/);
+  // Bigger nodes win a collision, with a deterministic tie-break so a view does
+  // not flicker between two equally good answers.
+  assert.match(block, /candidates\.sort\(\(a, b\) => b\.size - a\.size \|\| \(a\.id < b\.id \? -1 : 1\)\)/);
+  // A selected node always keeps its name: it is the thing being read.
+  assert.match(block, /const selected = state\.selection && state\.selection\.id === candidate\.id/);
+  // Measured over EVERY labelled node, not the ones Sigma currently displays --
+  // suppressing a label removes it from that set, so reading it would make the
+  // answer depend on the previous frame and oscillate.
+  assert.match(block, /viewGraph\.forEachNode\(\(id, attrs\) => \{/);
+  assert.doesNotMatch(block, /getNodeDisplayedLabels/);
+  // Refresh only when the set changed, or every frame would re-render.
+  assert.match(block, /if \(!changed\) return;/);
+  assert.match(block, /renderer\.refresh\(\{ skipIndexation: true \}\)/);
+  // And the reducer is what applies it.
+  assert.match(EXPLORER, /if \(state\.labelBlocked\.has\(id\)\) res\.label = '';/);
+});
