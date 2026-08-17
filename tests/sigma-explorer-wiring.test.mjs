@@ -1044,3 +1044,49 @@ test('?renderer=svg still draws, because it never gets the boot class', () => {
   );
   assert.match(script, /renderer === 'sigma'/);
 });
+
+test('the not-found card can be dismissed', () => {
+  // Reported by a tester: it offered adding the band and nothing else, so anyone
+  // who had simply mistyped was stuck looking at it.
+  assert.match(INDEX_HTML, /id="graph-empty-state-close"/);
+  assert.match(INDEX_HTML, /class="popover-close graph-empty-state__close"/);
+  assert.match(INDEX_HTML, /aria-label="Close"/);
+  const wiring = INDEX_HTML.slice(INDEX_HTML.indexOf("getElementById('graph-empty-state-close')"));
+  assert.match(wiring.slice(0, 320), /graphEmptyState\.hidden = true;/);
+  // Same stopPropagation trap as every other control inside the stage: without
+  // it the document-level outside-click closer swallows the event.
+  assert.match(wiring.slice(0, 320), /event\.stopPropagation\(\);/);
+});
+
+test('the home star introduces itself instead of just being a stranger', () => {
+  // Landing a visitor on one specific musician only works if they are told why --
+  // the Tom-from-Myspace trick works because Tom introduced himself. Without it
+  // the opening view reads as "here is a person you have never heard of".
+  assert.match(EXPLORER, /const introCopy = \(name\) => \{/);
+  assert.match(EXPLORER, /I built this site &mdash; you&rsquo;re starting on my node\./);
+  assert.match(EXPLORER, /Search for a band or artist above to find your place in the band universe\./);
+  // The name is derived from the home star, so changing the default anchor cannot
+  // leave the copy claiming to be someone else.
+  // Plain substring checks: a regex for this line needs escaping that obscures
+  // what is being asserted.
+  assert.ok(EXPLORER.includes(".trim().split("), 'the first name should be split out of the id');
+  assert.ok(EXPLORER.includes("[0] || 'I'"), 'and it should fall back rather than print undefined');
+  assert.match(EXPLORER, /introCopy\(homeStarId\)/);
+  // Gold, matching his star label, so the voice and the node are visibly one.
+  assert.match(EXPLORER, /\.sigma-intro__hello\{color:#ffc978/);
+});
+
+test('the introduction gives way to the generic explainer once you travel', () => {
+  // Keyed on the anchor rather than on "first visit", so it also returns with
+  // Reset -- the other way to end up back on his node.
+  const chrome = EXPLORER.slice(EXPLORER.indexOf('function updateChrome()'), EXPLORER.indexOf('// -- camera'));
+  assert.match(chrome, /const onHomeStar = Boolean\(homeStarId\) && homeStarId === state\.anchorId;/);
+  assert.match(chrome, /hintEl\.innerHTML = onHomeStar \? introCopy\(homeStarId\) : EXPLORE_COPY;/);
+});
+
+test('the introduction reads before the node count', () => {
+  // A visitor dropped on a stranger's node needs to know why before being told
+  // how many degrees out it is.
+  const footer = EXPLORER.slice(EXPLORER.indexOf('<div class="sigma-footer">'), EXPLORER.indexOf('</div>\n  `;'));
+  assert.ok(footer.indexOf('sigma-hint') < footer.indexOf('sigma-context'), 'the hint should come first');
+});
