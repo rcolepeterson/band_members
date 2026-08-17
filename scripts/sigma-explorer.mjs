@@ -206,32 +206,22 @@ const STAGE_CSS = `
   transform:rotate(${HOME_STAR_STYLE.ringTiltDeg}deg);box-shadow:0 0 10px rgba(159,176,196,0.45)}
 #${STAGE_ID} .sigma-home-star .core{position:relative;width:16px;height:16px;border-radius:50%;
   background:${HOME_STAR_STYLE.color};box-shadow:0 0 18px 4px rgba(223,230,239,0.65)}
-#${STAGE_ID} .sigma-home-star .home-label{position:absolute;top:100%;left:50%;
-  transform-origin:top center;margin-top:6px;white-space:nowrap;
-  /* Sentence case, not uppercase: this is a person's name, and shouting it was
-     never the point -- the ring and the glow already say "you are here". */
-  font-size:11.5px;letter-spacing:0.02em;color:#c8d3e0;opacity:0.9;
-  /* A soft dark halo around the glyphs, so a thread passing behind the text
-     reads as behind it instead of through it. Cheaper and less boxy than a
-     plate, and it keeps the label feeling like part of the starfield. */
-  text-shadow:0 0 6px rgba(8,11,17,0.95),0 0 12px rgba(8,11,17,0.85)}
-/* Focus ring: where the camera currently sits when that is NOT Aaron. A thin
-   cyan ring, deliberately quieter than the silver ringed star so the home
-   star keeps its unique identity in the universe. */
+#${STAGE_ID} .sigma-star-label{position:absolute;z-index:3;pointer-events:none;
+  transform:translateX(-50%);white-space:nowrap;letter-spacing:0.02em;
+  /* A halo rather than a plate, so a thread passing behind the name reads as
+     behind it without putting a box on the starfield. */
+  text-shadow:0 0 7px rgba(8,11,17,0.97),0 0 14px rgba(8,11,17,0.9),0 0 22px rgba(8,11,17,0.7)}
+#${STAGE_ID} .sigma-star-label[hidden]{display:none}
+/* Gold, and bigger than a node label: this is the one fixed point in the
+   galaxy, and it should read as a different kind of thing from the band and
+   musician names around it. */
+#${STAGE_ID} .sigma-home-label{font-size:14px;color:#ffc978;font-weight:500}
 #${STAGE_ID} .sigma-focus-ring{position:absolute;pointer-events:none;transform:translate(-50%,-50%);
   width:58px;height:58px}
 #${STAGE_ID} .sigma-focus-ring .ring{position:absolute;inset:0;border-radius:50%;
   border:1.4px solid rgba(143,232,246,0.75);box-shadow:0 0 14px rgba(143,232,246,0.35)}
-/* When the home star and the current focus are near each other, the two
-   labels would print on top of each other; positionOverlays() flips the home
-   label above its star to keep both readable. */
-#${STAGE_ID} .sigma-home-star.label-above .home-label{top:auto;bottom:100%;margin-top:0;margin-bottom:8px}
-#${STAGE_ID} .sigma-focus-ring .focus-label{position:absolute;top:100%;left:50%;
-  /* transform is set inline by positionOverlays() to cancel the star's zoom
-     scaling, so the horizontal centring is done with a margin instead. */
-  transform-origin:top center;
-  margin-top:6px;white-space:nowrap;font-size:11.5px;letter-spacing:0.02em;
-  color:#a8d7e0;opacity:0.9;text-shadow:0 0 6px rgba(8,11,17,0.95),0 0 12px rgba(8,11,17,0.85)}
+/* When the home star and the current focus are near each other, Aaron's name
+   would print across the focus ring; positionOverlays() flips it above his star. */
 /* A relocated panel has lost the button it used to hang below, so it is centred
    on screen as a dialog instead. clampPopover() sets an inline left offset to
    keep a bottom-anchored popover on screen; that offset is meaningless here, so
@@ -394,8 +384,14 @@ function buildStage(doc, mount) {
     <div class="sigma-fog" aria-hidden="true"></div>
     <div class="sigma-scrim sigma-scrim--top" aria-hidden="true"></div>
     <div class="sigma-scrim sigma-scrim--bottom" aria-hidden="true"></div>
-    <div class="sigma-home-star" hidden><span class="ring"></span><span class="core"></span><span class="home-label"></span></div>
-    <div class="sigma-focus-ring" hidden><span class="ring"></span><span class="focus-label"></span></div>
+    <div class="sigma-home-star" hidden><span class="ring"></span><span class="core"></span></div>
+    <div class="sigma-focus-ring" hidden><span class="ring"></span></div>
+    <!-- The labels are siblings of the overlays they name, not children. Inside,
+         they inherited the star's zoom scaling: the text grew with the zoom, and
+         its distance from the star grew with it too, so the name drifted away
+         from the thing it labels. Positioned independently they hold one size
+         and one gap at every zoom level. -->
+    <span class="sigma-star-label sigma-home-label" hidden></span>
     <div class="sigma-hero">
       <h1 class="sigma-wordmark">Rock Band Family Tree</h1>
     <div class="sigma-prompt">
@@ -470,6 +466,8 @@ export function initSigmaExplorer({
     relocated.push({ panel, parent: panel.parentNode, next: panel.nextSibling });
     stage.appendChild(panel);
   });
+
+  const homeLabelEl = stage.querySelector('.sigma-home-label');
 
   const actionRow = stage.querySelector('.sigma-actions');
   const actionButtons = new Map(
@@ -726,13 +724,10 @@ export function initSigmaExplorer({
     expandBtn.disabled = !remaining;
     expandBtn.setAttribute('aria-disabled', String(!remaining));
 
-    const homeLabel = homeStarEl.querySelector('.home-label');
-    if (homeLabel && homeStarId) {
-      homeLabel.textContent =
+    if (homeStarId) {
+      homeLabelEl.textContent =
         homeStarId === state.anchorId ? `${homeStarId} — you are here` : homeStarId;
     }
-    const focusLabel = focusRingEl.querySelector('.focus-label');
-    if (focusLabel) focusLabel.textContent = state.anchorId === homeStarId ? '' : state.anchorId;
     positionOverlays();
 
     // Search suggestions, in alphabetical order.
@@ -790,7 +785,7 @@ export function initSigmaExplorer({
     const place = (el, id, scale) => {
       if (!id || !viewGraph.hasNode(id)) {
         el.hidden = true;
-        return;
+        return null;
       }
       const point = renderer.graphToViewport({
         x: viewGraph.getNodeAttribute(id, 'x'),
@@ -800,29 +795,50 @@ export function initSigmaExplorer({
       el.style.left = `${point.x}px`;
       el.style.top = `${point.y}px`;
       el.style.transform = `translate(-50%,-50%) scale(${scale.toFixed(3)})`;
-      // The star and ring scale with the zoom so they keep tracking the node
-      // they mark. Their LABEL must not: text has one legible size, and riding
-      // the same transform blew "Aaron McRae -- you are here" up to nearly
-      // double size in a zoomed-in view (most visible on a phone, which frames
-      // a region rather than the whole neighbourhood).
-      const label = el.querySelector('.home-label, .focus-label');
-      if (label) label.style.transform = `translateX(-50%) scale(${(1 / scale).toFixed(3)})`;
+      return point;
     };
-    const zoomScale = Math.max(0.55, Math.min(1.9, 1 / ratio));
-    place(homeStarEl, homeStarId, zoomScale * HOME_STAR_STYLE.sizeMultiplier * 0.5);
-    place(focusRingEl, state.anchorId === homeStarId ? null : state.anchorId, zoomScale);
 
-    // Aaron is often one hop from whatever a visitor searched for, which put
-    // "AARON MCRAE" and the focus label on top of each other. Flip the home
-    // label above its star when the two overlays are close.
+    /**
+     * Puts a label just outside the overlay it names, in unscaled screen space.
+     *
+     * GAP is measured from the overlay's drawn edge rather than from its centre,
+     * so the name sits the same short distance from the star whether the camera
+     * is zoomed in on a phone or framing the whole neighbourhood.
+     */
+    const placeLabel = (labelEl, point, overlayEl, scale, above) => {
+      if (!point || !labelEl.textContent) {
+        labelEl.hidden = true;
+        return;
+      }
+      const GAP = 7;
+      const radius = (overlayEl.offsetHeight * scale) / 2;
+      labelEl.hidden = false;
+      labelEl.style.left = `${point.x}px`;
+      labelEl.style.top = above
+        ? `${point.y - radius - GAP - labelEl.offsetHeight}px`
+        : `${point.y + radius + GAP}px`;
+    };
+
+    const zoomScale = Math.max(0.55, Math.min(1.9, 1 / ratio));
+    const homeScale = zoomScale * HOME_STAR_STYLE.sizeMultiplier * 0.5;
+    const homePoint = place(homeStarEl, homeStarId, homeScale);
+    const focusPoint = place(
+      focusRingEl,
+      state.anchorId === homeStarId ? null : state.anchorId,
+      zoomScale
+    );
+
+    // Aaron is often one hop from whatever a visitor searched for, which put his
+    // name and the focus label on top of each other. Flip his above the star
+    // when the two overlays are close.
     const crowded =
-      !homeStarEl.hidden &&
-      !focusRingEl.hidden &&
-      Math.hypot(
-        parseFloat(homeStarEl.style.left) - parseFloat(focusRingEl.style.left),
-        parseFloat(homeStarEl.style.top) - parseFloat(focusRingEl.style.top)
-      ) < 120;
-    homeStarEl.classList.toggle('label-above', crowded);
+      !!homePoint &&
+      !!focusPoint &&
+      Math.hypot(homePoint.x - focusPoint.x, homePoint.y - focusPoint.y) < 120;
+    // Only the home star is labelled. The focus ring used to carry the anchor's
+    // name too, which printed it twice -- Sigma already draws that node's label,
+    // and the footer says "Centered on ..." as well.
+    placeLabel(homeLabelEl, homePoint, homeStarEl, homeScale, crowded);
   }
 
   function updateParallax() {
@@ -901,12 +917,42 @@ export function initSigmaExplorer({
 
   // -- wiring ---------------------------------------------------------------
 
-  renderer.on('clickNode', ({ node }) => highlightFrom(node));
-  renderer.on('doubleClickNode', ({ node }) => {
+  /**
+   * Travels to a node: it becomes the centre of a fresh neighbourhood, and stays
+   * highlighted so the connections that brought you there still read.
+   *
+   * This is what makes the graph feel like a place rather than a picture. Mike
+   * McCready sits 6 degrees from Aaron and Pearl Jam sits 7, so reaching Pearl
+   * Jam by expanding would mean pulling in hundreds of nodes to show one band;
+   * travelling to Mike puts it one hop away. Clicking is how you cross the
+   * galaxy, one star at a time.
+   */
+  function travelTo(node) {
+    if (!node) return;
+    // Clicking the current centre is not travel -- just re-assert the highlight,
+    // so a second click on the anchor does not re-render the same view.
+    if (node === state.anchorId) {
+      highlightFrom(node);
+      return;
+    }
     state.anchorSource = 'requested';
     state.maxHops = NEIGHBORHOOD_BUDGET.MAX_HOPS;
-    renderNeighborhood({ anchorId: node, maxNodes: NEIGHBORHOOD_BUDGET.MAX_NODES });
-  });
+    const moved = renderNeighborhood({
+      anchorId: node,
+      maxNodes: NEIGHBORHOOD_BUDGET.MAX_NODES,
+    });
+    // renderNeighborhood clears the highlight as part of drawing a new view;
+    // re-applying it after the fact is what keeps the clicked node lit on
+    // arrival, which is the difference between travelling and being teleported.
+    if (moved) highlightFrom(node);
+    stage.dispatchEvent(
+      new CustomEvent('rbft:sigma-travel', { bubbles: true, detail: { anchorId: node } })
+    );
+  }
+
+  renderer.on('clickNode', ({ node }) => travelTo(node));
+  // Kept so a double click is not read as two separate journeys.
+  renderer.on('doubleClickNode', ({ node }) => travelTo(node));
   renderer.on('clickStage', () => clearHighlight());
   // afterRender fires once per painted frame, with the camera in its final
   // state for that frame -- the only place the DOM home-star overlay can be
@@ -1045,6 +1091,7 @@ export function initSigmaExplorer({
     canonical,
     state,
     exploreFor,
+    travelTo,
     expand,
     flyTo,
     highlightFrom,

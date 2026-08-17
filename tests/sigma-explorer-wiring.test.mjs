@@ -287,9 +287,14 @@ test('the explorer keeps its logic in the tested helper module', () => {
   assert.doesNotMatch(EXPLORER, /forceSimulation/, 'no force layout on the Sigma path');
 });
 
-test('the home-star and focus labels avoid each other when they are close', () => {
-  assert.match(EXPLORER, /\.sigma-home-star\.label-above \.home-label\{/);
-  assert.match(EXPLORER, /classList\.toggle\('label-above', crowded\)/);
+test('Aaron\'s name moves aside when the focus ring is close', () => {
+  // Aaron is often one hop from whatever a visitor searched for, so his name
+  // would print across the focus ring. Only his star carries a label now -- the
+  // focus ring's own label repeated the node label Sigma already draws -- so
+  // this is about moving one label, not separating two.
+  assert.match(EXPLORER, /Math\.hypot\(homePoint\.x - focusPoint\.x, homePoint\.y - focusPoint\.y\) < 120/);
+  assert.match(EXPLORER, /placeLabel\(homeLabelEl, homePoint, homeStarEl, homeScale, crowded\)/);
+  assert.doesNotMatch(EXPLORER, /sigma-focus-label/);
 });
 
 test('node sizes are scaled from the tested helpers, per view and on resize', () => {
@@ -389,52 +394,23 @@ test('hover is drawn in the theme, not with Sigma default white plate', () => {
   assert.doesNotMatch(EXPLORER, /HOVER_PLATE_FILL = '(#fff|white|rgba\(255)/);
 });
 
-test('overlay labels carry a dark halo so threads read as behind them', () => {
-  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `'));
-  assert.match(css, /\.home-label\{[^}]*text-shadow:0 0 6px rgba\(8,11,17/s);
-  assert.match(css, /\.focus-label\{[^}]*text-shadow:0 0 6px rgba\(8,11,17/s);
-});
-
-test('overlay labels are not shouted in uppercase', () => {
-  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `'));
-  const labelRules = css.match(/\.(home|focus)-label\{[^}]*\}/gs) || [];
-  // Not a fixed count: besides the two base rules there is a .label-above
-  // variant that repositions the home label when it would collide with the
-  // focus label. Every rule that touches these labels has to stay un-shouted.
-  assert.ok(labelRules.length >= 2, `expected both overlay label rules, found ${labelRules.length}`);
-  labelRules.forEach(rule => assert.doesNotMatch(rule, /text-transform:\s*uppercase/));
-});
-
-test('the search prompt is sized as the primary action, and never zooms iOS', () => {
-  // STAGE_CSS is a template literal, so every selector carries a `#${STAGE_ID}`
-  // interpolation whose braces would break naive rule matching. Flatten it.
+test('the star label carries a dark halo so threads read as behind it', () => {
   const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
-  const inputRule = css.match(/\.sigma-prompt input\{[^}]*\}/s);
-  assert.ok(inputRule, 'the prompt input needs a style rule');
-  // iOS Safari zooms the page when a focused input's text is under 16px, which
-  // throws the constellation off screen on the very first interaction.
-  const fontSize = inputRule[0].match(/font-size:clamp\((\d+)px/);
-  assert.ok(fontSize, 'the input font size should be a clamp() with a floor');
-  assert.ok(Number(fontSize[1]) >= 16, `input font floor is ${fontSize[1]}px, must be >= 16px`);
-  // A narrow phone plus generous padding is exactly where a button label wraps
-  // mid-word. The button's styling is spread over more than one rule (it shares
-  // its height with the input), so this checks their union rather than assuming
-  // which rule carries which property.
-  const buttonRules = (css.match(/[^{}]*\.sigma-prompt button[^{]*\{[^}]*\}/gs) || []).join('\n');
-  assert.ok(buttonRules, 'the prompt button needs a style rule');
-  assert.match(buttonRules, /white-space:nowrap/);
-  assert.match(buttonRules, /flex:none/);
-  // Both controls take their height from one declaration, so they cannot drift
-  // apart the way padding-derived heights did (the button rendered 8px taller).
-  assert.match(buttonRules, /height:clamp\(/);
-  const inputRules = (css.match(/[^{}]*\.sigma-prompt input[^{]*\{[^}]*\}/gs) || []).join('\n');
-  assert.match(inputRules, /height:clamp\(/);
-  // The page's global form styling (input,select,textarea{margin-top:...}) is
-  // written for stacked labelled fields and leaked in here, dropping the field
-  // 8px below the button: same size, different row. scripts/layout-audit.mjs
-  // measures the rendered result; this keeps the reset itself from being lost.
-  assert.match(inputRules, /margin:0/);
-  assert.match(buttonRules, /margin:0/);
+  const rule = css.match(/\.sigma-star-label\{[^}]*\}/s);
+  assert.ok(rule, 'the star label needs a rule');
+  assert.match(rule[0], /text-shadow:0 0 7px rgba\(8,11,17/);
+});
+
+test('the star label is gold, larger than a node label, and not shouted', () => {
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
+  const rule = css.match(/\.sigma-home-label\{[^}]*\}/s);
+  assert.ok(rule, 'the home label needs a rule');
+  // Gold, so the one fixed point in the galaxy reads as a different kind of
+  // thing from the band and musician names around it.
+  assert.match(rule[0], /color:#ffc978/);
+  const size = rule[0].match(/font-size:(\d+(?:\.\d+)?)px/);
+  assert.ok(size && Number(size[1]) >= 13, `home label is ${size && size[1]}px; should be >= 13px`);
+  assert.doesNotMatch(rule[0], /text-transform:\s*uppercase/);
 });
 
 test('search suggestions are alphabetical, and cover every band', () => {
@@ -510,22 +486,35 @@ test('Reset returns to the opening view, not just the opening camera', () => {
   assert.match(goHome, /clearHighlight\(\)/);
 });
 
-test('overlay labels keep one size regardless of zoom', () => {
-  // The star and focus ring scale with the camera so they keep marking their
-  // node. Text must not ride that transform: in a zoomed-in view -- which is
-  // what a phone gets, since it frames a region rather than the whole
-  // neighbourhood -- it rendered "Aaron McRae — you are here" at nearly double
-  // size. positionOverlays() cancels the scale on the label only.
-  assert.match(EXPLORER, /label\.style\.transform = `translateX\(-50%\) scale\(\$\{\(1 \/ scale\)/);
-  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
-  // Centring has to come from the inline transform now, so the CSS must not set
-  // a competing one.
-  [
-    ['home-label', css.match(/\.home-label\{[^}]*\}/s)],
-    ['focus-label', css.match(/\.focus-label\{[^}]*\}/s)],
-  ].forEach(([name, rule]) => {
-    assert.ok(rule, `${name} needs a rule`);
-    assert.match(rule[0], /transform-origin:top center/);
-    assert.doesNotMatch(rule[0], /transform:translateX/);
-  });
+test('the star label keeps one size and one gap at every zoom', () => {
+  // The star scales with the camera so it keeps marking its node. Its label used
+  // to live inside that transform, so in a zoomed-in view -- which is what a
+  // phone gets -- the text grew with it AND drifted away from the star, since
+  // its offset scaled too. The label is now a sibling, placed in screen space.
+  assert.match(EXPLORER, /<span class="sigma-star-label sigma-home-label" hidden><\/span>/);
+  const place = EXPLORER.slice(EXPLORER.indexOf('const placeLabel ='), EXPLORER.indexOf('const zoomScale ='));
+  // Measured from the overlay's drawn edge, so the gap is constant on screen.
+  assert.match(place, /const GAP = \d+;/);
+  assert.match(place, /const radius = \(overlayEl\.offsetHeight \* scale\) \/ 2;/);
+  assert.match(place, /point\.y \+ radius \+ GAP/);
+  // And no scale on the label itself.
+  assert.doesNotMatch(place, /scale\(/);
+});
+
+
+test('clicking a node travels to it, keeping it lit on arrival', () => {
+  // The point of the whole explorer: Mike McCready is 6 degrees from Aaron and
+  // Pearl Jam is 7, so reaching Pearl Jam by expanding would pull in hundreds of
+  // nodes to show one band. Travelling to Mike puts it one hop away.
+  assert.match(EXPLORER, /renderer\.on\('clickNode', \(\{ node \}\) => travelTo\(node\)\)/);
+  const travel = EXPLORER.slice(EXPLORER.indexOf('function travelTo(node)'), EXPLORER.indexOf("renderer.on('clickNode'"));
+  // Clicking the current centre must not re-render the same view.
+  assert.match(travel, /if \(node === state\.anchorId\)/);
+  // Budgets open up for a requested anchor, as with a search.
+  assert.match(travel, /state\.anchorSource = 'requested'/);
+  assert.match(travel, /maxNodes: NEIGHBORHOOD_BUDGET\.MAX_NODES/);
+  // renderNeighborhood clears the highlight while drawing, so it is re-applied
+  // afterwards -- otherwise you arrive somewhere with nothing lit.
+  assert.match(travel, /if \(moved\) highlightFrom\(node\)/);
+  assert.match(travel, /rbft:sigma-travel/);
 });
