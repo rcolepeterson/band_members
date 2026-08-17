@@ -17,8 +17,7 @@ import { dirname, join } from 'node:path';
 import {
   getNeighborhood,
   radialLayout,
-  chooseEdgeCurvatures,
-  curveDistance,
+  straightDistance,
   linkEndpoints,
   NEIGHBORHOOD_BUDGET,
 } from '../../scripts/neighborhood-helpers.mjs';
@@ -33,8 +32,8 @@ const LIVE_SAMPLE = JSON.parse(
   readFileSync(join(HERE, '..', 'fixtures', 'live-graph-sample.json'), 'utf8')
 );
 
-export const SPACING = 150;
-export const MIN_SEPARATION = 64;
+export const SPACING = 190;
+export const MIN_SEPARATION = 76;
 // A node must clear an unrelated edge by at least this much, in layout units.
 //
 // Division of responsibility, worth being explicit about:
@@ -228,22 +227,11 @@ export function layoutFor(graph, anchorId, budget, tuning = {}) {
     minSeparation: MIN_SEPARATION,
     ...tuning.layout,
   });
-  // Curvature is part of the geometry: an edge's clearance depends on which way
-  // it bows. Screen handedness (y down) is what Sigma draws with.
-  const screenSpace = new Map(
-    Array.from(positions.entries()).map(([id, p]) => [id, { x: p.x, y: -p.y }])
-  );
-  const curvatures = chooseEdgeCurvatures({
-    links: view.links,
-    positions: screenSpace,
-    protect: [anchorId],
-    protectClearance: ANCHOR_CLEARANCE + 8,
-    ...tuning.curvature,
-  });
-  return { view, positions, screenSpace, curvatures };
+  // Edges are drawn straight, so clearance is simply point-to-segment distance.
+  return { view, positions };
 }
 
-export function violations({ view, positions, screenSpace, curvatures }, anchorId) {
+export function violations({ view, positions }, anchorId) {
   const found = [];
   const soft = [];
 
@@ -274,16 +262,15 @@ export function violations({ view, positions, screenSpace, curvatures }, anchorI
     if (incident.has(target)) incident.get(target).add(link);
   });
   view.nodes.forEach(node => {
-    const point = screenSpace.get(node.id);
+    const point = positions.get(node.id);
     if (!point) return;
     view.links.forEach(link => {
       if (incident.get(node.id).has(link)) return;
       const [source, target] = linkEndpoints(link);
-      const a = screenSpace.get(source);
-      const b = screenSpace.get(target);
+      const a = positions.get(source);
+      const b = positions.get(target);
       if (!a || !b) return;
-      const curvature = curvatures.get(`${source}\u0000${target}`) || 0;
-      const clearance = curveDistance(point, a, b, curvature);
+      const clearance = straightDistance(point, a, b);
       const message = `${node.id} sits ${clearance.toFixed(1)} from ${source} -- ${target}`;
       if (clearance < EDGE_CLEARANCE_HARD) found.push(message);
       else if (clearance < EDGE_CLEARANCE_SOFT) soft.push(message);

@@ -18,6 +18,12 @@
 //     no force simulation on load, identical coordinates for everybody who
 //     opens the same link.
 //
+// Edges are drawn STRAIGHT, like the lines between stars in a constellation.
+// Curved edges were tried and rejected: bowed threads pile up and fight each
+// other wherever several cross. That puts the whole burden of keeping threads
+// off unrelated nodes on the layout solver (see relaxLayout), which is where it
+// belongs anyway.
+//
 // Interaction contract carried over from the SVG renderer (do not regress):
 //   - Click a band   -> electric blue (#27b8ff) glow on its members + edges.
 //   - Click a member -> amber/gold (#ffb454) glow on their bands + edges.
@@ -33,14 +39,6 @@
 
 import Graph from 'graphology';
 import Sigma from 'sigma';
-// Curved edges. Specifiers are bare and resolved by the import map in
-// index.html, which pins the versions and guarantees one shared Sigma instance
-// (two copies would give us a renderer that silently draws nothing).
-// Curves matter for more than looks: a straight chord between
-// two bands can pass exactly through an unrelated musician's node, which reads
-// as a membership that does not exist ("Charlie is sitting on the Sweet Water
-// string"). A bowed edge leaves the node alone.
-import EdgeCurveProgram from '@sigma/edge-curve';
 
 import {
   rendererFromSearch,
@@ -58,7 +56,6 @@ import {
   nodeSizeScale,
   layoutExtent,
   labelSettings,
-  chooseEdgeCurvatures,
   framingRatio,
 } from './neighborhood-helpers.mjs';
 
@@ -85,10 +82,6 @@ const LARGEST_NODE_SIZE = Math.max(...Object.values(KIND_STYLE).map(style => sty
 
 const EDGE_COLOR = 'rgba(150,170,190,0.22)';
 const DIM_LABEL_COLOR = 'rgba(150,163,178,0.75)';
-// How far an edge bows away from the straight line between its endpoints.
-// Enough to clear a node that happens to sit on the chord, small enough that
-// the graph still reads as a network rather than a bowl of noodles.
-const EDGE_CURVATURE = 0.18;
 // How much a selected node grows. Used both when drawing and when framing.
 const HIGHLIGHT_GROWTH = 1.25;
 // Dimmed nodes must be OPAQUE. A translucent fill let highlighted edges show
@@ -328,8 +321,6 @@ export function initSigmaExplorer({
     // emphasis. Stripping labels on dim made names appear only on click.
     labelColor: { attribute: 'labelColor', color: '#c8d3e0' },
     defaultEdgeColor: EDGE_COLOR,
-    defaultEdgeType: 'curve',
-    edgeProgramClasses: { curve: EdgeCurveProgram },
     hideEdgesOnMove: true,
     hideLabelsOnMove: true,
     nodeReducer: (id, attrs) => reduceNode(id, attrs),
@@ -431,28 +422,8 @@ export function initSigmaExplorer({
       links: view.links,
       anchorId,
       depths: view.depths,
-      spacing: 150,
+      spacing: 190,
       adjacency,
-    });
-
-    // Which way each edge should bow, decided against the actual node positions
-    // so a curve never lands on an unrelated musician.
-    //
-    // Note the y flip: layout space has y pointing up, the screen has y
-    // pointing down, and a curvature sign means the opposite side of the chord
-    // in each. Choosing the sign in layout space and handing it straight to
-    // Sigma bows every edge the WRONG way -- measurably worse than not choosing
-    // at all, which is how this was caught.
-    const screenSpacePositions = new Map(
-      Array.from(positions.entries()).map(([id, point]) => [id, { x: point.x, y: -point.y }])
-    );
-    const curvatures = chooseEdgeCurvatures({
-      links: view.links,
-      positions: screenSpacePositions,
-      curvature: EDGE_CURVATURE,
-      // The anchor is what the visitor is looking at; a thread grazing it reads
-      // as a connection it does not have.
-      protect: [anchorId],
     });
 
     viewGraph.clear();
@@ -478,11 +449,7 @@ export function initSigmaExplorer({
       const [source, target] = linkEndpoints(link);
       if (!viewGraph.hasNode(source) || !viewGraph.hasNode(target)) return;
       if (viewGraph.hasEdge(source, target)) return;
-      viewGraph.addEdge(source, target, {
-        size: 1,
-        relation: link.relation || 'member',
-        curvature: curvatures.get(`${source}\u0000${target}`) ?? EDGE_CURVATURE,
-      });
+      viewGraph.addEdge(source, target, { size: 1, relation: link.relation || 'member' });
     });
 
     state.layoutExtent = layoutExtent(positions);

@@ -20,13 +20,13 @@
 import { linkEndpoints } from './neighborhood-helpers.mjs';
 import { SHAPES, BUDGETS, SPACING, layoutFor, violations } from '../tests/helpers/layout-checks.mjs';
 
-// Knobs that still exist after the layout settled on per-ring allocation:
-// how much arc every node is guaranteed, how far apart consecutive rings sit,
-// and how hard edges bow.
+// Knobs that matter now that edges are drawn straight: how much arc every node
+// is guaranteed, how far apart consecutive rings sit, and how far a node may
+// wander in or out of its ring while the solver resolves overlaps.
 const CANDIDATES = {
-  minSeparation: [44, 52, 60, 72],
-  spacingScale: [1, 1.3],
-  curvature: [0.18, 0.26, 0.34],
+  minSeparation: [64, 76, 88],
+  spacingScale: [1, 1.25],
+  radialBand: [0.16, 0.26],
 };
 
 function anchorsFor(graph) {
@@ -67,8 +67,8 @@ const tuningFor = combo => ({
   layout: {
     minSeparation: combo.minSeparation,
     spacing: SPACING * combo.spacingScale,
+    radialBand: combo.radialBand,
   },
-  curvature: { curvature: combo.curvature },
 });
 
 if (process.argv.includes('--current')) {
@@ -81,8 +81,8 @@ if (process.argv.includes('--current')) {
 const combos = [];
 for (const minSeparation of CANDIDATES.minSeparation) {
   for (const spacingScale of CANDIDATES.spacingScale) {
-    for (const curvature of CANDIDATES.curvature) {
-      combos.push({ minSeparation, spacingScale, curvature });
+    for (const radialBand of CANDIDATES.radialBand) {
+      combos.push({ minSeparation, spacingScale, radialBand });
     }
   }
 }

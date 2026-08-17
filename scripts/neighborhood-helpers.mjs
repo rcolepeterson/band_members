@@ -481,13 +481,6 @@ export function relaxLayout({
   links = [],
   anchorId = null,
   minSeparation = 64,
-  // How far nodes are nudged off their ring before relaxing, as a fraction of
-  // their ring slot. 0 gives clean concentric rings; the default gives a
-  // scattered constellation.
-  scatter = 1,
-  // Whether to run the collision solver. Off only for tests that want to inspect
-  // the raw seed.
-  relax = true,
   edgeClearance = 26,
   // Passes are budgeted per view rather than fixed: a pass costs time roughly in
   // proportion to the node count, so a constant count would make the biggest
@@ -498,7 +491,7 @@ export function relaxLayout({
   // fraction. Enforced as a hard clamp, not a spring: "further from the anchor
   // means more degrees of separation" is the one thing the picture has to keep
   // saying, and a spring can be overpowered by a crowd of separation pushes.
-  radialBand = 0.16,
+  radialBand = 0.26,
   // Cohesion (pulling a node toward the average of its neighbours) is OFF by
   // default and probably should stay that way: the seed layout already places
   // children near their parents, and an attractive force that acts at every
@@ -711,21 +704,123 @@ export function relaxLayout({
     if (settling && worstViolation <= TOLERANCE) break;
   }
 
-  enforceSeparation({ positions, ids, anchorId, minSeparation, clampToBand, targetRadius });
-  enforceEdgeClearance({
+  enforceConstraints({
     positions,
     ids,
     edgeList,
     anchorId,
-    clearance: Math.max(minSeparation * 0.45, 1),
+    minSeparation,
+    // Edges are drawn straight, so this pass is the ONLY thing keeping a thread
+    // off an unrelated node. Aim well past the strict minimum.
+    clearance: minSeparation * 0.55,
     clampToBand,
     targetRadius,
   });
-  // Separation has the final word: nudging nodes off edges can bring two of them
-  // together, and an edge grazing a node is less damaging than two nodes merging.
-  enforceSeparation({ positions, ids, anchorId, minSeparation, clampToBand, targetRadius, rounds: 20 });
 
   return positions;
+}
+
+/**
+ * Final enforcement of the two constraints that matter, together.
+ *
+ * Running them one after the other does not work: pushing a node off a thread
+ * can slide it into another node, and pushing nodes apart can slide one onto a
+ * thread, so whichever ran last won and the other was left half-satisfied.
+ * Interleaving them in one loop lets both converge, and gives separation the
+ * slight edge within each round -- two merged nodes are a worse lie than a
+ * thread passing close.
+ */
+function enforceConstraints({
+  positions,
+  ids,
+  edgeList,
+  anchorId,
+  minSeparation,
+  clearance,
+  clampToBand,
+  targetRadius,
+  // Rounds cost time in proportion to node count squared, so budget them the
+  // same way relaxIterations does: enough to converge, not enough to stall a
+  // 400-node expansion.
+  rounds = null,
+}) {
+  const passes = rounds || Math.max(24, Math.min(90, Math.round(12000 / Math.max(ids.length, 1))));
+  const move = (id, dx, dy) => {
+    if (id === anchorId) return;
+    const point = positions.get(id);
+    point.x += dx;
+    point.y += dy;
+    clampToBand(point, targetRadius.get(id));
+  };
+
+  for (let round = 0; round < passes; round += 1) {
+    let worst = 0;
+
+    // Nodes off each other.
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) {
+        const a = positions.get(ids[i]);
+        const b = positions.get(ids[j]);
+        let dx = a.x - b.x;
+        let dy = a.y - b.y;
+        let distance = Math.hypot(dx, dy);
+        if (distance >= minSeparation) continue;
+        if (distance < 1e-6) {
+          const seed = scatterSeed(ids[i]);
+          dx = Math.cos(seed.angular * Math.PI);
+          dy = Math.sin(seed.angular * Math.PI);
+          distance = 1e-6;
+        }
+        worst = Math.max(worst, minSeparation - distance);
+        const push = (minSeparation - distance) / distance / 2;
+        move(ids[i], dx * push, dy * push);
+        move(ids[j], -dx * push, -dy * push);
+      }
+    }
+
+    // Nodes off threads they are not part of.
+    edgeList.forEach(([source, target]) => {
+      const a = positions.get(source);
+      const b = positions.get(target);
+      ids.forEach(id => {
+        if (id === source || id === target) return;
+        const point = positions.get(id);
+        const vx = b.x - a.x;
+        const vy = b.y - a.y;
+        const len2 = vx * vx + vy * vy;
+        if (!len2) return;
+        let t = ((point.x - a.x) * vx + (point.y - a.y) * vy) / len2;
+        t = Math.max(0, Math.min(1, t));
+        let dx = point.x - (a.x + t * vx);
+        let dy = point.y - (a.y + t * vy);
+        let distance = Math.hypot(dx, dy);
+        // The anchor cannot move out of the way -- it is pinned at the centre --
+        // so it gets a wider berth, and the thread's own endpoints do the moving.
+        const isAnchor = id === anchorId;
+        const required = isAnchor ? clearance * 1.6 : clearance;
+        if (distance >= required) return;
+        if (distance < 1e-6) {
+          const norm = Math.hypot(vx, vy) || 1;
+          dx = -vy / norm;
+          dy = vx / norm;
+          distance = 1e-6;
+        }
+        worst = Math.max(worst, required - distance);
+        const push = (required - distance) / distance;
+        // The node steps aside, and the thread's ends yield a little -- sharing
+        // the correction converges faster than moving the node alone, which just
+        // pushes it into whatever is behind it. For the pinned anchor the ends do
+        // all of the yielding.
+        const nodeShare = isAnchor ? 0 : 0.7;
+        const endShare = isAnchor ? 0.5 : 0.15;
+        move(id, dx * push * nodeShare, dy * push * nodeShare);
+        move(source, -dx * push * endShare * (1 - t), -dy * push * endShare * (1 - t));
+        move(target, -dx * push * endShare * t, -dy * push * endShare * t);
+      });
+    });
+
+    if (worst <= TOLERANCE) break;
+  }
 }
 
 /**
@@ -763,7 +858,11 @@ function enforceEdgeClearance({
         let dx = point.x - (a.x + t * vx);
         let dy = point.y - (a.y + t * vy);
         let distance = Math.hypot(dx, dy);
-        if (distance >= clearance) return;
+        // The anchor cannot move out of the way -- it is pinned at the centre --
+        // so it gets a wider berth, and the thread's own endpoints do the moving.
+        const isAnchor = id === anchorId;
+        const required = isAnchor ? clearance * 1.6 : clearance;
+        if (distance >= required) return;
         if (distance < 1e-6) {
           const norm = Math.hypot(vx, vy) || 1;
           dx = -vy / norm;
@@ -779,60 +878,6 @@ function enforceEdgeClearance({
         }
       });
     });
-    if (worst <= TOLERANCE) break;
-  }
-}
-
-/**
- * Last word on node separation.
- *
- * The main loop balances several constraints at once, so a stubborn pair can end
- * up a few units short. This pass cares about one thing only -- no two nodes
- * closer than minSeparation -- and pushes pairs apart until that holds, keeping
- * every node inside its radial band. Bounded, so a genuinely impossible
- * configuration ends as good as it can be rather than looping forever.
- */
-function enforceSeparation({
-  positions,
-  ids,
-  anchorId,
-  minSeparation,
-  clampToBand,
-  targetRadius,
-  rounds = 60,
-}) {
-  for (let round = 0; round < rounds; round += 1) {
-    let worst = 0;
-    for (let i = 0; i < ids.length; i += 1) {
-      for (let j = i + 1; j < ids.length; j += 1) {
-        const a = positions.get(ids[i]);
-        const b = positions.get(ids[j]);
-        let dx = a.x - b.x;
-        let dy = a.y - b.y;
-        let distance = Math.hypot(dx, dy);
-        if (distance >= minSeparation) continue;
-        if (distance < 1e-6) {
-          const seed = scatterSeed(ids[i]);
-          dx = Math.cos(seed.angular * Math.PI);
-          dy = Math.sin(seed.angular * Math.PI);
-          distance = 1e-6;
-        }
-        worst = Math.max(worst, minSeparation - distance);
-        const push = (minSeparation - distance) / distance / 2;
-        const mx = dx * push;
-        const my = dy * push;
-        if (ids[i] !== anchorId) {
-          a.x += mx;
-          a.y += my;
-          clampToBand(a, targetRadius.get(ids[i]));
-        }
-        if (ids[j] !== anchorId) {
-          b.x -= mx;
-          b.y -= my;
-          clampToBand(b, targetRadius.get(ids[j]));
-        }
-      }
-    }
     if (worst <= TOLERANCE) break;
   }
 }
@@ -872,6 +917,14 @@ export const MAX_BRANCH_RADIUS_GROWTH = 6;
 
 // Most sub-rings one branch may stagger its children across.
 export const MAX_SUB_RINGS = 6;
+
+// Widest slice of a ring one parent's children may occupy before they are moved
+// into a local orbit around that parent instead.
+export const WIDE_BLOCK_SPAN = Math.PI * 0.75;
+
+// A parent needs at least this many children before its block is treated as
+// crowded enough to become an orbit.
+export const WIDE_BLOCK_MIN_CHILDREN = 8;
 
 // Narrowest sector a branch may be given, in radians. Only a guard against
 // division by zero: a genuinely tiny sector is respected, and the branch moves
@@ -936,11 +989,13 @@ export function radialLayout({
   // room between neighbours is also more room for the chords that pass between
   // them, and since the camera frames whatever the layout produces, a larger
   // number costs nothing visually.
-  minSeparation = 64,
+  minSeparation = 76,
   // How far nodes are nudged off their ring before relaxing, as a fraction of
   // their ring slot. 0 gives clean concentric rings; the default gives a
   // scattered constellation.
   scatter = 1,
+  // Forwarded to relaxLayout: how far a node may drift in or out of its ring.
+  radialBand = 0.26,
   // Whether to run the collision solver. Off only for tests that want to inspect
   // the raw seed.
   relax = true,
@@ -1040,30 +1095,92 @@ export function radialLayout({
       previousRadius + spacing * 0.75
     );
 
-    // Order: by parent angle, then by the parent's own name, then the node's --
-    // stable, and grouped so siblings sit together.
-    const ordered = ids.slice().sort((a, b) => {
-      const parentA = parentOf.get(a);
-      const parentB = parentOf.get(b);
-      const angleA = nodeAngles.has(parentA) ? nodeAngles.get(parentA) : 0;
-      const angleB = nodeAngles.has(parentB) ? nodeAngles.get(parentB) : 0;
-      if (angleA !== angleB) return angleA - angleB;
-      const byParent = String(parentA).localeCompare(String(parentB));
-      return byParent || String(a).localeCompare(String(b));
+    // Blocks, one per parent, sized by how many children that parent has and
+    // placed as close to the parent's own angle as possible without overlapping
+    // the block before it.
+    //
+    // Spreading a layer evenly around the whole ring gives every node the same
+    // arc, but it also scatters one band's members across the entire circle --
+    // and with STRAIGHT threads, the members on the far side are joined to their
+    // band by lines that cut straight across the middle of the graph, through
+    // the anchor and whatever else is in the way. Clustering each parent's
+    // children in front of it keeps threads short and local, which is what makes
+    // a band read as its own little system.
+    const byParent = new Map();
+    ids.forEach(id => {
+      const parent = parentOf.get(id);
+      if (!byParent.has(parent)) byParent.set(parent, []);
+      byParent.get(parent).push(id);
+    });
+    byParent.forEach(kids => kids.sort((a, b) => String(a).localeCompare(String(b))));
+
+    const parents = Array.from(byParent.keys()).sort(
+      (a, b) =>
+        (nodeAngles.has(a) ? nodeAngles.get(a) : 0) - (nodeAngles.has(b) ? nodeAngles.get(b) : 0) ||
+        String(a).localeCompare(String(b))
+    );
+
+    // Monotone placement: each block starts at its parent's angle if it can, or
+    // immediately after the previous block if not. Blocks therefore never
+    // overlap, so every node keeps its full slot of arc.
+    let cursor = null;
+    parents.forEach(parent => {
+      const kids = byParent.get(parent);
+      const width = slot * kids.length;
+      const parentAngle = nodeAngles.has(parent) ? nodeAngles.get(parent) : 0;
+      const parentPoint = positions.get(parent);
+
+      // A parent with a large share of the ring cannot have its children "in
+      // front of it" -- a band with forty members would need most of the circle,
+      // and its members would end up ringing the ANCHOR, joined back to their
+      // band by long straight threads across the middle of the graph.
+      //
+      // So past a certain width, the children orbit their own band instead: a
+      // compact local ring centred on the parent. Short threads, no crossings,
+      // and it is exactly the solar system the space metaphor promises.
+      // Only for a genuinely crowded parent: a layer with two or three nodes
+      // gives each of them a huge nominal slot, and those should stay on the
+      // ring where "one more degree out" still reads.
+      if (
+        kids.length >= WIDE_BLOCK_MIN_CHILDREN &&
+        width > WIDE_BLOCK_SPAN &&
+        parentPoint &&
+        parent !== anchorId
+      ) {
+        const orbit = Math.max((kids.length * minSeparation) / (Math.PI * 2), spacing * 0.7);
+        // The orbit is centred beyond the band, away from the anchor, so the
+        // cluster still sits further out than the ring it came from -- distance
+        // from the anchor has to keep meaning degrees of separation.
+        const facing = Math.atan2(parentPoint.y, parentPoint.x);
+        const centreX = parentPoint.x + Math.cos(facing) * orbit;
+        const centreY = parentPoint.y + Math.sin(facing) * orbit;
+        kids.forEach((id, index) => {
+          const angle = facing + (index + 0.5) * ((Math.PI * 2) / kids.length);
+          const x = centreX + Math.cos(angle) * orbit;
+          const y = centreY + Math.sin(angle) * orbit;
+          positions.set(id, { x, y, hop });
+          nodeAngles.set(id, Math.atan2(y, x));
+        });
+        return;
+      }
+
+      const desired = parentAngle - width / 2;
+      const start = cursor === null ? desired : Math.max(cursor, desired);
+      cursor = start + width;
+      kids.forEach((id, index) => {
+        const angle = start + slot * (index + 0.5);
+        positions.set(id, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, hop });
+        nodeAngles.set(id, angle);
+      });
     });
 
-    // Rotate the ring so the first block starts near its own parent, which keeps
-    // children under their band instead of drifting a fixed offset away.
-    const firstParent = parentOf.get(ordered[0]);
-    const offset = (nodeAngles.has(firstParent) ? nodeAngles.get(firstParent) : 0) - slot / 2;
-
-    ordered.forEach((id, index) => {
-      const angle = offset + slot * index;
-      positions.set(id, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, hop });
-      nodeAngles.set(id, angle);
-    });
-
-    previousRadius = radius;
+    // The next ring must clear whatever this one ACTUALLY used, which is more
+    // than its nominal radius once a crowded band's children have been moved out
+    // into an orbit around it.
+    previousRadius = ids.reduce((furthest, id) => {
+      const point = positions.get(id);
+      return point ? Math.max(furthest, Math.hypot(point.x, point.y)) : furthest;
+    }, radius);
   });
 
   // ----- 4. Scatter and relax ----------------------------------------------
@@ -1099,153 +1216,11 @@ export function radialLayout({
       // them comfortably met at the end.
       edgeClearance: minSeparation * 2,
       spacing,
+      radialBand,
     });
   }
 
   return positions;
-}
-
-/**
- * Distance from a point to a quadratic Bezier, sampled.
- *
- * Mirrors how Sigma's edge-curve program draws a curved edge: the control point
- * is the midpoint pushed perpendicular to the chord by curvature * length.
- */
-export function curveDistance(point, a, b, curvature = 0, samples = 20) {
-  const segment = straightDistance;
-  if (!curvature) return segment(point, a, b);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const control = { x: (a.x + b.x) / 2 - dy * curvature, y: (a.y + b.y) / 2 + dx * curvature };
-  let best = Infinity;
-  let previous = a;
-  for (let i = 1; i <= samples; i += 1) {
-    const t = i / samples;
-    const u = 1 - t;
-    const current = {
-      x: u * u * a.x + 2 * u * t * control.x + t * t * b.x,
-      y: u * u * a.y + 2 * u * t * control.y + t * t * b.y,
-    };
-    best = Math.min(best, segment(point, previous, current));
-    previous = current;
-  }
-  return best;
-}
-
-/**
- * Picks which way -- and how far -- each edge should bow.
- *
- * A curved edge only helps if it curves AWAY from the nodes near its chord, by
- * enough to actually clear them. Both halves of that matter, and both were
- * learned the hard way: a fixed sign left edges drawn tangent to unrelated
- * musicians, and a fixed magnitude left dense views with nodes sitting on
- * threads they have nothing to do with.
- *
- * For each edge: walk candidate bows from gentle to pronounced, in both
- * directions, and take the first that clears every non-endpoint node by
- * `targetClearance`. If nothing reaches the target, keep whichever candidate
- * came closest, so a hopeless case still ends up as good as it can be rather
- * than arbitrary.
- *
- * Coordinates must be in the same handedness as the renderer (screen space, y
- * pointing down); a sign chosen in y-up space bows every edge the wrong way.
- *
- * Ties break deterministically, so a shared link always looks identical.
- *
- * Returns Map("source\u0000target" -> signed curvature).
- */
-export function chooseEdgeCurvatures({
-  links = [],
-  positions = new Map(),
-  curvature = 0.18,
-  // Multiples of the base curvature to try, gentlest first.
-  // A hub musician in eight bands sends long chords across the graph, and a
-  // gentle bow is not enough to clear the bands those chords sweep past, so the
-  // ladder reaches well beyond a subtle curve before giving up.
-  magnitudes = [1, 1.4, 1.9, 2.6, 3.6, 5, 7, 9, 12],
-  // Layout-unit clearance we are aiming for between a curve and any unrelated
-  // node. Roughly a third of the layout's separation floor.
-  // Aiming above the strict invariant (a third of the separation floor) leaves
-  // margin: an edge that only just satisfies the chooser can still be visually
-  // tangent to the anchor, which is the most conspicuous node on screen.
-  targetClearance = 30,
-  // Nodes that must be cleared even at the cost of a worse average: in practice
-  // the anchor, which is the node every visitor is looking at and the one place
-  // a stray thread reads as a real connection.
-  protect = [],
-  protectClearance = 30,
-  samples = 14,
-} = {}) {
-  const chosen = new Map();
-  const entries = Array.from(positions.entries());
-
-  links.forEach(link => {
-    const [source, target] = linkEndpoints(link);
-    const key = `${source}\u0000${target}`;
-    const a = positions.get(source);
-    const b = positions.get(target);
-    if (!a || !b) {
-      chosen.set(key, curvature);
-      return;
-    }
-
-    const length = Math.hypot(b.x - a.x, b.y - a.y);
-    const maxMagnitude = Math.max(...magnitudes) * curvature;
-    // Only nodes near the straight chord can possibly interfere with any of the
-    // candidate curves, and a straight-line test is cheap. Everything else is
-    // skipped, which keeps this affordable on a 200-node view.
-    const cutoff = maxMagnitude * length + targetClearance * 2;
-    const nearby = [];
-    entries.forEach(([id, point]) => {
-      if (id === source || id === target) return;
-      if (straightDistance(point, a, b) <= cutoff) nearby.push({ id, point });
-    });
-    if (!nearby.length) {
-      chosen.set(key, curvature);
-      return;
-    }
-
-    const protectedIds = new Set(protect);
-    const scoreFor = signed => {
-      let worst = Infinity;
-      let worstProtected = Infinity;
-      for (const entry of nearby) {
-        const distance = curveDistance(entry.point, a, b, signed, samples);
-        if (distance < worst) worst = distance;
-        if (protectedIds.has(entry.id) && distance < worstProtected) worstProtected = distance;
-      }
-      return { worst, worstProtected };
-    };
-
-    const parity = (source.length + target.length) % 2 === 0 ? 1 : -1;
-    let best = { value: parity * curvature, worst: -Infinity, worstProtected: -Infinity };
-    for (const multiple of magnitudes) {
-      const magnitude = multiple * curvature;
-      // Try the parity-preferred side first so ties stay stable.
-      for (const sign of [parity, -parity]) {
-        const signed = sign * magnitude;
-        const score = scoreFor(signed);
-        // A candidate that clears the protected nodes always beats one that does
-        // not, however good its average.
-        const betterProtected =
-          Math.min(score.worstProtected, protectClearance) >
-          Math.min(best.worstProtected, protectClearance);
-        const sameProtected =
-          Math.min(score.worstProtected, protectClearance) ===
-          Math.min(best.worstProtected, protectClearance);
-        if (betterProtected || (sameProtected && score.worst > best.worst)) {
-          best = { value: signed, ...score };
-        }
-        if (score.worst >= targetClearance && score.worstProtected >= protectClearance) {
-          chosen.set(key, signed);
-          return;
-        }
-      }
-    }
-    chosen.set(key, best.value);
-  });
-
-  return chosen;
 }
 
 /**

@@ -66,11 +66,10 @@ import { SHAPES, BUDGETS, layoutFor, violations } from './helpers/layout-checks.
 // ---------------------------------------------------------------------------
 
 const KNOWN_TIGHT = new Map([
-  ['liveSample / anchor Swans / 3 hops, 100 nodes', 2],
-  ['liveSample / anchor Swans / 4 hops, 160 nodes', 2],
-  ['liveSample / anchor Swans / 5 hops, 220 nodes', 17],
-  ['liveSample / anchor Swans / 6 hops, 400 nodes', 26],
-  ['liveSample / anchor John Stanier / 6 hops, 400 nodes', 2],
+  ['liveSample / anchor Swans / 4 hops, 160 nodes', 1],
+  ['liveSample / anchor Swans / 5 hops, 220 nodes', 6],
+  ['liveSample / anchor Swans / 6 hops, 400 nodes', 1],
+  ['liveSample / anchor John Stanier / 6 hops, 400 nodes', 1],
 ]);
 
 // ---------------------------------------------------------------------------
@@ -127,6 +126,6 @@ for (const [shapeName, build] of Object.entries(SHAPES)) {
     const first = layoutFor(graph, 'Aaron McRae', BUDGETS[2]);
     const second = layoutFor(graph, 'Aaron McRae', BUDGETS[2]);
     first.positions.forEach((point, id) => assert.deepEqual(point, second.positions.get(id)));
-    first.curvatures.forEach((value, key) => assert.equal(value, second.curvatures.get(key)));
+    assert.equal(first.positions.size, second.positions.size);
   });
 }
