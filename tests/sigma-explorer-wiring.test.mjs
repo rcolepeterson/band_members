@@ -392,7 +392,9 @@ test('a framed view leaves room for labels', () => {
   // The framed ratio is compared with a tolerance rather than for equality,
   // because framingRatio() may return a smaller (zoomed-in) ratio on dense
   // views and the "already framed" branch must not fire on a float wobble.
-  assert.match(EXPLORER, /ratio >= FRAMED_RATIO - 1e-6/);
+  // Compared through fitRatio() now: the same value has to drive both the framing
+  // call and the "did it fit?" test, or the branch mis-detects.
+  assert.match(EXPLORER, /ratio >= fitRatio\(\) - 1e-6/);
 });
 
 test('the renderer frames views through the tested framing helper', () => {
@@ -622,4 +624,38 @@ test('label placement is measured, collision-free and stable', () => {
   assert.match(block, /renderer\.refresh\(\{ skipIndexation: true \}\)/);
   // And the reducer is what applies it.
   assert.match(EXPLORER, /if \(state\.labelBlocked\.has\(id\)\) res\.label = '';/);
+});
+
+test('the chrome band is measured, and used for centring only', () => {
+  const area = EXPLORER.slice(EXPLORER.indexOf('function chromeInsets()'), EXPLORER.indexOf('function cameraOffsetY('));
+  assert.match(area, /hero\.bottom - host\.top/);
+  assert.match(area, /host\.bottom - footer\.top/);
+  // A very short window must still leave a usable band rather than nothing.
+  assert.match(area, /Math\.max\(host\.height \* 0\.45/);
+  // Framing and sizing deliberately use the FULL canvas. Measured: handing them
+  // the band instead reads as "fitting would not be legible", so the camera zooms
+  // into a region -- the opening view went from 17 nodes on screen to 8. Nodes
+  // visible beats names hidden.
+  const framed = EXPLORER.slice(EXPLORER.indexOf('function framedRatio()'), EXPLORER.indexOf('function applySizeScale('));
+  assert.match(framed, /const rect = canvasHost\.getBoundingClientRect\(\);/);
+  assert.doesNotMatch(framed, /safeArea\(\)/);
+});
+
+test('the camera centres the drawing in that band, at the right zoom', () => {
+  const offset = EXPLORER.slice(EXPLORER.indexOf('function cameraOffsetY('), EXPLORER.indexOf('function fitRatio()'));
+  assert.match(offset, /viewportToFramedGraph/);
+  // The shift is applied in the same setState as a new ratio, so it has to be
+  // expressed at the TARGET zoom -- computing it at the current one overshot by
+  // half again as much on a short window.
+  assert.match(offset, /perPixel \*= targetRatio \/ current/);
+  assert.match(EXPLORER, /y: 0\.5 \+ cameraOffsetY\(ratio\)/);
+  assert.match(EXPLORER, /y: display\.y \+ cameraOffsetY\(nextRatio\)/);
+});
+
+test('the fit ratio is deliberately not loosened to clear the chrome', () => {
+  // Measured, not assumed: loosening the fit so the whole drawing clears the
+  // chrome pulls nodes closer together, and labels then collide with each other
+  // instead. On 1440x900 that traded 2 hidden names for 5.
+  const fit = EXPLORER.slice(EXPLORER.indexOf('function fitRatio()'), EXPLORER.indexOf('function framedRatio()'));
+  assert.match(fit, /return FRAMED_RATIO;/);
 });

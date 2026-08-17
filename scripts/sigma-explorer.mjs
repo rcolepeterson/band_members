@@ -612,7 +612,95 @@ export function initSigmaExplorer({
 
   // How far out to sit for the current view: fit everything when that is
   // legible, otherwise show a region at a usable scale and let people pan.
+  /**
+   * How much of the canvas the chrome is sitting on, top and bottom, in pixels.
+   *
+   * The starfield is the whole page, so the hero and footer float over the
+   * drawing. Framing to the full viewport therefore aimed the graph at a
+   * rectangle whose top and bottom strips are occupied: nodes landed under the
+   * wordmark and the footer, and their names had to be suppressed to avoid
+   * printing through the text. Measuring the chrome instead lets the graph be
+   * framed into the space that is actually free.
+   */
+  function chromeInsets() {
+    const host = canvasHost.getBoundingClientRect();
+    const MARGIN = 12;
+    const measure = el => {
+      if (!el || el.hidden) return 0;
+      const r = el.getBoundingClientRect();
+      return r.width && r.height ? r : 0;
+    };
+    const hero = measure(heroEl);
+    const footer = measure(footerEl);
+    return {
+      top: hero ? Math.max(0, hero.bottom - host.top) + MARGIN : 0,
+      bottom: footer ? Math.max(0, host.bottom - footer.top) + MARGIN : 0,
+    };
+  }
+
+  /** The rectangle the graph is allowed to occupy, in canvas pixels. */
+  function safeArea() {
+    const host = canvasHost.getBoundingClientRect();
+    const insets = chromeInsets();
+    // Never let the chrome claim so much that there is nothing left to draw in;
+    // a very short window keeps a usable band in the middle.
+    const height = Math.max(host.height * 0.45, host.height - insets.top - insets.bottom);
+    const top = Math.min(insets.top, Math.max(0, host.height - height));
+    return { width: host.width, height, top, hostHeight: host.height };
+  }
+
+  /**
+   * Camera y shift, in framed graph units, that puts the middle of the drawing in
+   * the middle of the space the chrome leaves free rather than the middle of the
+   * window.
+   *
+   * Converted through viewportToFramedGraph rather than derived from the ratio,
+   * because that mapping already accounts for the current zoom and for Sigma's
+   * own framing of the graph into a unit square.
+   */
+  function cameraOffsetY(targetRatio = null) {
+    const area = safeArea();
+    const deltaPx = (area.top + area.height / 2) - area.hostHeight / 2;
+    if (!deltaPx) return 0;
+    const from = renderer.viewportToFramedGraph({ x: 0, y: 0 });
+    const to = renderer.viewportToFramedGraph({ x: 0, y: 100 });
+    let perPixel = (to.y - from.y) / 100;
+    if (!Number.isFinite(perPixel) || !perPixel) return 0;
+    // The mapping above describes the CURRENT zoom, but callers apply this shift
+    // in the same setState as a new ratio. Framed units per pixel scale with the
+    // ratio, so without this the shift was computed at the wrong zoom and
+    // overshot -- by half again as much on a short window.
+    const current = renderer.getCamera().getState().ratio || 1;
+    if (targetRatio && Number.isFinite(targetRatio) && current) {
+      perPixel *= targetRatio / current;
+    }
+    // Moving the camera's centre UP in framed space moves the drawing DOWN on
+    // screen, hence the negation.
+    return -deltaPx * perPixel;
+  }
+
+  /**
+   * The ratio at which a view counts as "fitted".
+   *
+   * Deliberately NOT loosened to make the whole drawing fit the band between the
+   * hero and the footer, which was the obvious next move and measured worse:
+   * zooming out to clear the chrome pulls the nodes closer together, so labels
+   * start colliding with EACH OTHER instead. On a 1440x900 window that traded 2
+   * hidden names for 5. The graph is centred in the band instead, and the few
+   * names that still land under the chrome are dropped by updateLabelBlocking().
+   */
+  function fitRatio() {
+    return FRAMED_RATIO;
+  }
+
   function framedRatio() {
+    // The FULL canvas, deliberately, not the band the chrome leaves free.
+    // Measuring the band here was the obvious move and it was wrong: framingRatio
+    // reads a smaller usable area as "fitting would not be legible" and zooms in
+    // on a region instead, which cut the opening view from 17 nodes on screen to
+    // 8. Nodes visible matters more than names hidden. The band is used for
+    // CENTRING (see cameraOffsetY), so the drawing sits in the clear space
+    // without being shrunk into it.
     const rect = canvasHost.getBoundingClientRect();
     return framingRatio({
       extent: state.layoutExtent,
@@ -621,13 +709,15 @@ export function initSigmaExplorer({
       // Selection grows a node by a quarter (see reduceNode), so frame for the
       // biggest a node can ever be drawn, not its resting size.
       maxNodeSize: LARGEST_NODE_SIZE * state.sizeScale * HIGHLIGHT_GROWTH,
-      baseRatio: FRAMED_RATIO,
+      baseRatio: fitRatio(),
     });
   }
 
   // Node radii are screen pixels, so how close nodes look depends on the
   // window as much as on the node count. Recomputed per view AND on resize.
   function applySizeScale(visibleCount = state.view ? state.view.nodes.length : 0) {
+    // Full canvas, for the same reason as framedRatio: sizing to the band shrank
+    // nodes and pulled their labels closer together.
     const rect = canvasHost.getBoundingClientRect();
     state.sizeScale = nodeSizeScale({
       visibleCount,
@@ -713,8 +803,10 @@ export function initSigmaExplorer({
     const ratio = framedRatio();
     if (animate) {
       flyTo(anchorId, { animate: true, ratio: Math.min(0.8, ratio) });
-    } else if (ratio >= FRAMED_RATIO - 1e-6) {
-      renderer.getCamera().setState({ x: 0.5, y: 0.5, ratio, angle: 0 });
+    } else if (ratio >= fitRatio() - 1e-6) {
+      // Centred in the space the chrome leaves free, not in the window: framing
+      // to the window put the top of the drawing under the wordmark.
+      renderer.getCamera().setState({ x: 0.5, y: 0.5 + cameraOffsetY(ratio), ratio, angle: 0 });
       positionOverlays();
     } else {
       flyTo(anchorId, { animate: false, ratio });
@@ -805,10 +897,13 @@ export function initSigmaExplorer({
     renderer.refresh();
     const display = renderer.getNodeDisplayData(id);
     if (!display) return;
+    const nextRatio = ratio || camera.getState().ratio || 1;
     const next = {
       x: display.x,
-      y: display.y,
-      ratio: ratio || camera.getState().ratio || 1,
+      // Same shift: centring on a node means centring it in the free band, not
+      // behind the wordmark.
+      y: display.y + cameraOffsetY(nextRatio),
+      ratio: nextRatio,
       angle: 0,
     };
     if (animate && typeof camera.animate === 'function') {
