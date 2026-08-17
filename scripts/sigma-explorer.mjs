@@ -89,6 +89,10 @@ const HOVER_PLATE_EDGE = 'rgba(143,232,246,0.45)';
 const HOVER_LABEL_COLOR = '#e8f6fa';
 const HOVER_GLOW = 'rgba(143,232,246,0.30)';
 
+// Upper bound on datalist options. Comfortably above the band count, low
+// enough that a pathological graph cannot stall the browser building the list.
+const MAX_SUGGESTIONS = 800;
+
 const SMALLEST_NODE_SIZE = Math.min(...Object.values(KIND_STYLE).map(style => style.size));
 const LARGEST_NODE_SIZE = Math.max(...Object.values(KIND_STYLE).map(style => style.size));
 
@@ -173,16 +177,44 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-focus-ring .focus-label{position:absolute;top:100%;left:50%;transform:translateX(-50%);
   margin-top:6px;white-space:nowrap;font-size:11.5px;letter-spacing:0.02em;
   color:#a8d7e0;opacity:0.9;text-shadow:0 0 6px rgba(8,11,17,0.95),0 0 12px rgba(8,11,17,0.85)}
-#${STAGE_ID} .sigma-prompt{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);
-  width:min(460px,86vw);display:flex;flex-direction:column;gap:6px;z-index:4}
-#${STAGE_ID} .sigma-prompt form{display:flex;gap:8px}
-#${STAGE_ID} .sigma-prompt input{flex:1;min-width:0;padding:11px 14px;border-radius:999px;
-  border:1px solid rgba(143,232,246,0.34);background:rgba(10,14,20,0.82);color:#e8eef6;
-  font-size:15px;backdrop-filter:blur(6px)}
-#${STAGE_ID} .sigma-prompt input::placeholder{color:#8b98a8}
-#${STAGE_ID} .sigma-prompt button{padding:11px 16px;border-radius:999px;border:1px solid rgba(143,232,246,0.34);
-  background:rgba(143,232,246,0.14);color:#d7f2f8;font-size:14px;cursor:pointer}
-#${STAGE_ID} .sigma-prompt .sigma-hint{text-align:center;font-size:12px;color:#8b98a8}
+/* The search prompt is the one thing a first-time visitor must not have to
+   look for, so it is scaled like a search homepage's field rather than like a
+   toolbar control: wide, tall enough to read as the primary action, and lifted
+   off the starfield with a shadow so it never competes with the threads behind
+   it. Sizes use clamp() so the same rule serves a phone and a desktop. */
+#${STAGE_ID} .sigma-prompt{position:absolute;left:50%;bottom:30px;transform:translateX(-50%);
+  width:min(620px,92vw);display:flex;flex-direction:column;gap:10px;z-index:4}
+#${STAGE_ID} .sigma-prompt form{display:flex;gap:10px;align-items:stretch}
+/* One explicit height for both controls, rather than letting each derive its
+   own from padding plus line-height: a button's content box does not resolve
+   the same way an input's does, and the two ended up 8px apart. Horizontal
+   padding only; vertical centring is done by the flex/line box. */
+#${STAGE_ID} .sigma-prompt input,
+#${STAGE_ID} .sigma-prompt button{height:clamp(48px,5.4vw,58px);box-sizing:border-box}
+#${STAGE_ID} .sigma-prompt input{flex:1;min-width:0;
+  padding:0 clamp(18px,2vw,24px);border-radius:999px;
+  border:1px solid rgba(143,232,246,0.38);background:rgba(10,14,20,0.86);color:#e8eef6;
+  /* Never below 16px: iOS Safari zooms the whole page when a focused input's
+     text is smaller than that, which yanks the constellation off screen. */
+  font-size:clamp(16px,1.7vw,18px);line-height:1.2;
+  box-shadow:0 8px 28px rgba(4,7,12,0.55);backdrop-filter:blur(6px);
+  transition:border-color 140ms ease, box-shadow 140ms ease}
+#${STAGE_ID} .sigma-prompt input::placeholder{color:#93a1b2}
+#${STAGE_ID} .sigma-prompt input:focus{outline:none;border-color:rgba(143,232,246,0.75);
+  box-shadow:0 8px 28px rgba(4,7,12,0.55),0 0 0 3px rgba(143,232,246,0.18)}
+#${STAGE_ID} .sigma-prompt button{flex:none;white-space:nowrap;
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:0 clamp(20px,2.4vw,30px);border-radius:999px;
+  border:1px solid rgba(143,232,246,0.42);background:rgba(143,232,246,0.18);color:#e2f7fc;
+  /* Matches the input's line-height so both controls compute to the same
+     height; a button's default "normal" line-height made it 8px taller. */
+  font-size:clamp(15px,1.6vw,17px);line-height:1.2;font-weight:500;letter-spacing:0.01em;cursor:pointer;
+  box-shadow:0 8px 28px rgba(4,7,12,0.45);transition:background 140ms ease, border-color 140ms ease}
+#${STAGE_ID} .sigma-prompt button:hover{background:rgba(143,232,246,0.28);
+  border-color:rgba(143,232,246,0.7)}
+#${STAGE_ID} .sigma-prompt button:focus-visible{outline:2px solid rgba(143,232,246,0.8);
+  outline-offset:2px}
+#${STAGE_ID} .sigma-prompt .sigma-hint{text-align:center;font-size:13px;color:#93a1b2}
 #${STAGE_ID} .sigma-expand{position:absolute;right:18px;bottom:26px;z-index:4;display:flex;
   flex-direction:column;align-items:flex-end;gap:6px}
 #${STAGE_ID} .sigma-expand button{padding:9px 14px;border-radius:999px;cursor:pointer;
@@ -192,7 +224,12 @@ const STAGE_CSS = `
   color:#9aa7b6;max-width:min(320px,60vw);line-height:1.45}
 #${STAGE_ID} .sigma-context strong{color:#dfe6ef;font-weight:500}
 @media (max-width:720px){
-  #${STAGE_ID} .sigma-prompt{bottom:78px;width:min(92vw,460px)}
+  #${STAGE_ID} .sigma-prompt{bottom:78px;width:min(94vw,620px);gap:8px}
+  #${STAGE_ID} .sigma-prompt form{gap:8px}
+  /* Keeps "Explore" from eating the field's width on a narrow phone, without
+     dropping the input's font below the 16px no-zoom threshold. */
+  #${STAGE_ID} .sigma-prompt button{padding:0 18px}
+  #${STAGE_ID} .sigma-prompt .sigma-hint{font-size:12px}
   #${STAGE_ID} .sigma-expand{right:12px;bottom:20px}
   #${STAGE_ID} .sigma-context{font-size:11px;max-width:70vw}
 }
@@ -282,6 +319,8 @@ export function initSigmaExplorer({
 
   const adjacency = buildAdjacency(master.nodes, master.links);
   const masterById = new Map(master.nodes.map(node => [node.id, node]));
+  // Computed once: updateChrome() runs on every view change, and this does not.
+  const bandNames = master.nodes.filter(node => node.type === 'band').map(node => node.id);
 
   // The silver ringed star belongs to ONE musician -- the project's default
   // anchor -- not to "wherever the camera happens to be". Someone who lands on
@@ -523,10 +562,22 @@ export function initSigmaExplorer({
     if (focusLabel) focusLabel.textContent = state.anchorId === homeStarId ? '' : state.anchorId;
     positionOverlays();
 
-    // Search suggestions: the frontier first (the natural next step), then a
-    // slice of the whole corpus. Never the entire 50K list.
-    const suggestions = [...view.frontier.slice(0, 40), ...master.nodes.slice(0, 200).map(n => n.id)];
-    datalist.innerHTML = Array.from(new Set(suggestions))
+    // Search suggestions, in alphabetical order.
+    //
+    // The list used to be ordered by relevance -- the frontier first, then an
+    // arbitrary slice of the corpus -- which reads as random the moment someone
+    // clicks the empty field and just looks at what is on offer. A browser
+    // datalist substring-filters as you type, so relevance ordering buys
+    // nothing once there is a query, and alphabetical is what a person scanning
+    // a list expects. Every band is offered (not a 200-node slice), plus the
+    // current frontier, so the natural next steps are always present.
+    //
+    // Musicians are deliberately not listed: 2,700 names would bury the bands,
+    // and typing any musician's name still resolves through resolveAnchor.
+    const suggestions = new Set([...view.frontier.slice(0, 40), ...bandNames]);
+    datalist.innerHTML = Array.from(suggestions)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }))
+      .slice(0, MAX_SUGGESTIONS)
       .map(id => `<option value="${escapeHtml(id)}"></option>`)
       .join('');
   }

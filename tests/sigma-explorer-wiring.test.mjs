@@ -316,3 +316,40 @@ test('overlay labels are not shouted in uppercase', () => {
   assert.ok(labelRules.length >= 2, `expected both overlay label rules, found ${labelRules.length}`);
   labelRules.forEach(rule => assert.doesNotMatch(rule, /text-transform:\s*uppercase/));
 });
+
+test('the search prompt is sized as the primary action, and never zooms iOS', () => {
+  // STAGE_CSS is a template literal, so every selector carries a `#${STAGE_ID}`
+  // interpolation whose braces would break naive rule matching. Flatten it.
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
+  const inputRule = css.match(/\.sigma-prompt input\{[^}]*\}/s);
+  assert.ok(inputRule, 'the prompt input needs a style rule');
+  // iOS Safari zooms the page when a focused input's text is under 16px, which
+  // throws the constellation off screen on the very first interaction.
+  const fontSize = inputRule[0].match(/font-size:clamp\((\d+)px/);
+  assert.ok(fontSize, 'the input font size should be a clamp() with a floor');
+  assert.ok(Number(fontSize[1]) >= 16, `input font floor is ${fontSize[1]}px, must be >= 16px`);
+  // A narrow phone plus generous padding is exactly where a button label wraps
+  // mid-word. The button's styling is spread over more than one rule (it shares
+  // its height with the input), so this checks their union rather than assuming
+  // which rule carries which property.
+  const buttonRules = (css.match(/[^{}]*\.sigma-prompt button[^{]*\{[^}]*\}/gs) || []).join('\n');
+  assert.ok(buttonRules, 'the prompt button needs a style rule');
+  assert.match(buttonRules, /white-space:nowrap/);
+  assert.match(buttonRules, /flex:none/);
+  // Both controls take their height from one declaration, so they cannot drift
+  // apart the way padding-derived heights did (the button rendered 8px taller).
+  assert.match(buttonRules, /height:clamp\(/);
+  const inputRules = (css.match(/[^{}]*\.sigma-prompt input[^{]*\{[^}]*\}/gs) || []).join('\n');
+  assert.match(inputRules, /height:clamp\(/);
+});
+
+test('search suggestions are alphabetical, and cover every band', () => {
+  // Clicking the empty field shows the list as-is, so DOM order IS the order the
+  // visitor reads. Relevance ordering (frontier first, then an arbitrary corpus
+  // slice) looked random in that moment.
+  assert.match(EXPLORER, /\.sort\(\(a, b\) => a\.localeCompare\(b, undefined, \{ sensitivity: 'base', numeric: true \}\)\)/);
+  // Every band, not a slice of the node list.
+  assert.match(EXPLORER, /const bandNames = master\.nodes\.filter\(node => node\.type === 'band'\)/);
+  assert.doesNotMatch(EXPLORER, /master\.nodes\.slice\(0, 200\)/);
+  assert.match(EXPLORER, /const MAX_SUGGESTIONS = \d+;/);
+});
