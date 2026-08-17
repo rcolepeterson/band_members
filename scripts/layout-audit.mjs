@@ -32,6 +32,8 @@
 //   - nodes rendered outside the viewport (camera framing too tight)
 //   - phantom overlays (an anchor star drawn for a node not in the view)
 //   - console errors and failed module loads
+//   - click-through: press each pill and measure what opens -- on screen, big
+//     enough to use, nothing covering it, its own text not overflowing
 //   - the stage chrome: prompt controls same height and row, shortcut pills
 //     big enough to tap with labels that neither wrap nor clip, and none of the
 //     page's own duplicate toolbar showing through
@@ -290,6 +292,87 @@ const MEASURE = limits => {
  * a screenshot had already missed it once.
  */
 /* c8 ignore start */
+// ---------------------------------------------------------------------------
+// Click-through pass.
+//
+// Two bugs shipped in one day that every other check called clean: the Filter
+// pill opened its panel just past the bottom of the window (top:910 in a 900px
+// viewport), and the "No Rawk Found" prompt never appeared because nothing
+// listened for the event that raises it. Both were invisible to the suite for
+// the same reason -- the tests drove the machinery directly (selectOption on a
+// <select>, functions called by name) instead of pressing the thing a visitor
+// presses and then looking at what came up.
+//
+// So this pass PRESSES each pill and asserts that whatever opens is actually
+// usable: on screen, big enough to read, and not buried under other chrome. It
+// deliberately measures the result rather than trusting an aria attribute -- the
+// Filter pill was setting aria-expanded="true" the whole time it was broken.
+// ---------------------------------------------------------------------------
+
+// Each pill, and the surface it should raise.
+const CLICK_THROUGH = [
+  { key: 'filter', opens: '.sigma-filters', label: 'Filter panel' },
+  { key: 'share', opens: '#share-popover', label: 'Share panel' },
+  { key: 'add', opens: '#add-band-popover', label: 'Add-band panel' },
+  { key: 'feedback', opens: '#feedback-popover', label: 'Feedback panel' },
+  // Not a pill: type a band that is not in the tree and press Explore. This is
+  // the other bug -- the "No Rawk Found" prompt with its offer to add the band
+  // existed and worked, but nothing listened for the miss, so it never appeared.
+  { search: 'Zzzz Not A Real Band', opens: '#graph-empty-state', label: 'No Rawk Found' },
+];
+
+const MEASURE_OPENED = (selector) => {
+  const el = document.querySelector(selector);
+  if (!el) return { problems: [`${selector} is not in the document`] };
+  if (el.hidden) return { problems: [`${selector} is still hidden after the click`] };
+  const cs = getComputedStyle(el);
+  if (cs.display === 'none') return { problems: [`${selector} is display:none after the click`] };
+  if (cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.05) {
+    return { problems: [`${selector} is invisible after the click`] };
+  }
+
+  const problems = [];
+  const r = el.getBoundingClientRect();
+  const box = `${Math.round(r.width)}x${Math.round(r.height)} at ${Math.round(r.left)},${Math.round(r.top)}`;
+
+  // The bug that started this: a panel that opens outside the window.
+  const margin = -1;
+  if (r.width < 40 || r.height < 40) problems.push(`opened at ${box}, too small to be usable`);
+  if (r.top < margin) problems.push(`opened ${Math.round(-r.top)}px above the top of the window (${box})`);
+  if (r.left < margin) problems.push(`opened ${Math.round(-r.left)}px left of the window (${box})`);
+  if (r.bottom > window.innerHeight - margin) {
+    problems.push(`opened ${Math.round(r.bottom - window.innerHeight)}px below the bottom of the window (${box})`);
+  }
+  if (r.right > window.innerWidth - margin) {
+    problems.push(`opened ${Math.round(r.right - window.innerWidth)}px right of the window (${box})`);
+  }
+
+  // Reachable by a pointer: something else on top of the middle of the panel
+  // means a visitor clicks that instead. Skips panels taller than the window,
+  // which scroll internally and legitimately start under the hero.
+  const cx = Math.round(r.left + r.width / 2);
+  const cy = Math.round(r.top + Math.min(r.height / 2, 40));
+  if (r.height <= window.innerHeight && cx > 0 && cy > 0) {
+    const hit = document.elementFromPoint(cx, cy);
+    if (hit && !el.contains(hit) && hit !== el) {
+      problems.push(`${hit.tagName.toLowerCase()}.${(hit.className || '').toString().split(' ')[0]} covers it`);
+    }
+  }
+
+  // Its own text has to fit: a heading clipped by the panel edge is the same
+  // class of fault as a label printing over the footer.
+  el.querySelectorAll('h1, h2, h3, h4, p, label, button, .share-popover-title').forEach(child => {
+    if (!child.textContent.trim() || child.children.length) return;
+    const cr = child.getBoundingClientRect();
+    if (!cr.width || !cr.height) return;
+    if (cr.right > r.right + 1 || cr.left < r.left - 1) {
+      problems.push(`"${child.textContent.trim().slice(0, 24)}" overflows the panel horizontally`);
+    }
+  });
+
+  return { problems, metrics: { box } };
+};
+
 const MEASURE_CHROME = () => {
   const stage = document.getElementById('sigma-stage');
   if (!stage) return { problems: ['no sigma stage on the page'] };
@@ -489,6 +572,7 @@ const MEASURE_LABELS = () => {
 let failures = 0;
 const rows = [];
 const chromeRows = [];
+const clickRows = [];
 const labelRows = [];
 
 for (const dataset of DATASETS) {
@@ -529,6 +613,52 @@ for (const viewport of VIEWPORTS) {
   const chrome = await page.evaluate(MEASURE_CHROME);
   chromeRows.push({ label: `${dataset.label}  ${viewport.label}`, ...chrome });
   if (chrome.problems.length) failures += 1;
+
+  // Press every pill and look at what comes up. See CLICK_THROUGH.
+  for (const item of CLICK_THROUGH) {
+    const trigger = `.sigma-action[data-key="${item.key}"]`;
+    const label = `${dataset.label}  ${viewport.label} / ${item.label}`;
+    let result;
+    try {
+      if (item.search) {
+        // Search the way a visitor does, through the field and the button.
+        await page.fill('.sigma-prompt input', item.search);
+        await page.click('.sigma-prompt form button[type="submit"]');
+        await page.waitForTimeout(900);
+        result = await page.evaluate(MEASURE_OPENED, item.opens);
+      } else {
+      const present = await page.$(trigger);
+      if (!present) {
+        result = { problems: [`no ${item.key} pill to press`] };
+      } else {
+        // A real press, at the pill's own coordinates, so anything covering the
+        // pill fails here rather than being bypassed by a synthetic event.
+        await page.click(trigger, { timeout: 5000 });
+        await page.waitForTimeout(650);
+        result = await page.evaluate(MEASURE_OPENED, item.opens);
+      }
+      }
+    } catch (error) {
+      const what = item.search ? `searching for "${item.search}"` : `pressing the ${item.key} pill`;
+      result = { problems: [`${what} failed: ${error.message.split('\n')[0]}`] };
+    }
+    clickRows.push({ label, ...result });
+    if (result.problems.length) failures += 1;
+    if (SHOTS) {
+      await page.screenshot({ path: `${SHOTS}/${label.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.png` });
+    }
+    // Close it again so the next pill starts from a clean stage.
+    await page.keyboard.press('Escape').catch(() => {});
+    await page.waitForTimeout(350);
+    await page.evaluate(() => {
+      // Escape does not close every panel; hide any that are still up.
+      ['.sigma-filters', '#share-popover', '#add-band-popover', '#feedback-popover', '#graph-empty-state']
+        .forEach(sel => { const el = document.querySelector(sel); if (el && !el.hidden) el.hidden = true; });
+      const field = document.querySelector('.sigma-prompt input');
+      if (field) field.value = '';
+    });
+    await page.waitForTimeout(250);
+  }
 
   for (const state of STATES) {
     for (const [action, argument] of state.steps) {
@@ -603,6 +733,13 @@ chromeRows.forEach(({ label, problems, metrics }) => {
   problems.forEach(problem => console.log(`        - ${problem}`));
 });
 
-const checks = rows.length + chromeRows.length + labelRows.length;
+console.log('\nClick-through  --  press each pill, measure what opens\n');
+clickRows.forEach(({ label, problems, metrics }) => {
+  const summary = metrics ? metrics.box : 'did not open';
+  console.log(`${problems.length ? 'FAIL' : 'ok  '}  ${label.padEnd(40)} ${summary}`);
+  problems.forEach(problem => console.log(`        - ${problem}`));
+});
+
+const checks = rows.length + chromeRows.length + labelRows.length + clickRows.length;
 console.log(`\n${checks - failures}/${checks} checks clean`);
 process.exit(failures ? 1 : 0);

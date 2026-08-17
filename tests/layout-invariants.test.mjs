@@ -196,3 +196,60 @@ test('the production snapshot holds a real graph and no personal data', () => {
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// The click-through pass.
+//
+// Two bugs shipped in one day that every other check called clean: the Filter
+// pill opened its panel just past the bottom of the window (top:910 in a 900px
+// viewport), and the "No Rawk Found" prompt never appeared because nothing
+// listened for the event that raises it. Both were invisible for the same
+// reason -- the tests drove the machinery directly (selectOption on a <select>,
+// functions called by name) instead of pressing what a visitor presses and then
+// looking at what came up. These pin the pass that closes that gap.
+// ---------------------------------------------------------------------------
+
+test('the audit presses every pill and measures what opens', () => {
+  assert.match(AUDIT, /const CLICK_THROUGH = \[/);
+  for (const key of ['filter', 'share', 'add', 'feedback']) {
+    assert.match(AUDIT, new RegExp(`key: '${key}'`), `${key} must be pressed`);
+  }
+  // A real press at the pill's own coordinates, so anything covering the pill
+  // fails here instead of being bypassed by a synthetic event.
+  assert.match(AUDIT, /await page\.click\(trigger, \{ timeout: 5000 \}\)/);
+  // The search miss is a flow, not a pill: type a band that is not in the tree.
+  assert.match(AUDIT, /search: 'Zzzz Not A Real Band', opens: '#graph-empty-state'/);
+  assert.match(AUDIT, /await page\.fill\('\.sigma-prompt input', item\.search\)/);
+});
+
+test('opening a panel off screen is a failure, not a pass', () => {
+  // The exact fault: aria-expanded said true, the selects were populated, and
+  // the panel was 279px below the bottom of the window.
+  assert.match(AUDIT, /below the bottom of the window/);
+  assert.match(AUDIT, /above the top of the window/);
+  assert.match(AUDIT, /left of the window/);
+  assert.match(AUDIT, /right of the window/);
+  // And the other fault: raised nothing at all.
+  assert.match(AUDIT, /is still hidden after the click/);
+  assert.match(AUDIT, /is not in the document/);
+});
+
+test('the click-through measures the result, not an aria attribute', () => {
+  // The Filter pill set aria-expanded="true" for the entire time it was broken,
+  // so believing the trigger would have kept the gate green.
+  const measure = AUDIT.slice(AUDIT.indexOf('const MEASURE_OPENED'), AUDIT.indexOf('const MEASURE_CHROME'));
+  assert.doesNotMatch(measure, /aria-expanded/);
+  assert.match(measure, /getBoundingClientRect\(\)/);
+  // Reachable by a pointer: something drawn on top of the panel means a visitor
+  // clicks that instead.
+  assert.match(measure, /document\.elementFromPoint\(cx, cy\)/);
+  assert.match(measure, /covers it/);
+  // Too small to use counts as broken too.
+  assert.match(measure, /too small to be usable/);
+});
+
+test('every opened panel is counted in the audit total', () => {
+  // A pass whose results are printed but not counted is decoration.
+  assert.match(AUDIT, /const checks = rows\.length \+ chromeRows\.length \+ labelRows\.length \+ clickRows\.length;/);
+  assert.match(AUDIT, /if \(result\.problems\.length\) failures \+= 1;/);
+});
