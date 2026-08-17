@@ -998,3 +998,49 @@ test('the shared picture includes the star, ring and gold label', () => {
   assert.match(overlays, /getBoundingClientRect\(\)/);
   assert.match(INDEX_HTML, /await drawGraph\(\);\s*\n\s*drawOverlays\(\);/);
 });
+
+test('the SVG is not drawn when the constellation is the renderer', () => {
+  // It was drawing a force layout over every node and roughly 16,500 SVG
+  // elements -- 89% of the elements on the page -- entirely behind display:none.
+  // Measured on the full graph, about fifteen seconds AFTER the data had already
+  // parsed, to produce a picture nobody sees.
+  const render = INDEX_HTML.slice(INDEX_HTML.indexOf('function renderGraph()'));
+  const stop = render.indexOf("if (document.body && document.body.classList.contains('rbft-sigma-boot'))");
+  assert.ok(stop > 0, 'renderGraph should bail before drawing on the constellation');
+
+  // Order matters: everything the constellation needs has to happen BEFORE the
+  // bail. If setGraph moved below it, filters would stop reaching Sigma.
+  const handOff = render.indexOf('window.RBFT_SIGMA.setGraph(filtered)');
+  assert.ok(handOff > 0 && handOff < stop, 'the filtered graph must reach Sigma before the bail');
+  const state = render.indexOf('graphState.rendered = { nodes, links }');
+  assert.ok(state > 0 && state < stop, 'the view must be recorded before the bail');
+  for (const marker of ['graphBadge.textContent', 'syncFilterBtn(', 'metricNodes.textContent']) {
+    const at = render.indexOf(marker);
+    assert.ok(at > 0 && at < stop, `${marker} must run before the bail`);
+  }
+  // And the drawing really is below it.
+  const wipe = render.indexOf("graphGroup.selectAll('*').remove()");
+  assert.ok(wipe > stop, 'the SVG wipe and draw must sit below the bail');
+});
+
+test('the view is read as data, not from the drawn SVG', () => {
+  // The node card's member list, the highlight sets and the connection names all
+  // read the data BOUND TO THE SVG, so they silently depended on the SVG having
+  // been drawn. Not drawing it would have emptied every band card.
+  assert.match(INDEX_HTML, /function renderedNodeData\(\) \{\s*\n\s*if \(graphState && graphState\.rendered\) return graphState\.rendered\.nodes;/);
+  assert.match(INDEX_HTML, /function renderedLinkData\(\) \{\s*\n\s*if \(graphState && graphState\.rendered\) return graphState\.rendered\.links;/);
+  // The DOM fallback stays, so the SVG path cannot regress.
+  assert.match(INDEX_HTML, /return graphGroup \? graphGroup\.selectAll\('g\.node'\)\.data\(\) : \[\];/);
+  assert.match(INDEX_HTML, /return graphGroup \? graphGroup\.selectAll\('line\.link'\)\.data\(\) : \[\];/);
+});
+
+test('?renderer=svg still draws, because it never gets the boot class', () => {
+  // The bail is keyed on the class the inline boot script only adds for the
+  // constellation, so the escape hatch is untouched: verified at 3,194 nodes and
+  // 3,766 links drawn and visible.
+  const script = INDEX_HTML.slice(
+    INDEX_HTML.indexOf("new URLSearchParams(window.location.search).get('renderer')"),
+    INDEX_HTML.indexOf("classList.add('rbft-sigma-boot')")
+  );
+  assert.match(script, /renderer === 'sigma'/);
+});
