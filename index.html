@@ -39,6 +39,26 @@
   <meta name="twitter:image" content="https://bandmembers.netlify.app/og-image.png" />
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <!-- Import map for the Sigma renderer's ES modules (issue #80).
+       Bare specifiers, in one reviewable place, pinned to the same versions as
+       the devDependencies in package.json (asserted by
+       tests/sigma-explorer-wiring.test.mjs). Mapping "sigma" once guarantees
+       every module shares ONE Sigma instance rather than each CDN URL pulling
+       its own copy, and the trailing-slash entries let a module import a
+       subpath like "sigma/rendering" through the same pinned copy.
+       Inert for anyone not using ?renderer=sigma: an import map costs nothing
+       until a module actually imports something. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "sigma": "https://esm.sh/sigma@3.0.3",
+      "sigma/": "https://esm.sh/sigma@3.0.3/",
+      "graphology": "https://esm.sh/graphology@0.26.0",
+      "graphology/": "https://esm.sh/graphology@0.26.0/"
+    }
+  }
+  </script>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=boska@400,500,700&display=swap">
   <style>
@@ -816,13 +836,37 @@ body {
    `hidden` never held either. Restoring `display: none` for [hidden]
    makes setSignedInState() the real owner of visibility again.
 
-   Scoped to the three affected classes rather than a blanket
+   Scoped to the affected classes rather than a blanket
    `[hidden] { display: none !important }` so this cannot retroactively
    hide anything else on the page that relies on the same (bad) pattern.
+
+   Two more instances of the identical bug, found by
+   tests/hidden-attribute.test.mjs after the pencil was reported visible
+   while signed out:
+
+     .node-card__edit     -> display: inline-flex  (node card)
+     .member-row-remove   -> display: inline-flex  (submission form rows)
+
+   .node-card__edit: renderEditAffordances() sets `.hidden = !canEdit`, so
+   the "Edit this band" pencil was correctly marked hidden for signed-out
+   visitors and rendered anyway -- and since the same function only binds
+   onclick when the user can edit, clicking it did nothing at all. A
+   visitor reads that as the app being broken.
+
+   .member-row-remove: the first member row's remove button ships hidden in
+   the markup precisely so the only row cannot be deleted (addMemberRow()
+   un-hides it on every row after the first). With the attribute inert, the
+   x has been showing on that first row, letting someone empty the roster.
+
+   Scoping is now safe to keep, because the test above enforces the
+   invariant for every markup-hidden element on the page instead of relying
+   on someone remembering this comment.
    -------------------------------------------------------------------- */
 .header-btn[hidden],
 .header-user[hidden],
-.mobile-sheet-add-band[hidden] { display: none !important; }
+.mobile-sheet-add-band[hidden],
+.node-card__edit[hidden],
+.member-row-remove[hidden] { display: none !important; }
 
 /* --------------------------------------------------------------------
    Stats HUD vs. the top toolbar (tester feedback after #76).
@@ -3309,6 +3353,56 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     let graphGroup = null;
     let zoomBehavior = null;
     let graphState = null;
+
+    // ---------------------------------------------------------------------
+    // Sigma renderer bridge (issue #80).
+    //
+    // The Sigma neighborhood explorer lives in scripts/sigma-explorer.mjs --
+    // a real ES module, which this classic script cannot import. Rather than
+    // duplicating the data pipeline over there, we publish the master graph
+    // on window and announce it once; the module waits for that event (see
+    // bootFromPage) so both renderers always draw exactly the same data.
+    //
+    // Cost when the flag is absent: none. The module reads ?renderer= and
+    // returns immediately unless it is 'sigma'.
+    // ---------------------------------------------------------------------
+    /**
+     * The URL to hand someone else for THIS view.
+     *
+     * Sharing is the main way people arrive -- a link from another user, not a
+     * visit to the front door -- so a shared link has to reproduce what the
+     * sharer was looking at. This used to be origin + pathname, which threw the
+     * query string away: whatever you were centred on, your friend landed on the
+     * default anchor.
+     *
+     * Only view-defining parameters are carried, and only ones the app actually
+     * reads (see resolveAnchor / rendererFromSearch), so a link cannot smuggle
+     * anything else along.
+     */
+    const SHAREABLE_PARAMS = ['renderer', 'anchor', 'band', 'member', 'node', 'person'];
+    function shareableUrl() {
+      const base = window.location.origin + window.location.pathname;
+      const source = new URLSearchParams(window.location.search);
+      const kept = new URLSearchParams();
+      SHAREABLE_PARAMS.forEach(key => {
+        const value = source.get(key);
+        if (value) kept.set(key, value);
+      });
+      const query = kept.toString();
+      return query ? `${base}?${query}` : base;
+    }
+
+    function publishMasterGraph(master) {
+      if (!master) return;
+      try {
+        window.RBFT_MASTER_GRAPH = master;
+        window.dispatchEvent(new CustomEvent('rbft:graph-ready', {
+          detail: { nodeCount: master.nodes.length, linkCount: master.links.length }
+        }));
+      } catch (error) {
+        console.warn('Could not publish the master graph to the Sigma renderer.', error);
+      }
+    }
     let currentScene = 'all';
     let currentGenre = 'all';
     let currentSearch = '';
@@ -3454,7 +3548,7 @@ if (shareGraphBtn) {
 async function tryNativeShare() {
   const svg = document.getElementById('graph-svg');
   if (!svg) return false;
-  const siteUrl = window.location.origin + window.location.pathname;
+  const siteUrl = shareableUrl();
   const pngBlob = await renderGraphPngBlob();
   if (!pngBlob) return false;
   const file = new File([pngBlob], 'rock-band-family-tree.png', { type: 'image/png' });
@@ -3529,7 +3623,7 @@ if (copySiteLinkBtn) {
 // For each: intent URL uses the platform's documented endpoint format
 // (won't break — these have been stable for years).
 async function shareToSocial(platform) {
-  const siteUrl = window.location.origin + window.location.pathname;
+  const siteUrl = shareableUrl();
   const title = 'Rock Band Family Tree';
   const caption = 'Explore how bands and musicians connect across scenes and decades.';
   const platformName = platform === 'x' ? 'X' : platform.charAt(0).toUpperCase() + platform.slice(1);
@@ -3848,7 +3942,7 @@ function downloadPngBlob(blob) {
     async function renderGraphPngBlob() {
       const svg = document.getElementById('graph-svg');
       if (!svg) return null;
-      const siteUrl = window.location.origin + window.location.pathname;
+      const siteUrl = shareableUrl();
       const rect = svg.getBoundingClientRect();
 
       // Aspect-ratio-preserving sizing. Previous version used
@@ -3950,7 +4044,7 @@ function downloadPngBlob(blob) {
         setShareFeedback('Graph preview is not available yet.');
         return;
       }
-      const siteUrl = window.location.origin + window.location.pathname;
+      const siteUrl = shareableUrl();
       // Delegate the actual canvas drawing to renderGraphPngBlob() —
       // one source of truth for header/footer/aspect-ratio math shared
       // with copyGraphPngToClipboard(), tryNativeShare(), and
@@ -4076,7 +4170,7 @@ function downloadPngBlob(blob) {
       // Always the bare main-site URL (no filter/hash state) so the
       // recipient lands on the full graph and can start exploring, not
       // stuck in someone else's filter.
-      const siteUrl = window.location.origin + window.location.pathname;
+      const siteUrl = shareableUrl();
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(siteUrl).then(() => {
           setShareFeedback('Main site link copied to your clipboard.');
@@ -8597,6 +8691,7 @@ function downloadPngBlob(blob) {
         await loadGraphData().then(rows => {
           const master = buildMasterGraph(rows);
           graphState = { master };
+          publishMasterGraph(master);
           renderGraph();
         });
 
@@ -8849,6 +8944,7 @@ function downloadPngBlob(blob) {
       rebuildInstrumentDatalist();
       rebuildGenreDatalist();
       graphState = { master };
+      publishMasterGraph(master);
 
       // PR 4b: fetch every band's cached verification status in one batch
       // call, BEFORE the first renderGraph() below, so silver-star badges
@@ -9084,7 +9180,7 @@ function downloadPngBlob(blob) {
               // the desktop share popover on mobile because it's
               // anchored to a hidden toolbar.
               try {
-                const siteUrl = window.location.origin + window.location.pathname;
+                const siteUrl = shareableUrl();
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                   await navigator.clipboard.writeText(siteUrl);
                 }
@@ -9678,5 +9774,11 @@ function downloadPngBlob(blob) {
       graphBadge.textContent = 'Graph unavailable';
     });
   </script>
+
+  <!-- Sigma.js neighborhood explorer (issue #80). OFF by default: the module
+       checks ?renderer= and returns immediately unless it is 'sigma', so the
+       shipped SVG renderer is untouched for normal visitors. Opt in with
+       ?renderer=sigma; the SVG path stays reachable at ?renderer=svg. -->
+  <script type="module" src="scripts/sigma-explorer.mjs"></script>
 </body>
 </html>

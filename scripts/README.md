@@ -116,3 +116,60 @@ npm test
 ```
 
 Runs 68 tests. The 24 new tests in `tests/pipeline-helpers.test.mjs` cover name normalization, tenure formatting, confidence scoring, and CSV emission. Network layers (MusicBrainz + Wikipedia clients) are intentionally not mocked — the pipeline reads them from cache during dry runs.
+
+
+## Layout quality harnesses (Sigma explorer, issue #80)
+
+The Sigma neighborhood layout is checked by two harnesses instead of by looking
+at screenshots. Both were added after a run of layout bugs -- overlapping
+members, missing names, nodes sitting on unrelated edges, a phantom anchor star
+-- each of which was a property we could have stated up front.
+
+### `npm test` -> tests/layout-invariants.test.mjs
+
+Pure geometry, no browser, runs in CI on every push. Sweeps a matrix of graph
+shapes x anchors x hop/node budgets and asserts:
+
+- every visible node gets a position, and no two share coordinates
+- no two nodes are closer than the separation floor
+- no edge passes through a node it is not attached to, measured against the
+  CURVE that actually gets drawn
+- each degree of separation reads as further from the anchor
+- nothing unrelated crosses the anchor
+- the same view produces identical coordinates every time
+
+Graph shapes live in `tests/helpers/layout-checks.mjs`, including
+`tests/fixtures/live-graph-sample.json` -- a trimmed snapshot of the real graph,
+because live data takes lopsided, cross-linked shapes no hand-written fixture
+thought of. **When a layout bug is reported, add the shape that produced it.**
+
+`KNOWN_TIGHT` in the test file records the handful of dense real-data views that
+still have tight spots, with an allowance each: a regression fails, and so does
+an improvement (with a message telling you to lower the number).
+
+### `npm run audit:layout` -> scripts/layout-audit.mjs
+
+The same properties in real rendered pixels, because only a live page knows node
+radii, label culling and camera framing. Needs a local Chromium; not in CI.
+
+    npm run audit:layout                          # against http://127.0.0.1:8123
+    node scripts/layout-audit.mjs --url https://deploy-preview-81--bandmembers.netlify.app/
+    node scripts/layout-audit.mjs --shots ./audit-shots
+
+Sweeps viewport sizes (including a tall window and a phone) x view states
+(opening, highlight, search, expanded, expanded twice) and additionally catches
+unnamed nodes, clipped labels, phantom overlays and console errors.
+
+### `npm run test:layout` -> scripts/layout-tune.mjs
+
+Sweeps layout tuning constants against the invariant checks and reports which
+combinations are clean, so the constants are chosen by measurement rather than by
+feel. `--current` just checks today's defaults.
+
+### Refreshing the live fixture
+
+Serve the site locally, then in a scratch script with `playwright-core`, load
+`?renderer=sigma`, read `window.RBFT_MASTER_GRAPH`, trim it to the multi-hop
+neighbourhoods of a few interesting anchors, and write
+`tests/fixtures/live-graph-sample.json`. Keep it small -- it exists to be
+representative, not complete.

@@ -2,16 +2,22 @@
   "name": "band-members",
   "version": "1.0.0",
   "private": true,
-  "description": "Rock Band Family Tree — static site with a Netlify Functions + Netlify Blobs backend for shared band submissions.",
+  "description": "Rock Band Family Tree \u2014 static site with a Netlify Functions + Netlify Blobs backend for shared band submissions.",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/"
+    "test": "node --test tests/",
+    "test:layout": "node scripts/layout-tune.mjs --current",
+    "audit:layout": "node scripts/layout-audit.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "@netlify/blobs": "^8.1.0"
   },
   "devDependencies": {
-    "d3": "^7.9.0"
+    "d3": "^7.9.0",
+    "graphology": "^0.26.0",
+    "graphology-shortest-path": "^2.1.0",
+    "sigma": "^3.0.3",
+    "playwright-core": "^1.56.0"
   }
 }
