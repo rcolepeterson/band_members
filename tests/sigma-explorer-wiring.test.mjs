@@ -680,7 +680,8 @@ test('blocking is recomputed when the chrome moves, not only per frame', () => {
   // under labels that were already placed. Sigma does not draw a frame for a DOM
   // reflow, so waiting for afterRender left a label across the footer.
   assert.match(EXPLORER, /new ResizeObserver\(\(\) => updateLabelBlocking\(\)\)/);
-  assert.match(EXPLORER, /\[heroEl, footerEl, homeLabelEl\]\.forEach\(el => \{ if \(el\) chromeObserver\.observe\(el\); \}\)/);
+  // The node card joined this list: it is chrome too while it is docked open.
+  assert.match(EXPLORER, /\[heroEl, footerEl, homeLabelEl, nodeCardEl\]\.forEach\(el => \{ if \(el\) chromeObserver\.observe\(el\); \}\)/);
   assert.match(EXPLORER, /if \(chromeObserver\) chromeObserver\.disconnect\(\)/);
   // And once more right after the chrome's own text is written.
   const chrome = EXPLORER.slice(EXPLORER.indexOf('function updateChrome()'), EXPLORER.indexOf('// -- camera'));
@@ -720,4 +721,76 @@ test('the filter panel reuses the page\'s own controls', () => {
   // Same click-propagation trap as the pills.
   const panel = EXPLORER.slice(EXPLORER.indexOf("filterPanel.addEventListener('click'"), EXPLORER.indexOf('function runAction'));
   assert.match(panel, /event\.stopPropagation\(\)/);
+});
+
+test('one click both travels and leaves the card open', () => {
+  // The card needed a SECOND click to appear, and the cause was event ORDER.
+  // The page closes any open card on rbft:sigma-travel, because the view that
+  // card described is gone. highlightFrom() dispatches rbft:sigma-select, which
+  // opens the card for the clicked node. Travel was announced AFTER the
+  // highlight, so it closed the card that had just been opened -- and only a
+  // second click, which is not travel and therefore only re-highlights, made it
+  // stick. Stale card closes first, new card opens second.
+  const travel = EXPLORER.slice(EXPLORER.indexOf('function travelTo(node)'), EXPLORER.indexOf("renderer.on('clickNode'"));
+  const dispatchAt = travel.indexOf("'rbft:sigma-travel'");
+  const highlightAt = travel.indexOf('if (moved) highlightFrom(node)');
+  assert.ok(dispatchAt > 0 && highlightAt > 0, 'travelTo should both announce travel and re-highlight');
+  assert.ok(dispatchAt < highlightAt, 'travel must be announced BEFORE the highlight reopens the card');
+});
+
+test('the docked node card counts as chrome while it is open', () => {
+  // It sits over the constellation, so a label underneath it would look culled
+  // for no reason -- the same fault as the hero and the footer, with a box that
+  // comes and goes.
+  const block = EXPLORER.slice(EXPLORER.indexOf('function updateLabelBlocking()'), EXPLORER.indexOf('function updateParallax()'));
+  assert.match(block, /nodeCardEl && !nodeCardEl\.hidden && nodeCardEl\.classList\.contains\('is-open'\)/);
+  assert.match(block, /addZone\(nodeCardEl\)/);
+  // Closing it is a class change, not a resize, so the size observer can miss it.
+  assert.match(EXPLORER, /cardStateObserver/);
+  assert.match(EXPLORER, /attributeFilter: \['class', 'hidden', 'style'\]/);
+  assert.match(EXPLORER, /if \(cardStateObserver\) cardStateObserver\.disconnect\(\)/);
+});
+
+test('the card docks to a corner on the constellation', () => {
+  // Clicking a node now flies the camera AND opens the card, so a node-anchored
+  // card would ride along with the flight and land under the hero or footer.
+  assert.match(EXPLORER, /body\.\$\{BODY_ACTIVE_CLASS\} \.node-card\{position:fixed/);
+  // The mobile bottom sheet still wins below 700px, where a corner card would
+  // cover the graph it describes.
+  assert.match(EXPLORER, /@media \(min-width:701px\)\{[\s\S]*?body\.\$\{BODY_ACTIVE_CLASS\} \.node-card\{/);
+  // CSS owns the position, so the page's node-following geometry must stand down.
+  assert.match(INDEX_HTML, /if \(document\.body && document\.body\.classList\.contains\('rbft-sigma-chrome'\)\) \{[\s\S]*?nodeCardEl\.style\.left = '';/);
+});
+
+test('relocated panels are restored to wherever they now live', () => {
+  // hookPopoverForMobile captured its parent at startup and a MutationObserver
+  // kept restoring it. The Sigma chrome MOVES these panels into its stage and
+  // hides the toolbar they came from, so "restoring" posted Add and Feedback
+  // back inside a display:none ancestor: both pills opened a panel that measured
+  // 0x0 and never appeared. Share was never hooked here, which is exactly why
+  // Share was the only one of the three that worked.
+  assert.match(INDEX_HTML, /function currentHome\(\)/);
+  assert.match(INDEX_HTML, /if \(stage && document\.body\.classList\.contains\('rbft-sigma-chrome'\)\) return stage;/);
+  assert.match(INDEX_HTML, /const home = currentHome\(\);/);
+});
+
+test('cards and popovers are radiused rectangles, not chamfered ones', () => {
+  // They were border-radius:0 plus a clip-path polygon cutting each corner at 45
+  // degrees. The shape read as a cut-off rectangle, and the diagonal sliced
+  // through the padding so text near a corner sat closer to the visible edge
+  // than the box model claimed.
+  const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
+  assert.doesNotMatch(css, /clip-path:\s*polygon/, 'no chamfered corners should remain');
+  assert.match(INDEX_HTML, /--radius-card: 12px;/);
+  assert.match(INDEX_HTML, /--radius-control: 8px;/);
+});
+
+test('the shared glass popover style carries its own padding', () => {
+  // .share-popover -- used by Share, Add your band and Feedback -- set colour,
+  // border and shadow but no padding at all, so every line sat one pixel off the
+  // border. Padding belongs on the shared style, not on each of the three
+  // panels; that is how it went missing in the first place.
+  const share = INDEX_HTML.slice(INDEX_HTML.indexOf('.share-popover {'));
+  const firstRule = share.slice(0, share.indexOf('}'));
+  assert.match(firstRule, /padding: 1\.1rem 1\.15rem 1\.15rem;/);
 });

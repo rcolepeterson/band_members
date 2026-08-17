@@ -244,7 +244,7 @@ const STAGE_CSS = `
 
 #${STAGE_ID} .sigma-filters{position:absolute;left:50%;transform:translateX(-50%);
   top:calc(100% + 10px);width:min(420px,92vw);z-index:7;padding:16px 18px 18px;
-  border-radius:16px;border:1px solid rgba(143,232,246,0.3);background:rgba(9,12,18,0.97);
+  border-radius:var(--radius-card,12px);border:1px solid rgba(143,232,246,0.3);background:rgba(9,12,18,0.97);
   box-shadow:0 18px 44px rgba(3,6,10,0.7);display:flex;flex-direction:column;gap:12px;
   text-align:left}
 #${STAGE_ID} .sigma-filters[hidden]{display:none}
@@ -254,7 +254,7 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-filters__close:hover{color:#e6f1f8}
 #${STAGE_ID} .sigma-filters__slot label{display:block;margin-bottom:5px;font-size:12px;color:#93a1b2}
 #${STAGE_ID} .sigma-filters__slot select{width:100%;min-height:42px;margin:0;
-  border-radius:10px;border:1px solid rgba(190,206,224,0.24);background:rgba(14,19,26,0.92);
+  border-radius:var(--radius-control,8px);border:1px solid rgba(190,206,224,0.24);background:rgba(14,19,26,0.92);
   color:#e2ecf5;font-size:14px;padding:0 10px}
 #${STAGE_ID} .sigma-filters__row{display:flex;gap:8px;flex-wrap:wrap}
 #${STAGE_ID} .sigma-filters__row button{flex:1;min-width:130px;min-height:42px;margin:0;
@@ -306,7 +306,7 @@ const STAGE_CSS = `
   /* max-content so the sentence sets its own width up to the cap; without it the
      popover shrank to the space left of wherever it was previously placed. */
   width:max-content;max-width:min(280px,80vw);
-  padding:9px 12px;border-radius:12px;border:1px solid rgba(143,232,246,0.34);
+  padding:9px 12px;border-radius:var(--radius-card,12px);border:1px solid rgba(143,232,246,0.34);
   background:rgba(9,12,18,0.97);color:#dce9f3;font-size:13px;line-height:1.4;
   box-shadow:0 10px 30px rgba(3,6,10,0.7);pointer-events:none}
 #${STAGE_ID} .sigma-tip[hidden]{display:none}
@@ -382,6 +382,24 @@ body.${BODY_ACTIVE_CLASS} .site-header .header-inner{padding:0;max-width:none}
 /* The stage is fixed to the viewport, so the page behind it must not scroll a
    dark panel out from under the constellation. */
 body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
+
+/* The node card, docked. Clicking a band or musician now flies the camera AND
+   opens its card in one action, so the card cannot be anchored to the node any
+   more: it would ride along with the flight and land under the hero or the
+   footer. Docked bottom-right it is always in the same place, clear of the
+   centred constellation and clear of the footer's commentary. Fixed rather than
+   absolute because the starfield is the whole page.
+   The mobile bottom-sheet rules below 700px still win -- they are !important and
+   a corner card on a phone would cover the graph it describes. */
+@media (min-width:701px){
+  body.${BODY_ACTIVE_CLASS} .node-card{position:fixed;z-index:13;
+    right:clamp(16px,2vw,28px);bottom:clamp(16px,2.4vh,28px);left:auto;top:auto;
+    transform:none;width:min(330px,32vw);min-width:0;max-width:none;
+    max-height:min(56vh,520px)}
+  /* The tail is a pointer at a node this card no longer sits beside. */
+  body.${BODY_ACTIVE_CLASS} .node-card__tail{display:none}
+  body.${BODY_ACTIVE_CLASS} .node-card.node-card--below{transform:none}
+}
 
 @media (max-width:720px){
   #${STAGE_ID} .sigma-hero{width:min(94vw,620px);gap:10px}
@@ -532,6 +550,9 @@ export function initSigmaExplorer({
   // Node ids whose label would collide with the chrome. See updateLabelBlocking.
   const homeLabelEl = stage.querySelector('.sigma-home-label');
 
+  // Lives in the page's .graph-stage rather than this stage, so it is looked up
+  // from the document.
+  const nodeCardEl = doc.querySelector('.node-card');
   const heroEl = stage.querySelector('.sigma-hero');
   const footerEl = stage.querySelector('.sigma-footer');
   const filterPanel = stage.querySelector('.sigma-filters');
@@ -1091,6 +1112,13 @@ export function initSigmaExplorer({
     addZone(heroEl);
     addZone(footerEl);
     addZone(homeLabelEl);
+    // The node card is docked over the constellation while it is open, so it is
+    // chrome for as long as it is up. Without this a name could hide underneath
+    // it and look culled for no reason -- the same fault as the hero and footer,
+    // just with a box that comes and goes.
+    if (nodeCardEl && !nodeCardEl.hidden && nodeCardEl.classList.contains('is-open')) {
+      addZone(nodeCardEl);
+    }
 
     const size = renderer.getSetting('labelSize') || 12;
     labelMetrics.font = `${renderer.getSetting('labelWeight') || 'normal'} ${size}px `
@@ -1254,10 +1282,17 @@ export function initSigmaExplorer({
     // renderNeighborhood clears the highlight as part of drawing a new view;
     // re-applying it after the fact is what keeps the clicked node lit on
     // arrival, which is the difference between travelling and being teleported.
-    if (moved) highlightFrom(node);
+    // Travel is announced BEFORE the highlight, and the order is the whole bug:
+    // the page closes any open card on travel, because the view that card
+    // described is gone. Highlighting dispatches rbft:sigma-select, which opens
+    // the card for the clicked node -- so announcing travel afterwards closed the
+    // card that had just been opened, and only a SECOND click (which is not
+    // travel, so it only re-highlights) could make it stick. Stale card closes
+    // first, new card opens second.
     stage.dispatchEvent(
       new CustomEvent('rbft:sigma-travel', { bubbles: true, detail: { anchorId: node } })
     );
+    if (moved) highlightFrom(node);
   }
 
   renderer.on('clickNode', ({ node }) => travelTo(node));
@@ -1281,7 +1316,16 @@ export function initSigmaExplorer({
     ? new ResizeObserver(() => updateLabelBlocking())
     : null;
   if (chromeObserver) {
-    [heroEl, footerEl, homeLabelEl].forEach(el => { if (el) chromeObserver.observe(el); });
+    [heroEl, footerEl, homeLabelEl, nodeCardEl].forEach(el => { if (el) chromeObserver.observe(el); });
+  }
+
+  // Closing the card is a class change, not a resize, so the size observer above
+  // can miss it and leave a zone standing where there is no longer a card.
+  const cardStateObserver = nodeCardEl && typeof MutationObserver === 'function'
+    ? new MutationObserver(() => updateLabelBlocking())
+    : null;
+  if (cardStateObserver) {
+    cardStateObserver.observe(nodeCardEl, { attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
   }
 
   form.addEventListener('submit', event => {
@@ -1558,6 +1602,7 @@ export function initSigmaExplorer({
       renderer.kill();
       if (authObserver) authObserver.disconnect();
       if (chromeObserver) chromeObserver.disconnect();
+      if (cardStateObserver) cardStateObserver.disconnect();
       // Panels go home before the stage is dropped, or they would be removed
       // with it and the SVG renderer would come back without them.
       relocated.forEach(({ panel, parent, next }) => {
