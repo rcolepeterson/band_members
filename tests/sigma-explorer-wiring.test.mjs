@@ -121,8 +121,82 @@ test('camera rotation, orbit and pilot mode are absent', () => {
 test('the discovery prompt and larger-universe copy are present', () => {
   assert.match(EXPLORER, /Who&rsquo;s your favorite band\?/);
   assert.match(EXPLORER, /larger music universe/);
-  assert.match(EXPLORER, /Expand this constellation/);
-  assert.match(EXPLORER, /data-action="expand"/);
+  // Expand moved from a lone bottom-right button ("Expand this constellation")
+  // into the shortcut row, where a one-word label carries the sentence in its
+  // popover instead of in the label itself.
+  const expand = STAGE_ACTIONS().find(item => item.key === 'expand');
+  assert.ok(expand, 'the shortcut row must include an expand action');
+  assert.equal(expand.label, 'Expand');
+  assert.match(expand.detail, /horizon|beyond/i);
+});
+
+/** Parses the STAGE_ACTIONS table out of the module source. */
+function STAGE_ACTIONS() {
+  const block = EXPLORER.slice(
+    EXPLORER.indexOf('const STAGE_ACTIONS = ['),
+    EXPLORER.indexOf('// Upper bound on datalist options'),
+  );
+  return [...block.matchAll(/key: '([a-z]+)',\s*\n\s*label: '([^']+)',\s*\n\s*detail:\s*'([^']+)'/g)]
+    .map(([, key, label, detail]) => ({ key, label, detail }));
+}
+
+test('every shortcut pill has a one-word label and a sentence explaining it', () => {
+  const actions = STAGE_ACTIONS();
+  // The whole row, per the agreed design: nothing else competes with the hero.
+  assert.deepEqual(
+    actions.map(item => item.key),
+    // No Sign-in pill: the page's account strip in the site header is kept as
+    // the single entry point, top-right where a search homepage puts the avatar.
+    ['expand', 'reset', 'add', 'share', 'feedback'],
+  );
+  actions.forEach(({ key, label, detail }) => {
+    // A pill only fits a short label; two words at most ("Sign in").
+    assert.ok(label.length <= 9, `${key}: label "${label}" is too long for a pill`);
+    assert.ok(label.split(' ').length <= 2, `${key}: label "${label}" is more than two words`);
+    // One word cannot explain itself -- "Reset" resets WHAT? -- so the sentence
+    // is required, and it has to be a sentence.
+    assert.ok(detail.length > 25, `${key}: detail is too terse to explain the button`);
+    assert.match(detail, /\.$/, `${key}: detail should read as a sentence`);
+  });
+});
+
+test('the shortcut popover works for hover, keyboard and touch', () => {
+  // A title attribute is invisible on touch and to keyboard users, so the
+  // popover is a real element driven by all three input paths.
+  assert.match(EXPLORER, /addEventListener\('pointerenter'/);
+  assert.match(EXPLORER, /addEventListener\('focus'/);
+  assert.match(EXPLORER, /addEventListener\('blur'/);
+  assert.match(EXPLORER, /aria-describedby="\$\{TIP_ID\}"/);
+  assert.match(EXPLORER, /role="tooltip"/);
+  // And it must be dismissable, or a tap-opened popover traps a phone user.
+  assert.match(EXPLORER, /event\.key === 'Escape'/);
+  assert.match(EXPLORER, /addEventListener\('pointerdown'/);
+  // Clamped so the end pills of a centred row cannot push it off screen.
+  assert.match(EXPLORER, /Math\.max\(margin, Math\.min\(left, stageBox\.width - width - margin\)\)/);
+});
+
+test('the page\'s own duplicate chrome stands down while Sigma renders', () => {
+  // Both renderers share index.html. Without this the visitor saw two toolbars
+  // for one graph.
+  assert.match(EXPLORER, /const BODY_ACTIVE_CLASS = 'rbft-sigma-chrome';/);
+  assert.match(EXPLORER, /doc\.body\.classList\.add\(BODY_ACTIVE_CLASS\)/);
+  // And it must be given back, since the flag is switchable at runtime.
+  assert.match(EXPLORER, /doc\.body\.classList\.remove\(BODY_ACTIVE_CLASS\)/);
+  ['.hero', '.graph-overlay-top', '.graph-stats-badge'].forEach(selector => {
+    assert.ok(
+      EXPLORER.includes(`body.\${BODY_ACTIVE_CLASS} ${selector}`),
+      `${selector} should stand down while Sigma renders`,
+    );
+  });
+});
+
+test('the wordmark stays on screen above the search field', () => {
+  assert.match(EXPLORER, /class="sigma-wordmark">Rock Band Family Tree<\/h1>/);
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
+  const hero = css.match(/\.sigma-hero\{[^}]*\}/s);
+  assert.ok(hero, 'the hero needs a style rule');
+  // Anchored to the top of the stage, like a search homepage.
+  assert.match(hero[0], /top:clamp\(/);
 });
 
 test('a search miss invites the visitor to add the band', () => {
@@ -152,11 +226,25 @@ test('the opening view is capped and the frontier is surfaced', () => {
 // ---------------------------------------------------------------------------
 
 test('stage chrome is not hidden on small screens', () => {
-  // The prompt and expand controls get repositioned under 720px, never
+  // The prompt and shortcut pills get repositioned under 720px, never
   // display:none -- the PR #42/#44/#45/#63 trap.
-  const mobileBlock = EXPLORER.slice(EXPLORER.indexOf('@media (max-width:720px)'));
-  assert.ok(mobileBlock.includes('.sigma-prompt'), 'the prompt must be tuned for mobile');
-  assert.doesNotMatch(mobileBlock, /display:\s*none/);
+  //
+  // Checks rules rather than a slice of text: the module now also contains
+  // legitimate display:none rules for the PAGE's duplicate toolbar, and a
+  // blunt "no display:none after this point" search flagged those.
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
+  const mediaBlocks = [...css.matchAll(/@media[^{]*\{([\s\S]*?)\n\}/g)].map(m => m[1]);
+  assert.ok(mediaBlocks.length, 'expected at least one responsive block');
+  assert.ok(css.includes('#stage .sigma-prompt'), 'the prompt must be tuned for mobile');
+  mediaBlocks.forEach(block => {
+    [...block.matchAll(/([^{}\n]*#stage[^{]*)\{([^}]*)\}/g)].forEach(([, selector, body]) => {
+      assert.doesNotMatch(
+        body,
+        /display:\s*none/,
+        `a responsive rule hides stage chrome: ${selector.trim()}`,
+      );
+    });
+  });
 });
 
 test('CDN versions are pinned in the import map, matching package.json', () => {
@@ -377,4 +465,67 @@ test('only bands are suggested, never the 2,700 musicians', () => {
   // The one non-band source is the frontier, which is what expanding would
   // reach next; it is bounded so it cannot flood the list either.
   assert.match(block, /view\.frontier\.slice\(0, \d+\)/);
+});
+
+test('the page panels the pills open are moved out of the retired toolbar', () => {
+  // Add / Share / Feedback panels are nested INSIDE the toolbar that stands
+  // down, so hiding the toolbar hid them too and the pills opened nothing.
+  assert.match(EXPLORER, /const RELOCATED_PANELS = \['#add-band-popover', '#share-popover', '#feedback-popover'\]/);
+  assert.match(EXPLORER, /stage\.appendChild\(panel\)/);
+  // And they must be put back, or switching the flag off loses them entirely.
+  assert.match(EXPLORER, /parent\.insertBefore\(panel, next\)/);
+  const destroy = EXPLORER.slice(EXPLORER.indexOf('    destroy() {'));
+  const restore = destroy.indexOf('parent.insertBefore(panel, next)');
+  const removeStage = destroy.indexOf('stage.remove()');
+  assert.ok(restore > -1 && removeStage > -1 && restore < removeStage,
+    'panels must be rescued before the stage is removed, or they go with it');
+});
+
+test('a pill click does not reach the page-wide popover closer', () => {
+  // The page closes its popovers on any click outside them. Without
+  // stopPropagation the pill's own click bubbled to that handler and shut the
+  // panel in the tick it opened -- the buttons looked broken.
+  const handler = EXPLORER.slice(
+    EXPLORER.indexOf("button.addEventListener('click', event => {"),
+    EXPLORER.indexOf('runAction(item);') + 40,
+  );
+  assert.match(handler, /event\.stopPropagation\(\)/);
+});
+
+test('pills drive the page\'s real controls rather than reimplementing them', () => {
+  // Two implementations of "add a band" would drift apart; these forward to the
+  // existing buttons instead.
+  assert.match(EXPLORER, /const target = doc\.querySelector\(item\.target\);\s*\n\s*if \(target\) target\.click\(\);/);
+  ['#add-band-btn', '#share-graph-btn', '#send-feedback-btn'].forEach(selector => {
+    assert.ok(EXPLORER.includes(selector), `${selector} should be driven by a pill`);
+  });
+});
+
+test('Reset returns to the opening view, not just the opening camera', () => {
+  const goHome = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function showTip'));
+  // Budgets have to be reset too: after two expands, recentring the camera alone
+  // would leave 220 nodes on screen.
+  assert.match(goHome, /state\.maxHops = NEIGHBORHOOD_BUDGET\.MAX_HOPS/);
+  assert.match(goHome, /maxNodes: NEIGHBORHOOD_BUDGET\.OPENING_MAX_NODES/);
+  assert.match(goHome, /clearHighlight\(\)/);
+});
+
+test('overlay labels keep one size regardless of zoom', () => {
+  // The star and focus ring scale with the camera so they keep marking their
+  // node. Text must not ride that transform: in a zoomed-in view -- which is
+  // what a phone gets, since it frames a region rather than the whole
+  // neighbourhood -- it rendered "Aaron McRae — you are here" at nearly double
+  // size. positionOverlays() cancels the scale on the label only.
+  assert.match(EXPLORER, /label\.style\.transform = `translateX\(-50%\) scale\(\$\{\(1 \/ scale\)/);
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
+  // Centring has to come from the inline transform now, so the CSS must not set
+  // a competing one.
+  [
+    ['home-label', css.match(/\.home-label\{[^}]*\}/s)],
+    ['focus-label', css.match(/\.focus-label\{[^}]*\}/s)],
+  ].forEach(([name, rule]) => {
+    assert.ok(rule, `${name} needs a rule`);
+    assert.match(rule[0], /transform-origin:top center/);
+    assert.doesNotMatch(rule[0], /transform:translateX/);
+  });
 });

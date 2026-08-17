@@ -89,6 +89,52 @@ const HOVER_PLATE_EDGE = 'rgba(143,232,246,0.45)';
 const HOVER_LABEL_COLOR = '#e8f6fa';
 const HOVER_GLOW = 'rgba(143,232,246,0.30)';
 
+/**
+ * The secondary actions, as one quiet row of pills under the search field --
+ * the shape of a fresh browser home page: wordmark, search, a row of shortcuts.
+ *
+ * Each carries a one-word label and a sentence explaining it, shown in a
+ * popover on hover, on keyboard focus, and on tap. One word alone is not
+ * self-explanatory ("Reset" resets WHAT?), and a title attribute is invisible
+ * to touch, so the sentence is part of the control rather than a nicety.
+ *
+ * `target` names an existing control in index.html: these pills drive the
+ * page's real buttons rather than reimplementing their behaviour, so the two
+ * paths cannot drift apart. `action` names a Sigma-side function instead.
+ */
+const STAGE_ACTIONS = [
+  {
+    key: 'expand',
+    label: 'Expand',
+    detail: 'Push the horizon out one degree and pull in the bands just beyond this view.',
+    action: 'expand',
+  },
+  {
+    key: 'reset',
+    label: 'Reset',
+    detail: 'Recentre the constellation on Aaron McRae and return to the opening view.',
+    action: 'home',
+  },
+  {
+    key: 'add',
+    label: 'Add',
+    detail: 'Add a band and its line-up to the tree. Requires signing in.',
+    target: '#add-band-btn',
+  },
+  {
+    key: 'share',
+    label: 'Share',
+    detail: 'Copy a link to this exact view, or post it.',
+    target: '#share-graph-btn',
+  },
+  {
+    key: 'feedback',
+    label: 'Feedback',
+    detail: 'Tell us what is broken, missing or wrong. It reaches a person.',
+    target: '#send-feedback-btn',
+  },
+];
+
 // Upper bound on datalist options. Comfortably above the band count, low
 // enough that a pathological graph cannot stall the browser building the list.
 const MAX_SUGGESTIONS = 800;
@@ -105,6 +151,11 @@ const HIGHLIGHT_GROWTH = 1.25;
 // the first preview) rather than as one dimmed node behind a gold thread.
 const DIM_NODE_COLOR = '#4e5865';
 const STAGE_ID = 'sigma-stage';
+const TIP_ID = 'sigma-action-tip';
+// Set on <body> while the Sigma renderer owns the screen, so the page's own
+// toolbar, hero and stats badge can step aside for the minimal chrome. Removed
+// again by destroy(), which matters because the flag is switchable at runtime.
+const BODY_ACTIVE_CLASS = 'rbft-sigma-chrome';
 
 const EXPLORE_COPY = 'You are viewing one region of a much larger music universe.';
 
@@ -155,7 +206,8 @@ const STAGE_CSS = `
   transform:rotate(${HOME_STAR_STYLE.ringTiltDeg}deg);box-shadow:0 0 10px rgba(159,176,196,0.45)}
 #${STAGE_ID} .sigma-home-star .core{position:relative;width:16px;height:16px;border-radius:50%;
   background:${HOME_STAR_STYLE.color};box-shadow:0 0 18px 4px rgba(223,230,239,0.65)}
-#${STAGE_ID} .sigma-home-star .home-label{position:absolute;top:100%;margin-top:6px;white-space:nowrap;
+#${STAGE_ID} .sigma-home-star .home-label{position:absolute;top:100%;left:50%;
+  transform-origin:top center;margin-top:6px;white-space:nowrap;
   /* Sentence case, not uppercase: this is a person's name, and shouting it was
      never the point -- the ring and the glow already say "you are here". */
   font-size:11.5px;letter-spacing:0.02em;color:#c8d3e0;opacity:0.9;
@@ -174,16 +226,70 @@ const STAGE_CSS = `
    labels would print on top of each other; positionOverlays() flips the home
    label above its star to keep both readable. */
 #${STAGE_ID} .sigma-home-star.label-above .home-label{top:auto;bottom:100%;margin-top:0;margin-bottom:8px}
-#${STAGE_ID} .sigma-focus-ring .focus-label{position:absolute;top:100%;left:50%;transform:translateX(-50%);
+#${STAGE_ID} .sigma-focus-ring .focus-label{position:absolute;top:100%;left:50%;
+  /* transform is set inline by positionOverlays() to cancel the star's zoom
+     scaling, so the horizontal centring is done with a margin instead. */
+  transform-origin:top center;
   margin-top:6px;white-space:nowrap;font-size:11.5px;letter-spacing:0.02em;
   color:#a8d7e0;opacity:0.9;text-shadow:0 0 6px rgba(8,11,17,0.95),0 0 12px rgba(8,11,17,0.85)}
-/* The search prompt is the one thing a first-time visitor must not have to
-   look for, so it is scaled like a search homepage's field rather than like a
-   toolbar control: wide, tall enough to read as the primary action, and lifted
-   off the starfield with a shadow so it never competes with the threads behind
-   it. Sizes use clamp() so the same rule serves a phone and a desktop. */
-#${STAGE_ID} .sigma-prompt{position:absolute;left:50%;bottom:30px;transform:translateX(-50%);
-  width:min(620px,92vw);display:flex;flex-direction:column;gap:10px;z-index:4}
+/* A relocated panel has lost the button it used to hang below, so it is centred
+   on screen as a dialog instead. clampPopover() sets an inline left offset to
+   keep a bottom-anchored popover on screen; that offset is meaningless here, so
+   the centring has to win over it. */
+#${STAGE_ID} > .share-popover{position:fixed;left:50% !important;top:50%;
+  transform:translate(-50%,-50%);z-index:12;max-height:86vh;overflow-y:auto;
+  margin:0;width:min(560px,92vw)}
+@media (max-width:720px){
+  #${STAGE_ID} > .share-popover{width:94vw;max-height:82vh}
+}
+
+/* Threads and nodes pass under the chrome, since the starfield is the whole
+   page. These gradients sink the graph slightly behind the hero and the footer
+   so text never has a node label sitting in the middle of it. Deliberately soft
+   and short: a hard band would rebuild the seam that full-bleed removes. */
+#${STAGE_ID} .sigma-scrim{position:absolute;left:0;right:0;z-index:3;pointer-events:none}
+#${STAGE_ID} .sigma-scrim--top{top:0;height:clamp(140px,22vh,210px);
+  background:linear-gradient(180deg,rgba(6,9,14,0.92) 0%,rgba(6,9,14,0.72) 45%,rgba(6,9,14,0) 100%)}
+#${STAGE_ID} .sigma-scrim--bottom{bottom:0;height:clamp(90px,14vh,140px);
+  background:linear-gradient(0deg,rgba(6,9,14,0.9) 0%,rgba(6,9,14,0.6) 50%,rgba(6,9,14,0) 100%)}
+
+/* The hero: wordmark, search, and one quiet row of shortcut pills, stacked at
+   the top of the starfield. This is the shape of a fresh browser home page, and
+   the reason the graph itself gets the whole rest of the screen. */
+#${STAGE_ID} .sigma-hero{position:absolute;left:50%;top:clamp(16px,3.4vh,40px);
+  transform:translateX(-50%);width:min(620px,92vw);display:flex;flex-direction:column;
+  align-items:center;gap:clamp(10px,1.6vh,16px);z-index:4}
+#${STAGE_ID} .sigma-wordmark{margin:0;font-size:clamp(15px,2.2vw,26px);font-weight:400;
+  letter-spacing:0.18em;text-transform:uppercase;color:#dbe6f2;text-align:center;
+  text-shadow:0 0 10px rgba(8,11,17,0.95),0 0 20px rgba(8,11,17,0.8)}
+/* The shortcut row stays deliberately quiet -- hairline border, no fill -- so
+   the constellation is the only bright thing until someone reaches for a
+   control. */
+#${STAGE_ID} .sigma-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+#${STAGE_ID} .sigma-action{height:clamp(40px,4.2vw,44px);padding:0 clamp(14px,1.6vw,20px);
+  border-radius:999px;border:1px solid rgba(190,206,224,0.22);background:rgba(10,14,20,0.55);
+  color:#c3d0de;font-size:clamp(13px,1.2vw,14px);line-height:1;white-space:nowrap;
+  cursor:pointer;margin:0;backdrop-filter:blur(6px);
+  transition:color 140ms ease,border-color 140ms ease,background 140ms ease}
+#${STAGE_ID} .sigma-action:hover{color:#eaf4fb;border-color:rgba(143,232,246,0.6);
+  background:rgba(143,232,246,0.14)}
+#${STAGE_ID} .sigma-action:focus-visible{outline:2px solid rgba(143,232,246,0.8);outline-offset:2px}
+#${STAGE_ID} .sigma-action[aria-expanded="true"]{color:#eaf4fb;border-color:rgba(143,232,246,0.6)}
+/* One popover element, moved to whichever pill is being hovered, focused or
+   tapped. A title attribute would have been invisible on touch. */
+#${STAGE_ID} .sigma-tip{position:absolute;z-index:6;
+  /* max-content so the sentence sets its own width up to the cap; without it the
+     popover shrank to the space left of wherever it was previously placed. */
+  width:max-content;max-width:min(280px,80vw);
+  padding:9px 12px;border-radius:12px;border:1px solid rgba(143,232,246,0.34);
+  background:rgba(9,12,18,0.97);color:#dce9f3;font-size:13px;line-height:1.4;
+  box-shadow:0 10px 30px rgba(3,6,10,0.7);pointer-events:none}
+#${STAGE_ID} .sigma-tip[hidden]{display:none}
+/* The running commentary sits at the bottom, out of the hero's way. */
+#${STAGE_ID} .sigma-footer{position:absolute;left:50%;bottom:clamp(14px,2.4vh,26px);
+  transform:translateX(-50%);width:min(620px,92vw);display:flex;flex-direction:column;
+  align-items:center;gap:4px;text-align:center;z-index:4}
+#${STAGE_ID} .sigma-prompt{width:100%;display:flex;flex-direction:column;gap:10px}
 #${STAGE_ID} .sigma-prompt form{display:flex;gap:10px;align-items:stretch}
 /* One explicit height for both controls, rather than letting each derive its
    own from padding plus line-height: a button's content box does not resolve
@@ -220,22 +326,48 @@ const STAGE_CSS = `
   border-color:rgba(143,232,246,0.7)}
 #${STAGE_ID} .sigma-prompt button:focus-visible{outline:2px solid rgba(143,232,246,0.8);
   outline-offset:2px}
-#${STAGE_ID} .sigma-prompt .sigma-hint{text-align:center;font-size:13px;color:#93a1b2}
-#${STAGE_ID} .sigma-expand{position:absolute;right:18px;bottom:26px;z-index:4;display:flex;
-  flex-direction:column;align-items:flex-end;gap:6px}
-#${STAGE_ID} .sigma-expand button{padding:9px 14px;border-radius:999px;cursor:pointer;
-  border:1px solid rgba(201,182,255,0.4);background:rgba(201,182,255,0.14);color:#e4dbff;font-size:13px}
-#${STAGE_ID} .sigma-expand .sigma-frontier{font-size:11px;color:#8b98a8}
-#${STAGE_ID} .sigma-context{position:absolute;left:18px;top:18px;z-index:4;font-size:12px;
-  color:#9aa7b6;max-width:min(320px,60vw);line-height:1.45}
+#${STAGE_ID} .sigma-footer .sigma-hint{margin:0;font-size:13px;color:#93a1b2}
+#${STAGE_ID} .sigma-footer .sigma-frontier{font-size:12px;color:#8b98a8}
+#${STAGE_ID} .sigma-context{margin:0;font-size:12px;color:#9aa7b6;line-height:1.45}
 #${STAGE_ID} .sigma-context strong{color:#dfe6ef;font-weight:500}
+/* --------------------------------------------------------------------------
+   The page's own chrome, stood down while Sigma is rendering.
+
+   Both renderers share index.html, and its toolbar, hero and stats badge were
+   built for the SVG path: with the Sigma stage on top, the visitor saw two sets
+   of controls for one graph. These rules retire the duplicates for as long as
+   the Sigma flag is on; destroy() removes the body class, so switching back
+   restores everything.
+   -------------------------------------------------------------------------- */
+body.${BODY_ACTIVE_CLASS} .hero,
+body.${BODY_ACTIVE_CLASS} .graph-overlay-top,
+body.${BODY_ACTIVE_CLASS} .graph-stats-badge,
+body.${BODY_ACTIVE_CLASS} .graph-panel-head,
+body.${BODY_ACTIVE_CLASS} .graph-version-pill,
+/* Anchored to the page's Sign-up button, which is now hidden, so it floated
+   over the hero pointing at nothing. */
+body.${BODY_ACTIVE_CLASS} .welcome-nudge{display:none !important}
+/* The account strip in the site header STAYS: it is the one place that shows who
+   you are signed in as and how to sign out, and it sits top-right exactly where
+   a search homepage puts the avatar. It is why there is no Sign-in pill in the
+   shortcut row -- two entry points for one action is worse than none. */
+body.${BODY_ACTIVE_CLASS} .site-header{position:fixed;top:0;right:0;left:auto;width:auto;
+  z-index:6;background:none;border:none;box-shadow:none;padding:10px 14px}
+body.${BODY_ACTIVE_CLASS} .site-header .header-inner{padding:0;max-width:none}
+/* The stage is fixed to the viewport, so the page behind it must not scroll a
+   dark panel out from under the constellation. */
+body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
+
 @media (max-width:720px){
-  #${STAGE_ID} .sigma-prompt{bottom:78px;width:min(94vw,620px);gap:8px}
+  #${STAGE_ID} .sigma-hero{width:min(94vw,620px);gap:10px}
+  #${STAGE_ID} .sigma-prompt{gap:8px}
   #${STAGE_ID} .sigma-prompt form{gap:8px}
+  #${STAGE_ID} .sigma-actions{gap:6px}
+  #${STAGE_ID} .sigma-action{padding:0 13px;font-size:12.5px}
   /* Keeps "Explore" from eating the field's width on a narrow phone, without
      dropping the input's font below the 16px no-zoom threshold. */
   #${STAGE_ID} .sigma-prompt button{padding:0 18px}
-  #${STAGE_ID} .sigma-prompt .sigma-hint{font-size:12px}
+  #${STAGE_ID} .sigma-footer .sigma-hint{font-size:12px}
   #${STAGE_ID} .sigma-expand{right:12px;bottom:20px}
   #${STAGE_ID} .sigma-context{font-size:11px;max-width:70vw}
 }
@@ -260,9 +392,12 @@ function buildStage(doc, mount) {
     <div class="sigma-starfield" aria-hidden="true"></div>
     <div class="sigma-canvas-host"></div>
     <div class="sigma-fog" aria-hidden="true"></div>
+    <div class="sigma-scrim sigma-scrim--top" aria-hidden="true"></div>
+    <div class="sigma-scrim sigma-scrim--bottom" aria-hidden="true"></div>
     <div class="sigma-home-star" hidden><span class="ring"></span><span class="core"></span><span class="home-label"></span></div>
     <div class="sigma-focus-ring" hidden><span class="ring"></span><span class="focus-label"></span></div>
-    <p class="sigma-context" aria-live="polite"></p>
+    <div class="sigma-hero">
+      <h1 class="sigma-wordmark">Rock Band Family Tree</h1>
     <div class="sigma-prompt">
       <form autocomplete="off">
         <input type="search" name="favorite-band" placeholder="Who&rsquo;s your favorite band?"
@@ -271,10 +406,17 @@ function buildStage(doc, mount) {
         <button type="submit">Explore</button>
       </form>
       <datalist id="sigma-search-options"></datalist>
-      <p class="sigma-hint">${EXPLORE_COPY}</p>
     </div>
-    <div class="sigma-expand">
-      <button type="button" data-action="expand">Expand this constellation</button>
+      <div class="sigma-actions" role="group" aria-label="Graph actions">
+        ${STAGE_ACTIONS.map(item => `
+          <button type="button" class="sigma-action" data-key="${item.key}"
+                  aria-describedby="${TIP_ID}">${escapeHtml(item.label)}</button>`).join('')}
+      </div>
+    </div>
+    <div class="sigma-tip" id="${TIP_ID}" role="tooltip" hidden></div>
+    <div class="sigma-footer">
+      <p class="sigma-context" aria-live="polite"></p>
+      <p class="sigma-hint">${EXPLORE_COPY}</p>
       <span class="sigma-frontier"></span>
     </div>
   `;
@@ -314,7 +456,27 @@ export function initSigmaExplorer({
   const focusRingEl = stage.querySelector('.sigma-focus-ring');
   const contextEl = stage.querySelector('.sigma-context');
   const frontierEl = stage.querySelector('.sigma-frontier');
-  const expandBtn = stage.querySelector('[data-action="expand"]');
+  // The page's Add / Share / Feedback panels live INSIDE the toolbar that stands
+  // down for the Sigma chrome, so hiding the toolbar hid the panels too and the
+  // new pills opened nothing. They are moved onto the stage for the duration and
+  // put back by destroy(), which keeps their existing handlers intact -- listeners
+  // are bound to the elements, not to where they sit in the tree.
+  const RELOCATED_PANELS = ['#add-band-popover', '#share-popover', '#feedback-popover'];
+  const relocated = [];
+
+  RELOCATED_PANELS.forEach(selector => {
+    const panel = doc.querySelector(selector);
+    if (!panel || !panel.parentNode) return;
+    relocated.push({ panel, parent: panel.parentNode, next: panel.nextSibling });
+    stage.appendChild(panel);
+  });
+
+  const actionRow = stage.querySelector('.sigma-actions');
+  const actionButtons = new Map(
+    [...stage.querySelectorAll('.sigma-action')].map(el => [el.dataset.key, el])
+  );
+  const tip = stage.querySelector(`#${TIP_ID}`);
+  const expandBtn = actionButtons.get('expand');
   const form = stage.querySelector('.sigma-prompt form');
   const input = stage.querySelector('.sigma-prompt input');
   const datalist = stage.querySelector('#sigma-search-options');
@@ -322,6 +484,8 @@ export function initSigmaExplorer({
   const svg = doc.getElementById('graph-svg');
   const svgDisplayBefore = svg ? svg.style.display : null;
   if (svg) svg.style.display = 'none';
+  // Retires the page's duplicate controls for as long as this renderer is up.
+  doc.body.classList.add(BODY_ACTIVE_CLASS);
 
   const adjacency = buildAdjacency(master.nodes, master.links);
   const masterById = new Map(master.nodes.map(node => [node.id, node]));
@@ -557,7 +721,10 @@ export function initSigmaExplorer({
     frontierEl.textContent = remaining
       ? `${remaining} connected ${remaining === 1 ? 'node' : 'nodes'} just beyond this view`
       : 'Every connection in this region is on screen';
-    expandBtn.hidden = !remaining;
+    // Disabled rather than hidden: a shortcut row that changes length as you
+    // explore makes the others move under the pointer.
+    expandBtn.disabled = !remaining;
+    expandBtn.setAttribute('aria-disabled', String(!remaining));
 
     const homeLabel = homeStarEl.querySelector('.home-label');
     if (homeLabel && homeStarId) {
@@ -633,6 +800,13 @@ export function initSigmaExplorer({
       el.style.left = `${point.x}px`;
       el.style.top = `${point.y}px`;
       el.style.transform = `translate(-50%,-50%) scale(${scale.toFixed(3)})`;
+      // The star and ring scale with the zoom so they keep tracking the node
+      // they mark. Their LABEL must not: text has one legible size, and riding
+      // the same transform blew "Aaron McRae -- you are here" up to nearly
+      // double size in a zoomed-in view (most visible on a phone, which frames
+      // a region rather than the whole neighbourhood).
+      const label = el.querySelector('.home-label, .focus-label');
+      if (label) label.style.transform = `translateX(-50%) scale(${(1 / scale).toFixed(3)})`;
     };
     const zoomScale = Math.max(0.55, Math.min(1.9, 1 / ratio));
     place(homeStarEl, homeStarId, zoomScale * HOME_STAR_STYLE.sizeMultiplier * 0.5);
@@ -749,7 +923,110 @@ export function initSigmaExplorer({
     event.preventDefault();
     exploreFor(input.value);
   });
-  expandBtn.addEventListener('click', expand);
+  // -- shortcut row ---------------------------------------------------------
+
+  /**
+   * Returns the constellation to its opening state: Aaron McRae at the centre,
+   * budgets back to the opening view. "Reset" on its own is ambiguous, which is
+   * exactly why the pill carries a sentence.
+   */
+  function goHome() {
+    state.maxHops = NEIGHBORHOOD_BUDGET.MAX_HOPS;
+    state.anchorSource = 'default';
+    clearHighlight();
+    const home = homeStarId || NEIGHBORHOOD_BUDGET.DEFAULT_ANCHOR;
+    renderNeighborhood({
+      anchorId: home,
+      maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
+      animate: true,
+    });
+  }
+
+  /**
+   * Positions the shared popover under a pill, clamped to stay on screen -- the
+   * end pills of a centred row would otherwise push it off the edge.
+   */
+  function showTip(button) {
+    const item = STAGE_ACTIONS.find(entry => entry.key === button.dataset.key);
+    if (!item) return;
+    tip.textContent = item.detail;
+    tip.hidden = false;
+    const stageBox = stage.getBoundingClientRect();
+    const box = button.getBoundingClientRect();
+    const width = tip.offsetWidth;
+    const margin = 10;
+    let left = box.left - stageBox.left + box.width / 2 - width / 2;
+    left = Math.max(margin, Math.min(left, stageBox.width - width - margin));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${box.bottom - stageBox.top + 8}px`;
+    button.setAttribute('aria-expanded', 'true');
+  }
+
+  function hideTip() {
+    tip.hidden = true;
+    actionButtons.forEach(button => button.removeAttribute('aria-expanded'));
+  }
+
+  /** Runs a pill's action: a Sigma function, or the page's own button. */
+  function runAction(item) {
+    if (item.action === 'expand') return expand();
+    if (item.action === 'home') return goHome();
+    if (!item.target) return;
+    const target = doc.querySelector(item.target);
+    if (target) target.click();
+  }
+
+  actionButtons.forEach((button, key) => {
+    const item = STAGE_ACTIONS.find(entry => entry.key === key);
+    if (!item) return;
+    // Hover and keyboard focus reveal the explanation; a tap runs the action, so
+    // touch users get the sentence from the pill they are already pressing --
+    // pointerdown shows it, and it stays up briefly after the action fires.
+    button.addEventListener('pointerenter', () => { if (!button.disabled) showTip(button); });
+    button.addEventListener('pointerleave', hideTip);
+    button.addEventListener('focus', () => showTip(button));
+    button.addEventListener('blur', hideTip);
+    button.addEventListener('click', event => {
+      // stopPropagation is load-bearing. The page closes its popovers on any
+      // click outside them; without this, the pill's own click carried on
+      // bubbling to that handler and shut the panel in the same tick it opened,
+      // so Add / Share / Feedback appeared to do nothing at all.
+      event.stopPropagation();
+      hideTip();
+      runAction(item);
+    });
+  });
+
+  // Escape closes the popover, and so does a press anywhere else -- without
+  // this, a tap-opened popover on a phone has no way out.
+  doc.addEventListener('keydown', event => { if (event.key === 'Escape') hideTip(); });
+  doc.addEventListener('pointerdown', event => {
+    if (!actionRow.contains(event.target)) hideTip();
+  });
+
+  /**
+   * Hides pills whose page-side control is not available -- Sign in, once the
+   * visitor is signed in. Watched rather than read once, because signing in
+   * happens without a reload.
+   */
+  function syncActionAvailability() {
+    STAGE_ACTIONS.filter(item => item.hideWhenSignedIn).forEach(item => {
+      const button = actionButtons.get(item.key);
+      const target = item.target ? doc.querySelector(item.target) : null;
+      // offsetParent is null for a control the page has hidden.
+      const available = !!target && (!!target.offsetParent || target.getClientRects().length > 0);
+      if (button) button.hidden = !available;
+    });
+  }
+
+  syncActionAvailability();
+  const authObserver = typeof MutationObserver === 'function'
+    ? new MutationObserver(syncActionAvailability)
+    : null;
+  if (authObserver) {
+    const header = doc.querySelector('.site-header');
+    if (header) authObserver.observe(header, { attributes: true, subtree: true, childList: true });
+  }
 
   // -- first paint ----------------------------------------------------------
 
@@ -774,7 +1051,17 @@ export function initSigmaExplorer({
     clearHighlight,
     destroy() {
       renderer.kill();
+      if (authObserver) authObserver.disconnect();
+      // Panels go home before the stage is dropped, or they would be removed
+      // with it and the SVG renderer would come back without them.
+      relocated.forEach(({ panel, parent, next }) => {
+        panel.hidden = true;
+        parent.insertBefore(panel, next);
+      });
       stage.remove();
+      // Hand the page's own toolbar, hero and badge back, so switching the flag
+      // off at runtime leaves a working SVG renderer rather than a bare page.
+      doc.body.classList.remove(BODY_ACTIVE_CLASS);
       if (svg) svg.style.display = svgDisplayBefore || '';
     },
   };

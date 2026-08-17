@@ -19,7 +19,9 @@
 //   - nodes rendered outside the viewport (camera framing too tight)
 //   - phantom overlays (an anchor star drawn for a node not in the view)
 //   - console errors and failed module loads
-//   - the stage chrome: prompt controls same height, same row, no clipping
+//   - the stage chrome: prompt controls same height and row, shortcut pills
+//     big enough to tap with labels that neither wrap nor clip, and none of the
+//     page's own duplicate toolbar showing through
 //
 // Usage (needs a local Chromium and playwright-core):
 //   node scripts/layout-audit.mjs                       # against a local server
@@ -250,12 +252,46 @@ const MEASURE_CHROME = () => {
   if (textLines > 1) problems.push(`the Explore label wrapped onto ${textLines} lines`);
   if (ri.left < 0 || rb.right > window.innerWidth) problems.push('the prompt overflows the viewport');
 
+  // The shortcut row: one-word pills whose labels must not wrap or clip, and
+  // which have to stay big enough to hit with a thumb.
+  const pills = [...stage.querySelectorAll('.sigma-action')].filter(
+    el => !!el.offsetParent || el.getClientRects().length > 0,
+  );
+  if (!pills.length) problems.push('the shortcut row has no visible pills');
+  pills.forEach(pill => {
+    const r = pill.getBoundingClientRect();
+    const name = pill.dataset.key || pill.textContent.trim();
+    // 40px is the floor for a comfortable touch target on a phone.
+    if (r.height < 40) problems.push(`the ${name} pill is only ${r.height.toFixed(0)}px tall`);
+    if (pill.scrollWidth > pill.clientWidth + 1) problems.push(`the ${name} pill's label is clipped`);
+    const range = document.createRange();
+    range.selectNodeContents(pill);
+    if (range.getClientRects().length > 1) problems.push(`the ${name} pill's label wrapped`);
+    if (r.left < 0 || r.right > window.innerWidth) problems.push(`the ${name} pill is off screen`);
+  });
+
+  // The wordmark stays put, above the field, the way a search home page does it.
+  const wordmark = stage.querySelector('.sigma-wordmark');
+  if (!wordmark) problems.push('the wordmark is missing');
+  else if (wordmark.getBoundingClientRect().bottom > ri.top) {
+    problems.push('the wordmark overlaps the search field');
+  }
+
+  // The page's own toolbar must not be showing at the same time as this chrome.
+  ['.hero', '.graph-overlay-top', '.graph-stats-badge'].forEach(selector => {
+    const el = document.querySelector(selector);
+    if (el && (el.offsetParent || el.getClientRects().length)) {
+      problems.push(`the page's ${selector} is still visible behind the Sigma chrome`);
+    }
+  });
+
   return {
     problems,
     metrics: {
       offset: +offset.toFixed(1),
       height: +ri.height.toFixed(0),
       font: fontSize,
+      pills: pills.length,
     },
   };
 };
@@ -345,7 +381,7 @@ rows.forEach(({ label, result, problems }) => {
 console.log('\nStage chrome\n');
 chromeRows.forEach(({ label, problems, metrics }) => {
   const summary = metrics
-    ? `field ${metrics.height}px  font ${metrics.font}px  row offset ${metrics.offset}px`
+    ? `field ${metrics.height}px  font ${metrics.font}px  offset ${metrics.offset}px  ${metrics.pills} pills`
     : 'not measured';
   console.log(`${problems.length ? 'FAIL' : 'ok  '}  ${label.padEnd(34)} ${summary}`);
   problems.forEach(problem => console.log(`        - ${problem}`));
