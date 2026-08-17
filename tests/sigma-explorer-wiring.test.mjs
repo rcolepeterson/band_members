@@ -353,3 +353,22 @@ test('search suggestions are alphabetical, and cover every band', () => {
   assert.doesNotMatch(EXPLORER, /master\.nodes\.slice\(0, 200\)/);
   assert.match(EXPLORER, /const MAX_SUGGESTIONS = \d+;/);
 });
+
+test('only bands are suggested, never the 2,700 musicians', () => {
+  // A deliberate product decision, not an accident of the corpus slice this
+  // replaced: musicians would outnumber bands roughly six to one and bury them.
+  // Typing a musician's name still resolves through resolveAnchor -- they are
+  // findable, just not offered.
+  const block = EXPLORER.slice(
+    EXPLORER.indexOf('// Search suggestions'),
+    EXPLORER.indexOf('datalist.innerHTML') + 400,
+  );
+  assert.ok(block.includes('bandNames'), 'suggestions come from the band list');
+  assert.ok(
+    !/type === 'person'/.test(block) && !/master\.nodes\.map/.test(block),
+    'suggestions must not be drawn from the full node list',
+  );
+  // The one non-band source is the frontier, which is what expanding would
+  // reach next; it is bounded so it cannot flood the list either.
+  assert.match(block, /view\.frontier\.slice\(0, \d+\)/);
+});
