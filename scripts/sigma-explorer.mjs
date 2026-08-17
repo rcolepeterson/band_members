@@ -112,7 +112,10 @@ const STAGE_ACTIONS = [
   {
     key: 'reset',
     label: 'Reset',
-    detail: 'Recentre the constellation on Aaron McRae and return to the opening view.',
+    // Deliberately does not name the default anchor. Every visitor sees this
+    // copy, and naming one person makes a shared tool read as somebody's
+    // personal page.
+    detail: 'Start over from the beginning, back to the view you opened with.',
     action: 'home',
   },
   {
@@ -972,9 +975,9 @@ export function initSigmaExplorer({
   // -- shortcut row ---------------------------------------------------------
 
   /**
-   * Returns the constellation to its opening state: Aaron McRae at the centre,
-   * budgets back to the opening view. "Reset" on its own is ambiguous, which is
-   * exactly why the pill carries a sentence.
+   * Returns the constellation to its opening state: the default anchor at the
+   * centre, budgets back to the opening view. "Reset" on its own is ambiguous,
+   * which is exactly why the pill carries a sentence.
    */
   function goHome() {
     state.maxHops = NEIGHBORHOOD_BUDGET.MAX_HOPS;

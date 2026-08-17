@@ -136,8 +136,15 @@ function STAGE_ACTIONS() {
     EXPLORER.indexOf('const STAGE_ACTIONS = ['),
     EXPLORER.indexOf('// Upper bound on datalist options'),
   );
-  return [...block.matchAll(/key: '([a-z]+)',\s*\n\s*label: '([^']+)',\s*\n\s*detail:\s*'([^']+)'/g)]
-    .map(([, key, label, detail]) => ({ key, label, detail }));
+  // Tolerates comment lines between the fields: the copy carries reasoning, and
+  // an entry is allowed to explain itself without breaking this parser.
+  return [...block.matchAll(/key: '([a-z]+)',([\s\S]*?)\n\s*(?:target|action):/g)].map(
+    ([, key, body]) => ({
+      key,
+      label: (body.match(/label: '([^']+)'/) || [])[1] || '',
+      detail: (body.match(/detail:\s*'([^']+)'/) || [])[1] || '',
+    }),
+  );
 }
 
 test('every shortcut pill has a one-word label and a sentence explaining it', () => {
@@ -517,4 +524,18 @@ test('clicking a node travels to it, keeping it lit on arrival', () => {
   // afterwards -- otherwise you arrive somewhere with nothing lit.
   assert.match(travel, /if \(moved\) highlightFrom\(node\)/);
   assert.match(travel, /rbft:sigma-travel/);
+});
+
+test('pill copy does not name the default anchor', () => {
+  // Every visitor reads this copy. Naming one person in it makes a shared tool
+  // read as somebody's personal page, and it goes stale if the default changes.
+  const actions = EXPLORER.slice(
+    EXPLORER.indexOf('const STAGE_ACTIONS = ['),
+    EXPLORER.indexOf('// Upper bound on datalist options'),
+  );
+  const details = [...actions.matchAll(/detail:\s*'([^']+)'/g)].map(m => m[1]);
+  assert.ok(details.length >= 5, `expected every pill to have copy, found ${details.length}`);
+  details.forEach(detail => {
+    assert.doesNotMatch(detail, /Aaron|McRae/i, `pill copy names the anchor: "${detail}"`);
+  });
 });
