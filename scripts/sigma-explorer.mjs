@@ -176,11 +176,19 @@ const EXPLORE_COPY = 'You are viewing one region of a much larger music universe
 // First person, because it is his site and his node. The name comes from the
 // home star rather than being written in, so changing the default anchor cannot
 // leave the copy claiming to be someone else.
+//
+// The last sentence names Travel. Travel is the primary way to move through this
+// graph -- clicking a node re-centres the view on it -- and until now no copy
+// anywhere said so. The opening story pointed only at the search field, which
+// teaches a visitor exactly one way in and leaves the other 3,000 nodes looking
+// like decoration. "Click any band or musician" matches the phrasing the legacy
+// selection panel already uses, so the site says it one way.
 const introCopy = (name) => {
   const first = String(name || '').trim().split(/\s+/)[0] || 'I';
   return `<strong class="sigma-intro__hello">Hey, I&rsquo;m ${escapeHtml(first)}.</strong> `
     + `I built this site &mdash; you&rsquo;re starting on my node. `
-    + `Search for a band or artist above to find your place in the band universe.`;
+    + `Search for a band or artist above to find your place in the band universe. `
+    + `Click any band or musician to travel there.`;
 };
 
 // Base camera ratio for a freshly framed view. Comfortably above 1 because Sigma

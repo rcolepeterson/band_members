@@ -1065,6 +1065,9 @@ test('the home star introduces itself instead of just being a stranger', () => {
   assert.match(EXPLORER, /const introCopy = \(name\) => \{/);
   assert.match(EXPLORER, /I built this site &mdash; you&rsquo;re starting on my node\./);
   assert.match(EXPLORER, /Search for a band or artist above to find your place in the band universe\./);
+  // And it names Travel. Search was the only way in that the copy mentioned, which
+  // left clicking -- the primary way to move through the graph -- undiscoverable.
+  assert.match(EXPLORER, /Click any band or musician to travel there\./);
   // The name is derived from the home star, so changing the default anchor cannot
   // leave the copy claiming to be someone else.
   // Plain substring checks: a regex for this line needs escaping that obscures
