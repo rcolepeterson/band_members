@@ -59,24 +59,42 @@
   <meta name="twitter:description" content="Explore how bands and musicians connect across scenes and decades." />
   <meta name="twitter:image" content="https://bandmembers.netlify.app/og-image.png" />
 
-  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <!--
+    d3 is NOT loaded here any more.
+    
+    It used to be a render-blocking <script> from d3js.org with no integrity
+    attribute, on every cold load. Two problems with that, both invisible from a
+    machine whose network reaches d3js.org fine:
+
+      - It was a hard dependency on somebody else's uptime. Blocking that host left
+        the page with NO graph at all, not a slower one.
+      - The default renderer never uses it. d3's only jobs here are the SVG force
+        simulation and the CSV fallback, and neither runs on the Sigma path -- so
+        nearly every visitor was blocking on 278KB they never touched.
+
+    It is now vendored at /vendor/d3.js and fetched by ensureD3() only when the SVG
+    renderer or the CSV fallback actually needs it.
+  -->
 
   <!-- Import map for the Sigma renderer's ES modules (issue #80).
-       Bare specifiers, in one reviewable place, pinned to the same versions as
-       the devDependencies in package.json (asserted by
-       tests/sigma-explorer-wiring.test.mjs). Mapping "sigma" once guarantees
-       every module shares ONE Sigma instance rather than each CDN URL pulling
-       its own copy, and the trailing-slash entries let a module import a
-       subpath like "sigma/rendering" through the same pinned copy.
-       Inert for anyone not using ?renderer=sigma: an import map costs nothing
-       until a module actually imports something. -->
+       Bare specifiers, in one reviewable place. Mapping "sigma" once guarantees
+       every module shares ONE Sigma instance rather than each URL pulling its own
+       copy. Inert for anyone not using the constellation: an import map costs
+       nothing until a module actually imports something.
+
+       These used to point at esm.sh, which cost 15 requests to assemble Sigma and
+       resolved graphology-utils@^2.5.2 -- a caret range -- at request time, meaning
+       production JavaScript could change with no commit and no deploy. Now both
+       files are built from the pinned devDependencies by `npm run vendor` and
+       committed, so the exact bytes the browser runs are in version control and
+       change only in a reviewable diff. -->
   <script type="importmap">
   {
     "imports": {
-      "sigma": "https://esm.sh/sigma@3.0.3",
-      "sigma/": "https://esm.sh/sigma@3.0.3/",
-      "graphology": "https://esm.sh/graphology@0.26.0",
-      "graphology/": "https://esm.sh/graphology@0.26.0/"
+      "sigma": "/vendor/sigma.mjs",
+      "sigma/": "/vendor/",
+      "graphology": "/vendor/graphology.mjs",
+      "graphology/": "/vendor/"
     }
   }
   </script>
@@ -3658,6 +3676,55 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     // link handed to someone else: a visitor debugging the SVG path would otherwise
     // share the slow renderer to everyone who opened their link, with no idea they
     // had done it.
+    // --- renderer + d3 loading -------------------------------------------
+    //
+    // The constellation (Sigma) is the default and never touches d3. The SVG
+    // renderer and the CSV fallback are the only two things that do, so d3 is
+    // fetched on demand instead of blocking every page load on a 278KB library
+    // most visitors never use.
+    function onSigmaPath() {
+      return !!(document.body && document.body.classList.contains('rbft-sigma-boot'));
+    }
+
+    // Resolves once window.d3 is usable. Cached, so several callers cannot start
+    // several downloads. Served from this origin, so there is no third party to be
+    // down, slow, blocked by an extension, or to have its bytes changed under us --
+    // the old <script src="https://d3js.org/..."> carried no integrity attribute.
+    let d3Loading = null;
+    function ensureD3() {
+      if (window.d3) return Promise.resolve(window.d3);
+      if (d3Loading) return d3Loading;
+      d3Loading = new Promise((resolve, reject) => {
+        const tag = document.createElement('script');
+        tag.src = '/vendor/d3.js';
+        tag.async = false;
+        tag.onload = () => window.d3
+          ? resolve(window.d3)
+          : reject(new Error('/vendor/d3.js loaded but window.d3 is missing'));
+        tag.onerror = () => {
+          // Let a later attempt retry rather than caching the failure forever.
+          d3Loading = null;
+          reject(new Error('could not load /vendor/d3.js'));
+        };
+        document.head.appendChild(tag);
+      });
+      return d3Loading;
+    }
+
+    // Was inline at boot, which is why blocking d3 produced a blank page even
+    // though the constellation draws no SVG at all.
+    function setupSvgRenderer() {
+      svgSelection = d3.select('#graph-svg');
+      graphGroup = svgSelection.append('g');
+      zoomBehavior = d3.zoom().scaleExtent([0.25, 3]).on('zoom', event => {
+        graphGroup.attr('transform', event.transform);
+        // Reposition the anchored node card so it tracks the node under the
+        // new zoom transform. Called on every wheel/pan event.
+        positionNodeCard();
+      });
+      svgSelection.call(zoomBehavior);
+    }
+
     const SHAREABLE_PARAMS = ['anchor', 'band', 'member', 'node', 'person'];
     function shareableUrl() {
       // Strip a trailing index.html. Both / and /index.html serve this page, so
@@ -5028,6 +5095,9 @@ function downloadPngBlob(blob) {
       } catch (error) {
         console.warn('Falling back to CSV load; /api/bands failed:', error);
         rawBandsData = null;
+        // The only use of d3 on the constellation path, and only when the API is
+        // unreachable -- so it is fetched here rather than on every load.
+        await ensureD3();
         return d3.csv('seattle_band_members-2-2.csv?v=6');
       }
     }
@@ -9467,18 +9537,19 @@ function downloadPngBlob(blob) {
     renderBandMemberButtons([]);
     window.addEventListener('scroll', updateHeroState, { passive: true });
 
-    svgSelection = d3.select('#graph-svg');
-    graphGroup = svgSelection.append('g');
-    zoomBehavior = d3.zoom().scaleExtent([0.25, 3]).on('zoom', event => {
-      graphGroup.attr('transform', event.transform);
-      // Reposition the anchored node card so it tracks the node under the
-      // new zoom transform. Called on every wheel/pan event.
-      positionNodeCard();
-    });
+    // The SVG machinery, and the d3 it needs, only when something needs it.
+    //
+    // This block used to run unconditionally at boot -- which is exactly why
+    // blocking d3js.org produced a blank page even though the constellation never
+    // draws an SVG. On the Sigma path it is now skipped entirely and d3 is never
+    // fetched at all.
+    // On the SVG path the renderer must exist before any graph is drawn, so the
+    // data load is chained behind it rather than racing it.
+    const rendererReady = onSigmaPath()
+      ? Promise.resolve()
+      : ensureD3().then(setupSvgRenderer);
 
-    svgSelection.call(zoomBehavior);
-
-    loadGraphData().then(async rows => {
+    rendererReady.then(loadGraphData).then(async rows => {
       const master = buildMasterGraph(rows);
       // Seed instrument suggestions from the CSV and refresh the datalist so
       // real values are suggestible as soon as the base data lands.
