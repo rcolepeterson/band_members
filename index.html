@@ -2680,22 +2680,12 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             session state is known.
           -->
           <!--
-            Sign up sits BEFORE Sign in, because a first-time visitor is the
-            common case in the corner where the hamburger used to be. Both are
-            shown rather than one, since a tester reported not knowing which of
-            the two they needed (feedback item x); the deeper fix for where each
-            one lands is separate work.
+            ONE control, not two. The pair shipped a change ago because the corner
+            had just been vacated by the hamburger and both entry points existed;
+            with the flows merged there is one thing to press, so showing two was
+            the confusion rather than the cure (feedback item x).
           -->
-          <button class="header-btn header-btn--primary" type="button" id="header-signup-btn" hidden>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <line x1="19" y1="8" x2="19" y2="14"/>
-              <line x1="22" y1="11" x2="16" y2="11"/>
-            </svg>
-            Sign up
-          </button>
-          <button class="header-btn" type="button" id="sign-in-btn" hidden>
+          <button class="header-btn header-btn--primary" type="button" id="sign-in-btn" hidden>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
               <polyline points="10 17 15 12 10 7"/>
@@ -5214,15 +5204,20 @@ function downloadPngBlob(blob) {
       const addBtn = document.getElementById('add-band-btn');
       const mobileAddBtn = document.getElementById('mobile-add-band-btn');
       const popover = document.getElementById('add-band-popover');
+      // Add stays Add. It used to rename itself to "Sign up" when signed out,
+      // which put a third label on the one room and meant the button a visitor
+      // pressed to contribute was not the button they later looked for. Pressing
+      // it while signed out still raises the auth panel -- which now explains
+      // itself -- so nothing is lost by telling the truth about what it does.
       if (addBtn) {
-        addBtn.textContent = isSignedIn ? 'Add your band' : 'Sign up';
-        addBtn.setAttribute('aria-label', isSignedIn ? 'Add your band' : 'Sign up to add your band');
+        addBtn.textContent = 'Add your band';
+        addBtn.setAttribute('aria-label', 'Add your band');
       }
       if (mobileAddBtn) {
         // The mobile button has an SVG icon followed by a text node. Rewrite
         // just the trailing text; keep the icon intact.
         const textNodes = Array.from(mobileAddBtn.childNodes).filter(n => n.nodeType === 3);
-        const label = isSignedIn ? 'Add your band' : 'Sign up';
+        const label = 'Add your band';
         if (textNodes.length) {
           textNodes[textNodes.length - 1].textContent = ' ' + label;
         } else {
@@ -5249,8 +5244,6 @@ function downloadPngBlob(blob) {
       const mobileSignInRow = document.getElementById('mobile-sign-in-row');
       const headerUser = document.getElementById('header-user');
       if (signInBtn) signInBtn.hidden = isSignedIn;
-      const headerSignupBtn = document.getElementById('header-signup-btn');
-      if (headerSignupBtn) headerSignupBtn.hidden = isSignedIn;
       if (mobileSignInRow) mobileSignInRow.hidden = isSignedIn;
       if (headerUser) headerUser.hidden = !isSignedIn;
       const initials = document.getElementById('header-user-initials');
@@ -8914,26 +8907,38 @@ function downloadPngBlob(blob) {
     // this PR client-only: no change to the identity model, the token, or
     // session storage. The follow-up is noted in the PR description.
     // ---------------------------------------------------------------------
-    const AUTH_MODE_COPY = {
-      signup: {
-        title: 'Sign up to add your band',
-        copy: 'Quick one-time sign-up so we can attribute your contributions and let you edit later. ' +
-              'No password. Your email is only used for account recovery — never shared.',
-        submit: 'Sign up',
-        pending: 'Signing up…'
-      },
-      signin: {
-        title: 'Welcome back',
-        copy: 'Already have an account? Enter the same email you signed up with and we\'ll restore it — ' +
-              'no password needed. Confirm the rest so we can keep your profile current.',
-        submit: 'Sign in',
-        pending: 'Signing in…'
-      }
+    // ONE DOOR.
+    //
+    // There were two modes, signup and signin, and a tester reported not knowing
+    // which they needed -- reasonably, because they open the SAME panel with the
+    // same fields and only the wording differs. Worse, the Add-your-band button
+    // renamed itself to "Sign up" when signed out, so there were three labels for
+    // one room.
+    //
+    // They can be one thing because the server already treats them as one:
+    // /api/signup is insert-or-return on email (see signup.mjs), so the same
+    // submission signs a returning visitor in and creates an account for a new
+    // one. The panel now says exactly that instead of asking the visitor to
+    // predict which case they are.
+    //
+    // The two keys are kept so existing callers of setAuthMode() stay valid, but
+    // both resolve to the same copy; the argument no longer changes what is on
+    // screen. See setAuthMode below.
+    const AUTH_COPY = {
+      title: 'Sign in or create an account',
+      copy: 'One email, no password. If you have been here before we will restore your account; ' +
+            'if not, we will make you one. Your email is only used for account recovery — never shared.',
+      submit: 'Continue',
+      pending: 'Just a moment…'
     };
+    const AUTH_MODE_COPY = { signup: AUTH_COPY, signin: AUTH_COPY };
     let currentAuthMode = 'signup';
 
+    // The mode argument is accepted and recorded, but no longer switches the copy:
+    // there is one entry point now. Kept as a function so the call sites that
+    // reset framing (and the tests that pin them) continue to make sense.
     function setAuthMode(mode) {
-      const copy = AUTH_MODE_COPY[mode] || AUTH_MODE_COPY.signup;
+      const copy = AUTH_MODE_COPY[mode] || AUTH_COPY;
       currentAuthMode = AUTH_MODE_COPY[mode] ? mode : 'signup';
       const title = document.getElementById('signup-panel-title');
       const body = document.getElementById('signup-panel-copy');
@@ -8966,11 +8971,6 @@ function downloadPngBlob(blob) {
       document.getElementById('add-band-btn')?.setAttribute('aria-expanded', 'true');
       clampPopover(popover);
     }
-
-    document.getElementById('header-signup-btn')?.addEventListener('click', (event) => {
-      event.stopPropagation();
-      openSignupPopover();
-    });
 
     document.getElementById('sign-in-btn')?.addEventListener('click', (event) => {
       // The document-level "click outside → close popovers" handler would
@@ -10183,9 +10183,9 @@ function downloadPngBlob(blob) {
                 let data = null;
                 try { data = await response.json(); } catch (_) {}
                 if (!response.ok || !data || !data.user || !data.user.token) {
-                  const fallbackMsg = currentAuthMode === 'signin'
-                    ? `Sign-in failed (${response.status}).`
-                    : `Sign-up failed (${response.status}).`;
+                  // Was branched on the mode; with one door there is one message,
+                  // and it should not guess which half of the operation failed.
+                  const fallbackMsg = `Could not sign you in (${response.status}).`;
                   const msg = (data && (data.error || data.message)) || fallbackMsg;
                   status.textContent = msg;
                   status.className = 'validation-message is-error';

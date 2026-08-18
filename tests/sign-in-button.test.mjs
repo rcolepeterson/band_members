@@ -420,25 +420,33 @@ test('openSignInFlow does not proxy-click the Add-your-band toggle', () => {
 // Sign-in vs sign-up disambiguation.
 // -----------------------------------------------------------------------
 
-test('setAuthMode rewrites title, copy and submit label for both modes', () => {
-  assert.match(INDEX_HTML, /const AUTH_MODE_COPY = \{/, 'Expected an AUTH_MODE_COPY map.');
-  const map = sliceBetween(INDEX_HTML, /const AUTH_MODE_COPY = \{/, 'let currentAuthMode');
-  for (const mode of ['signup:', 'signin:']) {
-    assert.ok(map.includes(mode), `Expected AUTH_MODE_COPY to define ${mode}`);
-  }
-  for (const key of ['title:', 'copy:', 'submit:', 'pending:']) {
-    assert.ok(
-      map.split(key).length - 1 >= 2,
-      `Expected both AUTH_MODE_COPY modes to define ${key}`
-    );
-  }
+test('there is one auth panel, with one set of words', () => {
+  // This used to assert two modes -- signup and signin -- each with their own
+  // title, copy and submit label. A tester could not tell which they needed, and
+  // reasonably so: both opened the SAME panel with the SAME fields and only the
+  // wording differed. They are now one door, because the server already treats
+  // them as one (/api/signup is insert-or-return on email), so the panel states
+  // that outright instead of asking the visitor to predict their own case.
+  assert.match(INDEX_HTML, /const AUTH_COPY = \{/, 'Expected a single AUTH_COPY.');
+  assert.match(INDEX_HTML, /title: 'Sign in or create an account'/);
+  assert.match(INDEX_HTML, /submit: 'Continue'/);
+  // Both keys survive so existing callers stay valid, but they resolve to the
+  // same copy -- the argument no longer changes what is on screen.
+  assert.match(INDEX_HTML, /const AUTH_MODE_COPY = \{ signup: AUTH_COPY, signin: AUTH_COPY \};/);
   const fn = sliceBetween(INDEX_HTML, /function setAuthMode\(mode\) \{/, '\n    }');
   for (const id of ['signup-panel-title', 'signup-panel-copy', 'signup-submit-btn']) {
-    assert.ok(
-      fn.includes(`getElementById('${id}')`),
-      `Expected setAuthMode to rewrite #${id}.`
-    );
+    assert.ok(fn.includes(`getElementById('${id}')`), `Expected setAuthMode to rewrite #${id}.`);
   }
+});
+
+test('Add stops calling itself Sign up', () => {
+  // It renamed itself when signed out, which put a third label on the one room:
+  // the button a visitor pressed to contribute was not the button they later
+  // looked for. Pressing it while signed out still raises the auth panel, which
+  // now explains itself.
+  assert.match(INDEX_HTML, /addBtn\.textContent = 'Add your band';/);
+  assert.match(INDEX_HTML, /addBtn\.setAttribute\('aria-label', 'Add your band'\);/);
+  assert.doesNotMatch(INDEX_HTML, /isSignedIn \? 'Add your band' : 'Sign up'/);
 });
 
 test('signin mode reuses the existing signup form and endpoint', () => {
@@ -524,23 +532,19 @@ test('successful auth and sign-out both reset the panel to signup framing', () =
   );
 });
 
-test('submit handler pending + failure copy follow the active auth mode', () => {
+test('the in-flight and failure copy no longer guess which half is happening', () => {
+  // The pending label and the error both used to branch on the mode, so a visitor
+  // could be told "Sign-up failed" for what they thought was a sign-in. With one
+  // door there is one message.
   assert.match(
     INDEX_HTML,
     /const modeCopy = AUTH_MODE_COPY\[currentAuthMode\] \|\| AUTH_MODE_COPY\.signup;/,
-    'Expected the submit handler to read the active mode copy.'
+    'Expected the submit handler to read the panel copy.'
   );
-  assert.match(
-    INDEX_HTML,
-    /submitBtn\.textContent = modeCopy\.pending/,
-    'Expected the in-flight button label to follow the active mode ' +
-      '("Signing in…" vs "Signing up…").'
-  );
-  assert.match(
-    INDEX_HTML,
-    /currentAuthMode === 'signin'\s*\n?\s*\? `Sign-in failed/,
-    'Expected the fallback error message to follow the active mode.'
-  );
+  assert.match(INDEX_HTML, /submitBtn\.textContent = modeCopy\.pending/);
+  assert.match(INDEX_HTML, /pending: 'Just a moment…'/);
+  assert.match(INDEX_HTML, /const fallbackMsg = `Could not sign you in \(\$\{response\.status\}\)\.`;/);
+  assert.doesNotMatch(INDEX_HTML, /Sign-up failed/);
 });
 
 // -----------------------------------------------------------------------

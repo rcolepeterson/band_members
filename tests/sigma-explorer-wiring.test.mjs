@@ -1104,16 +1104,14 @@ test('the hamburger is retired on the constellation', () => {
   assert.match(INDEX_HTML, /const isMobile = !onConstellation && window\.matchMedia\('\(max-width: 900px\)'\)\.matches;/);
 });
 
-test('the corner the hamburger vacated carries Sign up and Sign in', () => {
-  assert.match(INDEX_HTML, /id="header-signup-btn"/);
-  // Sign up first: a first-time visitor is the common case in that corner.
+test('the corner the hamburger vacated carries ONE way in', () => {
+  // A pair shipped here a change ago, when both entry points still existed. With
+  // the flows merged, two controls for one room was the confusion rather than the
+  // cure, so there is a single control (feedback item x).
   const right = INDEX_HTML.slice(INDEX_HTML.indexOf('<div class="header-right">'), INDEX_HTML.indexOf('id="header-user"'));
-  assert.ok(right.indexOf('header-signup-btn') < right.indexOf('sign-in-btn'), 'Sign up should come first');
-  // Both follow the same signed-in rule, or a signed-in visitor keeps being
-  // invited to sign up.
-  assert.match(INDEX_HTML, /if \(headerSignupBtn\) headerSignupBtn\.hidden = isSignedIn;/);
-  // It reuses the existing flow rather than adding a second implementation.
-  assert.match(INDEX_HTML, /getElementById\('header-signup-btn'\)\?\.addEventListener\('click', \(event\) => \{[\s\S]{0,120}openSignupPopover\(\);/);
+  assert.doesNotMatch(right, /header-signup-btn/);
+  assert.match(right, /id="sign-in-btn"/);
+  assert.equal((right.match(/class="header-btn/g) || []).length, 1, 'exactly one auth control');
 });
 
 test('the auth corner is reachable on a phone, where it is the only way in', () => {
