@@ -25,6 +25,19 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { RENDERERS, DEFAULT_RENDERER } from '../scripts/neighborhood-helpers.mjs';
+
+// Assertions about what the page LOADS must not be satisfiable by deleting the
+// comments that explain why -- and the comments explaining which hosts are gone
+// necessarily name those hosts.
+//
+// Strips HTML comments and JS line comments. The (?<!:) guard is the whole trick:
+// without it, `//` in `https://d3js.org` would itself look like the start of a
+// comment, so a REAL script tag would be stripped too and the assertion below could
+// never fail. Verified by reinstating the tag.
+const stripComments = html =>
+  String(html)
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/(?<!:)\/\/[^\n]*/g, '');
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -44,9 +57,11 @@ test('index.html loads the explorer as a module and nothing else changes rendere
     /<script type="module" src="scripts\/sigma-explorer\.mjs"><\/script>/,
     'the explorer must be loaded as an ES module from index.html'
   );
-  // The SVG renderer is still the one the page builds on load.
   assert.match(INDEX_HTML, /<svg id="graph-svg"/);
-  assert.match(INDEX_HTML, /https:\/\/d3js\.org\/d3\.v7\.min\.js/);
+  // d3 used to be a render-blocking <script> from d3js.org here. It is now vendored
+  // and fetched on demand, so what has to exist is the loader, not the tag.
+  assert.match(INDEX_HTML, /function ensureD3\(\)/);
+  assert.doesNotMatch(stripComments(INDEX_HTML), /<script src="https:\/\/d3js\.org/);
 });
 
 test('the module self-boots unless the SVG renderer was asked for', () => {
@@ -281,13 +296,18 @@ test('CDN versions are pinned in the import map, matching package.json', () => {
   assert.ok(sigma, 'sigma must be a devDependency so the CDN pin is reviewable');
   const version = range => String(range).replace(/^[^0-9]*/, '');
   assert.match(INDEX_HTML, /<script type="importmap">/);
+  // The map now points at this origin, so the version it resolves to is recorded in
+  // the vendored file's banner rather than in a URL. Same requirement -- the shipped
+  // version must be reviewable and must agree with package.json -- different place.
+  const sigmaBundle = readFileSync(new URL('../vendor/sigma.mjs', import.meta.url), 'utf8').slice(0, 400);
+  const graphologyBundle = readFileSync(new URL('../vendor/graphology.mjs', import.meta.url), 'utf8').slice(0, 400);
   assert.ok(
-    INDEX_HTML.includes(`https://esm.sh/graphology@${version(graphology)}`),
-    'the import map must pin the same graphology version as package.json'
+    sigmaBundle.includes(`sigma@${version(sigma)}`),
+    `vendor/sigma.mjs must record sigma@${version(sigma)} to match package.json`
   );
   assert.ok(
-    INDEX_HTML.includes(`https://esm.sh/sigma@${version(sigma)}`),
-    'the import map must pin the same sigma version as package.json'
+    graphologyBundle.includes(`graphology@${version(graphology)}`),
+    `vendor/graphology.mjs must record graphology@${version(graphology)} to match package.json`
   );
   // @sigma/edge-curve was removed when the constellation went to straight
   // lines: curved threads crossed each other and read as tangled tension. Its
@@ -1161,4 +1181,91 @@ test('the page title carries no version number', () => {
   const og = INDEX_HTML.match(/<meta property="og:title" content="([^"]*)"/);
   assert.ok(og, 'expected an og:title');
   assert.equal(og[1], title[1], 'the tab and the shared card should say the same thing');
+});
+
+// --- no third party on the critical path -------------------------------------
+//
+// The page used to need d3js.org and esm.sh in order to boot. Blocking d3js.org
+// produced a blank page, not a slower one -- and that failure was invisible from a
+// machine whose network reaches those hosts, which is every machine we test on.
+// These assertions are the only thing standing between that and a quiet relapse.
+
+test('the import map points at this origin, not a CDN', () => {
+  const map = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('<script type="importmap">'),
+    INDEX_HTML.indexOf('</script>', INDEX_HTML.indexOf('<script type="importmap">')),
+  );
+  assert.ok(map.length > 0, 'expected an import map');
+  assert.match(map, /"sigma":\s*"\/vendor\/sigma\.mjs"/);
+  assert.match(map, /"graphology":\s*"\/vendor\/graphology\.mjs"/);
+  assert.doesNotMatch(map, /esm\.sh/, 'no module may resolve through esm.sh');
+  assert.doesNotMatch(map, /https?:\/\//, 'every mapping must be same-origin');
+});
+
+test('nothing loads a library from a third party', () => {
+  // esm.sh resolved graphology-utils@^2.5.2 -- a caret range -- at request time,
+  // so production JavaScript could change with no commit and no deploy.
+  //
+  // Comments are stripped first: the comments explaining WHY these hosts are gone
+  // name the hosts, and an assertion that forbids saying the words would have to be
+  // satisfied by deleting the explanation.
+  const markup = stripComments(INDEX_HTML);
+  assert.doesNotMatch(markup, /d3js\.org/, 'd3 must not come from d3js.org');
+  assert.doesNotMatch(markup, /esm\.sh/, 'no library may come from esm.sh');
+  assert.doesNotMatch(markup, /unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com/);
+});
+
+test('d3 is fetched on demand, not on every load', () => {
+  // d3's only jobs are the SVG force simulation and the CSV fallback. Neither runs
+  // on the constellation, so blocking every visitor on 278KB was pure waste.
+  assert.match(INDEX_HTML, /function ensureD3\(\)/);
+  assert.match(INDEX_HTML, /tag\.src = '\/vendor\/d3\.js';/);
+  // Cached, so several callers cannot start several downloads.
+  assert.match(INDEX_HTML, /if \(window\.d3\) return Promise\.resolve\(window\.d3\);/);
+  assert.match(INDEX_HTML, /if \(d3Loading\) return d3Loading;/);
+  // A failure must not be cached forever, or one flaky load would disable the SVG
+  // renderer for the rest of the session.
+  const loader = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('function ensureD3()'),
+    INDEX_HTML.indexOf('function setupSvgRenderer'),
+  );
+  assert.ok(loader.length > 0, 'expected to find the loader');
+  assert.match(loader, /d3Loading = null;/);
+});
+
+test('the SVG renderer is built only when it is the renderer', () => {
+  // This block used to run inline at boot, which is precisely why blocking d3
+  // blanked a page that draws no SVG at all.
+  assert.match(INDEX_HTML, /function setupSvgRenderer\(\)/);
+  assert.match(INDEX_HTML, /function onSigmaPath\(\)/);
+  assert.match(INDEX_HTML, /const rendererReady = onSigmaPath\(\)\s*\n\s*\? Promise\.resolve\(\)\s*\n\s*: ensureD3\(\)\.then\(setupSvgRenderer\);/);
+  // And the data load waits on it, so nothing draws before the renderer exists.
+  assert.match(INDEX_HTML, /rendererReady\.then\(loadGraphData\)\.then\(async rows => \{/);
+  // The CSV fallback is the constellation's only route to d3, and must await it.
+  const fallback = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('Falling back to CSV load'),
+    INDEX_HTML.indexOf('d3.csv('),
+  );
+  assert.ok(fallback.length > 0, 'expected to find the CSV fallback');
+  assert.match(fallback, /await ensureD3\(\);/);
+});
+
+test('the vendored bundles are self-contained and reproducible', () => {
+  const sigma = readFileSync(new URL('../vendor/sigma.mjs', import.meta.url), 'utf8');
+  const graphology = readFileSync(new URL('../vendor/graphology.mjs', import.meta.url), 'utf8');
+  // A surviving bare specifier would resolve through the import map at runtime and
+  // could quietly reach a network again.
+  for (const [name, src] of [['sigma', sigma], ['graphology', graphology]]) {
+    assert.doesNotMatch(src, /esm\.sh|d3js\.org|unpkg/, `${name} must not reference a CDN`);
+    assert.match(src, /Rebuild with: npm run vendor/, `${name} should record how it was built`);
+  }
+  // package-lock.json is gitignored here, so the lockfile cannot be the record of
+  // what ships -- the committed vendor/ files are, and they change only in a
+  // reviewable diff. The build script and the pinned devDependencies are what make
+  // regenerating them repeatable.
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(pkg.scripts.vendor, 'node scripts/vendor-libs.mjs');
+  for (const dep of ['sigma', 'graphology', 'd3']) {
+    assert.ok(pkg.devDependencies[dep], `${dep} must stay a pinned devDependency`);
+  }
 });
