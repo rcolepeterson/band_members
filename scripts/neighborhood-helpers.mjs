@@ -74,7 +74,22 @@ export const NEIGHBORHOOD_BUDGET = Object.freeze({
   // Expanded neighborhood after the opening view settles.
   MAX_NODES: 100,
   // Hard ceiling on traversal depth regardless of the node budget.
-  MAX_HOPS: 3,
+  //
+  // Two, not three. From a musician, two degrees is exactly one sentence: here is
+  // the person, here are their bands, here are the people they played with. Three
+  // begins pulling in those bandmates' OTHER bands, which is a second sentence and
+  // the point where the opening view stops being about anyone in particular.
+  //
+  // From Aaron the difference is small in count -- 15 nodes at two degrees against
+  // 18 at three -- so this is a change of meaning, not of weight. It is not a
+  // performance measure and should not be sold as one. What it does buy is somewhere
+  // for Expand to go: the first press now reveals the branch that used to be there
+  // before anyone asked.
+  //
+  // One constant, so every fresh view agrees: opening, Reset, Travel, search and a
+  // filter change all frame two degrees. Anything else would mean Reset could shrink
+  // the view you were already looking at.
+  MAX_HOPS: 2,
   // Cap on edges handed to Sigma. Dense hubs (a member in 12 bands) can
   // blow past the node cap in edges alone.
   MAX_EDGES: 400,
