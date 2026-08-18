@@ -167,6 +167,21 @@ const TIP_ID = 'sigma-action-tip';
 const BODY_ACTIVE_CLASS = 'rbft-sigma-chrome';
 
 const EXPLORE_COPY = 'You are viewing one region of a much larger music universe.';
+// Shown while the view is centred on the home star, which is where every visitor
+// who has not followed a shared link begins.
+//
+// Landing a stranger on one specific musician is only charming if they are told
+// why -- the Tom-from-Myspace trick works because Tom introduced himself. Without
+// this, the opening view reads as "here is a person you have never heard of".
+// First person, because it is his site and his node. The name comes from the
+// home star rather than being written in, so changing the default anchor cannot
+// leave the copy claiming to be someone else.
+const introCopy = (name) => {
+  const first = String(name || '').trim().split(/\s+/)[0] || 'I';
+  return `<strong class="sigma-intro__hello">Hey, I&rsquo;m ${escapeHtml(first)}.</strong> `
+    + `I built this site &mdash; you&rsquo;re starting on my node. `
+    + `Search for a band or artist above to find your place in the band universe.`;
+};
 
 // Base camera ratio for a freshly framed view. Comfortably above 1 because Sigma
 // frames NODES, and a node's label extends well past it -- at 1.0 every name
@@ -357,6 +372,9 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-prompt button:focus-visible{outline:2px solid rgba(143,232,246,0.8);
   outline-offset:2px}
 #${STAGE_ID} .sigma-footer .sigma-hint{margin:0;font-size:13px;color:#93a1b2}
+/* The greeting is in the gold of his star label, so the voice and the node the
+   visitor is looking at are visibly the same thing. */
+#${STAGE_ID} .sigma-intro__hello{color:#ffc978;font-weight:500}
 #${STAGE_ID} .sigma-footer .sigma-frontier{font-size:12px;color:#8b98a8}
 #${STAGE_ID} .sigma-context{margin:0;font-size:12px;color:#9aa7b6;line-height:1.45}
 #${STAGE_ID} .sigma-context strong{color:#dfe6ef;font-weight:500}
@@ -485,8 +503,11 @@ function buildStage(doc, mount) {
       </div>
     </div>
     <div class="sigma-footer">
-      <p class="sigma-context" aria-live="polite"></p>
+      <!-- The introduction reads BEFORE the numbers. A visitor who has just been
+           dropped on a stranger's node needs to know why before being told how
+           many degrees out it is. -->
       <p class="sigma-hint">${EXPLORE_COPY}</p>
+      <p class="sigma-context" aria-live="polite"></p>
       <span class="sigma-frontier"></span>
     </div>
   `;
@@ -529,6 +550,7 @@ export function initSigmaExplorer({
   const homeStarEl = stage.querySelector('.sigma-home-star');
   const focusRingEl = stage.querySelector('.sigma-focus-ring');
   const contextEl = stage.querySelector('.sigma-context');
+  const hintEl = stage.querySelector('.sigma-hint');
   const frontierEl = stage.querySelector('.sigma-frontier');
   // The page's Add / Share / Feedback panels live INSIDE the toolbar that stands
   // down for the Sigma chrome, so hiding the toolbar hid the panels too and the
@@ -931,6 +953,15 @@ export function initSigmaExplorer({
     if (homeStarId) {
       homeLabelEl.textContent =
         homeStarId === state.anchorId ? `${homeStarId} — you are here` : homeStarId;
+    }
+
+    // His introduction while the view is centred on him, the generic explainer
+    // once the visitor has gone somewhere of their own choosing. Keyed on the
+    // anchor rather than on "first visit" so it also comes back with Reset,
+    // which is the other way to end up on his node.
+    if (hintEl) {
+      const onHomeStar = Boolean(homeStarId) && homeStarId === state.anchorId;
+      hintEl.innerHTML = onHomeStar ? introCopy(homeStarId) : EXPLORE_COPY;
     }
     positionOverlays();
 

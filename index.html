@@ -2283,6 +2283,11 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   backdrop-filter: blur(14px) saturate(1.1);
   -webkit-backdrop-filter: blur(14px) saturate(1.1);
 }
+.graph-empty-state__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
 .graph-empty-state__title {
   font-family: var(--font-display);
   font-size: clamp(1.4rem, 1.1rem + 1vw, 1.9rem);
@@ -3260,6 +3265,11 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       visitors land straight on the Add-band form. No parallel gate.
     -->
     <div class="graph-empty-state" id="graph-empty-state" role="status" aria-live="polite" hidden>
+      <!-- Reported by a tester: the card had no way out. Adding the band was the
+           only offered action, so anyone who had simply mistyped was stuck
+           looking at it. Same close affordance as the node card. -->
+      <button type="button" class="popover-close graph-empty-state__close" id="graph-empty-state-close"
+              aria-label="Close">&times;</button>
       <div class="graph-empty-state__title">No Rawk Found</div>
       <p class="graph-empty-state__sub">
         Nothing in the tree matches <span class="graph-empty-state__query" id="graph-empty-state-query"></span>. Want to add them?
@@ -7187,6 +7197,11 @@ function downloadPngBlob(blob) {
       if (!popover || popover.hidden) openSignupPopover();
       if (loadCurrentUser()) prefillAddBandName(currentSearch);
     }
+
+    document.getElementById('graph-empty-state-close')?.addEventListener('click', event => {
+      event.stopPropagation();
+      if (graphEmptyState) graphEmptyState.hidden = true;
+    });
 
     document.getElementById('graph-empty-state-cta')?.addEventListener('click', event => {
       // Same reason as the mobile Add-your-band trigger: stop the
