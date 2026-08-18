@@ -1,0 +1,7 @@
+# Rock Band Family Tree
+# The graph is one page; ?anchor= only changes which node it opens on, so there is
+# nothing per-band to crawl and nothing to disallow.
+User-agent: *
+Allow: /
+
+Sitemap: https://bandmembers.netlify.app/sitemap.xml

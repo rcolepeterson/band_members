@@ -1,0 +1,6 @@
+# One canonical URL for the graph.
+#
+# /index.html and / both returned 200 with identical content, which splits crawler
+# attention and means shared links come in two shapes. Query strings are preserved
+# by Netlify, so a shared /index.html?anchor=Mudhoney still lands on the right band.
+/index.html   /   301!

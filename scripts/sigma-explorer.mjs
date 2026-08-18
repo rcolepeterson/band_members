@@ -1690,6 +1690,20 @@ export function initSigmaExplorer({
   // here the address bar stays put, so a refresh returns to this view.
   syncAddressBar();
 
+  // A link asked for a band we do not have. Say so, rather than opening on the
+  // fallback as though nothing was requested -- the recipient of a stale shared
+  // link would otherwise land on a stranger's node with no way to tell they had
+  // been sent somewhere specific. Reuses the same prompt a failed search raises,
+  // which already offers to add the missing band.
+  if (resolved.requestedByLink) {
+    stage.dispatchEvent(
+      new CustomEvent('rbft:sigma-search-miss', {
+        bubbles: true,
+        detail: { query: resolved.requestedByLink, fromLink: true },
+      })
+    );
+  }
+
   return {
     stage,
     renderer,

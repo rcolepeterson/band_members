@@ -253,16 +253,24 @@ export function resolveAnchor({
 
   const raw = String(search || '');
   const params = new URLSearchParams(raw.startsWith('?') ? raw.slice(1) : raw);
+  // Remembered so a caller can tell the difference between "no link asked for
+  // anything" and "a link asked for a band we do not have". Both used to land
+  // silently on the fallback, which meant a shared link to a renamed or deleted
+  // band opened on a stranger's node with no explanation -- the recipient cannot
+  // tell that they were sent somewhere specific at all.
+  let requestedByLink = null;
   for (const param of ANCHOR_PARAMS) {
-    const hit = match(params.get(param));
-    if (hit) return { anchorId: hit, source: 'deep-link', param };
+    const asked = params.get(param);
+    if (asked && String(asked).trim() && !requestedByLink) requestedByLink = String(asked).trim();
+    const hit = match(asked);
+    if (hit) return { anchorId: hit, source: 'deep-link', param, requestedByLink: null };
   }
 
   const runtime = match(requested);
-  if (runtime) return { anchorId: runtime, source: 'requested', param: null };
+  if (runtime) return { anchorId: runtime, source: 'requested', param: null, requestedByLink };
 
   const fallbackHit = match(fallback);
-  if (fallbackHit) return { anchorId: fallbackHit, source: 'fallback', param: null };
+  if (fallbackHit) return { anchorId: fallbackHit, source: 'fallback', param: null, requestedByLink };
 
   const adj = adjacency || buildAdjacency(nodes, links);
   let best = null;
@@ -275,8 +283,8 @@ export function resolveAnchor({
     }
   });
   return best
-    ? { anchorId: best, source: 'highest-degree', param: null }
-    : { anchorId: null, source: 'none', param: null };
+    ? { anchorId: best, source: 'highest-degree', param: null, requestedByLink }
+    : { anchorId: null, source: 'none', param: null, requestedByLink };
 }
 
 export function normalizeAnchorKey(value) {
