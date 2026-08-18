@@ -1269,3 +1269,14 @@ test('the vendored bundles are self-contained and reproducible', () => {
     assert.ok(pkg.devDependencies[dep], `${dep} must stay a pinned devDependency`);
   }
 });
+
+test('no comment impersonates a live CDN script tag', () => {
+  // A comment used to contain the literal string `<script src="https://d3js.org/...">`
+  // to explain what had been removed. Harmless to the browser, but it made the
+  // served HTML read as though the CDN tag were still there -- it fooled a grep of
+  // the live page twice, including mine. Describing the tag beats quoting it.
+  assert.ok(
+    !INDEX_HTML.includes('<script src="https://d3js.org'),
+    'nothing in the file, comment or not, should look like a live d3js.org script tag'
+  );
+});
