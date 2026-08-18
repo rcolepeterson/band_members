@@ -23,6 +23,13 @@
 //    localStorage. This is a plain bearer token so the client can attach it
 //    to subsequent /api/contributions and /api/me calls.
 //
+// 5. Two request shapes on one endpoint:
+//      { intent: 'signin', email }  -> look up only; never creates. Answers
+//                                      { found: true, user } or { found: false }.
+//      { email, name, city, ... }   -> the insert-or-return described above.
+//    This exists so a returning visitor can be recognised by email alone rather
+//    than retyping a profile the row already holds.
+//
 // Rate limiting: none at this layer. Netlify's platform-level rate limits
 // apply. If we see abuse we'll add per-IP throttling in a separate PR.
 
@@ -67,6 +74,63 @@ export default async (req) => {
   }
 
   const email      = normalizeEmail(body.email);
+
+  // Email-first sign-in.
+  //
+  // A returning visitor should not have to retype the four profile fields just
+  // to be recognised -- the row is keyed on email and nothing else is needed to
+  // find it. With { intent: 'signin' } this looks the email up and either signs
+  // them in or reports that there is no account yet, WITHOUT creating one. The
+  // client then reveals the profile fields for a genuine sign-up.
+  //
+  // An explicit intent rather than inferring from absent fields: inference would
+  // make a malformed sign-up (dropped field, bad client state) silently behave
+  // like a sign-in, and "no account found" is a very different answer from
+  // "you forgot to fill in your city".
+  //
+  // "No account yet" is an ANSWER, not an error, so it comes back 200 with
+  // found:false. A 404 would land in the console as a failure on the happy path
+  // of every new visitor.
+  if (body.intent === 'signin') {
+    if (!isPlausibleEmail(email)) {
+      return badRequest('email is required and must be a valid address', { field: 'email' });
+    }
+    try {
+      const sql = getSql();
+      const rows = await sql`
+        select id, email, name, token, bands_added, bands_edited, created_at,
+               city, state, country, instrument
+        from users
+        where lower(email) = lower(${email})
+        limit 1
+      `;
+      if (!rows[0]) return ok({ found: false, created: false, user: null });
+      const user = rows[0];
+      return ok({
+        found: true,
+        created: false,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          token: user.token,
+          bands_added: user.bands_added,
+          bands_edited: user.bands_edited,
+          created_at: user.created_at,
+          city: user.city,
+          state: user.state,
+          country: user.country,
+          instrument: user.instrument,
+        },
+      });
+    } catch (err) {
+      console.error('sign-in lookup failed', err);
+      return serverError('sign-in failed', {
+        message: err && err.message ? String(err.message) : 'unknown',
+      });
+    }
+  }
+
   const name       = normalizeName(body.name);
   const city       = normalizeCity(body.city);
   const state      = normalizeState(body.state);

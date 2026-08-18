@@ -3047,39 +3047,49 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                 </p>
                 <form class="form-grid" id="signup-form" novalidate>
                   <div class="form-span-2">
-                    <label for="signup-name">Your name</label>
-                    <input id="signup-name" name="signup-name" type="text" autocomplete="name" placeholder="Jane Musician" required maxlength="100" />
-                  </div>
-                  <div class="form-span-2">
                     <label for="signup-email">Email</label>
                     <input id="signup-email" name="signup-email" type="email" autocomplete="email" placeholder="you@example.com" required maxlength="254" />
                     <div class="field-note">Only used to attribute contributions and reach you if we need to. Not shared.</div>
                   </div>
                   <!--
-                    Profile fields added in PR signup-profile-fields. City /
-                    state / country give the map some 'where do our
-                    contributors live?' signal; instrument answers 'what do
-                    they play?'. All four required at signup per product
-                    decision on 2026-07-19; instrument accepts free-text so
-                    people who don't play can enter 'Music listener' or
-                    'Music connoisseur' (hinted in the placeholder).
+                    Everything below is what a NEW account needs: a name plus the
+                    four profile fields. It stays hidden until the email has been
+                    checked and come back unknown, so a returning visitor is
+                    recognised by email alone instead of retyping a profile the
+                    row already holds.
+
+                    City / state / country give the map its 'where do our
+                    contributors live?' signal; instrument answers 'what do they
+                    play?', free-text so people who don't play can enter 'Music
+                    listener' (hinted in the placeholder). Still required to
+                    create an account -- required is toggled in JS along with
+                    visibility, because a hidden required input blocks submission
+                    with a message the visitor can neither see nor reach.
                   -->
+                  <div class="signup-profile-fields form-span-2" id="signup-profile-fields" hidden>
+                  <div class="form-grid">
+                  <div class="form-span-2">
+                    <label for="signup-name">Your name</label>
+                    <input id="signup-name" name="signup-name" type="text" autocomplete="name" placeholder="Jane Musician" maxlength="100" />
+                  </div>
                   <div>
                     <label for="signup-city">City</label>
-                    <input id="signup-city" name="signup-city" type="text" autocomplete="address-level2" placeholder="Seattle" required maxlength="80" />
+                    <input id="signup-city" name="signup-city" type="text" autocomplete="address-level2" placeholder="Seattle" maxlength="80" />
                   </div>
                   <div>
                     <label for="signup-state">State / region</label>
-                    <input id="signup-state" name="signup-state" type="text" autocomplete="address-level1" placeholder="WA" required maxlength="80" />
+                    <input id="signup-state" name="signup-state" type="text" autocomplete="address-level1" placeholder="WA" maxlength="80" />
                   </div>
                   <div class="form-span-2">
                     <label for="signup-country">Country</label>
-                    <input id="signup-country" name="signup-country" type="text" autocomplete="country-name" placeholder="USA" required maxlength="80" />
+                    <input id="signup-country" name="signup-country" type="text" autocomplete="country-name" placeholder="USA" maxlength="80" />
                   </div>
                   <div class="form-span-2">
                     <label for="signup-instrument">Instrument you play</label>
-                    <input id="signup-instrument" name="signup-instrument" type="text" placeholder="Guitar, Bass, Drums… or &quot;Music listener&quot; if you don't play" required maxlength="60" />
+                    <input id="signup-instrument" name="signup-instrument" type="text" placeholder="Guitar, Bass, Drums… or &quot;Music listener&quot; if you don't play" maxlength="60" />
                     <div class="field-note">Don't play? Type <em>Music listener</em> or <em>Music connoisseur</em>.</div>
+                  </div>
+                  </div>
                   </div>
                   <div id="signup-status" class="validation-message" aria-live="polite"></div>
                   <div class="form-span-2 footer-strip">
@@ -8934,6 +8944,45 @@ function downloadPngBlob(blob) {
     const AUTH_MODE_COPY = { signup: AUTH_COPY, signin: AUTH_COPY };
     let currentAuthMode = 'signup';
 
+    // The four profile fields plus the name, shown only once an email has come
+    // back unknown. `required` is set here rather than in the markup: a hidden
+    // required input blocks form submission with a browser message the visitor can
+    // neither see nor reach, which is a dead end with no visible cause.
+    const PROFILE_FIELD_IDS = ['signup-name', 'signup-city', 'signup-state', 'signup-country', 'signup-instrument'];
+
+    function revealProfileFields() {
+      const wrap = document.getElementById('signup-profile-fields');
+      if (!wrap || !wrap.hidden) return;
+      wrap.hidden = false;
+      PROFILE_FIELD_IDS.forEach(id => {
+        const field = document.getElementById(id);
+        if (field) field.required = true;
+      });
+      const title = document.getElementById('signup-panel-title');
+      const body = document.getElementById('signup-panel-copy');
+      const submitBtn = document.getElementById('signup-submit-btn');
+      if (title) title.textContent = 'Create your account';
+      if (body) {
+        body.textContent = 'No account on that email yet. A few details and you are in — '
+          + 'city and instrument are what put you on the map.';
+      }
+      if (submitBtn) submitBtn.textContent = 'Create account';
+      const name = document.getElementById('signup-name');
+      if (name) name.focus();
+    }
+
+    // Back to step one: email only. Called whenever the panel is (re)framed, so a
+    // visitor who closed it mid-signup does not reopen it half-expanded.
+    function resetToEmailStep() {
+      const wrap = document.getElementById('signup-profile-fields');
+      if (!wrap) return;
+      wrap.hidden = true;
+      PROFILE_FIELD_IDS.forEach(id => {
+        const field = document.getElementById(id);
+        if (field) field.required = false;
+      });
+    }
+
     // The mode argument is accepted and recorded, but no longer switches the copy:
     // there is one entry point now. Kept as a function so the call sites that
     // reset framing (and the tests that pin them) continue to make sense.
@@ -8946,6 +8995,8 @@ function downloadPngBlob(blob) {
       if (title) title.textContent = copy.title;
       if (body) body.textContent = copy.copy;
       if (submitBtn) submitBtn.textContent = copy.submit;
+      // Reframing means starting over, so the profile step folds away again.
+      resetToEmailStep();
     }
 
     // Opens the shared popover in returning-user mode.
@@ -10125,8 +10176,19 @@ function downloadPngBlob(blob) {
               const state = (stateInput && stateInput.value || '').trim();
               const country = (countryInput && countryInput.value || '').trim();
               const instrument = (instrumentInput && instrumentInput.value || '').trim();
+              // Two steps on one form.
+              //
+              // Step one asks for the email and nothing else: a returning visitor
+              // is found by email alone, so making them retype a profile the row
+              // already holds was pure friction. Step two appears only when the
+              // email comes back unknown, and only then do the name and profile
+              // rules apply -- checking them in step one would demand fields that
+              // are not on screen.
+              const profileFields = document.getElementById('signup-profile-fields');
+              const creatingAccount = Boolean(profileFields && !profileFields.hidden);
+
               // Client-side sanity check. Server enforces the real rules.
-              if (!name || name.length > 100) {
+              if (creatingAccount && (!name || name.length > 100)) {
                 status.textContent = 'Please enter your name (up to 100 characters).';
                 status.className = 'validation-message is-error';
                 return;
@@ -10140,22 +10202,22 @@ function downloadPngBlob(blob) {
               // Length caps: city/state/country 80, instrument 60. We check
               // presence + length here so users get instant feedback instead
               // of a round-trip.
-              if (!city || city.length > 80) {
+              if (creatingAccount && (!city || city.length > 80)) {
                 status.textContent = 'Please enter your city (up to 80 characters).';
                 status.className = 'validation-message is-error';
                 return;
               }
-              if (!state || state.length > 80) {
+              if (creatingAccount && (!state || state.length > 80)) {
                 status.textContent = 'Please enter your state or region (up to 80 characters).';
                 status.className = 'validation-message is-error';
                 return;
               }
-              if (!country || country.length > 80) {
+              if (creatingAccount && (!country || country.length > 80)) {
                 status.textContent = 'Please enter your country (up to 80 characters).';
                 status.className = 'validation-message is-error';
                 return;
               }
-              if (!instrument || instrument.length > 60) {
+              if (creatingAccount && (!instrument || instrument.length > 60)) {
                 status.textContent = 'Please enter an instrument (or type "Music listener" if you don\'t play).';
                 status.className = 'validation-message is-error';
                 return;
@@ -10171,17 +10233,29 @@ function downloadPngBlob(blob) {
                 const response = await fetch(SIGNUP_ENDPOINT, {
                   method: 'POST',
                   headers: { 'content-type': 'application/json' },
-                  body: JSON.stringify({
-                    name: name,
-                    email: email,
-                    city: city,
-                    state: state,
-                    country: country,
-                    instrument: instrument
-                  })
+                  body: JSON.stringify(creatingAccount
+                    ? { name, email, city, state, country, instrument }
+                    // Look up only. The server never creates an account for this
+                    // shape, so a typo'd email cannot silently make a second one.
+                    : { intent: 'signin', email })
                 });
                 let data = null;
                 try { data = await response.json(); } catch (_) {}
+
+                // Known email, so that was the whole sign-in. Unknown email, so
+                // this visitor is new: reveal what an account needs and let them
+                // press Continue again. Deliberately not auto-creating from one
+                // press -- a mistyped address would make an account nobody can
+                // reach.
+                if (!creatingAccount && response.ok && data && data.found === false) {
+                  revealProfileFields();
+                  // No status line here: revealProfileFields already rewrites the
+                  // panel title and copy to say the same thing, and the status
+                  // region sits below all six fields where a phone visitor would
+                  // never see it.
+                  return;
+                }
+
                 if (!response.ok || !data || !data.user || !data.user.token) {
                   // Was branched on the mode; with one door there is one message,
                   // and it should not guess which half of the operation failed.
@@ -10219,8 +10293,13 @@ function downloadPngBlob(blob) {
                 // before the request: the success path calls
                 // setAuthMode('signup'), so a captured "Sign in" would be
                 // put back and leave the panel self-contradictory.
-                submitBtn.textContent =
-                  (AUTH_MODE_COPY[currentAuthMode] || AUTH_MODE_COPY.signup).submit;
+                // Respect the step, not just the panel framing: once the profile
+                // fields are open the button is creating an account, and resetting
+                // it to "Continue" here undid revealProfileFields' label.
+                const profileOpen = !document.getElementById('signup-profile-fields')?.hidden;
+                submitBtn.textContent = profileOpen
+                  ? 'Create account'
+                  : (AUTH_MODE_COPY[currentAuthMode] || AUTH_COPY).submit;
               }
             });
           }
