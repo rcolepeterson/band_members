@@ -1147,3 +1147,18 @@ test('the phone pill row fits on one line with every word intact', () => {
   assert.match(phone, /\.sigma-actions\{gap:5px;flex-wrap:nowrap\}/);
   assert.match(phone, /\.sigma-action\{padding:0 9px;font-size:12px;height:44px\}/);
 });
+
+test('the page title carries no version number', () => {
+  // "v1" in the title told every visitor they had arrived at a draft, and it
+  // disagreed with og:title -- so a shared link and the tab it opened were
+  // labelled differently.
+  const title = INDEX_HTML.match(/<title>([^<]*)<\/title>/);
+  assert.ok(title, 'expected a title tag');
+  assert.equal(title[1], 'Rock Band Family Tree');
+  // Pinned as a shape too, so v2 cannot arrive the same way v1 did.
+  assert.doesNotMatch(title[1], /\bv\d+\b/i, 'no version number in the title');
+  // And it must agree with the card a shared link renders.
+  const og = INDEX_HTML.match(/<meta property="og:title" content="([^"]*)"/);
+  assert.ok(og, 'expected an og:title');
+  assert.equal(og[1], title[1], 'the tab and the shared card should say the same thing');
+});
