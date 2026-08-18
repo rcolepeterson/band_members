@@ -3689,7 +3689,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     // Resolves once window.d3 is usable. Cached, so several callers cannot start
     // several downloads. Served from this origin, so there is no third party to be
     // down, slow, blocked by an extension, or to have its bytes changed under us --
-    // the old <script src="https://d3js.org/..."> carried no integrity attribute.
+    // the old third-party d3 tag carried no integrity attribute.
     let d3Loading = null;
     function ensureD3() {
       if (window.d3) return Promise.resolve(window.d3);
