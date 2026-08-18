@@ -320,6 +320,10 @@ const CLICK_THROUGH = [
   // the other bug -- the "No Rawk Found" prompt with its offer to add the band
   // existed and worked, but nothing listened for the miss, so it never appeared.
   { search: 'Zzzz Not A Real Band', opens: '#graph-empty-state', label: 'No Rawk Found' },
+  // The corner the hamburger vacated. On a phone this is now the only way in, so
+  // both have to raise a usable panel at every width.
+  { selector: '#header-signup-btn', opens: '#add-band-popover', label: 'Sign up panel' },
+  { selector: '#sign-in-btn', opens: '#add-band-popover', label: 'Sign in panel' },
 ];
 
 const MEASURE_OPENED = (selector) => {
@@ -662,7 +666,7 @@ for (const viewport of VIEWPORTS) {
 
   // Press every pill and look at what comes up. See CLICK_THROUGH.
   for (const item of CLICK_THROUGH) {
-    const trigger = `.sigma-action[data-key="${item.key}"]`;
+    const trigger = item.selector || `.sigma-action[data-key="${item.key}"]`;
     const label = `${dataset.label}  ${viewport.label} / ${item.label}`;
     let result;
     try {
@@ -675,7 +679,7 @@ for (const viewport of VIEWPORTS) {
       } else {
       const present = await page.$(trigger);
       if (!present) {
-        result = { problems: [`no ${item.key} pill to press`] };
+        result = { problems: [`no ${item.key || item.selector} control to press`] };
       } else {
         // A real press, at the pill's own coordinates, so anything covering the
         // pill fails here rather than being bypassed by a synthetic event.
@@ -698,7 +702,7 @@ for (const viewport of VIEWPORTS) {
     await page.waitForTimeout(350);
     await page.evaluate(() => {
       // Escape does not close every panel; hide any that are still up.
-      ['.sigma-filters', '#share-popover', '#add-band-popover', '#feedback-popover', '#graph-empty-state']
+      ['.sigma-filters', '#share-popover', '#add-band-popover', '#feedback-popover', '#graph-empty-state', '#signup-popover']
         .forEach(sel => { const el = document.querySelector(sel); if (el && !el.hidden) el.hidden = true; });
       const field = document.querySelector('.sigma-prompt input');
       if (field) field.value = '';

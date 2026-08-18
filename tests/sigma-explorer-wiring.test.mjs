@@ -1090,3 +1090,51 @@ test('the introduction reads before the node count', () => {
   const footer = EXPLORER.slice(EXPLORER.indexOf('<div class="sigma-footer">'), EXPLORER.indexOf('</div>\n  `;'));
   assert.ok(footer.indexOf('sigma-hint') < footer.indexOf('sigma-context'), 'the hint should come first');
 });
+
+test('the hamburger is retired on the constellation', () => {
+  // It duplicated the pill row -- Add, Share, Feedback, the filters and search
+  // all had a second home inside it. Two ways to do the same thing, and the pills
+  // are the ones a visitor can see (feedback item xiv).
+  const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
+  assert.match(css, /body\.rbft-sigma-boot \.mobile-menu-btn,/);
+  assert.match(css, /body\.rbft-sigma-boot #mobile-menu-sheet,/);
+  assert.match(css, /body\.rbft-sigma-boot #mobile-sheet-backdrop,/);
+  // Sign-up must stop reaching through the retired sheet for its trigger.
+  assert.match(INDEX_HTML, /const onConstellation = document\.body && document\.body\.classList\.contains\('rbft-sigma-boot'\);/);
+  assert.match(INDEX_HTML, /const isMobile = !onConstellation && window\.matchMedia\('\(max-width: 900px\)'\)\.matches;/);
+});
+
+test('the corner the hamburger vacated carries Sign up and Sign in', () => {
+  assert.match(INDEX_HTML, /id="header-signup-btn"/);
+  // Sign up first: a first-time visitor is the common case in that corner.
+  const right = INDEX_HTML.slice(INDEX_HTML.indexOf('<div class="header-right">'), INDEX_HTML.indexOf('id="header-user"'));
+  assert.ok(right.indexOf('header-signup-btn') < right.indexOf('sign-in-btn'), 'Sign up should come first');
+  // Both follow the same signed-in rule, or a signed-in visitor keeps being
+  // invited to sign up.
+  assert.match(INDEX_HTML, /if \(headerSignupBtn\) headerSignupBtn\.hidden = isSignedIn;/);
+  // It reuses the existing flow rather than adding a second implementation.
+  assert.match(INDEX_HTML, /getElementById\('header-signup-btn'\)\?\.addEventListener\('click', \(event\) => \{[\s\S]{0,120}openSignupPopover\(\);/);
+});
+
+test('the auth corner is reachable on a phone, where it is the only way in', () => {
+  const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
+  // The base stylesheet hides .header-right below 720px; with the sheet gone that
+  // would leave a phone with no way to sign in at all.
+  assert.match(css, /body\.rbft-sigma-boot \.header-right \{\s*\n\s*display: flex !important;/);
+  // A density pass pins .header-btn to min-height:26px !important, which is why
+  // Sign in has always been a 26px target. Survivable as a desktop convenience,
+  // not as the only entry on a phone.
+  assert.match(css, /body\.rbft-sigma-boot \.header-right \.header-btn \{\s*\n\s*min-height: 36px !important;/);
+  assert.match(css, /min-height: 40px !important;/);
+  // And the hero drops below that row, or the wordmark prints through it.
+  assert.match(css, /body\.rbft-sigma-boot #sigma-stage \.sigma-hero \{ top: 56px; \}/);
+});
+
+test('the phone pill row fits on one line with every word intact', () => {
+  // The wrap was never a shortage of space: at the old padding the row measured
+  // 353px inside 390px and still broke. Tightening brings it to 366px, so nothing
+  // has to be renamed, hidden behind a menu, or pushed off a scrolling edge.
+  const phone = EXPLORER.slice(EXPLORER.indexOf('@media (max-width:720px)'));
+  assert.match(phone, /\.sigma-actions\{gap:5px;flex-wrap:nowrap\}/);
+  assert.match(phone, /\.sigma-action\{padding:0 9px;font-size:12px;height:44px\}/);
+});
