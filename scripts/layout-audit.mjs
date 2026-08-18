@@ -320,9 +320,9 @@ const CLICK_THROUGH = [
   // the other bug -- the "No Rawk Found" prompt with its offer to add the band
   // existed and worked, but nothing listened for the miss, so it never appeared.
   { search: 'Zzzz Not A Real Band', opens: '#graph-empty-state', label: 'No Rawk Found' },
-  // The corner the hamburger vacated. On a phone this is now the only way in, so
-  // both have to raise a usable panel at every width.
-  { selector: '#header-signup-btn', opens: '#add-band-popover', label: 'Sign up panel' },
+  // The corner the hamburger vacated. On a phone this is the only way in, so it
+  // has to raise a usable panel at every width. One control now, not two: the two
+  // flows are merged.
   { selector: '#sign-in-btn', opens: '#add-band-popover', label: 'Sign in panel' },
 ];
 
