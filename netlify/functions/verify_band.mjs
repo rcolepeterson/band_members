@@ -39,6 +39,7 @@ import {
   extractBearerToken,
   findUserByToken,
 } from './_db.mjs';
+import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
 import { fetchMusicBrainz, fetchWikipedia, scoreVerification } from './_verify_helpers.mjs';
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours, per spec
@@ -95,6 +96,18 @@ export default async (req) => {
   try {
     const user = await findUserByToken(sql, token);
     if (!user) return unauthorized('invalid or revoked token');
+
+    // Keyed on the user id, not the token: rotating a credential must not hand its
+    // holder a fresh budget, and the counter table should never hold a live secret.
+    // Placed after the token check so an invalid caller cannot spend a real user's
+    // allowance by guessing at their id.
+    const rl = await consume({ sql, bucket: `verify-band:user:${user.id}`, ...RATE_LIMITS.verifyBand });
+    if (!rl.allowed) {
+      return tooManyRequests(
+        'Verification is limited to protect MusicBrainz, which asks for one request a second. Try again shortly.',
+        rl.retryAfterSeconds
+      );
+    }
 
     const bandRows = await sql`select * from bands where id = ${bandId} limit 1`;
     if (!bandRows.length) return notFound('no band with that id');

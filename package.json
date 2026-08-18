@@ -2,7 +2,7 @@
   "name": "band-members",
   "version": "1.0.0",
   "private": true,
-  "description": "Rock Band Family Tree \u2014 static site with a Netlify Functions + Netlify Blobs backend for shared band submissions.",
+  "description": "Rock Band Family Tree — static site with a Netlify Functions + Netlify Blobs backend for shared band submissions.",
   "type": "module",
   "scripts": {
     "test": "node --test tests/",
@@ -19,6 +19,7 @@
     "@netlify/blobs": "^8.1.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.5",
     "d3": "^7.9.0",
     "esbuild": "^0.28.2",
     "graphology": "^0.26.0",
