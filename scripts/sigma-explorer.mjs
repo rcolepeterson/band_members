@@ -428,8 +428,14 @@ body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
   #${STAGE_ID} .sigma-hero{width:min(94vw,620px);gap:10px}
   #${STAGE_ID} .sigma-prompt{gap:8px}
   #${STAGE_ID} .sigma-prompt form{gap:8px}
-  #${STAGE_ID} .sigma-actions{gap:6px}
-  #${STAGE_ID} .sigma-action{padding:0 13px;font-size:12.5px}
+  /* One row, all six words. The wrap to a second row was never a shortage of
+     space -- at the old padding the row measured 353px inside 390px and still
+     broke. Tightened padding and font bring the rightmost edge to 366px, so
+     every action stays visible and named rather than being renamed, hidden
+     behind a menu, or pushed off a scrolling edge. Height stays at 44px for the
+     tap target even though only width was ever the constraint. */
+  #${STAGE_ID} .sigma-actions{gap:5px;flex-wrap:nowrap}
+  #${STAGE_ID} .sigma-action{padding:0 9px;font-size:12px;height:44px}
   /* Keeps "Explore" from eating the field's width on a narrow phone, without
      dropping the input's font below the 16px no-zoom threshold. */
   #${STAGE_ID} .sigma-prompt button{padding:0 18px}

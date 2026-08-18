@@ -268,3 +268,12 @@ test('the audit presses Share and weighs the picture it produces', () => {
   // And when nothing is produced, report what the page told the visitor.
   assert.match(AUDIT, /no image was produced/);
 });
+
+test('the audit presses the auth corner too', () => {
+  // On a phone this corner is the only way in, so both controls have to raise a
+  // usable panel at every width.
+  assert.match(AUDIT, /selector: '#header-signup-btn', opens: '#add-band-popover'/);
+  assert.match(AUDIT, /selector: '#sign-in-btn', opens: '#add-band-popover'/);
+  // Entries may name a raw selector rather than a pill key.
+  assert.match(AUDIT, /const trigger = item\.selector \|\| `\.sigma-action\[data-key="\$\{item\.key\}"\]`;/);
+});
