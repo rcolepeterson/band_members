@@ -1,0 +1,17 @@
+# Security headers. Netlify already sends HSTS; these are the ones it does not.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Long-cache the images ONLY.
+#
+# Deliberately NOT the HTML or the .mjs files. There is no build step here, so
+# filenames carry no content hash -- an immutable cache on scripts/sigma-explorer.mjs
+# would serve stale code to returning visitors after every deploy, with no way to
+# bust it short of renaming the file. Netlify's default (max-age=0 + ETag) costs one
+# cheap 304 per asset and is the correct trade for an unfingerprinted site.
+/*.png
+  Cache-Control: public, max-age=604800
+/favicon.ico
+  Cache-Control: public, max-age=604800

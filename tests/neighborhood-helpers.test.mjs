@@ -910,3 +910,45 @@ test('framing fits the view when legible and zooms in when it is not', async () 
   assert.equal(framingRatio({}), base);
   assert.equal(framingRatio({ extent: 0, viewportWidth: 800, viewportHeight: 600 }), base);
 });
+
+// --- a link that asks for a band we do not have ------------------------------
+//
+// A shared link is the main way people arrive, so a stale one -- a band since
+// renamed, merged or deleted -- has to be distinguishable from no link at all.
+// Both used to land silently on the fallback anchor, which meant the recipient
+// opened on a stranger's node with no way to tell they had been sent somewhere.
+
+test('an unknown name in a link is reported, not swallowed', () => {
+  const nodes = [{ id: 'Aaron McRae' }, { id: 'Mudhoney' }];
+  const r = resolveAnchor({ search: '?anchor=Band+That+Does+Not+Exist', nodes, links: [] });
+  assert.equal(r.anchorId, 'Aaron McRae', 'still opens on something rather than nothing');
+  assert.equal(r.source, 'fallback');
+  assert.equal(r.requestedByLink, 'Band That Does Not Exist',
+    'the name the link asked for must survive so the page can say it');
+});
+
+test('a link that resolves reports nothing to apologise for', () => {
+  const nodes = [{ id: 'Aaron McRae' }, { id: 'Mudhoney' }];
+  const r = resolveAnchor({ search: '?anchor=Mudhoney', nodes, links: [] });
+  assert.equal(r.anchorId, 'Mudhoney');
+  assert.equal(r.source, 'deep-link');
+  assert.equal(r.requestedByLink, null);
+});
+
+test('no link at all is not treated as a failed one', () => {
+  // The distinction that matters: arriving at the bare site must not raise the
+  // "we could not find that" prompt at every visitor who typed the domain.
+  const nodes = [{ id: 'Aaron McRae' }];
+  for (const search of ['', '?', '?anchor=', '?renderer=svg']) {
+    const r = resolveAnchor({ search, nodes, links: [] });
+    assert.equal(r.requestedByLink, null, `"${search}" should not look like a failed request`);
+  }
+});
+
+test('a legacy spelling that misses is reported too', () => {
+  // ?band= / ?member= / ?node= / ?person= are all still accepted inbound, so a
+  // stale link in any of those shapes has to behave the same as ?anchor=.
+  const nodes = [{ id: 'Aaron McRae' }];
+  const r = resolveAnchor({ search: '?band=Gone+Band', nodes, links: [] });
+  assert.equal(r.requestedByLink, 'Gone Band');
+});

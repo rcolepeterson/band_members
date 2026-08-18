@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rock Band Family Tree v1</title>
 
+  <!--
+    Pre-launch URL hygiene. Every one of these was a live 404 or a missing tag
+    before the public launch:
+
+    - favicon.ico / favicon-32.png / apple-touch-icon.png were all 404, so every
+      visit fetched a missing icon and the browser tab showed a blank page glyph.
+    - No canonical. Both / and /index.html returned 200 with identical content, so
+      a crawler saw two pages. The canonical points at the bare origin because every
+      ?anchor= is the same document -- the graph is one page, not one page per band.
+  -->
+  <link rel="canonical" href="https://bandmembers.netlify.app/" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
   <!-- Meta description used by search engines and any unfurler that
        doesn't find a fuller Open Graph title/description. -->
   <meta name="description" content="Explore how bands and musicians connect across scenes and decades. An interactive family tree of rock, punk, metal, and beyond." />
@@ -2714,10 +2729,10 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         <div class="hero-inner hero-compact">
           <div class="eyebrow">Created by musicians, for musicians</div>
           <div class="hero-logo-wrap hero-logo-wrap-clean">
-            <img class="hero-logo hero-logo-clean" src='rbft_logo_3.png' alt="Rock Band Family Tree logo" width="850" height="437" loading="eager" />
+            <img class="hero-logo hero-logo-clean" src='RBFT_logo_3.png' alt="Rock Band Family Tree logo" width="850" height="437" loading="eager" />
             
             <h1 id="hero-title" class="hero-title-clean">Rock Band Family Tree</h1>
-            <div id="logo-missing-note" style="display:none;font-size:var(--text-sm);color:var(--color-text-muted);">Logo file not found. Keep rbft_logo_3.png in the same folder as index.html.</div>
+            <div id="logo-missing-note" style="display:none;font-size:var(--text-sm);color:var(--color-text-muted);">Logo file not found. Keep RBFT_logo_3.png in the same folder as index.html.</div>
           </div>
           <p class="hero-copy-clean">Follow the roots, branches, and side projects of the Seattle scene. Explore the network first, then scroll down to inspect details and add your own connection.</p>
         </div>
@@ -3632,9 +3647,20 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       });
     }
 
-    const SHAREABLE_PARAMS = ['renderer', 'anchor', 'band', 'member', 'node', 'person'];
+    // `renderer` is deliberately NOT here. It stays accepted on the way in, so
+    // ?renderer=svg remains a working escape hatch, but it is not copied into a
+    // link handed to someone else: a visitor debugging the SVG path would otherwise
+    // share the slow renderer to everyone who opened their link, with no idea they
+    // had done it.
+    const SHAREABLE_PARAMS = ['anchor', 'band', 'member', 'node', 'person'];
     function shareableUrl() {
-      const base = window.location.origin + window.location.pathname;
+      // Strip a trailing index.html. Both / and /index.html serve this page, so
+      // whichever one the sharer happened to be on used to end up in the link --
+      // and a shared URL is the primary way people arrive here. Stripping the
+      // segment rather than hardcoding '/' keeps the app hostable from a
+      // subdirectory.
+      const path = window.location.pathname.replace(/(^|\/)index\.html$/, '$1');
+      const base = window.location.origin + (path || '/');
       const source = new URLSearchParams(window.location.search);
       const kept = new URLSearchParams();
       SHAREABLE_PARAMS.forEach(key => {

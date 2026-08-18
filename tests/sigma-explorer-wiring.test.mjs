@@ -590,7 +590,15 @@ test('a shared link carries the view, not just the site', () => {
   // origin + pathname, which threw the query string away: whatever you were
   // centred on, the person you sent it to landed on the default anchor.
   assert.match(INDEX_HTML, /function shareableUrl\(\)/);
-  assert.match(INDEX_HTML, /const SHAREABLE_PARAMS = \['renderer', 'anchor', 'band', 'member', 'node', 'person'\]/);
+  assert.match(INDEX_HTML, /const SHAREABLE_PARAMS = \['anchor', 'band', 'member', 'node', 'person'\]/);
+  // `renderer` is deliberately absent. ?renderer=svg still works on the way IN,
+  // but copying it into a shared link would spread the slow escape-hatch renderer
+  // to everyone who opened that link, without the sharer ever knowing.
+  const params = INDEX_HTML.match(/const SHAREABLE_PARAMS = \[[^\]]*\]/)[0];
+  assert.ok(!params.includes('renderer'), 'renderer must not be copied into shared links');
+  // And the filename must not ride along. Both / and /index.html serve this page,
+  // so whichever the sharer happened to be on used to end up in the link.
+  assert.match(INDEX_HTML, /replace\(\/\(\^\|\\\/\)index\\\.html\$\/, '\$1'\)/);
   // Every share path must go through it.
   const shareSites = INDEX_HTML.match(/const siteUrl = [^;]+;/g) || [];
   assert.ok(shareSites.length >= 4, `expected several share call sites, found ${shareSites.length}`);
