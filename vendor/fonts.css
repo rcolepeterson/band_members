@@ -1,0 +1,53 @@
+/* Vendored by scripts/vendor-fonts.mjs -- do not edit. Rebuild: npm run vendor:fonts
+   Satoshi and Boska, Indian Type Foundry, ITF Free Font License v2.0.
+   Self-hosting is expressly permitted; the .woff2 files are stored exactly as
+   Fontshare serves them, because the same license prohibits subsetting and
+   format conversion. https://www.fontshare.com/licenses/itf-ffl */
+
+@font-face {
+  font-family: 'Boska';
+  src: url('/vendor/fonts/boska-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Boska';
+  src: url('/vendor/fonts/boska-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Boska';
+  src: url('/vendor/fonts/boska-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/vendor/fonts/satoshi-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/vendor/fonts/satoshi-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/vendor/fonts/satoshi-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

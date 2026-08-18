@@ -1280,3 +1280,60 @@ test('no comment impersonates a live CDN script tag', () => {
     'nothing in the file, comment or not, should look like a live d3js.org script tag'
   );
 });
+
+// --- fonts come from this origin too ----------------------------------------
+
+test('no font is fetched from a third party', () => {
+  const markup = stripComments(INDEX_HTML);
+  assert.doesNotMatch(markup, /fontshare\.com/, 'fonts must not come from fontshare.com');
+  assert.doesNotMatch(markup, /fonts\.googleapis\.com|fonts\.gstatic\.com/);
+  assert.match(markup, /<link rel="stylesheet" href="\/vendor\/fonts\.css">/);
+  // The preconnect went with it -- a preconnect to a host we no longer use is a
+  // DNS and TLS handshake spent on nothing.
+  assert.doesNotMatch(markup, /rel="preconnect"[^>]*fontshare/);
+});
+
+test('the vendored sheet declares both families, at the weights the page asks for', () => {
+  const css = readFileSync(new URL('../vendor/fonts.css', import.meta.url), 'utf8');
+  // Boska is the point of this one. `--font-display: 'Boska', Georgia, serif` had
+  // been rendering as GEORGIA, because the Fontshare API returns Satoshi plus four
+  // faces of Outfit and no Boska when Satoshi is listed first in the request.
+  for (const family of ['Boska', 'Satoshi']) {
+    for (const weight of [400, 500, 700]) {
+      const face = css.split('@font-face').find(
+        b => b.includes(`'${family}'`) && new RegExp(`font-weight: ${weight}\\b`).test(b)
+      );
+      assert.ok(face, `expected a @font-face for ${family} ${weight}`);
+      assert.match(face, /url\('\/vendor\/fonts\/[a-z]+-\d+\.woff2'\)/, `${family} ${weight} must load locally`);
+      assert.match(face, /font-display: swap/, `${family} ${weight} should not block first paint`);
+    }
+  }
+  // Outfit was four faces nothing referenced, arriving only because of that quirk.
+  assert.doesNotMatch(css, /Outfit/);
+});
+
+test('every declared font file is actually present', () => {
+  // A @font-face pointing at a missing file fails silently -- the browser just uses
+  // the fallback, which is exactly how Boska went unnoticed in the first place.
+  const css = readFileSync(new URL('../vendor/fonts.css', import.meta.url), 'utf8');
+  const referenced = [...css.matchAll(/url\('(\/vendor\/fonts\/[^']+)'\)/g)].map(m => m[1]);
+  assert.equal(referenced.length, 6, 'expected six faces');
+  for (const href of referenced) {
+    const path = new URL('..' + href, import.meta.url);
+    const bytes = readFileSync(path);
+    assert.ok(bytes.length > 1000, `${href} looks too small to be a real font (${bytes.length}B)`);
+    // woff2 files start with the signature 'wOF2'. Guards against a saved error page.
+    assert.equal(bytes.subarray(0, 4).toString('latin1'), 'wOF2', `${href} is not a woff2`);
+  }
+});
+
+test('the font build records its licence position', () => {
+  // The ITF Free Font License permits self-hosting but prohibits subsetting and
+  // format conversion, which is why the build stores the CDN's own .woff2 rather
+  // than converting the OTF download. Worth keeping written down next to the code.
+  const script = readFileSync(new URL('../scripts/vendor-fonts.mjs', import.meta.url), 'utf8');
+  assert.match(script, /itf-ffl/, 'link the licence that permits this');
+  assert.match(script, /prohibits subsetting and format conversion|PROHIBITS subsetting/i);
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(pkg.scripts['vendor:fonts'], 'node scripts/vendor-fonts.mjs');
+});

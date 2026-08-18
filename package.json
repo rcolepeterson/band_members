@@ -11,7 +11,8 @@
     "audit:layout:csv": "node scripts/layout-audit.mjs --data fixture",
     "audit:layout:prod": "node scripts/layout-audit.mjs --data production",
     "audit:layout:refresh": "node scripts/layout-audit.mjs --refresh-data --data production",
-    "vendor": "node scripts/vendor-libs.mjs"
+    "vendor": "node scripts/vendor-libs.mjs",
+    "vendor:fonts": "node scripts/vendor-fonts.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

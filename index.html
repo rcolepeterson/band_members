@@ -98,8 +98,25 @@
     }
   }
   </script>
-  <link rel="preconnect" href="https://api.fontshare.com">
-  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=boska@400,500,700&display=swap">
+  <!--
+    Fonts served from this origin. Two reasons, one of them a live bug.
+
+    The bug: this used to request `f[]=satoshi...&f[]=boska...` from the Fontshare
+    API, and that API returns Satoshi plus FOUR faces of Outfit and NO Boska when
+    Satoshi is listed first. Boska comes back correctly when it is listed first, so
+    the order silently decided whether the display font existed -- and it did not,
+    which meant `--font-display: 'Boska', Georgia, serif` had been rendering as
+    Georgia. Fetching each family separately removes the ordering question entirely.
+
+    The other reason: api.fontshare.com and cdn.fontshare.com were the last third
+    parties on the page. Blocked, the text fell back to system fonts -- not fatal like
+    d3 was, but still somebody else's uptime deciding how the site reads.
+
+    Built by `npm run vendor:fonts`. Files are stored exactly as Fontshare serves
+    them: the ITF Free Font License expressly permits self-hosting but prohibits
+    subsetting and format conversion.
+  -->
+  <link rel="stylesheet" href="/vendor/fonts.css">
   <style>
     :root, [data-theme="light"] {
       /* Type ramp. Every step below --text-xl was raised by 1px at both ends
