@@ -114,6 +114,13 @@ test('budget constants keep the opening view small', () => {
   assert.ok(NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES <= NEIGHBORHOOD_BUDGET.MAX_NODES);
   assert.ok(NEIGHBORHOOD_BUDGET.MAX_NODES <= 100, 'visible node budget must stay at or under 100');
   assert.ok(NEIGHBORHOOD_BUDGET.MAX_HOPS <= 3);
+  // Two exactly: the opening view is 'this person, their bands, their bandmates'.
+  // Three pulled in the bandmates' other bands, which made the first frame about
+  // nobody in particular. Pinned rather than bounded, because drifting back to
+  // three would restore that quietly.
+  assert.equal(NEIGHBORHOOD_BUDGET.MAX_HOPS, 2);
+  // And Expand must still have somewhere to go from there.
+  assert.ok(NEIGHBORHOOD_BUDGET.EXPAND_MAX_HOPS > NEIGHBORHOOD_BUDGET.MAX_HOPS);
 });
 
 test('one hop from the anchor returns only the anchor and its bands', () => {
