@@ -35,6 +35,7 @@ import {
   extractBearerToken,
   findUserByToken,
 } from './_db.mjs';
+import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
 
 // PR 3b note: bands_create.mjs / bands_edit.mjs / bands_edit_members.mjs log
 // their own contribution rows DIRECTLY inside the same sql.transaction() as
@@ -123,6 +124,18 @@ export default async (req) => {
   try {
     const user = await findUserByToken(sql, token);
     if (!user) return unauthorized('invalid or revoked token');
+
+    // Keyed on the user id, not the token: rotating a credential must not hand its
+    // holder a fresh budget, and the counter table should never hold a live secret.
+    // Placed after the token check so an invalid caller cannot spend a real user's
+    // allowance by guessing at their id.
+    const rl = await consume({ sql, bucket: `contribution:user:${user.id}`, ...RATE_LIMITS.contribution });
+    if (!rl.allowed) {
+      return tooManyRequests(
+        'Too many requests in the last hour. Try again shortly.',
+        rl.retryAfterSeconds
+      );
+    }
 
     // Two writes, one transaction so a mid-write failure can't leave the
     // counter and log out of sync. Neon's HTTP driver supports `sql.transaction()`

@@ -54,6 +54,7 @@ import {
   extractBearerToken,
   findUserByToken,
 } from './_db.mjs';
+import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
 
 const LIMITS = {
   bio: 2000,
@@ -110,6 +111,18 @@ export default async (req) => {
   try {
     const user = await findUserByToken(sql, token);
     if (!user) return unauthorized('invalid or revoked token');
+
+    // Keyed on the user id, not the token: rotating a credential must not hand its
+    // holder a fresh budget, and the counter table should never hold a live secret.
+    // Placed after the token check so an invalid caller cannot spend a real user's
+    // allowance by guessing at their id.
+    const rl = await consume({ sql, bucket: `band-edit:user:${user.id}`, ...RATE_LIMITS.bandEdit });
+    if (!rl.allowed) {
+      return tooManyRequests(
+        'That is a lot of edits in one hour. Try again shortly.',
+        rl.retryAfterSeconds
+      );
+    }
 
     const existingRows = UUID_RE.test(personId)
       ? await sql`select id, name, bio from band_members where id = ${personId}::uuid limit 1`

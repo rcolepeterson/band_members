@@ -189,9 +189,29 @@ export default async (req) => {
   const sql = getSql();
 
   try {
+    // Sweep spent rate-limit rows while we are already here on a schedule.
+    //
+    // The counter table holds one row per distinct caller, reused across windows, so
+    // it grows with the number of people who have ever visited rather than with
+    // traffic -- slowly, but without bound. A day is comfortably longer than the
+    // longest window (an hour), so nothing still being counted is removed.
+    //
+    // Deliberately not fatal: this is housekeeping, and losing it must not cost us
+    // the verification batch that is the actual job of this cron.
+    let sweptRateLimits = null;
+    try {
+      const swept = await sql`
+        delete from rate_limits where window_start < now() - interval '1 day' returning bucket
+      `;
+      sweptRateLimits = swept.length;
+      if (sweptRateLimits) console.log(`[cron:verify] swept ${sweptRateLimits} spent rate-limit rows`);
+    } catch (sweepErr) {
+      console.warn('[cron:verify] rate-limit sweep failed; continuing with the batch', sweepErr);
+    }
+
     const summary = await runBatch(sql);
     console.log(`[cron:verify] batch complete: processed=${summary.processed} succeeded=${summary.succeeded} failed=${summary.failed} next_stale_count=${summary.next_stale_count}`);
-    return ok(summary);
+    return ok({ ...summary, swept_rate_limits: sweptRateLimits });
   } catch (err) {
     console.error('[cron:verify] batch failed entirely', err);
     return serverError('cron batch failed', {

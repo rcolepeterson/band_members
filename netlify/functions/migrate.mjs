@@ -135,6 +135,24 @@ export default async (req) => {
     `;
     results.push('table contributions ready');
 
+    // Rate-limit counters. One row per bucket, reused, so the table's size tracks
+    // the number of distinct callers rather than the number of requests. The cron
+    // sweeps rows whose window is long past (see cron_verify_stale_bands).
+    //
+    // `bucket` is a namespaced string: 'signup:ip:1.2.3.4', 'band-create:tok:<id>'.
+    // The token's USER ID is used rather than the token itself, so a rotated
+    // credential does not hand its holder a fresh budget, and so the table never
+    // stores a live secret.
+    await sql`
+      create table if not exists rate_limits (
+        bucket text primary key,
+        hits integer not null default 0,
+        window_start timestamptz not null default now()
+      )
+    `;
+    await sql`create index if not exists rate_limits_window_start_idx on rate_limits (window_start)`;
+    results.push('table rate_limits ready');
+
     // PR 3b: bands_edit_members.mjs logs action='edit_band_members'. Because
     // `create table if not exists` is a no-op on a database that already has
     // this table (every deploy after the first), the CHECK constraint above

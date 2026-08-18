@@ -50,6 +50,7 @@ import {
   normalizeInstrument,
   isPlausibleEmail,
 } from './_db.mjs';
+import { clientIp, consume, tooManyRequests, LIMITS } from './_rate_limit.mjs';
 
 // Parse JSON body defensively — Netlify Functions v2 gives us the Request
 // object directly, but callers may send malformed JSON. Rather than 500 on a
@@ -74,6 +75,24 @@ export default async (req) => {
   }
 
   const email      = normalizeEmail(body.email);
+
+  // Per-IP cap on the front door. This endpoint is the ONLY way to obtain a token,
+  // so it is the one place where limiting changes the economics rather than just
+  // slowing a caller who is already inside.
+  //
+  // Per IP rather than per email, because the email is the thing being invented.
+  const ip = clientIp(req);
+  const attempts = await consume({
+    sql: getSql(),
+    bucket: `signup:ip:${ip}`,
+    ...LIMITS.signupAttempts,
+  });
+  if (!attempts.allowed) {
+    return tooManyRequests(
+      'Too many sign-in attempts from this network. Try again shortly.',
+      attempts.retryAfterSeconds
+    );
+  }
 
   // Email-first sign-in.
   //
@@ -222,6 +241,21 @@ export default async (req) => {
       }
       created = false;
     } else {
+      // A new row is about to be written, which is the expensive and abusable half.
+      // Counted separately and much tighter than the attempt budget above: a person
+      // who mistypes their address a dozen times is not creating a dozen accounts,
+      // and should not be treated like someone who is.
+      const creations = await consume({
+        sql,
+        bucket: `signup-create:ip:${ip}`,
+        ...LIMITS.signupCreations,
+      });
+      if (!creations.allowed) {
+        return tooManyRequests(
+          'Too many new accounts from this network. Try again later.',
+          creations.retryAfterSeconds
+        );
+      }
       const token = generateToken();
       const inserted = await sql`
         insert into users (email, name, token, city, state, country, instrument)

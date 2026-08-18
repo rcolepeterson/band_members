@@ -36,6 +36,7 @@ import {
   extractBearerToken,
   findUserByToken,
 } from './_db.mjs';
+import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
 import { createBandInNeon } from './_bands_write.mjs';
 
 const LIMITS = {
@@ -143,6 +144,18 @@ export default async (req) => {
   try {
     const user = await findUserByToken(sql, token);
     if (!user) return unauthorized('invalid or revoked token');
+
+    // Keyed on the user id, not the token: rotating a credential must not hand its
+    // holder a fresh budget, and the counter table should never hold a live secret.
+    // Placed after the token check so an invalid caller cannot spend a real user's
+    // allowance by guessing at their id.
+    const rl = await consume({ sql, bucket: `band-create:user:${user.id}`, ...RATE_LIMITS.bandCreate });
+    if (!rl.allowed) {
+      return tooManyRequests(
+        'You have added a lot of bands in the last hour. Take a breather and try again shortly.',
+        rl.retryAfterSeconds
+      );
+    }
 
     const result = await createBandInNeon(sql, {
       name, city, state, country, genre, years_active, label, albums, members,
