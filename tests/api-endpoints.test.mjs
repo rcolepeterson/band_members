@@ -12,6 +12,7 @@
 // benefit at this stage).
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { DB_URL_ENV } from '../netlify/functions/_db.mjs';
 import signup from '../netlify/functions/signup.mjs';
@@ -288,4 +289,81 @@ test('contributions rejects when body is not JSON', async () => {
   } finally {
     delete process.env[DB_URL_ENV];
   }
+});
+
+// --- email-first sign-in -----------------------------------------------------
+//
+// A returning visitor is found by email alone, so making them retype name, city,
+// state, country and instrument was pure friction. { intent: 'signin' } looks the
+// email up and never creates. These stay hermetic by only exercising branches
+// that return before any SQL runs.
+
+test('sign-in intent still requires a plausible email', async () => {
+  process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
+  try {
+    for (const body of [{ intent: 'signin' }, { intent: 'signin', email: 'nope' }]) {
+      const r = await signup(req('POST', { 'content-type': 'application/json' }, body));
+      assert.equal(r.status, 400, `expected 400 for ${JSON.stringify(body)}`);
+      const parsed = await r.json();
+      assert.match(parsed.error, /email/);
+    }
+  } finally {
+    delete process.env[DB_URL_ENV];
+  }
+});
+
+test('sign-in intent does not demand the profile fields', async () => {
+  // The whole point: an email on its own must get PAST validation. Without a
+  // reachable database it fails later, at the query, which is exactly what
+  // proves it cleared the profile checks that a sign-up has to satisfy.
+  process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
+  try {
+    const r = await signup(req('POST', { 'content-type': 'application/json' },
+      { intent: 'signin', email: 'someone@example.com' }));
+    assert.notEqual(r.status, 400, 'an email-only sign-in must not be rejected as invalid');
+    const parsed = await r.json();
+    if (parsed && parsed.error) {
+      assert.doesNotMatch(parsed.error, /city|state|country|instrument|name is required/,
+        'sign-in must not ask for profile fields');
+    }
+  } finally {
+    delete process.env[DB_URL_ENV];
+  }
+});
+
+test('creating an account still requires the four profile fields', async () => {
+  // The other half of the deal: the fields are collected on sign-up, so dropping
+  // the sign-in requirement must not have loosened creation.
+  process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
+  try {
+    const base = { email: 'new@example.com', name: 'New Person', city: 'Seattle', state: 'WA', country: 'USA', instrument: 'Guitar' };
+    for (const missing of ['city', 'state', 'country', 'instrument', 'name']) {
+      const body = { ...base };
+      delete body[missing];
+      const r = await signup(req('POST', { 'content-type': 'application/json' }, body));
+      assert.equal(r.status, 400, `expected 400 when ${missing} is missing`);
+      const parsed = await r.json();
+      assert.match(parsed.error, new RegExp(missing === 'state' ? 'state|region' : missing, 'i'));
+    }
+  } finally {
+    delete process.env[DB_URL_ENV];
+  }
+});
+
+test('the sign-in branch is a lookup, never an insert', () => {
+  // Read the source rather than the behaviour: proving "it did not write" against
+  // a live database is exactly the test that cannot be hermetic, and an accidental
+  // insert here would create an account nobody asked for.
+  const source = readFileSync(new URL('../netlify/functions/signup.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf("if (body.intent === 'signin')");
+  // End at the insert-or-return path, not at the first getSql() -- the sign-in
+  // branch makes its own getSql() call, which truncated this slice to nothing and
+  // made the assertions below pass vacuously.
+  const branch = source.slice(start, source.indexOf('// Insert-or-return semantics', start));
+  assert.ok(branch.length > 0, 'expected a sign-in branch before the insert-or-return path');
+  assert.doesNotMatch(branch, /insert\s+into/i);
+  assert.doesNotMatch(branch, /update\s+users/i);
+  // "No account yet" is an answer, not an error: a 404 would log a failure on the
+  // happy path of every new visitor.
+  assert.match(branch, /ok\(\{ found: false, created: false, user: null \}\)/);
 });

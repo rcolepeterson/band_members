@@ -324,6 +324,18 @@ const CLICK_THROUGH = [
   // has to raise a usable panel at every width. One control now, not two: the two
   // flows are merged.
   { selector: '#sign-in-btn', opens: '#add-band-popover', label: 'Sign in panel' },
+  // Step two of the same door. An unknown email reveals five more fields, which
+  // makes the panel taller than the screen -- so the check is not "did it open"
+  // but "can the visitor still press the button", with a real click at the
+  // button's own coordinates. Without this the profile step could grow until its
+  // own submit sat off-screen and every other check would stay green.
+  {
+    selector: '#sign-in-btn',
+    opens: '#add-band-popover',
+    label: 'Create-account step',
+    signupEmail: 'audit-unknown-address@example.com',
+    thenPress: '#signup-submit-btn',
+  },
 ];
 
 const MEASURE_OPENED = (selector) => {
@@ -685,7 +697,38 @@ for (const viewport of VIEWPORTS) {
         // pill fails here rather than being bypassed by a synthetic event.
         await page.click(trigger, { timeout: 5000 });
         await page.waitForTimeout(650);
+        if (item.signupEmail) {
+          // Answer "no account on that email" without a database, so the audit
+          // exercises the reveal rather than the network.
+          await page.route('**/api/signup', route => route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ found: false, created: false, user: null }),
+          }));
+          await page.fill('#signup-email', item.signupEmail);
+          await page.click('#signup-submit-btn', { timeout: 5000 });
+          await page.waitForTimeout(900);
+          await page.unroute('**/api/signup').catch(() => {});
+        }
         result = await page.evaluate(MEASURE_OPENED, item.opens);
+        if (item.thenPress && !result.problems.length) {
+          // Press it as a person would. Scrolling to reach it is fine; being
+          // covered, disabled or absent is not.
+          const shown = await page.$(item.thenPress);
+          if (!shown) {
+            result.problems.push(`${item.thenPress} is not on the page after the reveal`);
+          } else {
+            const revealed = await page.evaluate(
+              () => !document.getElementById('signup-profile-fields')?.hidden
+            );
+            if (!revealed) result.problems.push('an unknown email did not reveal the profile step');
+            try {
+              await page.click(item.thenPress, { timeout: 5000 });
+            } catch (error) {
+              result.problems.push(`cannot press ${item.thenPress}: ${error.message.split('\n')[0]}`);
+            }
+          }
+        }
       }
       }
     } catch (error) {

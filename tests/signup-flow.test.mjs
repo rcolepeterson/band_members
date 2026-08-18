@@ -50,8 +50,14 @@ test('Add-your-band popover contains a [data-signed-in-only] section', () => {
   );
 });
 
-test('signup form has name and email fields with required attribute', () => {
-  assert.match(INDEX_HTML, /id="signup-name"[^>]*required/);
+// Email carries `required` in the markup because it is step one and always on
+// screen. Name moved into the profile step, which is hidden until the email comes
+// back unknown -- and a hidden required input blocks submission with a browser
+// message the visitor can neither see nor reach, so its required is set in JS
+// alongside visibility instead. The tests below assert that guarantee where it now
+// lives; presence in the markup is still asserted here.
+test('signup form has name and email fields, with email required up front', () => {
+  assert.match(INDEX_HTML, /id="signup-name"/);
   assert.match(INDEX_HTML, /id="signup-email"[^>]*required/);
   assert.match(INDEX_HTML, /id="signup-email"[^>]*type="email"/);
 });
@@ -61,16 +67,22 @@ test('signup form has a submit button and a status region', () => {
   assert.match(INDEX_HTML, /id="signup-status"[^>]*aria-live="polite"/);
 });
 
-// Profile fields added in PR signup-profile-fields. All four required at
-// signup so the field-presence assertion below also asserts the `required`
-// HTML attribute. The instrument field's placeholder must hint at the
-// "Music listener" alternative so people who don't play know what to type;
-// the label copy is also asserted for the same reason.
-test('signup form has required city / state / country / instrument fields', () => {
+// Profile fields added in PR signup-profile-fields, then moved behind the email
+// step in feat/email-first-signin. Still mandatory to CREATE an account -- the
+// server rejects a sign-up without them, and the client sets `required` when it
+// reveals them -- but no longer demanded of a returning visitor, who is found by
+// email alone. The `required` attribute therefore cannot be in the markup: it
+// would block submission of step one, where the fields are not on screen.
+test('signup form has city / state / country / instrument fields, required only once shown', () => {
   for (const id of ['signup-city', 'signup-state', 'signup-country', 'signup-instrument']) {
-    const re = new RegExp(`id="${id}"[^>]*required`);
-    assert.match(INDEX_HTML, re, `Expected #${id} to be present and required.`);
+    assert.match(INDEX_HTML, new RegExp(`id="${id}"`), `Expected #${id} to be present.`);
+    assert.doesNotMatch(INDEX_HTML, new RegExp(`id="${id}"[^>]*required`),
+      `#${id} must not be required in the markup while hidden.`);
   }
+  // Enforcement moved here, and must exist somewhere or the fields became optional
+  // by accident.
+  assert.match(INDEX_HTML, /function revealProfileFields\(\)/);
+  assert.match(INDEX_HTML, /if \(field\) field\.required = true;/);
 });
 
 test('signup instrument field hints at "Music listener" for non-players', () => {
@@ -96,14 +108,22 @@ test('signup submit handler POSTs the profile fields to /api/signup', () => {
     anchorIdx > 0,
     'Expected fetch(SIGNUP_ENDPOINT, ...) call inside submit handler.'
   );
-  // Look at the next ~600 chars — enough to cover fetch options + body.
-  const window = INDEX_HTML.slice(anchorIdx, anchorIdx + 600);
-  for (const key of ['name:', 'email:', 'city:', 'state:', 'country:', 'instrument:']) {
+  // Look at the next ~900 chars — enough to cover fetch options + both bodies.
+  const window = INDEX_HTML.slice(anchorIdx, anchorIdx + 900);
+  // The creation body still carries every profile field. Shorthand properties now,
+  // so match the names rather than "name:" style keys.
+  for (const key of ['name', 'email', 'city', 'state', 'country', 'instrument']) {
     assert.ok(
-      window.includes(key),
-      `Expected signup submit body to include "${key}" property.`
+      new RegExp(`\\b${key}\\b`).test(window),
+      `Expected signup submit body to include "${key}".`
     );
   }
+  // And the sign-in body carries the email only, because that is all the server
+  // needs to recognise a returning visitor.
+  assert.ok(
+    window.includes("{ intent: 'signin', email }"),
+    'Expected an email-only sign-in body alongside the full sign-up body.'
+  );
 });
 
 test('signed-in strip has a sign-out button', () => {
