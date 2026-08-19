@@ -4372,10 +4372,567 @@ function downloadPngBlob(blob) {
       return out;
     }
 
+    /**
+     * Captures the constellation with every name drawn.
+     *
+     * On screen, updateLabelBlocking() suppresses any label that would print across
+     * the wordmark, the search field or the footer -- chrome text wins over a node
+     * label. In the poster the chrome sits in its own bands, so those labels have
+     * nothing to collide with, and suppressing them leaves unexplained bare dots in
+     * the picture. Three names went missing from the first Blind Melon export for
+     * exactly this reason.
+     *
+     * The set is cleared, captured, and put back, so the screen is unchanged by the
+     * act of sharing. Node-against-node collisions are still Sigma's own business
+     * and are unaffected.
+     */
+    // The graph band inside the poster. The capture is taken at this aspect so it
+    // drops straight in with no cropping.
+    const POSTER_GRAPH_ASPECT = 1200 / 738;
+
+    async function captureSigmaCanvasWithAllLabels() {
+      const controller = window.RBFT_SIGMA;
+      const blocked = controller && controller.state && controller.state.labelBlocked;
+      const renderer = controller && controller.renderer;
+      const host = document.querySelector('#sigma-stage .sigma-canvas-host');
+
+      const saved = blocked && typeof blocked.clear === 'function' ? [...blocked] : null;
+      if (saved) blocked.clear();
+
+      // Re-frame the renderer to the poster's aspect for the duration of the
+      // capture.
+      //
+      // Scaling a viewport-shaped screenshot into a square band meant cropping, and
+      // cropping cut node labels in half -- the first Blind Melon poster ended with
+      // "Shannon H" against the right edge. It also meant a phone and a desktop
+      // produced differently framed pictures of the same view. Rendering AT the
+      // target aspect removes both problems: nothing is cropped because nothing is
+      // rescaled, and a share looks the same wherever it was made.
+      //
+      // The host is position:absolute/inset:0, so an explicit size overrides it. The
+      // stage clips, so nothing of this is visible on screen, and it is put back in
+      // the finally below either way.
+      const previous = host
+        ? { width: host.style.width, height: host.style.height, right: host.style.right, bottom: host.style.bottom }
+        : null;
+      let reframed = false;
+      if (host && renderer && typeof renderer.resize === 'function') {
+        const width = 1200;
+        const height = Math.round(width / POSTER_GRAPH_ASPECT);
+        // inset:0 already pins right and bottom; leaving them set makes an explicit
+        // width ambiguous, so they are released for the duration.
+        host.style.right = 'auto';
+        host.style.bottom = 'auto';
+        host.style.width = `${width}px`;
+        host.style.height = `${height}px`;
+        try {
+          renderer.resize();
+          reframed = true;
+        } catch (_) {
+          host.style.width = previous.width;
+          host.style.height = previous.height;
+          host.style.right = previous.right;
+          host.style.bottom = previous.bottom;
+        }
+      }
+
+      // Frame the whole neighbourhood, centred.
+      //
+      // The on-screen camera was fitted to the visitor's own viewport, so re-rendering
+      // it at the poster's aspect cut names off the edges -- a phone's vertical extent
+      // does not fit a landscape band, and the extra width pushed nodes into the right
+      // margin where Sigma slices their labels. "Travis Warren" and "Shannon Hoon"
+      // both lost their tails, and Blind Melon lost its head.
+      //
+      // Sigma normalises node positions into [0,1], so ratio 1 at (0.5, 0.5) frames
+      // the entire current view whatever the viewport's shape; a little over 1 leaves
+      // a margin for the labels, which are drawn beyond their nodes. A share therefore
+      // looks the same from a phone and a desktop, and shows the whole constellation
+      // rather than whichever corner happened to be on screen.
+      const camera = renderer && typeof renderer.getCamera === 'function' ? renderer.getCamera() : null;
+      const cameraBefore = camera ? { ...camera.getState() } : null;
+      if (camera && cameraBefore) {
+        try { camera.setState({ x: 0.5, y: 0.5, ratio: 1.18, angle: 0 }); } catch (_) {}
+      }
+
+      // Brighter labels, for the poster only.
+      //
+      // On screen the names sit at #c8d3e0 against near-black, which reads fine at full
+      // size on a good display. A shared picture is looked at small and re-compressed by
+      // whichever platform it lands on, and at that size the peripheral names were hard
+      // to read. The fallback colour is raised while the ATTRIBUTE is left in place, so
+      // the gold highlight on a selected chain still wins.
+      const labelColorBefore = renderer && typeof renderer.getSetting === 'function'
+        ? renderer.getSetting('labelColor')
+        : null;
+      if (labelColorBefore && typeof renderer.setSetting === 'function') {
+        try {
+          renderer.setSetting('labelColor', { ...labelColorBefore, color: '#eaf2fa' });
+        } catch (_) {}
+      }
+
+      try {
+        // Let the re-frame settle before reading pixels.
+        //
+        // Sigma is configured with hideLabelsOnMove, and a camera change counts as a
+        // move, so a capture taken in the same turn can come back with labels missing
+        // -- "Dave Krusen" vanished from the desktop poster while appearing on the
+        // phone one, from the same data and the same framing. Two frames is enough for
+        // the renderer to consider itself still again.
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const canvas = captureSigmaCanvas();
+        // Everything positional MUST be read while still reframed.
+        //
+        // Measuring after the restore has now bitten twice: first the host box, which
+        // made drawImage stretch a landscape render into a portrait slot so every
+        // node came out an oval; then the overlay positions, which came back in the
+        // OLD viewport's coordinates and drew the focus ring around the wrong
+        // musician entirely. Both bugs looked like rendering faults and were both
+        // just this ordering.
+        const box = host ? host.getBoundingClientRect() : null;
+        const at = (nodeId) => {
+          try {
+            const graph = renderer.getGraph();
+            if (!nodeId || !graph.hasNode(nodeId)) return null;
+            const attrs = graph.getNodeAttributes(nodeId);
+            return renderer.graphToViewport({ x: attrs.x, y: attrs.y });
+          } catch (_) {
+            return null;
+          }
+        };
+        const state = controller && controller.state;
+        return {
+          canvas,
+          hostBox: box,
+          reframed,
+          overlay: reframed
+            ? { star: at(state && state.homeStarId), anchor: at(state && state.anchorId) }
+            : null,
+        };
+      } finally {
+        if (labelColorBefore) {
+          try { renderer.setSetting('labelColor', labelColorBefore); } catch (_) {}
+        }
+        if (camera && cameraBefore) {
+          try { camera.setState(cameraBefore); } catch (_) {}
+        }
+        if (saved) saved.forEach(id => blocked.add(id));
+        if (reframed && previous) {
+          host.style.width = previous.width;
+          host.style.height = previous.height;
+          host.style.right = previous.right;
+          host.style.bottom = previous.bottom;
+          try { renderer.resize(); } catch (_) {}
+        }
+        // Put the screen back the way the visitor left it.
+        try { renderer.refresh(); } catch (_) {}
+      }
+    }
+
+    /**
+     * Builds the shareable picture as a fixed 1200x1200 poster.
+     *
+     * WHY A POSTER AND NOT A SCREENSHOT
+     *
+     * The obvious approach is to rasterise the page. I tried it: html2canvas-pro
+     * renders this page wrong -- the outlined pills come out light grey, the
+     * wordmark washes out, and "Explore" ends up white on white, because it does
+     * not understand the dark theme's gradients and backdrop filters. The whole
+     * stage subtree came back empty when rasterising <body>. A browser has no API
+     * for "screenshot yourself", so a faithful screenshot is simply not available
+     * from inside the page.
+     *
+     * So the layout here is OURS and only the content is read from the live page:
+     * the typed query, the pill labels, the node card's fields, the status lines,
+     * and the shared URL. Substance faithful, form deterministic -- which also
+     * means one predictable output size instead of "whatever this viewport is".
+     *
+     * WHY SQUARE
+     *
+     * 1200x1200 survives Facebook, Instagram and X feeds without being cropped.
+     * The previous export matched the viewport, so a phone share produced a tall
+     * portrait image that feeds cut the top and bottom off.
+     *
+     * The signed-in strip is deliberately NOT drawn: it carries the sharer's name
+     * and a Sign out link, which has no business in a public post.
+     */
+    const SHARE_SIZE = 1200;
+
+    // Fonts must be LOADED, not merely declared, before canvas can use them --
+    // an unloaded family silently falls back, which is exactly how Boska rendered
+    // as Georgia on this site for months without anyone noticing.
+    async function ensureShareFonts() {
+      if (!document.fonts || typeof document.fonts.load !== 'function') return;
+      await Promise.all([
+        document.fonts.load('500 30px Satoshi'),
+        document.fonts.load('700 30px Satoshi'),
+        document.fonts.load('400 20px Satoshi'),
+      ]).catch(() => {});
+    }
+
+    function roundRectPath(ctx, x, y, w, h, r) {
+      const radius = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.arcTo(x + w, y, x + w, y + h, radius);
+      ctx.arcTo(x + w, y + h, x, y + h, radius);
+      ctx.arcTo(x, y + h, x, y, radius);
+      ctx.arcTo(x, y, x + w, y, radius);
+      ctx.closePath();
+    }
+
+    // Truncates to fit a width, so a long band name shortens instead of running
+    // off the edge or over its neighbour.
+    function fitText(ctx, text, maxWidth) {
+      const value = String(text == null ? '' : text);
+      if (ctx.measureText(value).width <= maxWidth) return value;
+      let out = value;
+      while (out.length > 1 && ctx.measureText(out + '\u2026').width > maxWidth) {
+        out = out.slice(0, -1);
+      }
+      return out + '\u2026';
+    }
+
+    const visibleEl = el => {
+      if (!el || el.hidden) return false;
+      const box = el.getBoundingClientRect();
+      if (!box.width || !box.height) return false;
+      const cs = getComputedStyle(el);
+      return cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity) > 0.05;
+    };
+
+    async function renderSharePosterBlob(sigmaCanvas, capture) {
+      await ensureShareFonts();
+      const siteUrl = shareableUrl();
+      const hostBox = capture.hostBox;
+      if (!hostBox || !hostBox.width || !hostBox.height) return null;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = SHARE_SIZE;
+      canvas.height = SHARE_SIZE;
+      const ctx = canvas.getContext('2d');
+
+      // --- background, matching the stage ---------------------------------
+      ctx.fillStyle = '#070b10';
+      ctx.fillRect(0, 0, SHARE_SIZE, SHARE_SIZE);
+      const glow = ctx.createRadialGradient(SHARE_SIZE / 2, SHARE_SIZE * 0.42, 0, SHARE_SIZE / 2, SHARE_SIZE * 0.42, SHARE_SIZE * 0.62);
+      glow.addColorStop(0, 'rgba(38,66,96,0.34)');
+      glow.addColorStop(1, 'rgba(7,11,16,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, SHARE_SIZE, SHARE_SIZE);
+
+      const GRAPH_TOP = 268;
+      const GRAPH_BOTTOM = 1006;
+      const GRAPH_H = GRAPH_BOTTOM - GRAPH_TOP;
+
+      // --- the constellation ----------------------------------------------
+      // The capture is taken at the band's own aspect (see
+      // captureSigmaCanvasWithAllLabels), so this normally resolves to an exact
+      // 1:1 placement and nothing is cropped. The cover maths is kept as the
+      // fallback for the case where re-framing was refused -- an old renderer
+      // without resize() -- where filling the band and trimming the edges still
+      // beats letterboxing a viewport into a square.
+      const fit = Math.max(SHARE_SIZE / hostBox.width, GRAPH_H / hostBox.height);
+      const drawW = hostBox.width * fit;
+      const drawH = hostBox.height * fit;
+      const dx = (SHARE_SIZE - drawW) / 2;
+      const dy = GRAPH_TOP + (GRAPH_H - drawH) / 2;
+      // Maps a point in client coordinates onto the poster, so the overlays land
+      // exactly where they sit on screen relative to the graph.
+      const mapPoint = (clientX, clientY) => ({
+        x: dx + (clientX - hostBox.left) * fit,
+        y: dy + (clientY - hostBox.top) * fit,
+      });
+      const centreOf = box => mapPoint(box.left + box.width / 2, box.top + box.height / 2);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, GRAPH_TOP, SHARE_SIZE, GRAPH_H);
+      ctx.clip();
+      ctx.drawImage(sigmaCanvas, dx, dy, drawW, drawH);
+
+      // The home star, its focus ring and the gold label are DOM elements layered
+      // over the canvas, so a canvas capture misses them entirely -- the first
+      // working export had Aaron as an unmarked white dot. Geometry is read from
+      // the live elements rather than recomputed, so it cannot drift.
+      const stage = document.getElementById('sigma-stage');
+      const controller = window.RBFT_SIGMA;
+
+      // Positions were computed during the capture, while the renderer was still
+      // re-framed (see captureSigmaCanvasWithAllLabels). Reading them here would
+      // give the on-screen viewport's coordinates instead.
+      const mappedOverlay = (which) => {
+        const at = capture.overlay && capture.overlay[which];
+        return at ? { x: dx + at.x * fit, y: dy + at.y * fit } : null;
+      };
+
+      const star = stage && stage.querySelector('.sigma-home-star');
+      if (visibleEl(star)) {
+        const box = star.getBoundingClientRect();
+        const at = mappedOverlay('star') || centreOf(box);
+        const core = (box.width * fit) / 2 * 0.32;
+        const halo = ctx.createRadialGradient(at.x, at.y, 0, at.x, at.y, core * 5);
+        halo.addColorStop(0, 'rgba(226,240,255,0.55)');
+        halo.addColorStop(1, 'rgba(226,240,255,0)');
+        ctx.fillStyle = halo;
+        ctx.beginPath();
+        ctx.arc(at.x, at.y, core * 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#eef5ff';
+        ctx.beginPath();
+        ctx.arc(at.x, at.y, core, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.save();
+        ctx.translate(at.x, at.y);
+        ctx.rotate(-0.32);
+        ctx.strokeStyle = 'rgba(226,236,248,0.85)';
+        ctx.lineWidth = Math.max(1, 1.6 * fit);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, core * 3.1, core * 1.05, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      const ring = stage && stage.querySelector('.sigma-focus-ring');
+      if (visibleEl(ring)) {
+        const box = ring.getBoundingClientRect();
+        const at = mappedOverlay('anchor') || centreOf(box);
+        ctx.strokeStyle = 'rgba(143,232,246,0.75)';
+        ctx.lineWidth = Math.max(1, 1.4 * fit);
+        ctx.beginPath();
+        ctx.arc(at.x, at.y, (box.width * fit) / 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      const homeLabel = stage && stage.querySelector('.sigma-home-label');
+      if (visibleEl(homeLabel) && homeLabel.textContent.trim()) {
+        const box = homeLabel.getBoundingClientRect();
+        const starAt = mappedOverlay('star');
+        const size = parseFloat(getComputedStyle(homeLabel).fontSize) || 14;
+        ctx.fillStyle = '#ffc978';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `500 ${Math.round(size * fit)}px Satoshi, system-ui, sans-serif`;
+        // Sits just under the star, the way the CSS places it.
+        const at = starAt
+          ? { x: starAt.x, y: starAt.y + Math.round(28 * fit) }
+          : centreOf(box);
+        ctx.fillText(homeLabel.textContent.trim(), at.x, at.y);
+      }
+      ctx.restore();
+
+      // --- wordmark --------------------------------------------------------
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#e9eef6';
+      // letterSpacing is not in every engine yet; when it is missing the wordmark
+      // simply renders tighter rather than failing.
+      try { ctx.letterSpacing = '10px'; } catch (_) {}
+      ctx.font = `500 34px Satoshi, system-ui, sans-serif`;
+      ctx.fillText('ROCK BAND FAMILY TREE', SHARE_SIZE / 2, 68);
+      try { ctx.letterSpacing = '0px'; } catch (_) {}
+
+      // --- search field + Explore -----------------------------------------
+      const promptInput = document.querySelector('.sigma-prompt input');
+      const exploreBtn = document.querySelector('.sigma-prompt form button[type="submit"]');
+      const query = (promptInput && promptInput.value || '').trim();
+      const exploreLabel = (exploreBtn && exploreBtn.textContent.trim()) || 'Explore';
+
+      const FIELD_H = 66;
+      const FIELD_Y = 116;
+      ctx.font = `600 22px Satoshi, system-ui, sans-serif`;
+      const exploreW = Math.round(ctx.measureText(exploreLabel).width) + 68;
+      const fieldW = 620;
+      const groupW = fieldW + 14 + exploreW;
+      const fieldX = Math.round((SHARE_SIZE - groupW) / 2);
+
+      roundRectPath(ctx, fieldX, FIELD_Y, fieldW, FIELD_H, FIELD_H / 2);
+      ctx.fillStyle = 'rgba(12,20,28,0.72)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(150,196,222,0.34)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.textAlign = 'left';
+      // The placeholder when nothing was typed, so the field never reads as an
+      // empty box in a picture meant to explain the site.
+      const placeholder = (promptInput && promptInput.getAttribute('placeholder')) || 'Who\u2019s your favorite band?';
+      ctx.font = query ? `500 24px Satoshi, system-ui, sans-serif` : `italic 400 24px Satoshi, system-ui, sans-serif`;
+      ctx.fillStyle = query ? '#e9eef6' : 'rgba(200,214,230,0.55)';
+      ctx.fillText(fitText(ctx, query || placeholder, fieldW - 60), fieldX + 30, FIELD_Y + FIELD_H / 2);
+
+      const exploreX = fieldX + fieldW + 14;
+      roundRectPath(ctx, exploreX, FIELD_Y, exploreW, FIELD_H, FIELD_H / 2);
+      ctx.fillStyle = 'rgba(30,63,79,0.92)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(143,232,246,0.42)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#eaf6fb';
+      ctx.font = `600 22px Satoshi, system-ui, sans-serif`;
+      ctx.fillText(exploreLabel, exploreX + exploreW / 2, FIELD_Y + FIELD_H / 2);
+
+      // --- the pill row ----------------------------------------------------
+      const pills = [...document.querySelectorAll('.sigma-action')]
+        .filter(visibleEl)
+        .map(p => p.textContent.trim())
+        .filter(Boolean);
+      if (pills.length) {
+        const PILL_H = 48;
+        const PILL_Y = 202;
+        ctx.font = `500 19px Satoshi, system-ui, sans-serif`;
+        const widths = pills.map(label => Math.round(ctx.measureText(label).width) + 44);
+        const gap = 12;
+        const total = widths.reduce((a, b) => a + b, 0) + gap * (pills.length - 1);
+        let x = Math.round((SHARE_SIZE - total) / 2);
+        pills.forEach((label, i) => {
+          roundRectPath(ctx, x, PILL_Y, widths[i], PILL_H, PILL_H / 2);
+          ctx.fillStyle = 'rgba(12,20,28,0.55)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(150,196,222,0.26)';
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(224,234,245,0.9)';
+          ctx.textAlign = 'center';
+          ctx.fillText(label, x + widths[i] / 2, PILL_Y + PILL_H / 2);
+          x += widths[i] + gap;
+        });
+      }
+
+      // --- the node card, if one is open -----------------------------------
+      // Drawn from the card's own text so it says exactly what the sharer was
+      // looking at. Positioned by us, in the lower right, matching where it docks.
+      const card = document.querySelector('.node-card');
+      if (visibleEl(card)) {
+        const name = card.querySelector('.node-card__name')?.textContent?.trim() || '';
+        const sub = card.querySelector('.node-card__sub')?.textContent?.trim() || '';
+        const chips = [...card.querySelectorAll('.node-card__chips .chip, .node-card__chips button, .node-card__chips a')]
+          .map(c => c.textContent.replace(/\s*\u2014\s*$/, '').replace(/\s+/g, ' ').trim())
+          .filter(Boolean)
+          .slice(0, 8);
+
+        const CARD_W = 348;
+        const PAD = 22;
+        ctx.font = `500 15px Satoshi, system-ui, sans-serif`;
+        // Lay the chips out first so the panel can be sized to its contents
+        // rather than guessing a height and clipping the last row.
+        const chipRows = [];
+        let row = [];
+        let rowW = 0;
+        chips.forEach(label => {
+          const w = Math.round(ctx.measureText(label).width) + 26;
+          if (rowW + w > CARD_W - PAD * 2 && row.length) { chipRows.push(row); row = []; rowW = 0; }
+          row.push({ label, w });
+          rowW += w + 8;
+        });
+        if (row.length) chipRows.push(row);
+
+        const CHIP_H = 32;
+        const headerH = 34 + (sub ? 24 : 0);
+        const chipsH = chipRows.length ? 22 + chipRows.length * (CHIP_H + 8) : 0;
+        const cardH = PAD * 2 + headerH + chipsH;
+        const cardX = SHARE_SIZE - CARD_W - 34;
+        const cardY = GRAPH_BOTTOM - cardH - 18;
+
+        roundRectPath(ctx, cardX, cardY, CARD_W, cardH, 14);
+        ctx.fillStyle = 'rgba(11,18,26,0.92)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(150,196,222,0.24)';
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        let ty = cardY + PAD + 20;
+        ctx.fillStyle = '#eef4fb';
+        ctx.font = `700 22px Satoshi, system-ui, sans-serif`;
+        ctx.fillText(fitText(ctx, name, CARD_W - PAD * 2), cardX + PAD, ty);
+        if (sub) {
+          ty += 24;
+          ctx.fillStyle = 'rgba(178,196,214,0.9)';
+          ctx.font = `400 16px Satoshi, system-ui, sans-serif`;
+          ctx.fillText(fitText(ctx, sub, CARD_W - PAD * 2), cardX + PAD, ty);
+        }
+        if (chipRows.length) {
+          ty += 26;
+          ctx.fillStyle = 'rgba(150,170,190,0.75)';
+          ctx.font = `500 12px Satoshi, system-ui, sans-serif`;
+          ctx.fillText('MEMBERS', cardX + PAD, ty);
+          ty += 14;
+          ctx.font = `500 15px Satoshi, system-ui, sans-serif`;
+          chipRows.forEach(chipRow => {
+            let cx = cardX + PAD;
+            chipRow.forEach(({ label, w }) => {
+              roundRectPath(ctx, cx, ty, w, CHIP_H, CHIP_H / 2);
+              ctx.fillStyle = 'rgba(20,32,44,0.9)';
+              ctx.fill();
+              ctx.strokeStyle = 'rgba(150,196,222,0.22)';
+              ctx.lineWidth = 1.2;
+              ctx.stroke();
+              ctx.fillStyle = '#dce8f4';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(label, cx + w / 2, ty + CHIP_H / 2);
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'alphabetic';
+              cx += w + 8;
+            });
+            ty += CHIP_H + 8;
+          });
+        }
+      }
+
+      // --- the status lines ------------------------------------------------
+      // Read from the footer, so the picture reports the same counts the page did
+      // instead of a caption we invented.
+      const footer = document.querySelector('.sigma-footer');
+      const lines = footer
+        ? ['.sigma-hint', '.sigma-context', '.sigma-frontier']
+            .map(sel => footer.querySelector(sel))
+            .filter(el => visibleEl(el) && el.textContent.trim())
+            .map(el => el.textContent.replace(/\s+/g, ' ').trim())
+        : [];
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      let ly = 1036;
+      lines.slice(0, 3).forEach((line, i) => {
+        ctx.font = `${i === 0 ? 500 : 400} ${i === 0 ? 19 : 17}px Satoshi, system-ui, sans-serif`;
+        ctx.fillStyle = i === 0 ? 'rgba(214,228,242,0.95)' : 'rgba(168,186,206,0.9)';
+        ctx.fillText(fitText(ctx, line, SHARE_SIZE - 120), SHARE_SIZE / 2, ly);
+        ly += 30;
+      });
+
+      // --- the URL ---------------------------------------------------------
+      // Deliberately large. Facebook and Instagram drop the link when a file is
+      // attached, so for a shared image this text is often the ONLY route back to
+      // the graph, and the old 10px version was unreadable on a phone.
+      const STRIP_H = 74;
+      const stripY = SHARE_SIZE - STRIP_H;
+      ctx.fillStyle = 'rgba(255,255,255,0.07)';
+      ctx.fillRect(0, stripY, SHARE_SIZE, 1);
+      ctx.fillStyle = '#0a1016';
+      ctx.fillRect(0, stripY + 1, SHARE_SIZE, STRIP_H - 1);
+      ctx.fillStyle = '#cfe6f5';
+      ctx.font = `600 24px Satoshi, system-ui, sans-serif`;
+      const displayUrl = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      ctx.fillText(fitText(ctx, decodeURIComponent(displayUrl), SHARE_SIZE - 80), SHARE_SIZE / 2, stripY + STRIP_H / 2 + 1);
+
+      return await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    }
+
     async function renderGraphPngBlob() {
-      const sigmaCanvas = captureSigmaCanvas();
+      const capture = await captureSigmaCanvasWithAllLabels();
+      const sigmaCanvas = capture && capture.canvas;
       const svg = document.getElementById('graph-svg');
       if (!sigmaCanvas && !svg) return null;
+      // The constellation is the default, so it gets the designed poster. The SVG
+      // renderer keeps the older viewport-shaped export: it is an escape hatch, and
+      // giving it a second layout to maintain buys nothing.
+      if (sigmaCanvas && capture.hostBox) {
+        const poster = await renderSharePosterBlob(sigmaCanvas, capture);
+        if (poster) return poster;
+      }
       const siteUrl = shareableUrl();
       // On the constellation the SVG is hidden and measures 0x0; size the export
       // from the stage that is actually on screen.
