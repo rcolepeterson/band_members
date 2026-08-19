@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
-    "@netlify/blobs": "^8.1.0"
+    "@netlify/blobs": "^8.1.0",
+    "pureimage": "^0.4.20"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.5",
