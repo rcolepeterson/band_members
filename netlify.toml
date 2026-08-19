@@ -6,3 +6,14 @@
 [functions]
   # Netlify Functions v2 (ESM, Request/Response signature).
   node_bundler = "esbuild"
+
+[functions.og_image]
+  # esbuild inlines JavaScript, not binaries, so the font the link-preview card draws
+  # with has to be shipped alongside the function explicitly. Without this the card
+  # renders as an untexted constellation, or falls back to the static image.
+  #
+  # Lato under OFL-1.1 (vendor/fonts/og/LICENSE.txt), which permits redistribution.
+  # The site's own Boska and Satoshi are woff2 and licensed under the ITF FFL, which
+  # forbids format conversion — and pureimage reads TTF, not woff2. Hence a different
+  # face here than in the browser.
+  included_files = ["vendor/fonts/og/**"]
