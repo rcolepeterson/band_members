@@ -386,15 +386,24 @@ export async function renderOgCard({ graph, search = '', host = 'bandmembers.net
 
       placed.push(boxAt(spot));
 
-      // On a hub the centre is the most crowded part of the card, so the one name that
-      // must always be readable is the one with the least free space around it. A plate
-      // behind it makes the overlap deliberate and legible instead of accidental and
-      // muddy — the same trick the site's own hover card uses. Only the anchor gets one;
-      // every other label found genuinely clear space or was dropped.
-      if (isAnchor) {
-        ctx.fillStyle = 'rgba(7,11,16,0.82)';
-        ctx.fillRect(spot.x - 8, spot.y - size - 3, width + 16, height + 4);
-      }
+      // Every label sits on a plate, not just the anchor's.
+      //
+      // Labels are kept clear of other labels and of every dot, but NOT of edges, and on a
+      // hub the edges radiate through the whole card -- so on the live Nine Inch Nails card
+      // a line ran straight through "Richard Patrick", "Pino Palladino" and "Martin
+      // Atkins". Requiring labels to dodge edges as well would have dropped most of the
+      // names on exactly the crowded cards that need them, since on a starburst every
+      // direction has a line in it.
+      //
+      // A plate is the better trade: the line stops at the text instead of crossing it, and
+      // no name is lost.
+      //
+      // Opaque, not translucent. A first attempt at 78% still let 22% of the line through,
+      // which on a thin pale edge was perfectly visible -- the fix looked like no fix at
+      // all. The graph area is a single flat colour, so an opaque plate in that exact
+      // colour is itself invisible: it reads as the line passing behind the name.
+      ctx.fillStyle = COLORS.background;
+      ctx.fillRect(spot.x - 5, spot.y - size - 2, width + 10, height + 2);
 
       ctx.fillStyle = isAnchor ? COLORS.anchorLabel : COLORS.label;
       ctx.fillText(text, spot.x, spot.y);
