@@ -1337,3 +1337,111 @@ test('the font build records its licence position', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(pkg.scripts['vendor:fonts'], 'node scripts/vendor-fonts.mjs');
 });
+
+// --- the share poster --------------------------------------------------------
+//
+// The old export was the constellation and a thin title bar: no wordmark, no search
+// field, no pills, no card, no status lines, and a 10px URL. It also matched the
+// viewport, so a phone produced a tall image that feeds crop.
+
+test('the poster is a fixed square, not the viewport', () => {
+  assert.match(INDEX_HTML, /const SHARE_SIZE = 1200;/);
+  // 1200x1200 survives Facebook, Instagram and X without cropping.
+  assert.match(INDEX_HTML, /canvas\.width = SHARE_SIZE;\s*\n\s*canvas\.height = SHARE_SIZE;/);
+});
+
+test('the poster reads its content from the live page', () => {
+  const poster = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
+    INDEX_HTML.indexOf('async function renderGraphPngBlob'),
+  );
+  assert.ok(poster.length > 0, 'expected the poster function');
+  // Everything the user asked to see in the picture.
+  assert.match(poster, /ROCK BAND FAMILY TREE/, 'the wordmark');
+  assert.match(poster, /\.sigma-prompt input/, 'the typed query');
+  assert.match(poster, /\.sigma-action/, 'the pill row');
+  // The lookup itself, not just the field names: replacing the querySelector with
+  // null left every field name in the file below it, so asserting only the names
+  // passed while the card silently stopped being drawn.
+  assert.match(poster, /const card = document\.querySelector\('\.node-card'\);/, 'the card lookup');
+  assert.match(poster, /visibleEl\(card\)/, 'the card is drawn only when it is open');
+  assert.match(poster, /\.node-card__name/, 'the card name');
+  assert.match(poster, /\.node-card__chips/, 'the card chips');
+  assert.match(poster, /'\.sigma-hint', '\.sigma-context', '\.sigma-frontier'/, 'the status lines');
+});
+
+test('the signed-in strip is never drawn into a shared picture', () => {
+  // It carries the sharer's name and a Sign out link, which has no business in a
+  // public post.
+  const poster = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
+    INDEX_HTML.indexOf('async function renderGraphPngBlob'),
+  );
+  assert.ok(!poster.includes('header-user'), 'the poster must not read the auth strip');
+  assert.ok(!poster.includes('Sign out'), 'and must not print it');
+});
+
+test('the URL on the poster is legible rather than a footnote', () => {
+  // Facebook and Instagram drop the link when a file is attached, so on a shared
+  // image this text is often the only route back to the graph. It used to be 10px.
+  const poster = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
+    INDEX_HTML.indexOf('async function renderGraphPngBlob'),
+  );
+  const match = poster.match(/const displayUrl[\s\S]{0,400}?fillText\(fitText\(ctx, decodeURIComponent\(displayUrl\)/);
+  assert.ok(match, 'expected the URL to be drawn through fitText');
+  const size = poster.match(/ctx\.font = `600 (\d+)px Satoshi[^`]*`;\s*\n\s*const displayUrl/);
+  assert.ok(size, 'expected an explicit font size for the URL');
+  assert.ok(Number(size[1]) >= 20, `the URL should be at least 20px, found ${size[1]}`);
+});
+
+test('everything positional is measured while the capture is re-framed', () => {
+  // This ordering has bitten twice. Measuring the host box after the restore made
+  // drawImage stretch a landscape render into a portrait slot, so every node came out
+  // an oval; measuring the overlay positions after the restore drew the focus ring
+  // around the wrong musician. Both looked like rendering faults and were neither.
+  const helper = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('async function captureSigmaCanvasWithAllLabels'),
+    INDEX_HTML.indexOf('const POSTER_GRAPH_ASPECT') > 0
+      ? INDEX_HTML.indexOf('async function renderSharePosterBlob')
+      : INDEX_HTML.length,
+  );
+  const measured = helper.indexOf('host.getBoundingClientRect()');
+  const overlays = helper.indexOf('graphToViewport');
+  // lastIndexOf, not indexOf: the same restore line also appears in the catch that
+  // handles a refused resize, which sits BEFORE the measurement. Matching that one
+  // made this assertion compare the wrong pair and fail on correct code.
+  const restored = helper.lastIndexOf('host.style.width = previous.width');
+  assert.ok(measured > 0 && overlays > 0 && restored > 0, 'expected all three');
+  assert.ok(measured < restored, 'the host box must be measured before the restore');
+  assert.ok(overlays < restored, 'overlay positions must be computed before the restore');
+  // And the poster must use the precomputed values rather than asking again.
+  const poster = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
+    INDEX_HTML.indexOf('async function renderGraphPngBlob'),
+  );
+  assert.ok(!poster.includes('graphToViewport'), 'the poster must not re-read positions');
+  assert.match(poster, /capture\.overlay && capture\.overlay\[which\]/);
+});
+
+test('the capture shows every name it can, and puts the screen back', () => {
+  const helper = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('async function captureSigmaCanvasWithAllLabels'),
+    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
+  );
+  // Our own chrome-collision rule is lifted: in the poster the chrome sits in its own
+  // bands, so a suppressed label leaves an unexplained bare dot.
+  assert.match(helper, /blocked\.clear\(\)/);
+  assert.match(helper, /saved\.forEach\(id => blocked\.add\(id\)\)/);
+  // Sharing must not change what the visitor is looking at.
+  assert.match(helper, /host\.style\.right = previous\.right/);
+  assert.match(helper, /camera\.setState\(cameraBefore\)/);
+  // inset:0 pins right and bottom, so an explicit width is ambiguous until they go.
+  assert.match(helper, /host\.style\.right = 'auto'/);
+});
+
+test('the SVG escape hatch keeps the older export', () => {
+  // It is an escape hatch; a second poster layout to maintain buys nothing.
+  assert.match(INDEX_HTML, /if \(sigmaCanvas && capture\.hostBox\) \{/);
+  assert.match(INDEX_HTML, /const poster = await renderSharePosterBlob\(sigmaCanvas, capture\);/);
+});
