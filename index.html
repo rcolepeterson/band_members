@@ -4455,6 +4455,22 @@ function downloadPngBlob(blob) {
         try { camera.setState({ x: 0.5, y: 0.5, ratio: 1.18, angle: 0 }); } catch (_) {}
       }
 
+      // Brighter labels, for the poster only.
+      //
+      // On screen the names sit at #c8d3e0 against near-black, which reads fine at full
+      // size on a good display. A shared picture is looked at small and re-compressed by
+      // whichever platform it lands on, and at that size the peripheral names were hard
+      // to read. The fallback colour is raised while the ATTRIBUTE is left in place, so
+      // the gold highlight on a selected chain still wins.
+      const labelColorBefore = renderer && typeof renderer.getSetting === 'function'
+        ? renderer.getSetting('labelColor')
+        : null;
+      if (labelColorBefore && typeof renderer.setSetting === 'function') {
+        try {
+          renderer.setSetting('labelColor', { ...labelColorBefore, color: '#eaf2fa' });
+        } catch (_) {}
+      }
+
       try {
         // Let the re-frame settle before reading pixels.
         //
@@ -4494,6 +4510,9 @@ function downloadPngBlob(blob) {
             : null,
         };
       } finally {
+        if (labelColorBefore) {
+          try { renderer.setSetting('labelColor', labelColorBefore); } catch (_) {}
+        }
         if (camera && cameraBefore) {
           try { camera.setState(cameraBefore); } catch (_) {}
         }
@@ -4894,7 +4913,7 @@ function downloadPngBlob(blob) {
       ctx.fillRect(0, stripY, SHARE_SIZE, 1);
       ctx.fillStyle = '#0a1016';
       ctx.fillRect(0, stripY + 1, SHARE_SIZE, STRIP_H - 1);
-      ctx.fillStyle = '#9fc6dd';
+      ctx.fillStyle = '#cfe6f5';
       ctx.font = `600 24px Satoshi, system-ui, sans-serif`;
       const displayUrl = siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
       ctx.fillText(fitText(ctx, decodeURIComponent(displayUrl), SHARE_SIZE - 80), SHARE_SIZE / 2, stripY + STRIP_H / 2 + 1);
