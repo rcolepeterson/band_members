@@ -127,6 +127,42 @@ export function buildAdjacency(nodes = [], links = []) {
   return adjacency;
 }
 
+/**
+ * Partitions a graph into its connected components (undirected).
+ *
+ * A filtered scene can leave a handful of bands with no shared members with
+ * the rest -- a BFS from any single anchor will never reach them, no matter
+ * how many hops it is allowed. This exists so the UI can at least say so,
+ * and point at where the rest of them are.
+ *
+ * Returns an array of arrays of node ids. Each component lists its ids in
+ * the order the BFS first reached them; the components themselves are in no
+ * particular order -- callers that care (largest first, etc.) sort the
+ * result themselves.
+ */
+export function getConnectedComponents(nodes = [], links = [], adjacency = null) {
+  const adj = adjacency || buildAdjacency(nodes, links);
+  const seen = new Set();
+  const components = [];
+  nodes.forEach(node => {
+    if (seen.has(node.id)) return;
+    const component = [];
+    const queue = [node.id];
+    seen.add(node.id);
+    while (queue.length) {
+      const id = queue.shift();
+      component.push(id);
+      (adj.get(id) || new Set()).forEach(neighbor => {
+        if (seen.has(neighbor)) return;
+        seen.add(neighbor);
+        queue.push(neighbor);
+      });
+    }
+    components.push(component);
+  });
+  return components;
+}
+
 // ---------------------------------------------------------------------------
 // Breadth-first neighborhood
 // ---------------------------------------------------------------------------

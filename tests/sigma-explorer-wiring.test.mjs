@@ -260,6 +260,26 @@ test('the opening view is capped and the frontier is surfaced', () => {
   assert.match(HELPERS, /MAX_NODES: 100/);
 });
 
+test('a disconnected group in the filtered graph is disclosed, not silently dropped', () => {
+  // "Expand" only ever grows the anchor's own component -- a scene filter can
+  // leave other bands with no shared members at all, invisible forever no
+  // matter how far that expands. This is the honesty fix: say so, and offer
+  // a one-click way to actually see them, reusing the same render path a
+  // node click already uses rather than rendering every group at once.
+  assert.match(HELPERS, /export function getConnectedComponents\(/);
+  assert.match(EXPLORER, /getConnectedComponents,?\s*\n/, 'must import the helper');
+  assert.match(EXPLORER, /no shared members with what's on screen/);
+  assert.match(EXPLORER, /Show next group/);
+  assert.match(EXPLORER, /Show that group/, 'singular phrasing for exactly one other group');
+  // Recomputed whenever the filtered graph changes, not just once at boot.
+  assert.match(EXPLORER, /components = getConnectedComponents\(master\.nodes, master\.links, adjacency\)/);
+  // The click handler reuses renderNeighborhood -- no separate multi-group
+  // rendering path, which is the deferred, bigger version of this feature.
+  const clickHandler = EXPLORER.slice(EXPLORER.indexOf('otherGroupsBtn.addEventListener'));
+  assert.match(clickHandler.slice(0, 400), /renderNeighborhood\(\{/);
+  assert.match(clickHandler.slice(0, 400), /state\.nextGroupAnchor/);
+});
+
 // ---------------------------------------------------------------------------
 // 6. Mobile parity + dependency pinning
 // ---------------------------------------------------------------------------
@@ -730,10 +750,14 @@ test('filters narrow the constellation through one implementation', () => {
   const setGraph = EXPLORER.slice(EXPLORER.indexOf('function setGraph(next)'), EXPLORER.indexOf('// -- first paint'));
   // An empty result is a real outcome of a narrow filter, not a crash.
   assert.match(setGraph, /No bands match these filters\./);
+  // The "most connected survivor" fallback now lives in a shared helper (also
+  // used to pick where "Show next group" jumps to) -- setGraph must call it,
+  // not reimplement it.
+  assert.match(setGraph, /highestDegreeNode\(master\.nodes\.map\(node => node\.id\)\)/);
   // buildAdjacency stores a Set per node: reading .length gave undefined, every
   // comparison was false, no anchor was ever chosen, and filtering silently did
   // nothing at all.
-  assert.match(setGraph, /neighbours \? neighbours\.size : 0/);
+  assert.match(EXPLORER, /neighbours \? neighbours\.size : 0/);
   // A filter should narrow what you are looking at, not move you.
   assert.match(setGraph, /masterById\.has\(state\.anchorId\) \? state\.anchorId : null/);
   // And clearing it should put you back rather than leaving you somewhere you

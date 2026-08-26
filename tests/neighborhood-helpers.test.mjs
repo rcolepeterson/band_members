@@ -29,6 +29,7 @@ import {
   NEIGHBORHOOD_BUDGET,
   buildAdjacency,
   getNeighborhood,
+  getConnectedComponents,
   resolveAnchor,
   classifyNode,
   NODE_KINDS,
@@ -951,4 +952,65 @@ test('a legacy spelling that misses is reported too', () => {
   const nodes = [{ id: 'Aaron McRae' }];
   const r = resolveAnchor({ search: '?band=Gone+Band', nodes, links: [] });
   assert.equal(r.requestedByLink, 'Gone Band');
+});
+
+// ---------------------------------------------------------------------------
+// 9. Connected components -- disconnected filtered scenes
+// ---------------------------------------------------------------------------
+//
+// A scene filter narrows the graph to whatever bands share that city, which
+// can easily leave two eras (or two cliques) of a scene with no shared
+// members at all. getNeighborhood() only ever finds the anchor's own group;
+// getConnectedComponents() is what lets the UI notice the others exist.
+
+test('the fixture graph is two components: the main cluster and the orphan band', () => {
+  const { nodes, links } = fixture();
+  const components = getConnectedComponents(nodes, links);
+  assert.equal(components.length, 2);
+  const sizes = components.map(c => c.length).sort((a, b) => a - b);
+  assert.deepEqual(sizes, [1, 8]);
+  const orphanComponent = components.find(c => c.includes('Orphan Band'));
+  assert.deepEqual(orphanComponent, ['Orphan Band']);
+});
+
+test('a small fully connected graph is a single component', () => {
+  const nodes = [{ id: 'X' }, { id: 'Y' }, { id: 'Z' }];
+  const links = [{ source: 'X', target: 'Y' }, { source: 'Y', target: 'Z' }];
+  const components = getConnectedComponents(nodes, links);
+  assert.equal(components.length, 1);
+  assert.equal(components[0].length, 3);
+});
+
+test('three disjoint groups report as three components, every node accounted for once', () => {
+  const nodes = [
+    { id: 'A1' }, { id: 'A2' }, { id: 'A3' },
+    { id: 'B1' }, { id: 'B2' },
+    { id: 'C1' },
+  ];
+  const links = [
+    { source: 'A1', target: 'A2' },
+    { source: 'A2', target: 'A3' },
+    { source: 'B1', target: 'B2' },
+  ];
+  const components = getConnectedComponents(nodes, links);
+  assert.equal(components.length, 3);
+  assert.deepEqual(components.map(c => c.length).sort((a, b) => a - b), [1, 2, 3]);
+  assert.deepEqual(components.flat().sort(), nodes.map(n => n.id).sort());
+});
+
+test('nodes with no links at all are each their own singleton component', () => {
+  const nodes = [{ id: 'Lonely One' }, { id: 'Lonely Two' }];
+  const components = getConnectedComponents(nodes, []);
+  assert.equal(components.length, 2);
+  assert.deepEqual(components.map(c => c.length), [1, 1]);
+});
+
+test('accepts a precomputed adjacency map instead of rebuilding one', () => {
+  // The Sigma renderer already has one in scope on every setGraph() call, and
+  // rebuilding it again for this would be wasted work on a filter change.
+  const nodes = [{ id: 'A' }, { id: 'B' }, { id: 'C' }];
+  const links = [{ source: 'A', target: 'B' }];
+  const adjacency = buildAdjacency(nodes, links);
+  const components = getConnectedComponents(nodes, links, adjacency);
+  assert.equal(components.length, 2);
 });

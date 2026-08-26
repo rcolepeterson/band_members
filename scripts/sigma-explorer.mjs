@@ -44,6 +44,7 @@ import {
   rendererFromSearch,
   resolveAnchor,
   getNeighborhood,
+  getConnectedComponents,
   buildAdjacency,
   radialLayout,
   classifyNode,
@@ -386,6 +387,19 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-footer .sigma-frontier{font-size:12px;color:#8b98a8}
 #${STAGE_ID} .sigma-context{margin:0;font-size:12px;color:#9aa7b6;line-height:1.45}
 #${STAGE_ID} .sigma-context strong{color:#dfe6ef;font-weight:500}
+/* Disconnected-scene disclosure: a filtered scene can leave a handful of
+   bands with no shared members with what's on screen, and no "Expand" will
+   ever reach them. This says so and offers a one-click jump, rather than
+   quietly implying the view is complete. */
+#${STAGE_ID} .sigma-other-groups{margin:0;font-size:12px;color:#8b98a8;display:flex;
+  flex-wrap:wrap;justify-content:center;align-items:baseline;gap:6px}
+#${STAGE_ID} .sigma-other-groups[hidden]{display:none}
+#${STAGE_ID} .sigma-other-groups__btn{border:0;background:none;padding:0;margin:0;
+  font:inherit;color:#8fe8f6;text-decoration:underline;text-underline-offset:2px;
+  cursor:pointer}
+#${STAGE_ID} .sigma-other-groups__btn:hover{color:#c3f2fb}
+#${STAGE_ID} .sigma-other-groups__btn:focus-visible{outline:2px solid rgba(143,232,246,0.8);
+  outline-offset:2px}
 /* --------------------------------------------------------------------------
    The page's own chrome, stood down while Sigma is rendering.
 
@@ -523,6 +537,10 @@ function buildStage(doc, mount) {
       <p class="sigma-hint">${EXPLORE_COPY}</p>
       <p class="sigma-context" aria-live="polite"></p>
       <span class="sigma-frontier"></span>
+      <p class="sigma-other-groups" hidden>
+        <span class="sigma-other-groups__text"></span>
+        <button type="button" class="sigma-other-groups__btn"></button>
+      </p>
     </div>
   `;
   stage.hidden = false;
@@ -566,6 +584,9 @@ export function initSigmaExplorer({
   const contextEl = stage.querySelector('.sigma-context');
   const hintEl = stage.querySelector('.sigma-hint');
   const frontierEl = stage.querySelector('.sigma-frontier');
+  const otherGroupsEl = stage.querySelector('.sigma-other-groups');
+  const otherGroupsTextEl = stage.querySelector('.sigma-other-groups__text');
+  const otherGroupsBtn = stage.querySelector('.sigma-other-groups__btn');
   // The page's Add / Share / Feedback panels live INSIDE the toolbar that stands
   // down for the Sigma chrome, so hiding the toolbar hid the panels too and the
   // new pills opened nothing. They are moved onto the stage for the duration and
@@ -625,11 +646,14 @@ export function initSigmaExplorer({
   // Retires the page's duplicate controls for as long as this renderer is up.
   doc.body.classList.add(BODY_ACTIVE_CLASS);
 
-  // Reassignable, not const: setGraph() swaps all four when a filter changes.
+  // Reassignable, not const: setGraph() swaps all five when a filter changes.
   let adjacency = buildAdjacency(master.nodes, master.links);
   let masterById = new Map(master.nodes.map(node => [node.id, node]));
   // Computed once: updateChrome() runs on every view change, and this does not.
   let bandNames = master.nodes.filter(node => node.type === 'band').map(node => node.id);
+  // Also computed once per filter, not per view: which nodes can reach which
+  // others depends on the filtered graph's shape, not on where the anchor is.
+  let components = getConnectedComponents(master.nodes, master.links, adjacency);
 
   // The silver ringed star belongs to ONE musician -- the project's default
   // anchor -- not to "wherever the camera happens to be". Someone who lands on
@@ -667,6 +691,13 @@ export function initSigmaExplorer({
     // Exposed so scripts/layout-audit.mjs can catch a phantom overlay: a star
     // drawn for a node that is not in the current view.
     homeStarId: null,
+    // Which component's node ids (as its componentKey()) "Show next group"
+    // has already sent the visitor to this filter, so repeated clicks tour
+    // every disconnected group instead of ping-ponging between the two
+    // largest. Reset whenever setGraph() changes the filtered graph.
+    visitedComponentKeys: new Set(),
+    // The anchor "Show next group" jumps to, recomputed on every render.
+    nextGroupAnchor: null,
   };
 
   state.homeStarId = homeStarId;
@@ -947,6 +978,32 @@ export function initSigmaExplorer({
     return true;
   }
 
+  // The busiest node among `ids` -- the most useful place to land in a
+  // narrowed graph, whether that narrowing came from a filter or from
+  // jumping into a disconnected group. Shared by setGraph() and the
+  // "Show next group" handler so there is one definition of "busiest".
+  function highestDegreeNode(ids) {
+    let best = null;
+    let bestDegree = -1;
+    ids.forEach(id => {
+      const neighbours = adjacency.get(id);
+      // buildAdjacency stores a Set per node, so this is .size -- reading
+      // .length gave undefined, every comparison was false, and no anchor was
+      // ever chosen, so a filtered graph silently did nothing.
+      const degree = neighbours ? neighbours.size : 0;
+      if (degree > bestDegree) { best = id; bestDegree = degree; }
+    });
+    return best;
+  }
+
+  // A stable identity for a component that does not depend on traversal
+  // order -- the same disconnected group produces the same key every time
+  // it is recomputed, so "already shown this filter" can be tracked by key
+  // rather than by object identity.
+  function componentKey(ids) {
+    return ids.length ? ids.slice().sort()[0] : '';
+  }
+
   function updateChrome() {
     const view = state.view;
     const anchor = masterById.get(state.anchorId);
@@ -963,6 +1020,40 @@ export function initSigmaExplorer({
     // explore makes the others move under the pointer.
     expandBtn.disabled = !remaining;
     expandBtn.setAttribute('aria-disabled', String(!remaining));
+
+    // "Expand" only ever finds more of the anchor's own component. A filtered
+    // scene can leave other bands with no shared members with it at all --
+    // invisible forever, no matter how far this expands -- so that has to be
+    // said explicitly rather than left for "frontier: none" to imply falsely
+    // that the view is complete.
+    const currentComponent = components.find(ids => ids.includes(state.anchorId));
+    const currentKey = currentComponent ? componentKey(currentComponent) : null;
+    if (currentKey) state.visitedComponentKeys.add(currentKey);
+    let otherComponents = currentKey ? components.filter(ids => componentKey(ids) !== currentKey) : [];
+    if (otherComponents.length) {
+      let unvisited = otherComponents.filter(ids => !state.visitedComponentKeys.has(componentKey(ids)));
+      if (!unvisited.length) {
+        // Toured every other group already -- start the loop over rather than
+        // going quiet once the tour is done.
+        state.visitedComponentKeys = new Set([currentKey]);
+        unvisited = otherComponents;
+      }
+      unvisited = unvisited.slice().sort((a, b) => b.length - a.length);
+      const nextGroup = unvisited[0];
+      state.nextGroupAnchor = highestDegreeNode(nextGroup);
+
+      const otherNodeCount = otherComponents.reduce((sum, ids) => sum + ids.length, 0);
+      const otherGroupCount = otherComponents.length;
+      otherGroupsTextEl.textContent =
+        `${otherNodeCount} more ${otherNodeCount === 1 ? 'node' : 'nodes'} in ` +
+        `${otherGroupCount} separate ${otherGroupCount === 1 ? 'group' : 'groups'} — ` +
+        `no shared members with what's on screen.`;
+      otherGroupsBtn.textContent = otherGroupCount === 1 ? 'Show that group' : 'Show next group';
+      otherGroupsEl.hidden = false;
+    } else {
+      state.nextGroupAnchor = null;
+      otherGroupsEl.hidden = true;
+    }
 
     if (homeStarId) {
       homeLabelEl.textContent =
@@ -1570,6 +1661,18 @@ export function initSigmaExplorer({
     });
   });
 
+  // Jumps to the busiest node of another disconnected group in this filter.
+  // Reuses the exact same anchor-and-BFS render path a node click uses --
+  // rendering every group at once is the bigger change this defers.
+  otherGroupsBtn.addEventListener('click', () => {
+    if (!state.nextGroupAnchor) return;
+    renderNeighborhood({
+      anchorId: state.nextGroupAnchor,
+      maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
+      animate: true,
+    });
+  });
+
   // Escape closes the popover, and so does a press anywhere else -- without
   // this, a tap-opened popover on a phone has no way out.
   doc.addEventListener('keydown', event => {
@@ -1623,6 +1726,7 @@ export function initSigmaExplorer({
       // An empty result is a real outcome of a narrow filter, not a failure.
       contextEl.textContent = 'No bands match these filters.';
       frontierEl.textContent = '';
+      otherGroupsEl.hidden = true;
       viewGraph.clear();
       renderer.refresh();
       state.view = { nodes: [], links: [], frontier: [], depths: new Map() };
@@ -1633,6 +1737,10 @@ export function initSigmaExplorer({
     adjacency = buildAdjacency(master.nodes, master.links);
     masterById = new Map(master.nodes.map(node => [node.id, node]));
     bandNames = master.nodes.filter(node => node.type === 'band').map(node => node.id);
+    components = getConnectedComponents(master.nodes, master.links, adjacency);
+    // A new filter is a new graph -- which groups have already been shown by
+    // "Show next group" resets with it.
+    state.visitedComponentKeys = new Set();
 
     let anchorId = masterById.has(state.anchorId) ? state.anchorId : null;
 
@@ -1649,21 +1757,9 @@ export function initSigmaExplorer({
     if (!anchorId && masterById.has(NEIGHBORHOOD_BUDGET.DEFAULT_ANCHOR)) {
       anchorId = NEIGHBORHOOD_BUDGET.DEFAULT_ANCHOR;
     }
-    if (!anchorId) {
-      // Most connected survivor: the busiest node is the most useful place to
-      // land in a narrowed graph.
-      let best = null;
-      let bestDegree = -1;
-      master.nodes.forEach(node => {
-        // buildAdjacency stores a Set per node, so this is .size -- reading
-        // .length gave undefined, every comparison was false, and no anchor was
-        // ever chosen, so a filtered graph silently did nothing.
-        const neighbours = adjacency.get(node.id);
-        const degree = neighbours ? neighbours.size : 0;
-        if (degree > bestDegree) { best = node.id; bestDegree = degree; }
-      });
-      anchorId = best;
-    }
+    // Most connected survivor: the busiest node is the most useful place to
+    // land in a narrowed graph.
+    if (!anchorId) anchorId = highestDegreeNode(master.nodes.map(node => node.id));
     if (!anchorId) return false;
 
     state.maxHops = NEIGHBORHOOD_BUDGET.MAX_HOPS;
