@@ -3564,6 +3564,14 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       const input = document.getElementById('gate-input');
       const error = document.getElementById('gate-error');
 
+      // Gate disabled at the site owner's request (2026-08-26). Flip to true to
+      // bring it back -- the markup and unlock logic below are untouched.
+      const GATE_ENABLED = false;
+      if (!GATE_ENABLED) {
+        gate.style.display = 'none';
+        return;
+      }
+
       if (sessionStorage.getItem('rbft-unlocked') === 'yes') {
         gate.style.display = 'none';
         return;
