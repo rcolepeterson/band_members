@@ -455,10 +455,17 @@ test('the Clear / Reset view action tears the highlight down via renderGraph', (
   assert.ok(branch.includes('renderGraph();'), 'Expected the Clear action to re-render.');
 
   const renderIdx = INDEX_HTML.indexOf('function renderGraph()');
-  const renderHead = INDEX_HTML.slice(renderIdx, renderIdx + 900);
+  const closeCardIdx = INDEX_HTML.indexOf('closeNodeCard()', renderIdx);
+  const filterIdx = INDEX_HTML.indexOf('getFilteredGraph(', renderIdx);
+  assert.ok(renderIdx > 0 && closeCardIdx > 0 && filterIdx > 0,
+    'Expected renderGraph(), closeNodeCard(), and getFilteredGraph( to all be found.');
+  // Ordering, not proximity: a fixed character window is too fragile to a
+  // comment growing above it (see the svgSelection guard fix), and proximity
+  // was never actually the invariant -- the card must close BEFORE the
+  // filter/re-render work starts, not merely "somewhere nearby".
   assert.ok(
-    renderHead.includes('closeNodeCard()'),
-    'renderGraph must close the card, which is what clears the highlight on Reset view.'
+    closeCardIdx < filterIdx,
+    'renderGraph must close the card, which is what clears the highlight on Reset view, before it filters/re-renders.'
   );
 });
 

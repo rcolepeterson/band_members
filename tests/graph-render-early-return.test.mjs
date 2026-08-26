@@ -80,17 +80,28 @@ function makeGraphGroup(initialChildren) {
   return group;
 }
 
-function runRenderGraph({ nodes = [], links = [], stage = { width: 1200, height: 800 }, graphGroup } = {}) {
+function runRenderGraph({
+  nodes = [],
+  links = [],
+  stage = { width: 1200, height: 800 },
+  graphGroup,
+  // Real boot: setupSvgRenderer() runs only off the Sigma path (see 53fe918),
+  // so svgSelection is null on the constellation and non-null on ?renderer=svg.
+  svgSelection = { attr() { return this; } },
+  sigmaBoot = false,
+} = {}) {
   const warnings = [];
   const textSink = () => ({ textContent: '' });
+  const metricNodes = textSink();
+  const graphBadge = textSink();
   const env = {
     graphState: { master: { nodes: [], links: [] } },
-    svgSelection: { attr() { return this; } },
+    svgSelection,
     graphGroup,
     closeNodeCard: () => {},
     nodeCardState: { node: null },
     getFilteredGraph: () => ({ nodes, links }),
-    metricNodes: textSink(),
+    metricNodes,
     metricLinks: textSink(),
     metricScenes: textSink(),
     locationKey: () => '',
@@ -98,7 +109,7 @@ function runRenderGraph({ nodes = [], links = [], stage = { width: 1200, height:
     currentScene: 'all',
     currentGenre: 'all',
     currentSearch: '',
-    graphBadge: textSink(),
+    graphBadge,
     noteLeft: textSink(),
     recentOnly: false,
     describeRecentSelection: () => '',
@@ -106,6 +117,10 @@ function runRenderGraph({ nodes = [], links = [], stage = { width: 1200, height:
     syncSearchEmptyState: () => {},
     // syncFilterBtn and the scene-label lookup both null-check their reads.
     document: {
+      // Absent by default (sigmaBoot: false), matching every pre-existing
+      // test here: `document.body && ...` is falsy, so those tests keep
+      // running the SVG-drawing tail exactly as before.
+      body: sigmaBoot ? { classList: { contains: cls => cls === 'rbft-sigma-boot' } } : undefined,
       getElementById: () => null,
       querySelector: () => (stage ? { getBoundingClientRect: () => stage } : null),
     },
@@ -113,7 +128,7 @@ function runRenderGraph({ nodes = [], links = [], stage = { width: 1200, height:
   };
   const factory = new Function(...DEPS, `return (${RENDER_GRAPH_SRC});`);
   factory(...DEPS.map(name => env[name]))();
-  return { warnings };
+  return { warnings, metricNodes, graphBadge };
 }
 
 // ---------------------------------------------------------------------
@@ -183,6 +198,48 @@ test('the SVG wipe sits below every early return in renderGraph', () => {
   assert.ok(
     stageGuardIdx < wipeIdx,
     'The stage measurement (and its guard) must happen BEFORE the wipe.'
+  );
+});
+
+// ---------------------------------------------------------------------
+// The scene/genre/search regression: svgSelection stays null forever on the
+// constellation (setupSvgRenderer() only runs off the Sigma path, see
+// 53fe918), so gating the WHOLE function on it silently broke every Scene,
+// Genre, Recently-added, and search change for every visitor on the default
+// renderer -- the initial graph looked fine because it never goes through
+// renderGraph() at all. Reported live by a beta tester.
+// ---------------------------------------------------------------------
+
+test('renderGraph still filters and updates chrome when svgSelection was never set up (Sigma boot)', () => {
+  const graphGroup = makeGraphGroup(['stale-svg-node']);
+  const { metricNodes, graphBadge } = runRenderGraph({
+    nodes: [{ id: 'Band A', type: 'band' }],
+    links: [],
+    graphGroup,
+    svgSelection: null,
+    sigmaBoot: true,
+  });
+  assert.equal(metricNodes.textContent, 1, 'metrics must update even without an SVG renderer');
+  assert.equal(graphBadge.textContent, 'Full graph', 'chrome must update even without an SVG renderer');
+  // And it must still stop before touching the (nonexistent) SVG.
+  assert.deepEqual(
+    graphGroup.children,
+    ['stale-svg-node'],
+    'must not attempt to draw into the SVG on the Sigma path'
+  );
+});
+
+test('the top-level guard no longer bails the whole function on a missing svgSelection', () => {
+  assert.doesNotMatch(
+    RENDER_GRAPH_CODE,
+    /if \(!graphState \|\| !svgSelection\) return;/,
+    'svgSelection must not gate the whole function -- the Sigma path never sets it up, ' +
+      'so this silently broke every filter and search change on the default renderer.'
+  );
+  assert.match(
+    RENDER_GRAPH_CODE,
+    /if \(!graphState\) return;/,
+    'graphState is still a legitimate "not loaded yet" guard.'
   );
 });
 

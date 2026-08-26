@@ -7941,7 +7941,16 @@ function downloadPngBlob(blob) {
     });
 
     function renderGraph() {
-      if (!graphState || !svgSelection) return;
+      // svgSelection is NOT a "not ready yet" guard, despite reading like one.
+      // setupSvgRenderer() -- the only place that ever assigns it -- runs only
+      // off the Sigma path (see 53fe918), so on the constellation it stays
+      // null forever. Gating the whole function on it silently broke every
+      // Scene/Genre/Recently-added/search change for every visitor on the
+      // default renderer: the initial graph looked fine because it never goes
+      // through renderGraph() at all. The real "stop before drawing the SVG on
+      // the constellation" guard already exists further down, keyed on the
+      // rbft-sigma-boot body class -- see tests/graph-render-early-return.test.mjs.
+      if (!graphState) return;
       // Any pending anchored node card is now stale (we're about to build a
       // brand new nodes/links copy). Close it before the DOM under it is
       // rebuilt so users don't see a card hovering over a node that no
