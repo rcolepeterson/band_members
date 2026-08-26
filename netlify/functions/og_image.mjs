@@ -413,7 +413,7 @@ export async function renderOgCard({ graph, search = '', host = 'bandmembers.net
     // --- wordmark and footer ---------------------------------------------------
     ctx.fillStyle = COLORS.wordmark;
     ctx.font = `26pt ${FONT_FAMILY}`;
-    ctx.fillText('ROCK BAND FAMILY TREE', 90, 74);
+    ctx.fillText('SIX DEGREES OF ROCK', 90, 74);
 
     const kind = byId.get(resolved.anchorId);
     const descriptor = kind && kind.type === 'band' ? 'band' : 'musician';

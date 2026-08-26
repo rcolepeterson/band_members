@@ -1,4 +1,4 @@
-# Rock Band Family Tree
+# Six Degrees of Rock
 # The graph is one page; ?anchor= only changes which node it opens on, so there is
 # nothing per-band to crawl and nothing to disallow.
 User-agent: *

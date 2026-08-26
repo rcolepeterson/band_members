@@ -227,7 +227,7 @@ test('the page\'s own duplicate chrome stands down while Sigma renders', () => {
 });
 
 test('the wordmark stays on screen above the search field', () => {
-  assert.match(EXPLORER, /class="sigma-wordmark">Rock Band Family Tree<\/h1>/);
+  assert.match(EXPLORER, /class="sigma-wordmark">Six Degrees of Rock<\/h1>/);
   const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
   const hero = css.match(/\.sigma-hero\{[^}]*\}/s);
   assert.ok(hero, 'the hero needs a style rule');
@@ -1174,7 +1174,7 @@ test('the page title carries no version number', () => {
   // labelled differently.
   const title = INDEX_HTML.match(/<title>([^<]*)<\/title>/);
   assert.ok(title, 'expected a title tag');
-  assert.equal(title[1], 'Rock Band Family Tree');
+  assert.equal(title[1], 'Six Degrees of Rock');
   // Pinned as a shape too, so v2 cannot arrive the same way v1 did.
   assert.doesNotMatch(title[1], /\bv\d+\b/i, 'no version number in the title');
   // And it must agree with the card a shared link renders.
@@ -1357,7 +1357,7 @@ test('the poster reads its content from the live page', () => {
   );
   assert.ok(poster.length > 0, 'expected the poster function');
   // Everything the user asked to see in the picture.
-  assert.match(poster, /ROCK BAND FAMILY TREE/, 'the wordmark');
+  assert.match(poster, /SIX DEGREES OF ROCK/, 'the wordmark');
   assert.match(poster, /\.sigma-prompt input/, 'the typed query');
   assert.match(poster, /\.sigma-action/, 'the pill row');
   // The lookup itself, not just the field names: replacing the querySelector with

@@ -194,7 +194,7 @@ async function main() {
   const args = parseArgs(process.argv);
   const log = (...m) => console.log(...m);
 
-  log('=== Rock Band Family Tree — MusicBrainz ingestion ===');
+  log('=== Six Degrees of Rock — MusicBrainz ingestion ===');
   log(`Seed:  ${args.seed}`);
   log(`Out:   ${args.out}`);
   if (args.limit) log(`Limit: first ${args.limit} persons`);

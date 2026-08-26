@@ -61,8 +61,8 @@ const html = `<!doctype html>
     letter-spacing: 0.5px;
   }
 </style></head><body>
-  <img class="logo" src="${logoDataUrl}" alt="Rock Band Family Tree" />
-  <div class="title">Rock Band Family Tree</div>
+  <img class="logo" src="${logoDataUrl}" alt="Six Degrees of Rock" />
+  <div class="title">Six Degrees of Rock</div>
   <div class="tagline">Explore how bands and musicians connect across scenes and decades.</div>
   <div class="footer">bandmembers.netlify.app</div>
 </body></html>`;

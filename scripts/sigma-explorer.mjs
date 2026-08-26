@@ -483,7 +483,7 @@ function buildStage(doc, mount) {
          and one gap at every zoom level. -->
     <span class="sigma-star-label sigma-home-label" hidden></span>
     <div class="sigma-hero">
-      <h1 class="sigma-wordmark">Rock Band Family Tree</h1>
+      <h1 class="sigma-wordmark">Six Degrees of Rock</h1>
     <div class="sigma-prompt">
       <form autocomplete="off">
         <input type="search" name="favorite-band" placeholder="Who&rsquo;s your favorite band?"

@@ -69,7 +69,7 @@ export default async (request, context) => {
   const origin = `${url.protocol}//${url.host}`;
   const shareUrl = escapeAttr(`${origin}/?anchor=${encodeURIComponent(name)}`);
   const imageUrl = escapeAttr(`${origin}/api/og?anchor=${encodeURIComponent(name)}`);
-  const title = `${safeName} &mdash; Rock Band Family Tree`;
+  const title = `${safeName} &mdash; Six Degrees of Rock`;
   const description = `See who ${safeName} played with, and how far the connections reach.`;
 
   let html = await response.text();
@@ -80,7 +80,7 @@ export default async (request, context) => {
   html = replaceMeta(html, 'name', 'twitter:title', title);
   html = replaceMeta(html, 'property', 'og:description', description);
   html = replaceMeta(html, 'name', 'twitter:description', description);
-  html = replaceMeta(html, 'property', 'og:image:alt', `The ${safeName} neighbourhood in the Rock Band Family Tree`);
+  html = replaceMeta(html, 'property', 'og:image:alt', `The ${safeName} neighbourhood in Six Degrees of Rock`);
 
   const headers = new Headers(response.headers);
   // The body now depends on the query string, so it must not be cached as if it were the

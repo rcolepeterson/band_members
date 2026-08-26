@@ -9,7 +9,7 @@
     og:title and twitter:title, which have always been the bare name -- meaning a
     shared link and the tab it opened were labelled two different things.
   -->
-  <title>Rock Band Family Tree</title>
+  <title>Six Degrees of Rock</title>
 
   <!--
     Pre-launch URL hygiene. Every one of these was a live 404 or a missing tag
@@ -42,20 +42,20 @@
        the preview as a huge "BF", which reads as an unrelated brand.
        The 1200x630 card survives every unfurler's crop. -->
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="Rock Band Family Tree" />
-  <meta property="og:title" content="Rock Band Family Tree" />
+  <meta property="og:site_name" content="Six Degrees of Rock" />
+  <meta property="og:title" content="Six Degrees of Rock" />
   <meta property="og:description" content="Explore how bands and musicians connect across scenes and decades." />
   <meta property="og:url" content="https://bandmembers.netlify.app/" />
   <meta property="og:image" content="https://bandmembers.netlify.app/og-image.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Rock Band Family Tree logo with tagline" />
+  <meta property="og:image:alt" content="Six Degrees of Rock logo with tagline" />
 
   <!-- Twitter/X card. summary_large_image renders the OG image full-
        width in the timeline; without this tag X falls back to a small
        thumbnail. -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Rock Band Family Tree" />
+  <meta name="twitter:title" content="Six Degrees of Rock" />
   <meta name="twitter:description" content="Explore how bands and musicians connect across scenes and decades." />
   <meta name="twitter:image" content="https://bandmembers.netlify.app/og-image.png" />
 
@@ -166,16 +166,14 @@
     .grid-lines{position:absolute;inset:0;background-image:linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);background-size:44px 44px;mask-image:linear-gradient(to bottom, rgba(0,0,0,0.55), transparent 85%);pointer-events:none;opacity:.4}
     .site-header{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px);background:color-mix(in srgb, var(--color-bg) 78%, transparent);border-bottom:1px solid var(--color-divider)}
     .header-inner{max-width:1320px;margin:0 auto;padding:var(--space-4);display:flex;align-items:center;justify-content:space-between;gap:var(--space-4)}
-    .header-left,.header-right{display:flex;align-items:center;gap:var(--space-3)}
-    .mini-mark{width:2.25rem;height:2.25rem;border-radius:var(--radius-full);display:grid;place-items:center;background:linear-gradient(160deg, rgba(82,174,182,0.22), rgba(82,174,182,0.06));border:1px solid var(--color-border);font-size:var(--text-sm);font-weight:700;letter-spacing:.16em}
-    .brand-meta{display:flex;flex-direction:column;gap:0.1rem}.brand-name{font-size:var(--text-sm);font-weight:700;letter-spacing:.08em;text-transform:uppercase}.brand-domain{font-size:var(--text-xs);color:var(--color-text-muted)}
+    .header-right{display:flex;align-items:center;gap:var(--space-3)}
     .header-btn{min-height:44px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);display:inline-flex;align-items:center;gap:var(--space-2);background:rgba(255,255,255,0.02)}
     .header-btn:hover{border-color:rgba(82,174,182,0.45);color:var(--color-primary-hover)}
     .layout{max-width:1320px;margin:0 auto;padding:clamp(var(--space-6),4vw,var(--space-12)) var(--space-4) var(--space-12);display:grid;gap:var(--space-6)}
     .hero{min-height:40vh;display:grid;place-items:center;text-align:center;padding:var(--space-10) 0 var(--space-6);position:relative;transition:min-height 260ms ease,padding 260ms ease,opacity 260ms ease,transform 260ms ease}
     .hero-inner{max-width:1080px;display:flex;flex-direction:column;align-items:center;gap:var(--space-4);transition:gap 260ms ease,transform 260ms ease}
     .eyebrow{font-size:var(--text-xs);letter-spacing:.24em;text-transform:uppercase;color:var(--color-text-muted)}.hero-title-clean{font-family:var(--font-body) !important;font-size:clamp(1.6rem, 1.25rem + 0.9vw, 2.2rem) !important;font-weight:700 !important;line-height:1.05;letter-spacing:0.04em;text-transform:uppercase;font-style:normal;font-variation-settings:normal;-webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
-    .hero-logo-wrap{display:grid;gap:var(--space-2);justify-items:center}.hero-logo{width:min(560px,90vw);padding:var(--space-2);filter:drop-shadow(0 24px 40px rgba(0,0,0,.25));transition:width 260ms ease,opacity 260ms ease,transform 260ms ease}.hero-meta-row{display:flex;align-items:center;gap:var(--space-3)}.version-pill{padding:0.3rem 0.75rem;border-radius:999px;border:1px solid var(--color-border);font-size:var(--text-xs);letter-spacing:.12em;text-transform:uppercase;color:var(--color-text-muted);background:rgba(255,255,255,0.02)}
+    .hero-logo-wrap{display:grid;gap:var(--space-2);justify-items:center}.hero-meta-row{display:flex;align-items:center;gap:var(--space-3)}.version-pill{padding:0.3rem 0.75rem;border-radius:999px;border:1px solid var(--color-border);font-size:var(--text-xs);letter-spacing:.12em;text-transform:uppercase;color:var(--color-text-muted);background:rgba(255,255,255,0.02)}
     .hero h1{font-weight:700;font-size:clamp(1.6rem, 1.25rem + 0.9vw, 2.2rem);line-height:1.05;max-width:none;white-space:nowrap;letter-spacing:0.04em;text-transform:uppercase;-webkit-font-smoothing:antialiased;font-style:normal;transition:font-size 260ms ease,transform 260ms ease}.hero p{max-width:58ch;color:var(--color-text-muted);transition:opacity 220ms ease,max-height 260ms ease,margin 260ms ease}
     .hero-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:var(--space-3);transition:opacity 220ms ease,max-height 260ms ease,margin 260ms ease}
     .primary-btn,.secondary-btn{min-height:48px;padding:0 var(--space-5);border-radius:var(--radius-full);display:inline-flex;align-items:center;justify-content:center;font-size:var(--text-sm);font-weight:700;text-decoration:none}
@@ -203,8 +201,8 @@
     .graph-stats-badge__sep{opacity:0.35}
     .graph-stats-badge__status{font-size:12px;color:rgba(212,232,244,0.72);letter-spacing:.09em}
     /* Mobile: hamburger lives top-right so drop the badge to the top-left
-       instead. Keep it compact so it can't collide with the ROCK BAND
-       FAMILY TREE title on very small phones. */
+       instead. Keep it compact so it can't collide with the SIX DEGREES
+       OF ROCK title on very small phones. */
     @media (max-width:720px){.graph-stats-badge{right:auto;top:var(--space-3);left:var(--space-3);padding:0.35rem 0.6rem;font-size:12px;gap:0.15rem;align-items:flex-start;text-align:left}.graph-stats-badge__counts{gap:0.35rem}.graph-stats-badge__group{gap:0.22rem}.graph-stats-badge__status{font-size:11px}}
     .sidebar{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-5)}.stack{padding:var(--space-5);display:grid;gap:var(--space-4)}.section-label{font-size:var(--text-xs);letter-spacing:.18em;text-transform:uppercase;color:var(--color-text-muted)}
     .metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2)}.metric-card{padding:0.45rem var(--space-3);border-radius:var(--radius-md);background:linear-gradient(180deg, rgba(86,109,128,0.38), rgba(43,57,71,0.46));border:1px solid rgba(159,187,204,0.16);min-height:42px;display:grid;align-content:center;gap:0.08rem}.metric-value{font-size:var(--text-sm);font-weight:700;line-height:1.05}.metric-label{font-size:0.78rem;line-height:1;color:rgba(237,241,247,0.72);text-transform:uppercase;letter-spacing:.08em}
@@ -221,7 +219,6 @@
     
     body.hero-condensed .hero{min-height:20vh;padding:var(--space-4) 0 var(--space-2)}
     body.hero-condensed .hero-inner{gap:var(--space-3)}
-    body.hero-condensed .hero-logo{width:min(240px,58vw);opacity:.96;transform:translateY(-2px)}
     body.hero-condensed .hero h1{font-size:var(--text-xl)}
     body.hero-condensed .hero p{opacity:0;max-height:0;overflow:hidden;margin:0}
     body.hero-condensed .hero-actions{opacity:0;max-height:0;overflow:hidden;margin:0}
@@ -273,7 +270,6 @@
     .hero{display:grid !important;min-height:auto;padding:var(--space-8) 0 var(--space-4) !important}
     .hero-compact{gap:var(--space-4)}
     .hero-logo-wrap-clean{gap:var(--space-3)}
-    .hero-logo-clean{width:min(320px,48vw);max-width:100%;height:auto;background:none;box-shadow:none}
     .hero-copy-clean{max-width:58ch;color:var(--color-text-muted)}
     .graph-panel{padding:0;background:transparent !important;border:none !important;box-shadow:none !important;min-height:auto !important;grid-template-rows:auto auto 1fr auto !important;gap:var(--space-4) !important}
     .graph-panel-head{padding:0 var(--space-2)}
@@ -281,22 +277,9 @@
     .graph-stage{min-height:680px !important;border:none !important;border-radius:calc(var(--radius-xl) + var(--space-2)) !important;box-shadow:0 30px 80px rgba(0,0,0,0.34) !important}
     .stage-header,.stage-toolbar,.stage-header-spacer{display:none !important}
     body.hero-condensed .hero{display:grid !important}
-    @media (max-width: 720px){.hero-logo-clean{width:min(240px,68vw)}.graph-stage{min-height:560px !important}}
+    @media (max-width: 720px){.graph-stage{min-height:560px !important}}
 
-  
-    .hero-logo, .hero-logo-clean {
-      display:block;
-      object-fit:contain;
-      image-rendering:auto;
-      transform:none !important;
-      filter:none !important;
-      mix-blend-mode:normal !important;
-      isolation:isolate;
-      background:transparent !important;
-    }
-    #hero-logo-fallback{display:none !important}
 
-  
     .filter-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(180px,0.6fr);gap:var(--space-3);padding:0 var(--space-2)}
     .filter-field{display:grid;gap:var(--space-2)}
     .filter-field label{font-size:var(--text-xs);letter-spacing:.1em;text-transform:uppercase;color:var(--color-text-muted)}
@@ -2085,10 +2068,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 .hero .hero-inner { pointer-events: none; gap: 0.15rem; }
 .hero .hero-logo-wrap { margin-bottom: 0; }
 .hero .hero-copy-clean,
-.hero .eyebrow,
-.hero .hero-logo,
-.hero .hero-logo-clean,
-.hero #logo-missing-note { display: none !important; }
+.hero .eyebrow { display: none !important; }
 .hero .hero-title-clean {
   font-size: 0.95rem !important;
   letter-spacing: 0.18em;
@@ -2675,7 +2655,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
  <!-- Stands in for the constellation chrome until the module mounts. -->
  <div class="rbft-boot-shell" aria-hidden="true">
    <div class="rbft-boot-shell__inner">
-     <p class="rbft-boot-shell__wordmark">Rock Band Family Tree</p>
+     <p class="rbft-boot-shell__wordmark">Six Degrees of Rock</p>
      <div class="rbft-boot-shell__field">Who&rsquo;s your favorite band?</div>
      <p class="rbft-boot-shell__note">Mapping the universe&hellip;</p>
    </div>
@@ -2770,10 +2750,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         <div class="hero-inner hero-compact">
           <div class="eyebrow">Created by musicians, for musicians</div>
           <div class="hero-logo-wrap hero-logo-wrap-clean">
-            <img class="hero-logo hero-logo-clean" src='RBFT_logo_3.png' alt="Rock Band Family Tree logo" width="850" height="437" loading="eager" />
-            
-            <h1 id="hero-title" class="hero-title-clean">Rock Band Family Tree</h1>
-            <div id="logo-missing-note" style="display:none;font-size:var(--text-sm);color:var(--color-text-muted);">Logo file not found. Keep RBFT_logo_3.png in the same folder as index.html.</div>
+            <h1 id="hero-title" class="hero-title-clean">Six Degrees of Rock</h1>
           </div>
           <p class="hero-copy-clean">Follow the roots, branches, and side projects of the Seattle scene. Explore the network first, then scroll down to inspect details and add your own connection.</p>
         </div>
@@ -3952,7 +3929,7 @@ async function tryNativeShare() {
   const siteUrl = shareableUrl();
   const pngBlob = await renderGraphPngBlob();
   if (!pngBlob) return false;
-  const file = new File([pngBlob], 'rock-band-family-tree.png', { type: 'image/png' });
+  const file = new File([pngBlob], 'six-degrees-of-rock.png', { type: 'image/png' });
   if (typeof navigator.canShare !== 'function' ||
       !navigator.canShare({ files: [file] }) ||
       typeof navigator.share !== 'function') {
@@ -3966,7 +3943,7 @@ async function tryNativeShare() {
     // text, once from url unfurl). Keep `text` as pure caption prose
     // and let `url` handle the link.
     await navigator.share({
-      title: 'Rock Band Family Tree',
+      title: 'Six Degrees of Rock',
       text: 'Explore how bands and musicians connect across scenes and decades.',
       url: siteUrl,
       files: [file],
@@ -4025,7 +4002,7 @@ if (copySiteLinkBtn) {
 // (won't break — these have been stable for years).
 async function shareToSocial(platform) {
   const siteUrl = shareableUrl();
-  const title = 'Rock Band Family Tree';
+  const title = 'Six Degrees of Rock';
   const caption = 'Explore how bands and musicians connect across scenes and decades.';
   const platformName = platform === 'x' ? 'X' : platform.charAt(0).toUpperCase() + platform.slice(1);
 
@@ -4117,7 +4094,7 @@ async function shareToSocial(platform) {
 function downloadPngBlob(blob) {
   const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.download = 'rock-band-family-tree.png';
+  link.download = 'six-degrees-of-rock.png';
   link.href = objectUrl;
   document.body.appendChild(link);
   link.click();
@@ -4335,7 +4312,7 @@ function downloadPngBlob(blob) {
     // Shared PNG renderer used by exportCurrentGraphPng,
     // copyGraphPngToClipboard, tryNativeShare, and shareToSocial. Renders
     // the current SVG graph into a canvas with the branded header
-    // ('Rock Band Family Tree') and footer (site URL), converts to a
+    // ('Six Degrees of Rock') and footer (site URL), converts to a
     // PNG Blob, and returns it. Returns null on any failure. See the
     // long comment in the old exporter for the rationale on inlining
     // the SVG stylesheet before serialization — external CSS doesn't
@@ -4737,7 +4714,7 @@ function downloadPngBlob(blob) {
       // simply renders tighter rather than failing.
       try { ctx.letterSpacing = '10px'; } catch (_) {}
       ctx.font = `500 34px Satoshi, system-ui, sans-serif`;
-      ctx.fillText('ROCK BAND FAMILY TREE', SHARE_SIZE / 2, 68);
+      ctx.fillText('SIX DEGREES OF ROCK', SHARE_SIZE / 2, 68);
       try { ctx.letterSpacing = '0px'; } catch (_) {}
 
       // --- search field + Explore -----------------------------------------
@@ -4995,7 +4972,7 @@ function downloadPngBlob(blob) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = `600 ${Math.round(19 * scale)}px "Inter", "Segoe UI", system-ui, sans-serif`;
-      ctx.fillText('Rock Band Family Tree', canvas.width / 2, headerH / 2);
+      ctx.fillText('Six Degrees of Rock', canvas.width / 2, headerH / 2);
 
       // Serialising the SVG means cloning three thousand nodes, so it is only
       // done when the SVG is actually the picture being shared.
@@ -5162,12 +5139,12 @@ function downloadPngBlob(blob) {
       //   UX is inferior to a plain download for most users. So we
       //   gate the share-sheet path on a coarse mobile heuristic and
       //   fall through to plain download on desktop.
-      const file = new File([pngBlob], 'rock-band-family-tree.png', { type: 'image/png' });
+      const file = new File([pngBlob], 'six-degrees-of-rock.png', { type: 'image/png' });
       // See tryNativeShare() for why `text` omits the URL: Facebook,
       // Messenger, and iMessage concatenate `text` + `url` and would
       // otherwise show the link twice above the shared image.
       const shareData = {
-        title: 'Rock Band Family Tree',
+        title: 'Six Degrees of Rock',
         text: 'Explore how bands and musicians connect across scenes and decades.',
         url: siteUrl,
         files: [file],
@@ -5200,7 +5177,7 @@ function downloadPngBlob(blob) {
       // Desktop / no share-sheet path: plain download.
       const objectUrl = URL.createObjectURL(pngBlob);
       const link = document.createElement('a');
-      link.download = 'rock-band-family-tree.png';
+      link.download = 'six-degrees-of-rock.png';
       link.href = objectUrl;
       document.body.appendChild(link);
       link.click();
@@ -10076,14 +10053,6 @@ function downloadPngBlob(blob) {
 
 
     (function () {
-      const logo = document.querySelector('.hero-logo-clean');
-      const logoNote = document.getElementById('logo-missing-note');
-      if (logo && logoNote) {
-        logo.addEventListener('error', function () {
-          logo.style.display = 'none';
-          logoNote.style.display = 'block';
-        });
-      }
       // Theme handling. Neither desktop nor mobile surface a manual
       // theme toggle anymore — both platforms follow the OS setting via
       // prefers-color-scheme (mobile previously had a manual 'Light mode'

@@ -2,7 +2,7 @@
   "name": "band-members",
   "version": "1.0.0",
   "private": true,
-  "description": "Rock Band Family Tree — static site with a Netlify Functions + Netlify Blobs backend for shared band submissions.",
+  "description": "Six Degrees of Rock — static site with a Netlify Functions + Netlify Blobs backend for shared band submissions.",
   "type": "module",
   "scripts": {
     "test": "node --test tests/",
