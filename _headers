@@ -4,6 +4,14 @@
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
 
+# Keep the maintainer audit page out of search indexes and caches. It has no
+# server-side gate of its own -- the real check is the ADMIN_TOKEN header on
+# the bands.mjs endpoint it calls -- so this is belt-and-suspenders against
+# it turning up in a search result, not the access control itself.
+/admin/*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
 # Long-cache the images ONLY.
 #
 # Deliberately NOT the HTML or the .mjs files. There is no build step here, so

@@ -1,7 +1,12 @@
 # Six Degrees of Rock
 # The graph is one page; ?anchor= only changes which node it opens on, so there is
 # nothing per-band to crawl and nothing to disallow.
+#
+# /admin/ is the maintainer audit page. It has no server-side gate of its own
+# (the real auth check is the ADMIN_TOKEN header on the backend it calls), so
+# keep it out of search results rather than relying on nobody linking to it.
 User-agent: *
 Allow: /
+Disallow: /admin/
 
 Sitemap: https://bandmembers.netlify.app/sitemap.xml
