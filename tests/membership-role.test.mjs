@@ -180,7 +180,7 @@ test('a touring player who passed through several bands reads as touring', () =>
 const EXPLORER = readFileSync(new URL('../scripts/sigma-explorer.mjs', import.meta.url), 'utf8');
 
 test('hue carries the role, and every role has a distinct one', () => {
-  const block = EXPLORER.slice(EXPLORER.indexOf('const ROLE_STYLE'), EXPLORER.indexOf('const ROLE_EDGE_STYLE'));
+  const block = EXPLORER.slice(EXPLORER.indexOf('const ROLE_STYLE'), EXPLORER.indexOf('// Threads are NOT coloured by role.'));
   const hues = block.match(/#[0-9a-f]{6}/gi) || [];
   assert.equal(hues.length, 3, 'expected one colour per role');
   assert.equal(new Set(hues.map(h => h.toLowerCase())).size, 3, 'roles must not share a hue');
@@ -189,18 +189,42 @@ test('hue carries the role, and every role has a distinct one', () => {
 });
 
 test('role drives colour and kind drives size, on separate channels', () => {
-  const roleBlock = EXPLORER.slice(EXPLORER.indexOf('const ROLE_STYLE'), EXPLORER.indexOf('const ROLE_EDGE_STYLE'));
+  const roleBlock = EXPLORER.slice(EXPLORER.indexOf('const ROLE_STYLE'), EXPLORER.indexOf('// Threads are NOT coloured by role.'));
   assert.doesNotMatch(roleBlock, /size:/, 'ROLE_STYLE must not set size; kind owns size');
   const reduce = EXPLORER.slice(EXPLORER.indexOf('function reduceNode('), EXPLORER.indexOf('function reduceEdge('));
   assert.match(reduce, /ROLE_STYLE\[attrs\.role\]/);
   assert.match(reduce, /size: \(attrs\.size \|\| style\.size\)/);
 });
 
-test('edges are coloured per membership at rest', () => {
+test('threads are ONE quiet colour at rest, whatever the role', () => {
+  // The correction to #119. Colouring threads by role at rest gave gold two
+  // meanings at once -- "founding member" and "this is what you selected" -- and
+  // a colour that means two things means neither. Gold and electric blue belong
+  // to selection alone.
   const reduce = EXPLORER.slice(EXPLORER.indexOf('function reduceEdge('), EXPLORER.indexOf('// -- sizing'));
-  assert.match(reduce, /ROLE_EDGE_STYLE\[attrs\.role\]/);
-  // A highlight still wins: selection has to remain readable.
-  assert.match(reduce, /state\.highlightEdges\.has\(edge\)/);
+  assert.match(reduce, /if \(!state\.highlightEdges\.size\) return \{ \.\.\.attrs, color: EDGE_COLOR \}/);
+  assert.doesNotMatch(reduce, /ROLE_EDGE_STYLE/, 'role must not colour a thread');
+  assert.doesNotMatch(EXPLORER, /const ROLE_EDGE_STYLE/, 'the role edge palette must be gone, not just unused');
+});
+
+test('gold is a member click and electric blue is a band click', () => {
+  // The distinction that already worked and must keep working. Same contract as
+  // the SVG renderer.
+  const pick = EXPLORER.slice(EXPLORER.indexOf('function highlightFrom('), EXPLORER.indexOf('function clearHighlight(') + 1);
+  const source = pick.length > 40 ? pick : EXPLORER;
+  assert.match(source, /entityType === 'band' \? BAND_HIGHLIGHT_COLOR : MEMBER_HIGHLIGHT_COLOR/);
+  assert.match(EXPLORER, /BAND_HIGHLIGHT_COLOR = '#27b8ff'/);
+  assert.match(EXPLORER, /MEMBER_HIGHLIGHT_COLOR = '#ffb454'/);
+  // A selected thread takes the selection colour, not its role colour.
+  const reduce = EXPLORER.slice(EXPLORER.indexOf('function reduceEdge('), EXPLORER.indexOf('// -- sizing'));
+  assert.match(reduce, /color: state\.highlightColor/);
+});
+
+test('edges still CARRY role, even though it draws nothing', () => {
+  // Kept as data for a legend or a founders-only filter. Removing it would mean
+  // plumbing weight through the view builder again later.
+  const build = EXPLORER.slice(EXPLORER.indexOf('viewGraph.clear();'), EXPLORER.indexOf('state.layoutExtent ='));
+  assert.match(build, /role: roleFromMembership\(link\)/);
 });
 
 test('the RENDERED view graph carries role on nodes and edges', () => {
