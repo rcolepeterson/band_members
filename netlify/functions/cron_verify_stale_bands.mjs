@@ -59,6 +59,13 @@ import { fetchMusicBrainz, fetchWikipedia, scoreVerification } from './_verify_h
 const MUSICBRAINZ_SLEEP_MS = 1000; // MB's documented 1 req/sec courtesy limit
 export const BATCH_SIZE = 10; // see header comment for the Netlify time-budget math; exported for tests
 
+// Netlify's default scheduled-function budget is 26s. Stop starting new bands at
+// 20s so the one in flight, plus the closing stale-count query, still land inside
+// it — and stop spending MusicBrainz retries at 14s, since a retry is worth up to
+// ~1.8s and accuracy on one band must not cost the rest of the batch.
+export const BATCH_BUDGET_MS = 20000;
+export const RETRY_BUDGET_MS = 14000;
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -99,11 +106,15 @@ export async function selectStaleBands(sql, limit) {
 // no drift between "what runs at 3am" and "what the admin can trigger for
 // testing". Returns { ok: true } or { ok: false, error } and never throws;
 // callers loop over a batch and must not have one bad band abort the rest.
-export async function verifyOneBand(sql, band) {
+export async function verifyOneBand(sql, band, { retries } = {}) {
   try {
     const wikiResult = await fetchWikipedia(band.name);
     await sleep(MUSICBRAINZ_SLEEP_MS);
-    const mbResult = await fetchMusicBrainz(band.name, { country: band.country });
+    // `retries` is threaded from runBatch's time budget rather than fixed here:
+    // retrying a load-shedding MusicBrainz is worth ~2s on an unlucky band, but
+    // not worth the batch overrunning the function's execution limit and losing
+    // every band still queued behind it.
+    const mbResult = await fetchMusicBrainz(band.name, { country: band.country, retries });
 
     if (!mbResult.ok && !wikiResult.ok) {
       return { ok: false, error: 'both MusicBrainz and Wikipedia lookups failed' };
@@ -146,14 +157,31 @@ export async function verifyOneBand(sql, band) {
 // both this file's scheduled `export default` handler and the manual
 // POST trigger in cron_verify_stale_bands_trigger.mjs — exported so that
 // second file (and tests) can call it directly.
-export async function runBatch(sql, batchSize = BATCH_SIZE) {
+export async function runBatch(sql, batchSize = BATCH_SIZE, { now = Date.now } = {}) {
   const candidates = await selectStaleBands(sql, batchSize);
+
+  const startedAt = now();
+  const elapsed = () => now() - startedAt;
 
   let succeeded = 0;
   let failed = 0;
+  let skippedForTime = 0;
   for (const band of candidates) {
+    // Stop rather than overrun. A batch that exceeds the function's execution
+    // limit is killed mid-band: the work already done is kept (each band commits
+    // its own row) but the remaining bands are lost silently and the caller
+    // learns nothing. Stopping early reports honestly instead, and the bands
+    // left behind are still the stalest, so the next run picks up exactly where
+    // this one stopped.
+    if (elapsed() > BATCH_BUDGET_MS) {
+      skippedForTime = candidates.length - (succeeded + failed);
+      console.warn(`[cron:verify] stopping early after ${elapsed()}ms; ${skippedForTime} band(s) left for the next run`);
+      break;
+    }
     console.log(`[cron:verify] checking band_id=${band.id} name="${band.name}"`);
-    const result = await verifyOneBand(sql, band);
+    // Only spend attempts on MusicBrainz while there is slack for them.
+    const retries = elapsed() < RETRY_BUDGET_MS ? undefined : 0;
+    const result = await verifyOneBand(sql, band, { retries });
     if (result.ok) {
       succeeded += 1;
       console.log(`[cron:verify] ok band_id=${band.id}`);
@@ -172,9 +200,10 @@ export async function runBatch(sql, batchSize = BATCH_SIZE) {
   const nextStaleCount = remaining.length;
 
   return {
-    processed: candidates.length,
+    processed: succeeded + failed,
     succeeded,
     failed,
+    skipped_for_time: skippedForTime,
     next_stale_count: nextStaleCount,
   };
 }
