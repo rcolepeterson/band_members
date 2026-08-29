@@ -397,6 +397,86 @@ export function isShortTermMembership(link) {
   return MOON_RELATIONS.includes(String(link.relation || '').trim().toLowerCase());
 }
 
+// ---------------------------------------------------------------------------
+// Membership role
+//
+// The role is a fact about a MEMBERSHIP, not about a person. Ben Weinman founded
+// The Dillinger Escape Plan and joined Suicidal Tendencies as a player; one node
+// cannot be both at once, and classifyNode's single `kind` forced exactly that
+// collapse -- worse, `bandCount > 1` returned CONSTELLATION before role was ever
+// consulted, so being in two bands erased the role entirely. 123 people in the
+// live graph hold genuinely different roles in different bands: Stone Gossard
+// founded Brad, Mother Love Bone, Pearl Jam and Temple of the Dog but played in
+// Citizen Dick and Gossman Project, and all of it rendered as one identical dot.
+//
+// So role rides on the edge, and on the node only relative to the anchor.
+// ---------------------------------------------------------------------------
+
+export const MEMBERSHIP_ROLES = Object.freeze({
+  FOUNDER: 'founder',
+  MEMBER: 'member',
+  TOURING: 'touring',
+});
+
+// Founder beats member beats touring. Used when a node has no single membership
+// to speak for it -- a person shown while the anchor is another person -- where
+// the honest summary is their strongest role rather than an arbitrary first row.
+const ROLE_RANK = Object.freeze({ founder: 3, member: 2, touring: 1 });
+
+/**
+ * The role of ONE membership.
+ *
+ * Touring is checked first because isShortTermMembership consults both weight
+ * and relation, and a row carrying relation='touring' with no weight would
+ * otherwise read as a founder -- normalizeNeonToRows defaults a null weight to
+ * '1', so "no weight recorded" and "founder" arrive indistinguishable (#115).
+ * Founder is therefore a strict weight === 1, never <=, so an absent or
+ * malformed weight lands on member rather than inventing a founder.
+ */
+export function roleFromMembership(link) {
+  if (!link) return MEMBERSHIP_ROLES.MEMBER;
+  if (isShortTermMembership(link)) return MEMBERSHIP_ROLES.TOURING;
+  return Number(link.weight) === MEMBERSHIP_WEIGHT.FOUNDER
+    ? MEMBERSHIP_ROLES.FOUNDER
+    : MEMBERSHIP_ROLES.MEMBER;
+}
+
+export function strongestRole(links = []) {
+  let best = null;
+  for (const link of links) {
+    const role = roleFromMembership(link);
+    if (!best || ROLE_RANK[role] > ROLE_RANK[best]) best = role;
+  }
+  return best;
+}
+
+/**
+ * The role to draw a person's node with, relative to the current anchor.
+ *
+ * When the anchor is a band this person belongs to, the answer is their role in
+ * THAT band. Centre on Dillinger and Ben Weinman is a founder; centre on
+ * Suicidal Tendencies and the same node is a member. That is the whole point:
+ * the view already has an anchor, so the node does not have to average away a
+ * career to fit one colour.
+ *
+ * Otherwise -- anchored on a person, or on a band this person is not in -- there
+ * is no single membership to speak for the node, and it falls back to their
+ * strongest role.
+ *
+ * Bands return null: role is a property of people, and a band keeps its own
+ * colour.
+ */
+export function roleForNode(node, { anchorId = null, links = [] } = {}) {
+  if (!node || node.type === 'band') return null;
+  const memberships = links.filter(link => linkEndpoints(link)[1] === node.id);
+  if (!memberships.length) return null;
+  if (anchorId && anchorId !== node.id) {
+    const toAnchor = memberships.filter(link => linkEndpoints(link)[0] === anchorId);
+    if (toAnchor.length) return strongestRole(toAnchor);
+  }
+  return strongestRole(memberships);
+}
+
 export const NODE_KINDS = Object.freeze({
   HOME_STAR: 'home-star',
   SOLAR_SYSTEM: 'solar-system',
@@ -487,6 +567,12 @@ export function toGraphologyGraph({ nodes = [], links = [] } = {}, GraphConstruc
       label: node.id,
       entityType: node.type,
       kind: classifyNode(node, { anchorId, adjacency, links }),
+      // Two independent axes, so neither can erase the other. `kind` answers
+      // how connected this node is and drives its SIZE; `role` answers what
+      // they were and drives its COLOUR. Collapsing both into `kind` is what
+      // made a founder of three bands and a session player who passed through
+      // three bands render as the same purple dot.
+      role: roleForNode(node, { anchorId, links }),
       city: node.city || '',
       state: node.state || '',
       country: node.country || '',
@@ -508,6 +594,11 @@ export function toGraphologyGraph({ nodes = [], links = [] } = {}, GraphConstruc
       relation: link.relation || 'member',
       weight: Number(link.weight || 1),
       yearsActive: link.yearsActive || '',
+      // The per-membership role. This is the one that is always true regardless
+      // of where the camera is: the line from Dillinger to Ben Weinman is a
+      // founder line and the line from Suicidal Tendencies to him is not, in the
+      // same view, at the same time.
+      role: roleFromMembership(link),
     });
   });
 
