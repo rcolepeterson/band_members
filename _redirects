@@ -4,3 +4,26 @@
 # attention and means shared links come in two shapes. Query strings are preserved
 # by Netlify, so a shared /index.html?anchor=Mudhoney still lands on the right band.
 /index.html   /   301!
+
+# One canonical HOST for the graph.
+#
+# The custom domain is set as the primary domain in Netlify, and Netlify does
+# redirect other custom domains (www) to it — but it keeps serving the project's
+# own *.netlify.app subdomain at 200. Verified after the domain launch:
+#
+#   curl -sSI https://bandmembers.netlify.app/  ->  HTTP/2 200
+#
+# So the pre-launch address was still serving a byte-identical copy of the site:
+# two hosts competing for the same content, every inbound link to the old address
+# passing none of its value on, and a canonical tag as the only thing telling
+# search engines which one to believe. This makes it an actual redirect.
+#
+# The hostname must be spelled out in full for a host-level rule; a bare path
+# would match every host, including the custom domain, and loop.
+#
+# Deploy previews and branch deploys are NOT affected: they are served from
+# deploy-preview-<n>--bandmembers.netlify.app and <branch>--bandmembers.netlify.app,
+# which are different hostnames and do not match these rules. Query strings are
+# preserved by Netlify, so /?anchor=KISS survives the hop.
+http://bandmembers.netlify.app/*    https://sixdegreesofrock.com/:splat   301!
+https://bandmembers.netlify.app/*   https://sixdegreesofrock.com/:splat   301!
