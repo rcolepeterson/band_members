@@ -202,3 +202,25 @@ test('edges are coloured per membership at rest', () => {
   // A highlight still wins: selection has to remain readable.
   assert.match(reduce, /state\.highlightEdges\.has\(edge\)/);
 });
+
+test('the RENDERED view graph carries role on nodes and edges', () => {
+  // The bug a screenshot caught and the unit tests did not: toGraphologyGraph is
+  // not the graph Sigma draws. initSigmaExplorer builds its own viewGraph on every
+  // travel, and setting role on the other one left the renderer with nothing --
+  // founders drew lavender and single-band members drew grey, because colour was
+  // still falling through to KIND_STYLE.
+  const build = EXPLORER.slice(EXPLORER.indexOf('viewGraph.clear();'), EXPLORER.indexOf('state.layoutExtent ='));
+  assert.match(build, /roleForNode\(/, 'view nodes must compute a role');
+  assert.match(build, /^\s*role,$/m, 'view nodes must carry role');
+  assert.match(build, /role: roleFromMembership\(link\)/, 'view edges must carry role');
+  assert.match(build, /weight: Number\(link\.weight \|\| 1\)/, 'view edges must keep weight');
+});
+
+test('the view role is computed against the current anchor and the full link set', () => {
+  // Against master.links, not view.links: a role must not be decided by which
+  // memberships happened to survive the neighbourhood budget.
+  const build = EXPLORER.slice(EXPLORER.indexOf('viewGraph.clear();'), EXPLORER.indexOf('state.layoutExtent ='));
+  const call = build.slice(build.indexOf('roleForNode('), build.indexOf('viewGraph.addNode('));
+  assert.match(call, /anchorId/);
+  assert.match(call, /links: master\.links/);
+});

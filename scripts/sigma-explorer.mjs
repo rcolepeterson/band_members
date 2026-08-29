@@ -52,6 +52,8 @@ import {
   NEIGHBORHOOD_BUDGET,
   NODE_KINDS,
   MEMBERSHIP_ROLES,
+  roleForNode,
+  roleFromMembership,
   HOME_STAR_STYLE,
   linkEndpoints,
   normalizeAnchorKey,
@@ -977,12 +979,23 @@ export function initSigmaExplorer({
           ? NODE_KINDS.HOME_STAR
           : classifyNode(masterById.get(node.id) || node, { adjacency, links: master.links });
       const style = KIND_STYLE[kind] || KIND_STYLE[NODE_KINDS.PLANET];
+      // Role is computed against the CURRENT anchor, which is why it is computed
+      // here and re-computed on every travel rather than once at load: centring
+      // on Dillinger makes Ben Weinman a founder, centring on Suicidal
+      // Tendencies makes the same node a member. It reads master.links, not
+      // view.links, so a role is not decided by which memberships happen to have
+      // survived the neighbourhood budget.
+      const role = roleForNode(masterById.get(node.id) || node, {
+        anchorId,
+        links: master.links,
+      });
       viewGraph.addNode(node.id, {
         label: node.id,
         x: point.x,
         y: point.y,
         hop: point.hop,
         kind,
+        role,
         entityType: node.type,
         size: style.size,
         color: style.color,
@@ -992,7 +1005,14 @@ export function initSigmaExplorer({
       const [source, target] = linkEndpoints(link);
       if (!viewGraph.hasNode(source) || !viewGraph.hasNode(target)) return;
       if (viewGraph.hasEdge(source, target)) return;
-      viewGraph.addEdge(source, target, { size: 1, relation: link.relation || 'member' });
+      // weight rides along because the role is derived from it, and because an
+      // edge that has lost its weight cannot be re-classified later.
+      viewGraph.addEdge(source, target, {
+        size: 1,
+        relation: link.relation || 'member',
+        weight: Number(link.weight || 1),
+        role: roleFromMembership(link),
+      });
     });
 
     state.layoutExtent = layoutExtent(positions);
