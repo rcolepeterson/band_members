@@ -101,18 +101,22 @@ const ROLE_STYLE = {
   [MEMBERSHIP_ROLES.TOURING]: { color: '#7d8ea0' },
 };
 
-// Edge colours, per membership. The lines are where the role is true no matter
-// where the camera sits: centred on nothing in particular, the gold line into
-// Dillinger and the lavender line into Suicidal Tendencies both read correctly
-// for the same musician, at the same time.
+// Threads are NOT coloured by role.
 //
-// A founder line is brighter AND thicker. The extra weight is reinforcement on
-// top of hue, not the signal itself.
-const ROLE_EDGE_STYLE = {
-  [MEMBERSHIP_ROLES.FOUNDER]: { color: 'rgba(255,198,92,0.55)', size: 1.5 },
-  [MEMBERSHIP_ROLES.MEMBER]: { color: 'rgba(201,182,255,0.38)', size: 1 },
-  [MEMBERSHIP_ROLES.TOURING]: { color: 'rgba(125,142,160,0.26)', size: 1 },
-};
+// #119 coloured them per membership at rest, and that broke the one distinction
+// the app already had: a thread glows gold when a MEMBER is clicked and electric
+// blue when a BAND is clicked. Painting founder threads gold at rest gave gold
+// two meanings at once -- "founding member" and "this is what you selected" --
+// and a colour that means two things means neither.
+//
+// So every thread stays one quiet blue-grey until a click, and gold and blue
+// belong to selection alone. Role lives on the NODES, where it has three hues of
+// its own and competes with nothing.
+//
+// The role attribute is still carried on every edge. It costs nothing to keep, it
+// is what a legend or a "show only founders" filter would read, and deriving it
+// at render time later would mean plumbing weight through the view builder a
+// second time.
 
 // Hover styling. Sigma's default hover draws a WHITE rounded plate behind the
 // node and its label, which is jarring on a dark starfield and washes the label
@@ -807,15 +811,10 @@ export function initSigmaExplorer({
   }
 
   function reduceEdge(edge, attrs) {
-    // At rest, a line is coloured by the role of the membership it represents.
-    // This is the half of the picture that survives the camera: the node can only
-    // show one role at a time, but every line in view shows its own.
-    const roleStyle = attrs.role ? ROLE_EDGE_STYLE[attrs.role] : null;
-    if (!state.highlightEdges.size) {
-      return roleStyle
-        ? { ...attrs, color: roleStyle.color, size: roleStyle.size }
-        : { ...attrs, color: EDGE_COLOR };
-    }
+    // One quiet colour at rest, for every thread whatever its role. Gold and
+    // electric blue are reserved for selection: gold when a member is clicked,
+    // electric blue when a band is clicked.
+    if (!state.highlightEdges.size) return { ...attrs, color: EDGE_COLOR };
     return state.highlightEdges.has(edge)
       ? { ...attrs, color: state.highlightColor, size: 2.2, zIndex: 1 }
       : { ...attrs, color: 'rgba(120,134,150,0.10)', size: 0.8 };
