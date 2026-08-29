@@ -153,10 +153,16 @@ test('the stage footer steps aside for an open sheet instead of being overlapped
     /body\.node-card-sheet-open \.sigma-footer\s*{[^}]*bottom:\s*calc\(var\(--sheet-height,\s*var\(--peek-height\)\)/,
     'Expected the footer lifted by the measured sheet height, falling back to --peek-height.'
   );
+  // The group jump must survive an expanded card: it is read and used while a
+  // card is open. Hiding it there was the first attempt and was wrong.
+  assert.ok(
+    !/node-card-sheet-expanded[^{]*\.sigma-footer\s*{[^}]*display:\s*none/.test(block),
+    'The group control must stay visible above an Expanded sheet, not be hidden.'
+  );
   assert.match(
     block,
-    /body\.node-card-sheet-expanded \.sigma-footer\s*{[^}]*display:\s*none/,
-    'Expected the footer hidden under an Expanded sheet rather than half-covered.'
+    /max-height:\s*min\(62dvh/,
+    'Expected the expanded sheet capped below the viewport so the lifted footer has room.'
   );
   assert.match(
     INDEX_HTML,
@@ -172,7 +178,7 @@ test('the sheet publishes its measured height and clears it again', () => {
   assert.match(
     INDEX_HTML,
     /setProperty\('--sheet-height',\s*nodeCardEl\.offsetHeight/,
-    'Expected the live sheet height to be published for the footer.'
+    'Expected the live sheet height to be published for the footer, in both states.'
   );
   const idx = INDEX_HTML.indexOf('function closeNodeCard');
   assert.ok(
@@ -181,23 +187,18 @@ test('the sheet publishes its measured height and clears it again', () => {
   );
 });
 
-test('the body sheet classes are set on open and cleared on close', () => {
+test('the sheet-open body class is set on open and cleared on close', () => {
   assert.match(
     INDEX_HTML,
     /classList\.toggle\('node-card-sheet-open',\s*sheet\)/,
     'Expected the sheet-open body class to track the mobile sheet.'
   );
-  assert.match(
-    INDEX_HTML,
-    /classList\.toggle\('node-card-sheet-expanded',\s*sheet && !peek\)/,
-    'Expected the expanded body class to track the expanded state.'
-  );
+
   const idx = INDEX_HTML.indexOf('function closeNodeCard');
   const body = INDEX_HTML.slice(idx, idx + 1400);
   assert.ok(
-    body.includes("classList.remove('node-card-sheet-open')") &&
-      body.includes("classList.remove('node-card-sheet-expanded')"),
-    'Expected both body classes cleared on close, or the footer never comes back.'
+    body.includes("classList.remove('node-card-sheet-open')"),
+    'Expected the body class cleared on close, or the footer never comes back.'
   );
 });
 
@@ -247,8 +248,8 @@ test('the expanded mobile sheet still scrolls inside itself', () => {
   const block = mobileSheetBlock();
   assert.ok(block.includes('overflow-y: auto;'), 'Expected the mobile sheet to scroll internally.');
   assert.ok(
-    block.includes('max-height: calc(100vh - 140px);'),
-    'Expected the expanded sheet to stay capped below the viewport height.'
+    /max-height:\s*calc\(62vh\)/.test(block) && /max-height:\s*min\(62dvh/.test(block),
+    'Expected the expanded sheet capped, with a vh fallback ahead of the dvh value.'
   );
   const peekRule = block.slice(block.indexOf('.node-card.is-open.node-card--peek'));
   assert.ok(
