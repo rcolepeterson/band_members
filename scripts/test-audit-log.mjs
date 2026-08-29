@@ -4,7 +4,7 @@
 // standing up `netlify dev`; this script hits the real function instead.
 //
 // Usage:
-//   ADMIN_TOKEN=... node scripts/test-audit-log.mjs https://deploy-preview-N--bandmembers.netlify.app
+//   ADMIN_TOKEN=... node scripts/test-audit-log.mjs https://deploy-preview-N--sixdegreesofrock.com
 //
 // ADMIN_TOKEN is required; there is no baked-in fallback anymore (see PR #46).
 // Grab the current value from the Netlify site's env vars.
@@ -21,7 +21,7 @@
 //
 // Exits nonzero on any failure with a human-readable message.
 
-const BASE = process.argv[2] || 'https://bandmembers.netlify.app';
+const BASE = process.argv[2] || 'https://sixdegreesofrock.com';
 const ADMIN = process.env.ADMIN_TOKEN;
 if (!ADMIN) {
   console.error('ADMIN_TOKEN env var is required. Get it from Netlify site settings > Environment variables and re-run:');

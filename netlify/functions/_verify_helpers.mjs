@@ -12,7 +12,7 @@
 // MusicBrainz (primary, structured) and Wikipedia (secondary, fuzzy
 // corroboration). Nothing here mutates band data.
 
-const MUSICBRAINZ_USER_AGENT = 'bandmembers-bot/1.0 (https://bandmembers.netlify.app; vimana17@gmail.com)';
+const MUSICBRAINZ_USER_AGENT = 'bandmembers-bot/1.0 (https://sixdegreesofrock.com; vimana17@gmail.com)';
 const WIKIPEDIA_USER_AGENT = MUSICBRAINZ_USER_AGENT;
 
 // --- Normalization utilities -------------------------------------------------
