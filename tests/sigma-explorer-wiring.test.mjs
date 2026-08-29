@@ -639,10 +639,15 @@ test('a shared link carries the view, not just the site', () => {
   // And the filename must not ride along. Both / and /index.html serve this page,
   // so whichever the sharer happened to be on used to end up in the link.
   assert.match(INDEX_HTML, /replace\(\/\(\^\|\\\/\)index\\\.html\$\/, '\$1'\)/);
-  // Every share path must go through it.
+  // Every share path must go through it, Copy link included: one button, one
+  // answer, whatever view the sharer is on.
   const shareSites = INDEX_HTML.match(/const siteUrl = [^;]+;/g) || [];
   assert.ok(shareSites.length >= 4, `expected several share call sites, found ${shareSites.length}`);
   shareSites.forEach(line => assert.match(line, /shareableUrl\(\)/));
+  // The bare front door is built by its own helper, never by hand, so that
+  // shareableUrl() and the "which link did I just copy" check agree on what the
+  // root even is.
+  assert.match(INDEX_HTML, /function siteRootUrl\(\)/);
   // And it must not carry arbitrary query parameters onward.
   const helper = INDEX_HTML.slice(INDEX_HTML.indexOf('function shareableUrl()'), INDEX_HTML.indexOf('function publishMasterGraph'));
   assert.match(helper, /SHAREABLE_PARAMS\.forEach/);
@@ -948,8 +953,16 @@ test('Share reads the live view, since the URL no longer follows travel', () => 
   // Otherwise Share would send whatever view the visit STARTED from -- for most
   // visitors, Aaron rather than the band they are looking at.
   const share = INDEX_HTML.slice(INDEX_HTML.indexOf('function shareableUrl()'), INDEX_HTML.indexOf('let sigmaSelectionBound'));
-  assert.match(share, /window\.RBFT_SIGMA\.state\.anchorId/);
+  assert.match(share, /window\.RBFT_SIGMA && window\.RBFT_SIGMA\.state/);
+  assert.match(share, /state\.anchorId/);
   assert.match(share, /kept\.set\('anchor', live\)/);
+  // ...with one exception: the home star on a visit that never asked for it. It
+  // is the opening view because it is the home star, not because the visitor
+  // chose it, so stamping it into a shared link made every share of the front
+  // door read as a deep link to one musician. See tests/share-url-home-star.
+  assert.match(share, /onUnrequestedHomeStar/);
+  assert.match(share, /live === state\.homeStarId/);
+  assert.match(share, /!arrivedAnchored\(\)/);
   // A stale ?band= alongside a fresh ?anchor= would contradict it.
   assert.match(share, /\['band', 'member', 'node', 'person'\]\.forEach\(key => kept\.delete\(key\)\)/);
 });

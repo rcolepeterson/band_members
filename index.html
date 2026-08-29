@@ -3872,14 +3872,33 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     }
 
     const SHAREABLE_PARAMS = ['anchor', 'band', 'member', 'node', 'person'];
-    function shareableUrl() {
-      // Strip a trailing index.html. Both / and /index.html serve this page, so
-      // whichever one the sharer happened to be on used to end up in the link --
-      // and a shared URL is the primary way people arrive here. Stripping the
-      // segment rather than hardcoding '/' keeps the app hostable from a
-      // subdirectory.
+    const INBOUND_ANCHOR_PARAMS = ['band', 'member', 'node', 'person', 'anchor'];
+
+    // The bare front door: origin + path, never a parameter. Both / and
+    // /index.html serve this page, so whichever one the sharer happened to be on
+    // used to end up in the link -- and a shared URL is the primary way people
+    // arrive here. Stripping the segment rather than hardcoding '/' keeps the app
+    // hostable from a subdirectory.
+    function siteRootUrl() {
       const path = window.location.pathname.replace(/(^|\/)index\.html$/, '$1');
-      const base = window.location.origin + (path || '/');
+      return window.location.origin + (path || '/');
+    }
+
+    // Did this visit arrive on a link that named a node? Same question, and the
+    // same answer, as syncAddressBar() in scripts/sigma-explorer.mjs asks before
+    // it writes the address bar. Both need it, so both read the URL the visit
+    // started on rather than the live view.
+    function arrivedAnchored() {
+      try {
+        const source = new URLSearchParams(window.location.search);
+        return INBOUND_ANCHOR_PARAMS.some(key => source.has(key));
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function shareableUrl() {
+      const base = siteRootUrl();
       const source = new URLSearchParams(window.location.search);
       const kept = new URLSearchParams();
       SHAREABLE_PARAMS.forEach(key => {
@@ -3893,12 +3912,25 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       // dropped here for the same reason syncAddressBar drops them: a stale
       // ?band= alongside a fresh ?anchor= would contradict it.
       try {
-        const live = window.RBFT_SIGMA
-          && window.RBFT_SIGMA.state
-          && window.RBFT_SIGMA.state.anchorId;
-        if (live) {
+        const state = window.RBFT_SIGMA && window.RBFT_SIGMA.state;
+        const live = state && state.anchorId;
+        // ...but not the home star on a visit that never asked for it. Aaron is
+        // the opening view because he is the home star, not because the visitor
+        // chose him, so stamping his name into a shared link made every share of
+        // the front door read as a deep link to one musician. syncAddressBar()
+        // was fixed for exactly this; Share is the other half, and it is the half
+        // that actually gets copied and pasted. Dropping the anchor here costs
+        // the recipient nothing: with no anchor they land on the home star
+        // anyway, which is the same view the sharer was looking at.
+        const onUnrequestedHomeStar = Boolean(live)
+          && Boolean(state.homeStarId)
+          && live === state.homeStarId
+          && !arrivedAnchored();
+        if (live && !onUnrequestedHomeStar) {
           ['band', 'member', 'node', 'person'].forEach(key => kept.delete(key));
           kept.set('anchor', live);
+        } else if (onUnrequestedHomeStar) {
+          INBOUND_ANCHOR_PARAMS.forEach(key => kept.delete(key));
         }
       } catch (error) {
         // Fall back to whatever the URL carried; a share link is better stale
@@ -5375,13 +5407,30 @@ function downloadPngBlob(blob) {
     }
 
     function copySiteLink() {
-      // Always the bare main-site URL (no filter/hash state) so the
-      // recipient lands on the full graph and can start exploring, not
-      // stuck in someone else's filter.
+      // Copy the view on screen, so that someone who explored their way to a band
+      // and reached for Copy link sends the band -- that is the whole point of
+      // building a tree and passing it on.
+      //
+      // The old comment here claimed this was "always the bare main-site URL (no
+      // filter/hash state)", which was never what the code did, and taking that
+      // comment at its word would break sharing a view by hand. The real defect
+      // was narrower: shareableUrl() stamped in the home star even on a visit
+      // that never asked for it, so a plain load or a refresh copied
+      // ?anchor=Aaron+McRae. That is fixed inside shareableUrl(), which now
+      // returns the bare root for exactly that case -- so this stays one button
+      // that does the obvious thing from wherever the sharer happens to be.
       const siteUrl = shareableUrl();
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(siteUrl).then(() => {
-          setShareFeedback('Main site link copied to your clipboard.');
+          // Say which of the two it actually was. A single fixed "Main site link
+          // copied" was how the old behaviour hid: it reported the front door
+          // while handing over a deep link, so nobody reading the confirmation
+          // had any reason to check the clipboard.
+          setShareFeedback(
+            siteUrl === siteRootUrl()
+              ? 'Main site link copied to your clipboard.'
+              : 'Link to this view copied to your clipboard.',
+          );
         }).catch(() => {
           setShareFeedback('Could not copy the link automatically.');
         });
