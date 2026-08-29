@@ -30,7 +30,11 @@ const CACHE_DIR = join(__dirname, '..', '.cache', 'musicbrainz');
 // limit is per User-Agent, so an honest UA also keeps us from getting
 // throttled behind other tools.
 export const MUSICBRAINZ_HEADERS = {
-  'User-Agent': 'RockBandFamilyTree/0.1 (https://github.com/rcolepeterson/band_members)',
+  // MB asks for an application name, a version, and a way to contact whoever is
+  // running it; they throttle per User-Agent as well as per IP, so a vague or
+  // stale UA gets queued behind every other tool sharing it. This one still
+  // named the retired project, and gave a repo URL rather than a contact.
+  'User-Agent': 'SixDegreesOfRock/1.0 ( https://sixdegreesofrock.com ; vimana17@gmail.com )',
   'Accept': 'application/json',
 };
 
@@ -86,16 +90,88 @@ export async function mbFetch(url, { forceRefresh = false, log = null } = {}) {
   if (elapsed < RATE_LIMIT_MS) {
     await sleep(RATE_LIMIT_MS - elapsed);
   }
-  lastRequestAt = Date.now();
-  if (log) log(`[fetch] ${url}`);
-  const res = await fetch(url, { headers: MUSICBRAINZ_HEADERS });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`MusicBrainz ${res.status} for ${url}: ${text.slice(0, 200)}`);
+  return fetchWithRetry(url, { log });
+}
+
+// MusicBrainz answers a burst of traffic with 503 and a JSON body reading
+// "The MusicBrainz web server is currently busy. Please try again later." —
+// observed on a plain single request while preparing a batch, so it is not a
+// symptom of us being impolite. Without a retry, one such response aborts a
+// run that may already be twenty minutes and several hundred cached lookups
+// deep, and the operator has to rerun the whole batch to get past a hiccup
+// that resolves in seconds.
+//
+// Retries are for transient conditions only:
+//   - 503 (busy) and 502/504 (gateway) — MB is up but shedding load
+//   - 429 (rate limited) — we backed off too little; honour Retry-After
+//   - network-level throws (DNS, reset, timeout)
+// A 400 or 404 is a real answer about a real query and is thrown immediately;
+// retrying it would just burn a second of the rate limit per attempt.
+//
+// Backoff is exponential from 2s, which respects MB's 1 req/sec courtesy
+// limit by construction, and is capped so a genuinely down service fails the
+// run in about a minute rather than hanging it indefinitely.
+const RETRY_STATUSES = new Set([429, 502, 503, 504]);
+// Measured, not guessed. From this network MB answers roughly two requests in
+// three and 503s the rest — a batch making ~1,500 calls will therefore hit
+// hundreds of them, and several in a row on the same URL is routine. Four
+// attempts was not enough: a single unlucky name (Robert Plant, five straight
+// 503s) burned all its attempts and dropped a seed person from the run. Eight
+// attempts with a capped exponential backoff covers a bad minute for one URL.
+const MAX_RETRIES = 8;
+const RETRY_BASE_MS = 1500;
+const RETRY_CAP_MS = 20000;
+
+export function retryDelayMs(attempt, retryAfterHeader = null) {
+  // Retry-After, when MB sends it, is authoritative: it is the service telling
+  // us when it will be ready, and guessing shorter is how you get banned.
+  const retryAfter = Number(retryAfterHeader);
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return Math.min(retryAfter * 1000, RETRY_CAP_MS);
   }
-  const body = await res.json();
-  await writeCache(url, body);
-  return body;
+  const backoff = Math.min(RETRY_BASE_MS * Math.pow(2, attempt), RETRY_CAP_MS);
+  // Jitter, because every retry in a run is otherwise scheduled on the same
+  // grid: a burst that gets 503'd together comes back together and gets 503'd
+  // together again. Up to 40% on top, never below the base delay, so pacing
+  // stays inside MB's courtesy limit.
+  return Math.round(backoff * (1 + Math.random() * 0.4));
+}
+
+async function fetchWithRetry(url, { log = null } = {}) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    if (attempt > 0) {
+      const wait = retryDelayMs(attempt - 1, lastError && lastError.retryAfter);
+      if (log) log(`[retry ${attempt}/${MAX_RETRIES}] waiting ${wait}ms — ${(lastError && lastError.message || '').slice(0, 120)}`);
+      await sleep(wait);
+      lastRequestAt = Date.now();
+    }
+    try {
+      const res = await fetch(url, { headers: MUSICBRAINZ_HEADERS });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        const error = new Error(`MusicBrainz ${res.status} for ${url}: ${text.slice(0, 200)}`);
+        if (!RETRY_STATUSES.has(res.status)) throw error;
+        error.retryAfter = res.headers && res.headers.get ? res.headers.get('retry-after') : null;
+        lastError = error;
+        continue;
+      }
+      const body = await res.json();
+      await writeCache(url, body);
+      return body;
+    } catch (error) {
+      // A thrown non-retryable HTTP error carries no retryAfter and must not be
+      // swallowed into another attempt.
+      if (error && typeof error.message === 'string' && /MusicBrainz \d{3} for/.test(error.message)
+          && !RETRY_STATUSES.has(Number(error.message.match(/MusicBrainz (\d{3})/)[1]))) {
+        throw error;
+      }
+      lastError = error;
+    }
+  }
+  throw new Error(
+    `MusicBrainz unreachable after ${MAX_RETRIES + 1} attempts for ${url}: ${lastError && lastError.message}`
+  );
 }
 
 // -----------------------------------------------------------------------
