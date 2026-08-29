@@ -25,10 +25,13 @@
 //               changed with no record of who changed it -- the one outcome an
 //               audited backfill exists to prevent.
 //
-//               Note this needs a SESSION, so the CLI connects with Pool rather
-//               than the neon() HTTP helper. Over HTTP each statement is its own
-//               implicit transaction and a BEGIN would be pointless, which is
-//               probably how the claim drifted from the code in the first place.
+//               Atomicity is reached two different ways depending on the driver,
+//               because over HTTP a BEGIN is a no-op: each statement is its own
+//               implicit transaction. neon()'s own .transaction([...]) batches
+//               statements into ONE request that really is atomic, so that is what
+//               the CLI uses. A session-backed client -- pglite in the tests, or
+//               node-postgres -- takes the BEGIN/COMMIT path instead. Same
+//               guarantee, arrived at by whichever route the connection supports.
 //
 //   node scripts/apply-enrichments.mjs --enrichments <csv> --seed <csv> \
 //        --actor <user-uuid> [--apply] [--fields weight,instruments,...] [--limit N]
@@ -234,25 +237,39 @@ export function currentMatchesExpectation(current, oldValue) {
 }
 
 /**
- * Run `body` inside a database transaction, committing on success and rolling
- * back on any throw.
+ * Commit every statement in `thunks` atomically, or none of them.
  *
- * `sql` must be backed by a single session -- a pooled client, or pglite in the
- * tests -- because BEGIN and COMMIT have to reach the same connection. The neon()
- * HTTP helper cannot provide that, which is why the CLI uses Pool.
+ * Each thunk is a function returning a query, deliberately not a started one, so
+ * this can decide HOW to run them:
+ *
+ *   - `sql.transaction([...])`, when the driver offers it. This is neon()'s HTTP
+ *     path: the statements go in one request and the server treats them as a
+ *     single transaction. A BEGIN would be useless here, because over HTTP each
+ *     statement is already its own implicit transaction -- which is exactly why
+ *     the atomicity this file used to claim was not merely missing but
+ *     unreachable with that connection.
+ *   - BEGIN / COMMIT / ROLLBACK otherwise, for a session-backed client. pglite in
+ *     the tests, node-postgres in principle.
+ *
+ * The ORIGINAL error is rethrown, never a rollback error. A rollback that itself
+ * fails is swallowed: that means the connection is gone, which already rolled the
+ * transaction back, and the first error is the one worth reporting.
  */
-export async function inTransaction(sql, body) {
+export async function commitAtomically(sql, thunks) {
+  if (typeof sql.transaction === 'function') {
+    return sql.transaction(thunks.map(fn => fn()));
+  }
   await sql`begin`;
   try {
-    const result = await body();
+    const results = [];
+    for (const fn of thunks) results.push(await fn());
     await sql`commit`;
-    return result;
+    return results;
   } catch (err) {
     try {
       await sql`rollback`;
     } catch {
-      // A rollback that itself fails means the connection is gone, which already
-      // rolled the transaction back. The original error is the useful one.
+      // See above: the connection is gone and the original error is the useful one.
     }
     throw err;
   }
@@ -342,35 +359,39 @@ export async function applyPlan(sql, plan, { actor, apply = false } = {}) {
       continue;
     }
 
+    // The data change and its audit row commit together or not at all. An
+    // unaudited edit to somebody's band is worse than a skipped one.
+    //
+    // Validation that can throw happens HERE, before the transaction opens, so a
+    // malformed weight is reported as a refusal rather than as a rolled-back
+    // transaction that looks like a database problem.
+    let dataThunk;
     try {
-      // The data change and its audit row commit together or not at all. An
-      // unaudited edit to somebody's band is worse than a skipped one.
-      await inTransaction(sql, async () => {
-        if (entry.scope === 'band') {
-          await writeBandField(sql, bid, entry);
-        } else if (entry.scope === 'person') {
-          await writePersonField(sql, pid, entry);
-        } else {
-          await writeMembershipWeight(sql, bid, pid, entry);
-        }
-        await sql`
-          insert into contributions (user_id, action, band_id, band_name, metadata)
-          values (
-            ${actor},
-            ${ACTION_FOR_SCOPE[entry.scope]},
-            ${String(bid)},
-            ${entry.band},
-            ${JSON.stringify({
-              source: 'apply-enrichments',
-              scope: entry.scope,
-              field: entry.field,
-              column: entry.column,
-              person: entry.person,
-              from: entry.oldValue,
-              to: entry.newValue,
-            })}
-          )`;
-      });
+      dataThunk = dataQueryFor(sql, entry, bid, pid);
+    } catch (err) {
+      results.push({ ...entry, status: 'failed', reason: err.message });
+      continue;
+    }
+    const auditThunk = () => sql`
+      insert into contributions (user_id, action, band_id, band_name, metadata)
+      values (
+        ${actor},
+        ${ACTION_FOR_SCOPE[entry.scope]},
+        ${String(bid)},
+        ${entry.band},
+        ${JSON.stringify({
+          source: 'apply-enrichments',
+          scope: entry.scope,
+          field: entry.field,
+          column: entry.column,
+          person: entry.person,
+          from: entry.oldValue,
+          to: entry.newValue,
+        })}
+      )`;
+
+    try {
+      await commitAtomically(sql, [dataThunk, auditThunk]);
       results.push({ ...entry, status: 'applied' });
     } catch (err) {
       results.push({ ...entry, status: 'failed', reason: err.message });
@@ -381,45 +402,47 @@ export async function applyPlan(sql, plan, { actor, apply = false } = {}) {
 
 // Column names come from the frozen maps above, never from the CSV, so an
 // attacker-supplied field cannot reach the SQL text. Each column is written by
-// an explicit branch for the same reason -- a Neon tagged template cannot
+// an explicit branch for the same reason -- a tagged template cannot
 // parameterize an identifier.
-async function writeBandField(sql, id, entry) {
-  const v = entry.newValue;
-  switch (entry.column) {
-    case 'years_active':
-      await sql`update bands set years_active = ${v}, updated_at = now() where id = ${id}`; break;
-    case 'city':
-      await sql`update bands set city = ${v}, updated_at = now() where id = ${id}`; break;
-    case 'country':
-      await sql`update bands set country = ${v}, updated_at = now() where id = ${id}`; break;
-    case 'genre':
-      await sql`update bands set genre = ${v}, updated_at = now() where id = ${id}`; break;
-    default:
-      throw new Error(`unroutable band column '${entry.column}'`);
+//
+// These return a THUNK rather than running the query, so commitAtomically can
+// either batch them into one HTTP transaction or run them inside BEGIN/COMMIT.
+// Anything that can throw (an out-of-range weight, an unroutable column) throws
+// when the thunk is BUILT, not when it runs, so a refusal is reported as a
+// refusal instead of as a failed transaction.
+export function dataQueryFor(sql, entry, bandId, personId) {
+  if (entry.scope === 'band') {
+    switch (entry.column) {
+      case 'years_active':
+        return () => sql`update bands set years_active = ${entry.newValue}, updated_at = now() where id = ${bandId}`;
+      case 'city':
+        return () => sql`update bands set city = ${entry.newValue}, updated_at = now() where id = ${bandId}`;
+      case 'country':
+        return () => sql`update bands set country = ${entry.newValue}, updated_at = now() where id = ${bandId}`;
+      case 'genre':
+        return () => sql`update bands set genre = ${entry.newValue}, updated_at = now() where id = ${bandId}`;
+      default:
+        throw new Error(`unroutable band column '${entry.column}'`);
+    }
   }
-}
-
-async function writePersonField(sql, id, entry) {
-  const v = entry.newValue;
-  switch (entry.column) {
-    case 'instrument1':
-      await sql`update band_members set instrument1 = ${v}, updated_at = now() where id = ${id}`; break;
-    case 'instrument2':
-      await sql`update band_members set instrument2 = ${v}, updated_at = now() where id = ${id}`; break;
-    default:
-      throw new Error(`unroutable person column '${entry.column}'`);
+  if (entry.scope === 'person') {
+    switch (entry.column) {
+      case 'instrument1':
+        return () => sql`update band_members set instrument1 = ${entry.newValue}, updated_at = now() where id = ${personId}`;
+      case 'instrument2':
+        return () => sql`update band_members set instrument2 = ${entry.newValue}, updated_at = now() where id = ${personId}`;
+      default:
+        throw new Error(`unroutable person column '${entry.column}'`);
+    }
   }
-}
-
-async function writeMembershipWeight(sql, bandId, personId, entry) {
   const weight = Number(entry.newValue);
-  // memberships.weight is `integer not null`, and the add-band form only ever
-  // writes 1, 2 or 3. Refusing anything else keeps a malformed CSV from putting
-  // a value in the column that no renderer knows how to classify.
+  // memberships.weight is `integer not null` with no CHECK, and the add-band form
+  // only ever writes 1, 2 or 3. Refusing anything else keeps a malformed CSV from
+  // putting a value in the column that no renderer knows how to classify.
   if (![1, 2, 3].includes(weight)) {
     throw new Error(`weight must be 1, 2 or 3 — got '${entry.newValue}'`);
   }
-  await sql`
+  return () => sql`
     update memberships set weight = ${weight}
     where band_id = ${bandId} and member_id = ${personId}`;
 }
@@ -494,25 +517,24 @@ async function main() {
     process.exit(1);
   }
 
-  // Pool, not neon(). Every write here commits with its audit row inside one
-  // transaction, and BEGIN/COMMIT have to reach the same connection. The neon()
-  // HTTP helper sends each statement as its own request, where a BEGIN would
-  // silently do nothing at all.
-  const { Pool } = await import('@neondatabase/serverless');
-  const pool = new Pool({ connectionString: dbUrl });
-  const client = await pool.connect();
-  const sql = async (strings, ...values) => {
-    const text = strings.reduce((acc, s, i) => acc + s + (i < values.length ? `$${i + 1}` : ''), '');
-    return (await client.query(text, values)).rows;
-  };
+  // neon(), not Pool.
+  //
+  // Pool would give a real session and therefore real BEGIN/COMMIT, but it talks
+  // WebSocket, and on Node 20 there is no global WebSocket and `ws` is not a
+  // dependency of this project. It fails immediately and unmistakably:
+  //
+  //   All attempts to open a WebSocket to connect to the database failed.
+  //
+  // So the first attempt at fixing the atomicity gap here would have crashed on
+  // the first --apply. neon()'s tagged template carries .transaction([...]),
+  // which batches statements into one request the server treats as a single
+  // transaction -- the same guarantee, over the transport that actually works
+  // here, and with no new dependency. commitAtomically picks that path
+  // automatically.
+  const { neon } = await import('@neondatabase/serverless');
+  const sql = neon(dbUrl);
 
-  let results;
-  try {
-    results = await applyPlan(sql, work, { actor: args.actor, apply: args.apply });
-  } finally {
-    client.release();
-    await pool.end();
-  }
+  const results = await applyPlan(sql, work, { actor: args.actor, apply: args.apply });
   const counts = summarize(results);
   console.log('=== Result ===');
   for (const [status, n] of Object.entries(counts)) console.log(`  ${status}: ${n}`);

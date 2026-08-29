@@ -23,7 +23,7 @@ import {
   applyPlan,
   currentMatchesExpectation,
   summarize,
-  inTransaction,
+  commitAtomically,
   BAND_FIELDS,
   PERSON_FIELDS,
   MEMBERSHIP_FIELDS,
@@ -487,18 +487,18 @@ test('a rollback does not poison the rest of the run', async () => {
   assert.equal((await sql`select * from contributions`).length, 1);
 });
 
-test('inTransaction commits on success and rolls back on throw', async () => {
+test('commitAtomically commits on success and rolls back on throw', async () => {
   const sql = await makeDb();
   await sql`create table probe (n integer)`;
 
-  await inTransaction(sql, async () => { await sql`insert into probe values (1)`; });
+  await commitAtomically(sql, [() => sql`insert into probe values (1)`]);
   assert.equal((await sql`select * from probe`).length, 1, 'committed');
 
   await assert.rejects(
-    inTransaction(sql, async () => {
-      await sql`insert into probe values (2)`;
-      throw new Error('boom');
-    }),
+    commitAtomically(sql, [
+      () => sql`insert into probe values (2)`,
+      () => { throw new Error('boom'); },
+    ]),
     /boom/,
     'the original error must surface, not a rollback error',
   );
@@ -507,14 +507,31 @@ test('inTransaction commits on success and rolls back on throw', async () => {
 
 test('the file does not claim a transaction it lacks', () => {
   // The specific regression: a comment asserting atomicity while the code had
-  // none. If inTransaction is ever removed, this fails alongside the behaviour.
+  // none. If commitAtomically is ever removed, this fails alongside the behaviour.
   const src = readFileSync(new URL('../scripts/apply-enrichments.mjs', import.meta.url), 'utf8');
-  assert.match(src, /export async function inTransaction/);
-  assert.match(src, /await inTransaction\(sql, async \(\) => \{/);
+  assert.match(src, /export async function commitAtomically/);
+  assert.match(src, /await commitAtomically\(sql, \[dataThunk, auditThunk\]\)/);
   assert.match(src, /await sql`begin`/);
   assert.match(src, /await sql`commit`/);
   assert.match(src, /await sql`rollback`/);
-  // And the CLI must use a session, because BEGIN over the HTTP helper is a no-op.
-  assert.match(src, /const \{ Pool \} = await import\('@neondatabase\/serverless'\)/);
-  assert.doesNotMatch(src, /const sql = neon\(/);
+  // And it must use the driver's own batched transaction when one is offered,
+  // because over HTTP a BEGIN is a no-op.
+  assert.match(src, /typeof sql\.transaction === 'function'/);
+});
+
+test('a driver offering .transaction() is used instead of BEGIN', async () => {
+  // The neon() HTTP path. Pool would give a real session, but it needs a
+  // WebSocket that Node 20 does not have and `ws` is not a dependency -- the
+  // first attempt at this fix crashed on connect. So when the driver batches,
+  // batch; never emit a BEGIN that HTTP would silently ignore.
+  const issued = [];
+  const fake = async (strings) => { issued.push(strings.join('?').trim()); return []; };
+  let batched = null;
+  fake.transaction = async (queries) => { batched = queries; return []; };
+
+  await commitAtomically(fake, [() => fake`update a set b = 1`, () => fake`insert into c values (2)`]);
+
+  assert.equal(batched.length, 2, 'both statements go in one batch');
+  assert.ok(!issued.some(q => /^begin/i.test(q)), 'no BEGIN over a batching driver');
+  assert.ok(!issued.some(q => /^commit/i.test(q)), 'no COMMIT either');
 });
