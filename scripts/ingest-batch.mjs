@@ -273,9 +273,27 @@ function usStateFor(_city) { return ''; }
 //   source,target,source_type,target_type,relation_type,city,state,
 //   country,genre,weight,Intrument 1,Intrument 2,Intrument 3,Intrument 4
 // ---------------------------------------------------------------------
+// 'Years Active' and 'Tenure' are additions to the legacy CSV shape, not part
+// of the original Seattle export. Both are read by the seed endpoint
+// (netlify/functions/seed_bands.mjs accepts 'Years Active' -> bands.years_active
+// and 'Tenure' -> memberships.tenure), and both were being thrown away here:
+// the MusicBrainz payload we already fetch and pay the rate limit for carries a
+// life-span for the band and a begin/end for every single membership, and the
+// pipeline read the years only as a yes/no confidence signal before discarding
+// the actual values.
+//
+// The cost of that omission, measured against production: 495 of 499 bands have
+// no years_active, every one of 2,757 musicians is missing theirs, and all 3,813
+// memberships have a null tenure. That is why a card reads "YEARS ACTIVE —" and
+// why every membership chip shows a name with no dates beside it.
+//
+// The seed endpoint fills these with coalesce(nullif(...)), so a backfill can
+// only ever populate an empty column and can never overwrite something a person
+// typed in by hand.
 const SEED_HEADERS = [
   'source', 'target', 'source_type', 'target_type', 'relation_type',
   'city', 'state', 'country', 'genre', 'weight',
+  'Years Active', 'Tenure',
   'Intrument 1', 'Intrument 2', 'Intrument 3', 'Intrument 4',
 ];
 
@@ -290,6 +308,11 @@ function proposedRowsForBand(bandDetail, { includeMembers = true } = {}) {
     .slice(0, 2)
     .map(t => t.name)
     .join(', ');
+  // The band's own life-span. formatTenure renders "1969-1980" for a band that
+  // has ended and "1973-present" for one that has not, reading MB's `ended`
+  // flag rather than inferring from a missing end date — a band with no end
+  // date recorded is not the same thing as a band still playing.
+  const yearsActive = formatTenure({ begin: self.begin, end: self.end, ended: self.ended });
   const rows = [];
   if (includeMembers) {
     for (const rel of bandDetail.relations) {
@@ -301,6 +324,11 @@ function proposedRowsForBand(bandDetail, { includeMembers = true } = {}) {
         relation_type: 'member_of',
         city, state, country, genre,
         weight: 2,
+        'Years Active': yearsActive,
+        // Per-membership dates, which are a different fact from the band's own
+        // life-span: this is when THIS musician was in THIS band, and it is what
+        // a membership chip shows beside the name.
+        Tenure: formatTenure(rel),
         'Intrument 1': '', 'Intrument 2': '', 'Intrument 3': '', 'Intrument 4': '',
       });
     }
@@ -332,6 +360,25 @@ function proposeEnrichments(seedBand, mbDetail) {
     }
     if (!row.genre && mbGenre) {
       proposals.push({ rowIndex: rowIdx, field: 'genre', oldValue: '', newValue: mbGenre, source: 'musicbrainz-tags' });
+    }
+    // Years active. The header comment for this function has always claimed to
+    // backfill it and never did, which is a large part of why 495 of the 499
+    // bands in production have an empty years_active and every card reads
+    // "YEARS ACTIVE —". The value is already in the MB payload this loop is
+    // holding; it was simply never proposed.
+    const mbYears = formatTenure({
+      begin: detail.self.begin,
+      end: detail.self.end,
+      ended: detail.self.ended,
+    });
+    if (!row['Years Active'] && mbYears) {
+      proposals.push({
+        rowIndex: rowIdx,
+        field: 'years_active',
+        oldValue: '',
+        newValue: mbYears,
+        source: 'musicbrainz-lifespan',
+      });
     }
   }
   return proposals;
