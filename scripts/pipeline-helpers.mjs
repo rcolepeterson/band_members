@@ -125,3 +125,85 @@ export function csvEscape(v) {
 export function csvRow(headers, obj) {
   return headers.map(h => csvEscape(obj[h])).join(',');
 }
+
+// -----------------------------------------------------------------------
+// Membership role and instruments, from MusicBrainz relationship attributes
+//
+// A "member of band" relation carries a flat attribute list that mixes the
+// role marker in with the instruments played:
+//
+//   Ben Weinman / The Dillinger Escape Plan
+//     ["guitar", "keyboard", "original", "piano"]
+//
+// `original` is MusicBrainz's founding-member marker, and it is the field
+// that answers the question the graph could not answer: 387 of 499 bands in
+// the seed have no founder recorded at all — Black Sabbath, Iron Maiden and
+// King Crimson among them — because proposedRowsForBand hardcoded weight: 2
+// for every imported membership. The signal was in the payload the importer
+// was already holding; it was thrown away.
+//
+// The instruments were thrown away in the same place: every imported row
+// writes four empty Intrument columns while MB is handing over "guitar",
+// "keyboard" and "piano" in that same array.
+// -----------------------------------------------------------------------
+
+// Attributes that describe the ROLE rather than an instrument. MB has no
+// touring marker on this relationship — weight 3 stays a human judgement made
+// through the add-band form, which is why this maps to founder-or-member only
+// and never proposes a downgrade.
+export const MB_ROLE_ATTRIBUTES = Object.freeze(['original']);
+
+/**
+ * Founder (1) or plain member (2), from a relation's attribute list.
+ *
+ * Deliberately never returns 3: MusicBrainz does not model touring membership
+ * on "member of band", so inferring it would be inventing data. A row that a
+ * human marked 3 is left alone by the enrichment pass.
+ */
+export function weightFromMbAttributes(attributes = []) {
+  const list = Array.isArray(attributes) ? attributes : [];
+  const isFounder = list.some(
+    a => MB_ROLE_ATTRIBUTES.includes(String(a || '').trim().toLowerCase()),
+  );
+  return isFounder ? 1 : 2;
+}
+
+/**
+ * The instruments from a relation's attribute list, cleaned for the CSV's four
+ * Intrument columns (the column name's missing 's' is load-bearing — it is the
+ * spelling the live data and the add-band form already use).
+ *
+ * MB writes a disambiguating parenthetical on some instruments —
+ * "drums (drum set)" — which is noise in a chip beside a musician's name, so
+ * it is stripped. Order is preserved: MB lists the primary instrument first.
+ */
+export function instrumentsFromMbAttributes(attributes = [], limit = 4) {
+  const list = Array.isArray(attributes) ? attributes : [];
+  const seen = new Set();
+  const out = [];
+  for (const raw of list) {
+    const value = String(raw || '').trim().toLowerCase();
+    if (!value) continue;
+    if (MB_ROLE_ATTRIBUTES.includes(value)) continue;
+    const cleaned = value.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+    if (!cleaned) continue;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(cleaned.charAt(0).toUpperCase() + cleaned.slice(1));
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/**
+ * Spread instruments across the CSV's four Intrument columns, filling the rest
+ * with '' so every emitted row keeps an identical column set.
+ */
+export function instrumentColumns(instruments = [], limit = 4) {
+  const cols = {};
+  for (let i = 0; i < limit; i += 1) {
+    cols[`Intrument ${i + 1}`] = instruments[i] || '';
+  }
+  return cols;
+}
