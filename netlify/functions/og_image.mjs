@@ -176,7 +176,7 @@ const fallback = () =>
  * production fixture without a database or a deploy. The handler's only extra job is
  * fetching the graph and turning null into a redirect.
  */
-export async function renderOgCard({ graph, search = '', host = 'bandmembers.netlify.app', stats = null } = {}) {
+export async function renderOgCard({ graph, search = '', host = 'sixdegreesofrock.com', stats = null } = {}) {
   if (!ensureFont()) return null;
   if (!graph || !graph.nodes || !graph.nodes.length) return null;
   {

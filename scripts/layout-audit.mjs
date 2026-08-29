@@ -71,7 +71,7 @@ const CHROME = readFlag(
 // one of them is not evidence about the other.
 const DATA_CHOICE = readFlag('--data', 'both');
 const REFRESH_DATA = args.includes('--refresh-data');
-const PRODUCTION_URL = readFlag('--production-url', 'https://bandmembers.netlify.app');
+const PRODUCTION_URL = readFlag('--production-url', 'https://sixdegreesofrock.com');
 const SNAPSHOT_PATH = new URL('./fixtures/production-bands.json', import.meta.url);
 
 // Refreshing is explicit rather than automatic: the snapshot is a fixture, and a

@@ -12,7 +12,7 @@
 // Usage:
 //   ADMIN_TOKEN=... node scripts/test-admin-audit-page.mjs [BASE_URL]
 //
-// Default BASE_URL is https://bandmembers.netlify.app.
+// Default BASE_URL is https://sixdegreesofrock.com.
 // Requires playwright (already a repo dev dep for other smoke tests).
 //
 // ADMIN_TOKEN is required; there is no baked-in fallback anymore (see PR #46).
@@ -20,7 +20,7 @@
 
 import { chromium } from 'playwright';
 
-const BASE = process.argv[2] || 'https://bandmembers.netlify.app';
+const BASE = process.argv[2] || 'https://sixdegreesofrock.com';
 const ADMIN = process.env.ADMIN_TOKEN;
 if (!ADMIN) {
   console.error('ADMIN_TOKEN env var is required. Get it from Netlify site settings > Environment variables and re-run:');

@@ -50,7 +50,7 @@ const COLORS = {
   strip: '#0a1016',
 };
 
-const HOST = 'bandmembers.netlify.app';
+const HOST = 'sixdegreesofrock.com';
 const TAGLINE = 'Explore how bands and musicians connect across scenes and decades.';
 
 const FONT_FAMILY = 'OgSans';
