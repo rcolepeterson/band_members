@@ -42,6 +42,9 @@ import {
   formatTenure,
   scoreCandidate,
   csvRow,
+  weightFromMbAttributes,
+  instrumentsFromMbAttributes,
+  instrumentColumns,
 } from './pipeline-helpers.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -323,13 +326,23 @@ function proposedRowsForBand(bandDetail, { includeMembers = true } = {}) {
         target_type: 'person',
         relation_type: 'member_of',
         city, state, country, genre,
-        weight: 2,
+        // Read the role instead of assuming one. This was hardcoded to 2, which
+        // is why 387 of 499 bands in the seed have no founder recorded at all --
+        // every band the importer has ever touched arrived as a wall of plain
+        // members. MB marks a founding member with the 'original' attribute,
+        // which the client was already fetching and this function was throwing
+        // away. Weight 3 (touring) is not inferred: MB does not model it, so it
+        // stays a human judgement made through the add-band form.
+        weight: weightFromMbAttributes(rel.attributes),
         'Years Active': yearsActive,
         // Per-membership dates, which are a different fact from the band's own
         // life-span: this is when THIS musician was in THIS band, and it is what
         // a membership chip shows beside the name.
         Tenure: formatTenure(rel),
-        'Intrument 1': '', 'Intrument 2': '', 'Intrument 3': '', 'Intrument 4': '',
+        // The instruments ride in the same attribute list as the role marker.
+        // Every imported row used to write four empty columns while MB was
+        // handing over "guitar", "keyboard" and "piano".
+        ...instrumentColumns(instrumentsFromMbAttributes(rel.attributes)),
       });
     }
   }
@@ -344,6 +357,28 @@ function proposedRowsForBand(bandDetail, { includeMembers = true } = {}) {
 // ---------------------------------------------------------------------
 function proposeEnrichments(seedBand, mbDetail) {
   const proposals = [];
+  // Membership rows are keyed by person so a row can find its own relation, and
+  // the attributes of EVERY relation for that person are merged into one list.
+  //
+  // MusicBrainz emits a separate "member of band" relation per instrument and
+  // per stint, so one musician appears many times: Black Sabbath returns 46
+  // relations for 24 people, and Ozzy Osbourne arrives twice over — once for
+  // lead vocals, once for harmonica. Keeping only the first relation would have
+  // recorded him as a singer who never touched a harmonica, and would have
+  // missed 'original' entirely on anyone whose founding stint is not their first
+  // listed row.
+  //
+  // normalizeNameKey is the same key buildSeedIndex uses, so "The Edge" and
+  // "Sinead O'Connor" match across the two sources the way they already do
+  // everywhere else in the pipeline.
+  const attributesByPerson = new Map();
+  for (const rel of mbDetail.relations || []) {
+    const key = normalizeNameKey(rel.relatedName);
+    if (!key) continue;
+    const merged = attributesByPerson.get(key) || [];
+    merged.push(...(Array.isArray(rel.attributes) ? rel.attributes : []));
+    attributesByPerson.set(key, merged);
+  }
   const mbCity = mbDetail.self.beginArea || '';
   const mbCountry = toIso3(mbDetail.self.country);
   const mbGenre = (mbDetail.self.tags || [])
@@ -366,10 +401,17 @@ function proposeEnrichments(seedBand, mbDetail) {
     // bands in production have an empty years_active and every card reads
     // "YEARS ACTIVE —". The value is already in the MB payload this loop is
     // holding; it was simply never proposed.
+    //
+    // These three lines read `detail`, which is the name the variable has in
+    // main()'s enrichment loop -- not in here, where the parameter is
+    // `mbDetail`. It is not a global either, so the whole --enrich pass threw
+    // "ReferenceError: detail is not defined" on its first band with rows,
+    // which is every band. years_active was never backfilled because the code
+    // meant to backfill it could not run.
     const mbYears = formatTenure({
-      begin: detail.self.begin,
-      end: detail.self.end,
-      ended: detail.self.ended,
+      begin: mbDetail.self.begin,
+      end: mbDetail.self.end,
+      ended: mbDetail.self.ended,
     });
     if (!row['Years Active'] && mbYears) {
       proposals.push({
@@ -379,6 +421,44 @@ function proposeEnrichments(seedBand, mbDetail) {
         newValue: mbYears,
         source: 'musicbrainz-lifespan',
       });
+    }
+
+    // Per-membership backfills: role and instruments. Unlike everything above,
+    // these are facts about ONE musician in this band rather than about the
+    // band, so they need the relation that matches this row's person.
+    const mbAttributes = attributesByPerson.get(normalizeNameKey(row.target));
+    if (mbAttributes) {
+      const mbWeight = weightFromMbAttributes(mbAttributes);
+      // The one proposal that touches a non-empty value, so the rule is narrow:
+      // only 2 -> 1, only when MB says 'original'. A row already marked 1 or 3
+      // is a human judgement and is never contradicted, and a founder is never
+      // downgraded to a member. Enrichments are written to
+      // candidates-enrichment.csv for review rather than applied, so an
+      // upgrade still passes a human before it reaches the graph.
+      if (mbWeight === 1 && String(row.weight || '').trim() === '2') {
+        proposals.push({
+          rowIndex: rowIdx,
+          field: 'weight',
+          oldValue: row.weight,
+          newValue: '1',
+          source: 'musicbrainz-original-attribute',
+        });
+      }
+      // Instruments only when the row has none at all. Filling column 3 of a
+      // row a human partly filled would interleave two sources in one list.
+      const hasAnyInstrument = [1, 2, 3, 4].some(n => (row[`Intrument ${n}`] || '').trim());
+      if (!hasAnyInstrument) {
+        const instruments = instrumentsFromMbAttributes(mbAttributes);
+        instruments.forEach((instrument, i) => {
+          proposals.push({
+            rowIndex: rowIdx,
+            field: `instrument_${i + 1}`,
+            oldValue: '',
+            newValue: instrument,
+            source: 'musicbrainz-attributes',
+          });
+        });
+      }
     }
   }
   return proposals;
