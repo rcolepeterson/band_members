@@ -36,20 +36,28 @@
        Absolute URL required by Facebook's crawler — relative paths get
        silently dropped by some unfurlers.
 
-       Why this matters (PR 14 - 2026-07-14): without an explicit
-       og:image, Facebook auto-cropped the RBFT logo (a horizontal
-       four-pick strip at 1602x426) to the middle two picks — rendering
-       the preview as a huge "BF", which reads as an unrelated brand.
-       The 1200x630 card survives every unfurler's crop. -->
+       Why an explicit og:image at all: without one, Facebook auto-cropped
+       the site logo (a horizontal strip at 1602x426) to its middle,
+       rendering the preview as two letters of an unrelated brand. A
+       purpose-built 1200x630 card survives every unfurler's crop.
+
+       ?v=2 is a cache bust, not a real file name. The card was redrawn for
+       the Six Degrees of Rock name — the retired "RBFT / Rock Band Family
+       Tree" pick logo was still unfurling under the old brand — and
+       Facebook, LinkedIn and iMessage all cache a preview image by URL.
+       Without the new query the old picture would keep being served to
+       anyone who had already shared the link. Shares that name a node are
+       unfurled by the live per-anchor card instead (netlify/functions/
+       og_image.mjs); this file is the front door's card and its fallback. -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Six Degrees of Rock" />
   <meta property="og:title" content="Six Degrees of Rock" />
   <meta property="og:description" content="Explore how bands and musicians connect across scenes and decades." />
   <meta property="og:url" content="https://bandmembers.netlify.app/" />
-  <meta property="og:image" content="https://bandmembers.netlify.app/og-image.png" />
+  <meta property="og:image" content="https://bandmembers.netlify.app/og-image.png?v=2" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Six Degrees of Rock logo with tagline" />
+  <meta property="og:image:alt" content="Six Degrees of Rock — a constellation of connected bands and musicians, with the tagline &quot;Explore how bands and musicians connect across scenes and decades.&quot;" />
 
   <!-- Twitter/X card. summary_large_image renders the OG image full-
        width in the timeline; without this tag X falls back to a small
@@ -57,7 +65,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Six Degrees of Rock" />
   <meta name="twitter:description" content="Explore how bands and musicians connect across scenes and decades." />
-  <meta name="twitter:image" content="https://bandmembers.netlify.app/og-image.png" />
+  <meta name="twitter:image" content="https://bandmembers.netlify.app/og-image.png?v=2" />
 
   <!--
     d3 is NOT loaded here any more.
@@ -2592,6 +2600,12 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   border-top: 1px solid rgba(255, 255, 255, 0.10);
 }
 
+/*
+  Mobile Peek handle: hidden entirely on desktop, where the card has no
+  Peek/Expanded states at all. The mobile block below gives it a size.
+*/
+.node-card__peek-toggle { display: none; }
+
 /* --- Mobile fallback: fixed bottom sheet, not anchored to the node ---
    On narrow screens the anchored card is impractical (thumb blocks the
    node, screen is narrow). We turn the same card into a bottom-anchored
@@ -2621,6 +2635,51 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   .node-card.is-open {
     transform: translateY(0);
   }
+  /*
+    Peek: the card opens in place (still 72px above the stage bottom, so it
+    never covers the group-status footer / "Show next group") but is capped
+    to a strip that shows the grab handle, the name and the subtitle. The
+    height cap rather than a translateY offset keeps the card inside its
+    known-good position and keeps the close button on screen.
+  */
+  .node-card.is-open.node-card--peek {
+    max-height: var(--peek-height, 112px);
+    overflow: hidden;
+  }
+  .node-card__peek-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Sticky so the handle stays reachable while an expanded card scrolls.
+       top cancels the card's 14px top padding; the negative margin pulls
+       the header back up so Peek does not waste vertical room. */
+    position: sticky;
+    top: -14px;
+    z-index: 1;
+    width: 100%;
+    min-height: 30px;
+    margin: -10px 0 4px;
+    padding: 8px 0 6px;
+    background: rgba(11, 15, 22, 0.96);
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .node-card__peek-grip {
+    width: 44px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.34);
+    transition: background 120ms ease-out;
+  }
+  .node-card__peek-toggle:active .node-card__peek-grip,
+  .node-card__peek-toggle:focus-visible .node-card__peek-grip {
+    background: rgba(255, 255, 255, 0.6);
+  }
+  /* The handle's background must not sit over the corner controls. */
+  .node-card__close,
+  .node-card__edit { z-index: 3; }
   .node-card__tail { display: none; }
 }
 
@@ -3406,6 +3465,18 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     -->
     <div id="node-card" class="node-card" role="dialog" aria-label="Selected node details" aria-hidden="true" hidden>
       <button type="button" class="node-card__close" id="node-card-close" aria-label="Close details">&times;</button>
+      <!--
+        Mobile Peek handle. Desktop hides it outright (display:none in the
+        base rule); the @media (max-width: 700px) block turns it into the
+        sheet's grab bar. A selected card opens as a compact Peek strip so
+        the constellation and the footer's "Show next group" action stay
+        visible; tapping this expands the card and scrolls internally. The
+        close button remains the only dismissal. Kept out of the header so
+        it can be sticky while the expanded body scrolls under it.
+      -->
+      <button type="button" class="node-card__peek-toggle" id="node-card-peek-toggle" aria-expanded="false" aria-label="Expand details">
+        <span class="node-card__peek-grip" aria-hidden="true"></span>
+      </button>
       <!--
         PR 3b: edit-band pencil. Static markup lives here, hidden by default;
         populateNodeCard() shows it for band nodes AND (as of the
@@ -6675,6 +6746,7 @@ function downloadPngBlob(blob) {
     const nodeCardConnLabel = document.getElementById('node-card-connections-label');
     const nodeCardConn = document.getElementById('node-card-connections');
     const nodeCardCloseBtn = document.getElementById('node-card-close');
+    const nodeCardPeekToggle = document.getElementById('node-card-peek-toggle');
     const nodeCardEditBtn = document.getElementById('node-card-edit');
     const nodeCardSigninHint = document.getElementById('node-card-signin-hint');
     const nodeCardSigninHintText = document.getElementById('node-card-signin-hint-text');
@@ -7329,29 +7401,65 @@ function downloadPngBlob(blob) {
       nodeCardEl.style.top = clampedY + 'px';
     }
 
+    // True only where CSS turns the card into a bottom sheet. Single source of
+    // truth for the breakpoint, so the sheet logic and positionNodeCard() can
+    // never disagree about which layout is on screen.
+    function isMobileSheet() {
+      return window.matchMedia('(max-width: 700px)').matches;
+    }
+
+    // Peek <-> Expanded for the mobile bottom sheet.
+    //   - the class drives the CSS height cap,
+    //   - data-sheet-state is what the Sigma label blocker's card observer and
+    //     the structural tests read,
+    //   - aria-expanded / aria-label keep the grab handle honest for screen
+    //     readers, since visually it is only a 4px bar.
+    // Desktop is always 'expanded': the class never lands there, so none of
+    // the mobile-only Peek CSS applies.
+    function setNodeCardSheetState(state) {
+      const peek = state === 'peek';
+      nodeCardEl.classList.toggle('node-card--peek', peek);
+      nodeCardEl.setAttribute('data-sheet-state', peek ? 'peek' : 'expanded');
+      if (nodeCardPeekToggle) {
+        nodeCardPeekToggle.setAttribute('aria-expanded', peek ? 'false' : 'true');
+        nodeCardPeekToggle.setAttribute('aria-label', peek ? 'Expand details' : 'Collapse details');
+      }
+      // Expanding scrolls back to the top: a card can be left scrolled halfway
+      // down its member chips, and reopening mid-list reads as a broken card.
+      if (!peek) nodeCardEl.scrollTop = 0;
+    }
+
+    function toggleNodeCardSheet() {
+      setNodeCardSheetState(nodeCardEl.classList.contains('node-card--peek') ? 'expanded' : 'peek');
+    }
+
     function openNodeCard(node) {
-  if (!node) return;
-  nodeCardState.node = node;
-  populateNodeCard(node);
-  nodeCardEl.hidden = false;
-  // Force a reflow so the transition from opacity 0 → 1 fires reliably.
-  // eslint-disable-next-line no-unused-expressions
-  nodeCardEl.offsetHeight;
-  nodeCardEl.classList.add('is-open');
-
-  const mobileSheet = window.matchMedia('(max-width: 700px)').matches;
-  nodeCardEl.classList.toggle('node-card--peek', mobileSheet);
-  nodeCardEl.setAttribute('data-sheet-state', mobileSheet ? 'peek' : 'expanded');
-
-  nodeCardEl.setAttribute('aria-hidden', 'false');
-  positionNodeCard();
-}
+      if (!node) return;
+      nodeCardState.node = node;
+      populateNodeCard(node);
+      nodeCardEl.hidden = false;
+      // Force a reflow so the transition from opacity 0 → 1 fires reliably.
+      // eslint-disable-next-line no-unused-expressions
+      nodeCardEl.offsetWidth;
+      nodeCardEl.classList.add('is-open');
+      // Every mobile selection starts compact, so tapping a node never buries
+      // the constellation or the footer's group navigation under a full card.
+      setNodeCardSheetState(isMobileSheet() ? 'peek' : 'expanded');
+      nodeCardEl.setAttribute('aria-hidden', 'false');
+      positionNodeCard();
+    }
 
     function closeNodeCard() {
       nodeCardState.node = null;
       nodeCardEl.classList.remove('is-open');
-	  nodeCardEl.classList.remove('node-card--peek');
+      // Clear the sheet state so the next selection cannot inherit a stale
+      // Expanded card from the last one.
+      nodeCardEl.classList.remove('node-card--peek');
       nodeCardEl.removeAttribute('data-sheet-state');
+      if (nodeCardPeekToggle) {
+        nodeCardPeekToggle.setAttribute('aria-expanded', 'false');
+        nodeCardPeekToggle.setAttribute('aria-label', 'Expand details');
+      }
       nodeCardEl.setAttribute('aria-hidden', 'true');
       // Both highlights belong to a selection, and the card is the only
       // thing on screen that names which node they belong to. Tying their
@@ -7575,6 +7683,22 @@ function downloadPngBlob(blob) {
     }
 
     if (nodeCardCloseBtn) nodeCardCloseBtn.addEventListener('click', closeNodeCard);
+    if (nodeCardPeekToggle) nodeCardPeekToggle.addEventListener('click', toggleNodeCardSheet);
+    // Rotating a phone, or resizing a desktop window past the breakpoint, swaps
+    // which layout the open card is in. Re-derive the state rather than leaving
+    // a desktop card wearing the Peek height cap (or a phone card stuck open).
+    if (window.matchMedia) {
+      const sheetQuery = window.matchMedia('(max-width: 700px)');
+      const onSheetBreakpointChange = () => {
+        if (!nodeCardState.node) return;
+        setNodeCardSheetState(sheetQuery.matches ? 'peek' : 'expanded');
+      };
+      if (typeof sheetQuery.addEventListener === 'function') {
+        sheetQuery.addEventListener('change', onSheetBreakpointChange);
+      } else if (typeof sheetQuery.addListener === 'function') {
+        sheetQuery.addListener(onSheetBreakpointChange);
+      }
+    }
     // ESC key closes the card, matching the popover convention already used
     // for Add-Your-Band.
     document.addEventListener('keydown', e => {
