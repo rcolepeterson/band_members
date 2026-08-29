@@ -12,6 +12,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
 import {
@@ -22,6 +23,7 @@ import {
   applyPlan,
   currentMatchesExpectation,
   summarize,
+  inTransaction,
   BAND_FIELDS,
   PERSON_FIELDS,
   MEMBERSHIP_FIELDS,
@@ -408,4 +410,111 @@ test('a genuinely different band is still refused', () => {
   );
   assert.equal(plan.length, 0);
   assert.match(skipped[0].reason, /wrong seed file/);
+});
+
+// ---------------------------------------------------------------------------
+// The transaction
+//
+// This file used to CLAIM "one transaction per band, so a failure cannot
+// half-apply a roster" while issuing the update and the audit insert as two
+// independent statements. An audit insert that failed after the update succeeded
+// left the graph changed with nobody recorded as having changed it — the one
+// outcome an audited backfill exists to prevent. These tests exist so the claim
+// cannot drift from the behaviour again.
+// ---------------------------------------------------------------------------
+
+test('a failed audit insert rolls the data write back', async () => {
+  // The realistic trigger: --actor pointing at a user that does not exist.
+  // contributions.user_id is a foreign key, so the insert violates it AFTER the
+  // membership update has already run inside the transaction.
+  const sql = await makeDb();
+  await seedDb(sql);
+  const ghostActor = '00000000-0000-0000-0000-000000000000';
+  const { plan } = buildPlan([proposal()], SEED_ROWS);
+
+  const results = await applyPlan(sql, plan, { actor: ghostActor, apply: true });
+
+  assert.equal(results[0].status, 'failed');
+  const [m] = await sql`select weight from memberships`;
+  assert.equal(m.weight, 2, 'the weight must be rolled back, not left at 1');
+  assert.equal((await sql`select * from contributions`).length, 0, 'no audit row');
+});
+
+test('a rolled-back band field is not left changed either', async () => {
+  const sql = await makeDb();
+  await seedDb(sql);
+  const ghostActor = '00000000-0000-0000-0000-000000000000';
+  const { plan } = buildPlan(
+    [proposal({ field: 'years_active', oldValue: '', newValue: '1997-present' })],
+    SEED_ROWS,
+  );
+  const results = await applyPlan(sql, plan, { actor: ghostActor, apply: true });
+  assert.equal(results[0].status, 'failed');
+  const [b] = await sql`select years_active from bands`;
+  assert.equal(b.years_active, '', 'years_active must be rolled back');
+});
+
+test('a rolled-back instrument fill is not left changed either', async () => {
+  const sql = await makeDb();
+  await seedDb(sql, { instrument1: '' });
+  const ghostActor = '00000000-0000-0000-0000-000000000000';
+  const { plan } = buildPlan(
+    [proposal({ field: 'instrument_1', oldValue: '', newValue: 'Guitar' })],
+    SEED_ROWS,
+  );
+  const results = await applyPlan(sql, plan, { actor: ghostActor, apply: true });
+  assert.equal(results[0].status, 'failed');
+  const [p] = await sql`select instrument1 from band_members`;
+  assert.equal(p.instrument1, '', 'instrument1 must be rolled back');
+});
+
+test('a rollback does not poison the rest of the run', async () => {
+  // A failed transaction must be rolled back cleanly enough that the NEXT entry
+  // can still commit. Without the rollback, Postgres leaves the session in
+  // "current transaction is aborted" and every later statement fails too.
+  const sql = await makeDb();
+  const { actorId } = await seedDb(sql);
+  const ghost = '00000000-0000-0000-0000-000000000000';
+
+  const { plan } = buildPlan([proposal()], SEED_ROWS);
+  const failed = await applyPlan(sql, plan, { actor: ghost, apply: true });
+  assert.equal(failed[0].status, 'failed');
+
+  const second = await applyPlan(sql, plan, { actor: actorId, apply: true });
+  assert.equal(second[0].status, 'applied', 'the session must still be usable');
+  const [m] = await sql`select weight from memberships`;
+  assert.equal(m.weight, 1);
+  assert.equal((await sql`select * from contributions`).length, 1);
+});
+
+test('inTransaction commits on success and rolls back on throw', async () => {
+  const sql = await makeDb();
+  await sql`create table probe (n integer)`;
+
+  await inTransaction(sql, async () => { await sql`insert into probe values (1)`; });
+  assert.equal((await sql`select * from probe`).length, 1, 'committed');
+
+  await assert.rejects(
+    inTransaction(sql, async () => {
+      await sql`insert into probe values (2)`;
+      throw new Error('boom');
+    }),
+    /boom/,
+    'the original error must surface, not a rollback error',
+  );
+  assert.equal((await sql`select * from probe`).length, 1, 'the second insert was rolled back');
+});
+
+test('the file does not claim a transaction it lacks', () => {
+  // The specific regression: a comment asserting atomicity while the code had
+  // none. If inTransaction is ever removed, this fails alongside the behaviour.
+  const src = readFileSync(new URL('../scripts/apply-enrichments.mjs', import.meta.url), 'utf8');
+  assert.match(src, /export async function inTransaction/);
+  assert.match(src, /await inTransaction\(sql, async \(\) => \{/);
+  assert.match(src, /await sql`begin`/);
+  assert.match(src, /await sql`commit`/);
+  assert.match(src, /await sql`rollback`/);
+  // And the CLI must use a session, because BEGIN over the HTTP helper is a no-op.
+  assert.match(src, /const \{ Pool \} = await import\('@neondatabase\/serverless'\)/);
+  assert.doesNotMatch(src, /const sql = neon\(/);
 });

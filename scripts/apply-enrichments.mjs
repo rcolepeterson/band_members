@@ -18,7 +18,17 @@
 //               proposal that says 2 -> 1 is skipped if the row no longer reads
 //               2, because a human may have edited it in the meantime and the
 //               CSV is a snapshot, not a lock.
-//   one transaction per band, so a failure cannot half-apply a roster.
+//   every write and its audit row commit together, or neither does.
+//               This claimed to be true before it was: the update and the
+//               contributions insert were two independent statements, so an audit
+//               insert that failed after the update succeeded left the graph
+//               changed with no record of who changed it -- the one outcome an
+//               audited backfill exists to prevent.
+//
+//               Note this needs a SESSION, so the CLI connects with Pool rather
+//               than the neon() HTTP helper. Over HTTP each statement is its own
+//               implicit transaction and a BEGIN would be pointless, which is
+//               probably how the claim drifted from the code in the first place.
 //
 //   node scripts/apply-enrichments.mjs --enrichments <csv> --seed <csv> \
 //        --actor <user-uuid> [--apply] [--fields weight,instruments,...] [--limit N]
@@ -224,8 +234,34 @@ export function currentMatchesExpectation(current, oldValue) {
 }
 
 /**
- * Apply a plan. `sql` is a Neon-shaped tagged template, so this runs against
- * Neon in production and pglite in tests with no branching.
+ * Run `body` inside a database transaction, committing on success and rolling
+ * back on any throw.
+ *
+ * `sql` must be backed by a single session -- a pooled client, or pglite in the
+ * tests -- because BEGIN and COMMIT have to reach the same connection. The neon()
+ * HTTP helper cannot provide that, which is why the CLI uses Pool.
+ */
+export async function inTransaction(sql, body) {
+  await sql`begin`;
+  try {
+    const result = await body();
+    await sql`commit`;
+    return result;
+  } catch (err) {
+    try {
+      await sql`rollback`;
+    } catch {
+      // A rollback that itself fails means the connection is gone, which already
+      // rolled the transaction back. The original error is the useful one.
+    }
+    throw err;
+  }
+}
+
+/**
+ * Apply a plan. `sql` is a Neon-shaped tagged template over a single session, so
+ * this runs against a pooled Neon client in production and pglite in tests with
+ * no branching.
  *
  * Returns a per-entry outcome so a caller can print a reviewable report:
  * applied, skipped (with a reason), or failed.
@@ -307,30 +343,34 @@ export async function applyPlan(sql, plan, { actor, apply = false } = {}) {
     }
 
     try {
-      if (entry.scope === 'band') {
-        await writeBandField(sql, bid, entry);
-      } else if (entry.scope === 'person') {
-        await writePersonField(sql, pid, entry);
-      } else {
-        await writeMembershipWeight(sql, bid, pid, entry);
-      }
-      await sql`
-        insert into contributions (user_id, action, band_id, band_name, metadata)
-        values (
-          ${actor},
-          ${ACTION_FOR_SCOPE[entry.scope]},
-          ${String(bid)},
-          ${entry.band},
-          ${JSON.stringify({
-            source: 'apply-enrichments',
-            scope: entry.scope,
-            field: entry.field,
-            column: entry.column,
-            person: entry.person,
-            from: entry.oldValue,
-            to: entry.newValue,
-          })}
-        )`;
+      // The data change and its audit row commit together or not at all. An
+      // unaudited edit to somebody's band is worse than a skipped one.
+      await inTransaction(sql, async () => {
+        if (entry.scope === 'band') {
+          await writeBandField(sql, bid, entry);
+        } else if (entry.scope === 'person') {
+          await writePersonField(sql, pid, entry);
+        } else {
+          await writeMembershipWeight(sql, bid, pid, entry);
+        }
+        await sql`
+          insert into contributions (user_id, action, band_id, band_name, metadata)
+          values (
+            ${actor},
+            ${ACTION_FOR_SCOPE[entry.scope]},
+            ${String(bid)},
+            ${entry.band},
+            ${JSON.stringify({
+              source: 'apply-enrichments',
+              scope: entry.scope,
+              field: entry.field,
+              column: entry.column,
+              person: entry.person,
+              from: entry.oldValue,
+              to: entry.newValue,
+            })}
+          )`;
+      });
       results.push({ ...entry, status: 'applied' });
     } catch (err) {
       results.push({ ...entry, status: 'failed', reason: err.message });
@@ -453,10 +493,26 @@ async function main() {
     console.error('ERROR: DATABASE_URL is not set. Refusing to guess a connection.');
     process.exit(1);
   }
-  const { neon } = await import('@neondatabase/serverless');
-  const sql = neon(dbUrl);
 
-  const results = await applyPlan(sql, work, { actor: args.actor, apply: args.apply });
+  // Pool, not neon(). Every write here commits with its audit row inside one
+  // transaction, and BEGIN/COMMIT have to reach the same connection. The neon()
+  // HTTP helper sends each statement as its own request, where a BEGIN would
+  // silently do nothing at all.
+  const { Pool } = await import('@neondatabase/serverless');
+  const pool = new Pool({ connectionString: dbUrl });
+  const client = await pool.connect();
+  const sql = async (strings, ...values) => {
+    const text = strings.reduce((acc, s, i) => acc + s + (i < values.length ? `$${i + 1}` : ''), '');
+    return (await client.query(text, values)).rows;
+  };
+
+  let results;
+  try {
+    results = await applyPlan(sql, work, { actor: args.actor, apply: args.apply });
+  } finally {
+    client.release();
+    await pool.end();
+  }
   const counts = summarize(results);
   console.log('=== Result ===');
   for (const [status, n] of Object.entries(counts)) console.log(`  ${status}: ${n}`);
