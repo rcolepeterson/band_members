@@ -5407,21 +5407,30 @@ function downloadPngBlob(blob) {
     }
 
     function copySiteLink() {
-      // Always the bare main-site URL (no filter/hash state) so the
-      // recipient lands on the full graph and can start exploring, not
-      // stuck in someone else's filter.
+      // Copy the view on screen, so that someone who explored their way to a band
+      // and reached for Copy link sends the band -- that is the whole point of
+      // building a tree and passing it on.
       //
-      // This called shareableUrl(), which does the opposite of what the comment
-      // above promises: it stamps in the anchor of the view on screen. So the
-      // button labelled "Copy link" -- the one whose own confirmation reads
-      // "Main site link copied to your clipboard" -- handed out a deep link to
-      // whichever node the sharer was sitting on, which for a plain visit is the
-      // home star. Shipped links read ?anchor=Aaron+McRae. "Share this graph"
-      // is the button that carries the view; this one is the front door.
-      const siteUrl = siteRootUrl();
+      // The old comment here claimed this was "always the bare main-site URL (no
+      // filter/hash state)", which was never what the code did, and taking that
+      // comment at its word would break sharing a view by hand. The real defect
+      // was narrower: shareableUrl() stamped in the home star even on a visit
+      // that never asked for it, so a plain load or a refresh copied
+      // ?anchor=Aaron+McRae. That is fixed inside shareableUrl(), which now
+      // returns the bare root for exactly that case -- so this stays one button
+      // that does the obvious thing from wherever the sharer happens to be.
+      const siteUrl = shareableUrl();
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(siteUrl).then(() => {
-          setShareFeedback('Main site link copied to your clipboard.');
+          // Say which of the two it actually was. A single fixed "Main site link
+          // copied" was how the old behaviour hid: it reported the front door
+          // while handing over a deep link, so nobody reading the confirmation
+          // had any reason to check the clipboard.
+          setShareFeedback(
+            siteUrl === siteRootUrl()
+              ? 'Main site link copied to your clipboard.'
+              : 'Link to this view copied to your clipboard.',
+          );
         }).catch(() => {
           setShareFeedback('Could not copy the link automatically.');
         });

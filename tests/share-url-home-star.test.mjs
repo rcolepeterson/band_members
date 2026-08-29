@@ -3,21 +3,23 @@
 // PR #112 fixed syncAddressBar() so a plain visit to / stops rewriting itself to
 // /?anchor=Aaron%20McRae. It fixed the address bar only. The URL people actually
 // pass around comes from the Share popover, and that path was untouched:
+// shareableUrl() wrote state.anchorId unconditionally, so every flow through it
+// -- Copy link, Facebook, X, Reddit, Email, Download PNG, the mobile bypass --
+// shared the front door as a deep link to one musician.
 //
-//   copySiteLink()   -> called shareableUrl(), despite its own comment promising
-//                       "always the bare main-site URL". The button reads "Copy
-//                       link" and confirms "Main site link copied to your
-//                       clipboard", then handed over ?anchor=Aaron+McRae.
-//   shareableUrl()   -> stamped state.anchorId unconditionally, so every share
-//                       flow that funnels through it (Facebook, X, Reddit, Email,
-//                       Download PNG, the mobile bypass) shared the front door as
-//                       a deep link to one musician.
-//
-// The rule both halves now follow: an anchor belongs in a link when the visitor
-// chose that node -- by arriving on a link that named it, or by travelling to it.
-// The home star on a visit that never asked for it is not a choice, and dropping
-// it costs the recipient nothing, since with no anchor they open on the home star
+// The rule it now follows: an anchor belongs in a link when the visitor chose
+// that node -- by arriving on a link that named it, or by travelling to it. The
+// home star on a visit that never asked for it is not a choice, and dropping it
+// costs the recipient nothing, since with no anchor they open on the home star
 // anyway.
+//
+// Note what is deliberately NOT the fix. copySiteLink()'s comment claimed it was
+// "always the bare main-site URL", and an early attempt took that at its word and
+// pointed it at the root. That killed the only way to share a view by hand: a
+// visitor who explores to Mudhoney and hits Copy link has to be able to send
+// Mudhoney. So Copy link keeps carrying the view, the stale comment is corrected
+// rather than implemented, and the whole rule lives in one place -- inside
+// shareableUrl() -- where every share path picks it up at once.
 //
 // index.html is a single 500KB document with no build step, so these functions
 // cannot be imported. Their bodies are extracted and evaluated against stub
@@ -167,26 +169,33 @@ test('a missing homeStarId cannot suppress a real anchor', () => {
   assert.equal(shareableUrl(), 'https://sixdegreesofrock.com/?anchor=Mudhoney');
 });
 
-test('Copy link uses siteRootUrl(), not shareableUrl()', () => {
-  // The regression itself: "Copy link" promises the main site link and must not
-  // reach for the view-carrying builder. Asserted against the source because the
-  // clipboard call cannot be evaluated headlessly.
+test('Copy link carries the view, so an explored tree can be passed on by hand', () => {
+  // Copy link is the only way to share a view without posting it to a platform,
+  // so it must use the view-carrying builder. The fix belongs inside
+  // shareableUrl(), not in a bare-URL special case here: narrowing this button to
+  // the root would have removed the ability to share a band at all.
+  // Asserted against the source because the clipboard call cannot run headlessly.
   const copy = extractFunction('copySiteLink');
-  assert.match(copy, /const siteUrl = siteRootUrl\(\);/);
-  assert.match(copy, /Main site link copied to your clipboard\./);
-  // Comments in this function discuss shareableUrl() by name, so strip them
-  // before asserting it is not CALLED. Matching the raw body would fail on prose.
-  const code = copy.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
-  assert.doesNotMatch(code, /shareableUrl\s*\(/);
+  assert.match(copy, /const siteUrl = shareableUrl\(\);/);
 });
 
-test('Share this graph still carries the view', () => {
-  // The counterpart guarantee: the platform share flows must keep using the
-  // builder that names the node on screen, or PR #108's shared-view previews
-  // silently degrade to the generic card.
-  const shareCallSites = (INDEX.match(/const siteUrl = shareableUrl\(\);/g) || []).length;
+test('the copy confirmation names which link was actually copied', () => {
+  // A single fixed "Main site link copied" is how the old behaviour stayed hidden
+  // for as long as it did: it reported the front door while handing over a deep
+  // link, so nobody reading the confirmation had a reason to check the clipboard.
+  const copy = extractFunction('copySiteLink');
+  assert.match(copy, /siteUrl === siteRootUrl\(\)/);
+  assert.match(copy, /Main site link copied to your clipboard\./);
+  assert.match(copy, /Link to this view copied to your clipboard\./);
+});
+
+test('every share flow routes through shareableUrl()', () => {
+  // One builder, so the home-star rule cannot hold on one path and not another.
+  const viaBuilder = (INDEX.match(/const siteUrl = shareableUrl\(\);/g) || []).length;
   assert.ok(
-    shareCallSites >= 6,
-    `Expected the platform share flows to keep calling shareableUrl(); found ${shareCallSites}.`,
+    viaBuilder >= 7,
+    `Expected every share flow to call shareableUrl(); found ${viaBuilder}.`,
   );
+  const byHand = (INDEX.match(/const siteUrl = (?!shareableUrl\(\);)/g) || []).length;
+  assert.equal(byHand, 0, 'A share link must not be assembled outside shareableUrl().');
 });

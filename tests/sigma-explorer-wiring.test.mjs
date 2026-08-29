@@ -639,25 +639,14 @@ test('a shared link carries the view, not just the site', () => {
   // And the filename must not ride along. Both / and /index.html serve this page,
   // so whichever the sharer happened to be on used to end up in the link.
   assert.match(INDEX_HTML, /replace\(\/\(\^\|\\\/\)index\\\.html\$\/, '\$1'\)/);
-  // Every share path that sends a VIEW must go through it.
-  //
-  // This used to require it of every `const siteUrl = ...` site without
-  // exception, which is how the front door came to be shared as a deep link:
-  // copySiteLink() promises "the bare main-site URL" in its own comment and
-  // confirms "Main site link copied to your clipboard", but the blanket rule
-  // forced it through the view-carrying builder too, so Copy link handed out
-  // ?anchor=<home star>. The platform flows share a view; Copy link shares the
-  // site. Both still route through a named helper -- that is the invariant worth
-  // protecting -- but not the same one.
+  // Every share path must go through it, Copy link included: one button, one
+  // answer, whatever view the sharer is on.
   const shareSites = INDEX_HTML.match(/const siteUrl = [^;]+;/g) || [];
   assert.ok(shareSites.length >= 4, `expected several share call sites, found ${shareSites.length}`);
-  shareSites.forEach(line => assert.match(line, /shareableUrl\(\)|siteRootUrl\(\)/));
-  const viewSites = shareSites.filter(line => line.includes('shareableUrl()'));
-  assert.ok(
-    viewSites.length >= 4,
-    `expected the platform share flows to keep carrying the view, found ${viewSites.length}`,
-  );
-  // And the bare front door is built by its own helper, never by hand.
+  shareSites.forEach(line => assert.match(line, /shareableUrl\(\)/));
+  // The bare front door is built by its own helper, never by hand, so that
+  // shareableUrl() and the "which link did I just copy" check agree on what the
+  // root even is.
   assert.match(INDEX_HTML, /function siteRootUrl\(\)/);
   // And it must not carry arbitrary query parameters onward.
   const helper = INDEX_HTML.slice(INDEX_HTML.indexOf('function shareableUrl()'), INDEX_HTML.indexOf('function publishMasterGraph'));
