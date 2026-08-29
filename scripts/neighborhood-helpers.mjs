@@ -348,9 +348,54 @@ export function normalizeAnchorKey(value) {
 
 // Membership relations that mean "not a permanent member". A moon orbits a
 // planet without being one: touring, session, live, guest, fill-in players.
+//
+// Kept as a fallback only. Nothing in the live data has ever populated it: every
+// membership row, in the original CSV export and in Postgres alike, carries
+// relation = 'member_of'. The role has always lived in the weight column
+// instead, which is what the add-band form writes and what the pre-Sigma SVG
+// renderer drew from.
 export const MOON_RELATIONS = Object.freeze([
   'touring', 'tour', 'session', 'live', 'guest', 'fill-in', 'fill in', 'substitute', 'temporary',
 ]);
+
+// Membership weight, as written by the add-band form's "Member weight" select:
+//
+//   1 — Founder / core member
+//   2 — Member
+//   3 — Touring member
+//
+// This is the field that actually distinguishes a founder from a hired hand, and
+// it is populated: 492 memberships at weight 1 and 60 at weight 3 in production.
+export const MEMBERSHIP_WEIGHT = Object.freeze({
+  FOUNDER: 1,
+  MEMBER: 2,
+  TOURING: 3,
+});
+
+/**
+ * Is this membership a short-term one — a moon rather than a planet?
+ *
+ * Either signal is enough, and the OR is deliberate.
+ *
+ * classifyNode used to test `relation` alone. Since every row in the graph says
+ * 'member_of', `every(...)` was never true, no node was ever classified a moon,
+ * and the touring tier silently disappeared when the renderer moved from SVG to
+ * Sigma — the pre-Sigma renderer had read `weight`, where the role actually
+ * lives. So weight has to be consulted.
+ *
+ * But weight cannot be consulted *instead*. normalizeNeonToRows defaults a null
+ * weight to '1', so "no weight recorded" and "founder" arrive here as the same
+ * value. A weight-first rule would therefore read an imported row that says
+ * relation='touring' with no weight as a founding member — losing the only
+ * signal that row actually carried. Checking both means neither source of truth
+ * can be silently overridden by the other's default.
+ */
+export function isShortTermMembership(link) {
+  if (!link) return false;
+  const weight = Number(link.weight);
+  if (Number.isFinite(weight) && weight >= MEMBERSHIP_WEIGHT.TOURING) return true;
+  return MOON_RELATIONS.includes(String(link.relation || '').trim().toLowerCase());
+}
 
 export const NODE_KINDS = Object.freeze({
   HOME_STAR: 'home-star',
@@ -406,9 +451,7 @@ export function classifyNode(node, { anchorId = null, adjacency = null, links = 
   const bandCount = new Set(memberships.map(link => linkEndpoints(link)[0])).size;
   if (bandCount > 1) return NODE_KINDS.CONSTELLATION;
 
-  const everyMembershipIsTemporary = memberships.every(link =>
-    MOON_RELATIONS.includes(String(link.relation || '').trim().toLowerCase())
-  );
+  const everyMembershipIsTemporary = memberships.every(isShortTermMembership);
   if (everyMembershipIsTemporary) return NODE_KINDS.MOON;
 
   return NODE_KINDS.PLANET;
