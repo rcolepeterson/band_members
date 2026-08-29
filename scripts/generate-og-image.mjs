@@ -1,84 +1,153 @@
-// One-shot generator for the site's Open Graph preview image
-// (og-image.png, 1200x630). Committed to the repo so it's served as a
+// One-shot generator for the site's static Open Graph fallback image
+// (og-image.png, 1200x630). Committed to the repo so it is served as a
 // static file and referenced from <meta property="og:image">.
 //
-// We use Playwright + Chromium (already a dev dep for the smoke tests)
-// to render a small HTML card into a PNG. This keeps the design in
-// version-controllable HTML/CSS rather than baked into a canvas script.
+// WHEN THIS IMAGE IS THE ONE PEOPLE SEE
 //
-// Why not just link to rbft_logo_3.png?
-//   - The bare logo is 1602x426, wider than tall. Facebook and other
-//     unfurlers crop to 1.91:1, which chops the logo down the middle
-//     to "BF" \u2014 exactly the ugly preview the user reported.
-//   - A purpose-built 1200x630 card centered on the full logo + tagline
-//     survives every unfurler's crop.
-import pw from 'playwright';
-import path from 'node:path';
-import fs from 'node:fs';
+// Shared links that name a node (/?anchor=KISS) are unfurled with the live
+// per-anchor card drawn by netlify/functions/og_image.mjs. This static file is
+// the fallback for everything else: the bare site URL, and any request where
+// the live card fails. So it must be generic and it must be on-brand.
+//
+// WHY THIS WAS REWRITTEN
+//
+// The previous version rendered RBFT_logo_3.png -- four guitar picks reading
+// "RBFT" over the words "Rock Band Family Tree" -- through Playwright. The site
+// was renamed to Six Degrees of Rock, so every share of the front door was
+// still unfurling under the retired name and the retired logo.
+//
+// It is now drawn with pureimage instead of Playwright + Chromium:
+//   - pureimage is already a runtime dependency, and is what the live per-anchor
+//     card uses, so the static fallback and the dynamic card share a font, a
+//     palette and a layout language instead of drifting apart.
+//   - no browser binary to download, so this regenerates anywhere, including in
+//     CI, which is what let the old image go stale in the first place.
+//
+// Run with: node scripts/generate-og-image.mjs
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { PassThrough } from 'node:stream';
+import { join, resolve } from 'node:path';
+import * as PImage from 'pureimage';
 
-const OUT = path.resolve('og-image.png');
+const OUT = resolve('og-image.png');
 
-// Inline the logo as a data URL so the render works without a running
-// dev server. rbft_logo_3.png is committed at the repo root; the file
-// name uses lowercase 'rbft' matching the on-page reference.
-const logoPath = path.resolve('RBFT_logo_3.png');
-if (!fs.existsSync(logoPath)) {
-  console.error(`Missing logo at ${logoPath} \u2014 aborting.`);
-  process.exit(1);
+// 1200x630 is the shape every unfurler crops to.
+const WIDTH = 1200;
+const HEIGHT = 630;
+
+// Same palette as netlify/functions/og_image.mjs, so a feed showing both a
+// generic share and an anchored one reads as one product.
+const COLORS = {
+  background: '#070b10',
+  edge: 'rgba(161,204,228,0.34)',
+  band: '#8fe8f6',
+  member: '#c9b6f0',
+  anchor: '#ffc978',
+  wordmark: '#e9eef6',
+  tagline: 'rgba(184,202,220,0.92)',
+  footer: '#cfe6f5',
+  strip: '#0a1016',
+};
+
+const HOST = 'bandmembers.netlify.app';
+const TAGLINE = 'Explore how bands and musicians connect across scenes and decades.';
+
+const FONT_FAMILY = 'OgSans';
+const FONT_PATH = resolve('vendor/fonts/og/Lato-Medium.ttf');
+
+function ensureFont() {
+  if (!existsSync(FONT_PATH)) {
+    console.error(`Missing font at ${FONT_PATH} — aborting.`);
+    process.exit(1);
+  }
+  // registerFont wants a path it can read freely; /tmp keeps pureimage away
+  // from anything read-only, matching the live card's approach.
+  const scratch = join(tmpdir(), 'sdor-og-font.ttf');
+  if (!existsSync(scratch)) writeFileSync(scratch, readFileSync(FONT_PATH));
+  PImage.registerFont(scratch, FONT_FAMILY).loadSync();
 }
-const logoDataUrl = 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64');
 
-const html = `<!doctype html>
-<html><head><meta charset="utf-8"><style>
-  html, body { margin: 0; padding: 0; background: #0b1118; }
-  body {
-    width: 1200px; height: 630px;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-    color: #e6eef7;
-    background:
-      radial-gradient(circle at 50% 30%, rgba(143,232,246,0.10), transparent 50%),
-      radial-gradient(circle at 20% 80%, rgba(108,146,176,0.14), transparent 55%),
-      linear-gradient(180deg, #111b26 0%, #0b1118 60%);
-  }
-  .logo {
-    width: 640px; max-width: 60vw; height: auto;
-    filter: drop-shadow(0 20px 40px rgba(0,0,0,0.4)) invert(1);
-    margin-bottom: 36px;
-  }
-  .title {
-    font-size: 46px; font-weight: 700; letter-spacing: -0.5px;
-    margin: 0 0 12px 0; text-align: center;
-  }
-  .tagline {
-    font-size: 24px; font-weight: 500; color: #a3b3c6;
-    text-align: center; max-width: 900px; line-height: 1.35;
-  }
-  .footer {
-    position: absolute; bottom: 32px; left: 0; right: 0;
-    text-align: center; font-size: 18px; color: #6f7889;
-    letter-spacing: 0.5px;
-  }
-</style></head><body>
-  <img class="logo" src="${logoDataUrl}" alt="Six Degrees of Rock" />
-  <div class="title">Six Degrees of Rock</div>
-  <div class="tagline">Explore how bands and musicians connect across scenes and decades.</div>
-  <div class="footer">bandmembers.netlify.app</div>
-</body></html>`;
+// A fixed decorative constellation. Hand-placed rather than generated from live
+// data: this image is committed, so it must render identically on every run, and
+// a generic card should not imply that these particular six nodes matter.
+// Coordinates are in card space, sitting in the lower band of the card where
+// there is no text.
+const STARS = [
+  { x: 190, y: 470, r: 9, kind: 'band' },
+  { x: 330, y: 402, r: 6, kind: 'member' },
+  { x: 470, y: 486, r: 13, kind: 'anchor' },
+  { x: 616, y: 396, r: 6, kind: 'member' },
+  { x: 742, y: 478, r: 9, kind: 'band' },
+  { x: 886, y: 410, r: 6, kind: 'member' },
+  { x: 1014, y: 480, r: 9, kind: 'band' },
+];
+// Six edges: the six degrees the name promises, drawn as one path across the
+// card so the picture states the premise without needing a caption.
+const EDGES = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6]];
 
-const b = await pw.chromium.launch({ headless: true });
-const c = await b.newContext({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
-const p = await c.newPage();
-await p.setContent(html, { waitUntil: 'domcontentloaded' });
-await p.evaluate(() => new Promise(r => {
-  const img = document.querySelector('img.logo');
-  if (img.complete) return r();
-  img.onload = () => r();
-  img.onerror = () => r();
-}));
-await p.waitForTimeout(200);
-await p.screenshot({ path: OUT, fullPage: false, omitBackground: false });
-await b.close();
-const stat = fs.statSync(OUT);
-console.log(`Wrote ${OUT}  size=${(stat.size/1024).toFixed(1)}KB`);
+function draw() {
+  const img = PImage.make(WIDTH, HEIGHT);
+  const ctx = img.getContext('2d');
+
+  ctx.fillStyle = COLORS.background;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  // Edges first so the dots sit on top of their own connections.
+  ctx.strokeStyle = COLORS.edge;
+  ctx.lineWidth = 2;
+  EDGES.forEach(([a, b]) => {
+    ctx.beginPath();
+    ctx.moveTo(STARS[a].x, STARS[a].y);
+    ctx.lineTo(STARS[b].x, STARS[b].y);
+    ctx.stroke();
+  });
+
+  STARS.forEach(star => {
+    ctx.fillStyle = COLORS[star.kind];
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  // Wordmark and tagline, on the same left margin as the live card's.
+  ctx.fillStyle = COLORS.wordmark;
+  ctx.font = `54pt ${FONT_FAMILY}`;
+  ctx.fillText('SIX DEGREES OF ROCK', 90, 220);
+
+  ctx.fillStyle = COLORS.tagline;
+  ctx.font = `21pt ${FONT_FAMILY}`;
+  ctx.fillText(TAGLINE, 90, 285);
+
+  // Footer strip, identical treatment to the live card.
+  const stripTop = HEIGHT - 62;
+  ctx.fillStyle = COLORS.strip;
+  ctx.fillRect(0, stripTop, WIDTH, 62);
+  ctx.fillStyle = COLORS.footer;
+  ctx.font = `16pt ${FONT_FAMILY}`;
+  ctx.fillText(HOST, 90, stripTop + 39);
+
+  return img;
+}
+
+async function main() {
+  ensureFont();
+  const img = draw();
+  const chunks = [];
+  const sink = new PassThrough();
+  sink.on('data', chunk => chunks.push(Buffer.from(chunk)));
+  await PImage.encodePNGToStream(img, sink);
+  const png = Buffer.concat(chunks);
+  if (!png.length) {
+    console.error('og: encoder produced no bytes — aborting.');
+    process.exit(1);
+  }
+  writeFileSync(OUT, png);
+  console.log(`Wrote ${OUT} (${WIDTH}x${HEIGHT}, ${png.length} bytes)`);
+}
+
+main().catch(error => {
+  console.error(error);
+  process.exit(1);
+});
