@@ -12,6 +12,16 @@
 // MusicBrainz (primary, structured) and Wikipedia (secondary, fuzzy
 // corroboration). Nothing here mutates band data.
 
+// Transient MusicBrainz conditions: the service is up but shedding load, or we
+// have been asked to slow down. Anything else is a real answer.
+export const MB_RETRY_STATUSES = new Set([429, 502, 503, 504]);
+export const MB_RETRY_DELAYS_MS = Object.freeze([600, 1200]);
+export const MB_MAX_RETRIES = MB_RETRY_DELAYS_MS.length;
+
+function sleepMs(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 const MUSICBRAINZ_USER_AGENT = 'bandmembers-bot/1.0 (https://sixdegreesofrock.com; vimana17@gmail.com)';
 const WIKIPEDIA_USER_AGENT = MUSICBRAINZ_USER_AGENT;
 
@@ -168,7 +178,7 @@ function logIfRateLimited(serviceName, status) {
 // Search MusicBrainz for a band by name (+ optional country disambiguation)
 // and return the best-matching artist object, or null if nothing usable
 // came back. `fetchImpl` defaults to global fetch; tests inject a mock.
-export async function fetchMusicBrainz(bandName, { country, fetchImpl = fetch } = {}) {
+export async function fetchMusicBrainz(bandName, { country, fetchImpl = fetch, retries = MB_MAX_RETRIES } = {}) {
   const name = typeof bandName === 'string' ? bandName.trim() : '';
   if (!name) return { ok: false, error: 'no band name provided' };
 
@@ -178,17 +188,43 @@ export async function fetchMusicBrainz(bandName, { country, fetchImpl = fetch } 
 
   const url = `https://musicbrainz.org/ws/2/artist/?query=${encodeURIComponent(query)}&fmt=json&limit=5`;
 
+  // MusicBrainz sheds load with 503 and a body reading "The MusicBrainz web
+  // server is currently busy." Measured while clearing a verification backlog:
+  // the same query answered 503, 503, then 200 with AC/DC at score 100. One
+  // attempt was all this function ever made, so a band whose single try landed
+  // on a busy moment was scored from Wikipedia alone — and every field that
+  // relies on MusicBrainz (genre tags, life-span, area) scored 0 or partial.
+  // AC/DC came out at 58. That is not a judgement about the band, it is a
+  // transport failure recorded as data, and it persists in the verifications
+  // table until something re-verifies it.
+  //
+  // The retry is deliberately small. This runs inside a scheduled function with
+  // roughly a 26-second budget for a whole batch, so a generous backoff here
+  // would trade one band's accuracy for the rest of the batch not running at
+  // all. Two extra attempts at 600ms and 1200ms cost at most 1.8s on the
+  // unlucky band and nothing at all on a healthy call, and the caller can pass
+  // `retries: 0` when it knows it is out of time.
   let res;
-  try {
-    res = await fetchImpl(url, { headers: { 'User-Agent': MUSICBRAINZ_USER_AGENT } });
-  } catch (err) {
-    return { ok: false, error: `network error contacting musicbrainz: ${err && err.message ? err.message : err}` };
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    if (attempt > 0) await sleepMs(MB_RETRY_DELAYS_MS[attempt - 1] ?? 1200);
+    try {
+      res = await fetchImpl(url, { headers: { 'User-Agent': MUSICBRAINZ_USER_AGENT } });
+    } catch (err) {
+      lastError = `network error contacting musicbrainz: ${err && err.message ? err.message : err}`;
+      res = null;
+      continue;
+    }
+    logIfRateLimited('musicbrainz', res.status);
+    if (res.ok) break;
+    lastError = `musicbrainz returned ${res.status}`;
+    // 400/404 are real answers about this query; retrying burns budget for
+    // nothing. Only transient load-shedding is worth another attempt.
+    if (!MB_RETRY_STATUSES.has(res.status)) return { ok: false, error: lastError };
+    res = null;
   }
 
-  logIfRateLimited('musicbrainz', res.status);
-  if (!res.ok) {
-    return { ok: false, error: `musicbrainz returned ${res.status}` };
-  }
+  if (!res) return { ok: false, error: lastError || 'musicbrainz unreachable' };
 
   let data;
   try {
