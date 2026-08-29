@@ -51,6 +51,9 @@ import {
   toGraphologyGraph,
   NEIGHBORHOOD_BUDGET,
   NODE_KINDS,
+  MEMBERSHIP_ROLES,
+  roleForNode,
+  roleFromMembership,
   HOME_STAR_STYLE,
   linkEndpoints,
   normalizeAnchorKey,
@@ -76,6 +79,39 @@ const KIND_STYLE = {
   [NODE_KINDS.PLANET]: { color: '#9fb8cc', size: 7 },
   [NODE_KINDS.MOON]: { color: '#7d8ea0', size: 5 },
   [NODE_KINDS.ASTEROID]: { color: '#5c6472', size: 4 },
+};
+
+// Role colours. Hue carries the role because brightness does not: a founder and
+// a plain member drawn in the same hue at different lightness are
+// indistinguishable once they are intermixed around a band, which is how they
+// actually appear. The reference point is the one distinction that already works
+// in this app -- gold strings for members, blue strings for bands -- where the
+// hue changes, not the weight.
+//
+// Nothing here is invented. Gold is the existing MEMBER_HIGHLIGHT_COLOR family,
+// lavender is the existing constellation colour, slate is the existing moon
+// colour, and bands keep their cyan so a person can never be mistaken for one.
+//
+// Size is deliberately NOT set here. `kind` owns size (how connected) and `role`
+// owns colour (what they were); keeping the two axes on separate channels is the
+// entire point, since a founder of one band and a founder of six should differ.
+const ROLE_STYLE = {
+  [MEMBERSHIP_ROLES.FOUNDER]: { color: '#ffc65c' },
+  [MEMBERSHIP_ROLES.MEMBER]: { color: '#c9b6ff' },
+  [MEMBERSHIP_ROLES.TOURING]: { color: '#7d8ea0' },
+};
+
+// Edge colours, per membership. The lines are where the role is true no matter
+// where the camera sits: centred on nothing in particular, the gold line into
+// Dillinger and the lavender line into Suicidal Tendencies both read correctly
+// for the same musician, at the same time.
+//
+// A founder line is brighter AND thicker. The extra weight is reinforcement on
+// top of hue, not the signal itself.
+const ROLE_EDGE_STYLE = {
+  [MEMBERSHIP_ROLES.FOUNDER]: { color: 'rgba(255,198,92,0.55)', size: 1.5 },
+  [MEMBERSHIP_ROLES.MEMBER]: { color: 'rgba(201,182,255,0.38)', size: 1 },
+  [MEMBERSHIP_ROLES.TOURING]: { color: 'rgba(125,142,160,0.26)', size: 1 },
 };
 
 // Hover styling. Sigma's default hover draws a WHITE rounded plate behind the
@@ -732,10 +768,15 @@ export function initSigmaExplorer({
 
   function reduceNode(id, attrs) {
     const style = KIND_STYLE[attrs.kind] || KIND_STYLE[NODE_KINDS.PLANET];
+    // Size from kind, colour from role. A person whose role is known overrides
+    // the kind colour, which is what lets a founder read as a founder even when
+    // they are a constellation -- `bandCount > 1` used to win outright and paint
+    // every multi-band musician the same purple regardless of what they did.
+    const roleStyle = attrs.role ? ROLE_STYLE[attrs.role] : null;
     const res = {
       ...attrs,
       size: (attrs.size || style.size) * state.sizeScale,
-      color: style.color,
+      color: (roleStyle && roleStyle.color) || style.color,
     };
     // The anchor's visual identity is the DOM ringed star overlay; the WebGL
     // node underneath is kept tiny and label-free so they don't fight.
@@ -766,7 +807,15 @@ export function initSigmaExplorer({
   }
 
   function reduceEdge(edge, attrs) {
-    if (!state.highlightEdges.size) return { ...attrs, color: EDGE_COLOR };
+    // At rest, a line is coloured by the role of the membership it represents.
+    // This is the half of the picture that survives the camera: the node can only
+    // show one role at a time, but every line in view shows its own.
+    const roleStyle = attrs.role ? ROLE_EDGE_STYLE[attrs.role] : null;
+    if (!state.highlightEdges.size) {
+      return roleStyle
+        ? { ...attrs, color: roleStyle.color, size: roleStyle.size }
+        : { ...attrs, color: EDGE_COLOR };
+    }
     return state.highlightEdges.has(edge)
       ? { ...attrs, color: state.highlightColor, size: 2.2, zIndex: 1 }
       : { ...attrs, color: 'rgba(120,134,150,0.10)', size: 0.8 };
@@ -930,12 +979,23 @@ export function initSigmaExplorer({
           ? NODE_KINDS.HOME_STAR
           : classifyNode(masterById.get(node.id) || node, { adjacency, links: master.links });
       const style = KIND_STYLE[kind] || KIND_STYLE[NODE_KINDS.PLANET];
+      // Role is computed against the CURRENT anchor, which is why it is computed
+      // here and re-computed on every travel rather than once at load: centring
+      // on Dillinger makes Ben Weinman a founder, centring on Suicidal
+      // Tendencies makes the same node a member. It reads master.links, not
+      // view.links, so a role is not decided by which memberships happen to have
+      // survived the neighbourhood budget.
+      const role = roleForNode(masterById.get(node.id) || node, {
+        anchorId,
+        links: master.links,
+      });
       viewGraph.addNode(node.id, {
         label: node.id,
         x: point.x,
         y: point.y,
         hop: point.hop,
         kind,
+        role,
         entityType: node.type,
         size: style.size,
         color: style.color,
@@ -945,7 +1005,14 @@ export function initSigmaExplorer({
       const [source, target] = linkEndpoints(link);
       if (!viewGraph.hasNode(source) || !viewGraph.hasNode(target)) return;
       if (viewGraph.hasEdge(source, target)) return;
-      viewGraph.addEdge(source, target, { size: 1, relation: link.relation || 'member' });
+      // weight rides along because the role is derived from it, and because an
+      // edge that has lost its weight cannot be re-classified later.
+      viewGraph.addEdge(source, target, {
+        size: 1,
+        relation: link.relation || 'member',
+        weight: Number(link.weight || 1),
+        role: roleFromMembership(link),
+      });
     });
 
     state.layoutExtent = layoutExtent(positions);
