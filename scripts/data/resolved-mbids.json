@@ -1144,6 +1144,1868 @@
       "name": "Pigeonhed",
       "score": 100,
       "resolvedAt": "2026-07-15T01:52:47.603Z"
+    },
+    "kooks": {
+      "mbid": "f82f3a3e-29c2-42ca-b589-bc5dc210fa9e",
+      "name": "The Kooks",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:31:22.188Z",
+      "via": "seed-resolve"
+    },
+    "good rats": {
+      "mbid": "9d72ddd0-5028-42a4-a60c-cd4ba72b1981",
+      "name": "The Good Rats",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:31:22.189Z",
+      "via": "seed-resolve"
+    },
+    "nation of language": {
+      "mbid": "88927646-0c28-4b1b-a69e-cb33c400d650",
+      "name": "Nation of language",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:31:22.189Z",
+      "via": "seed-resolve"
+    },
+    "velkro": {
+      "mbid": "904c51f3-4af2-4626-9d91-5639473701e3",
+      "name": "Velkro",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:31:22.189Z",
+      "via": "seed-resolve"
+    },
+    "arcadia": {
+      "mbid": "0f4e6cc8-8a38-4741-b344-9d388def0060",
+      "name": "Arcadia",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:31:22.189Z",
+      "via": "seed-resolve"
+    },
+    "ayron jones": {
+      "mbid": "87ea0636-1896-4649-b38c-7060b22f3a1e",
+      "name": "Ayron Jones",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:31:22.190Z",
+      "via": "seed-resolve"
+    },
+    "bitter end": {
+      "mbid": "a29cc48a-fff5-423b-b5e6-dca4c8d879fe",
+      "name": "Bitter End",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:31:23.858Z",
+      "via": "seed-resolve"
+    },
+    "blind melon": {
+      "mbid": "38c5cdab-5d6d-43d1-85b0-dac41bde186e",
+      "name": "Blind Melon",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:31:27.001Z",
+      "via": "seed-resolve"
+    },
+    "botch": {
+      "mbid": "72448406-ba82-43a7-9e13-d9a47ff333f4",
+      "name": "Botch",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:31:41.990Z",
+      "via": "seed-resolve"
+    },
+    "brad": {
+      "mbid": "edbaa513-b8d3-4e8f-b81f-ef640b8ad128",
+      "name": "Brad",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:31:43.005Z",
+      "via": "seed-resolve"
+    },
+    "10 minute warning": {
+      "mbid": "02189703-348d-4037-93f4-175dff79ad70",
+      "name": "10 Minute Warning",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:31:56.319Z",
+      "via": "seed-resolve"
+    },
+    "7 year bitch": {
+      "mbid": "91d06612-5c1e-4278-b40b-b6ce22dc9bb4",
+      "name": "7 Year Bitch",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:32:51.219Z",
+      "via": "seed-resolve"
+    },
+    "alice in chains": {
+      "mbid": "4bd95eea-b9f6-4d70-a36c-cfea77431553",
+      "name": "Alice in Chains",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:32:57.562Z",
+      "via": "seed-resolve"
+    },
+    "candlebox": {
+      "mbid": "8e9516ba-f417-47dd-a8a5-8998b94553f8",
+      "name": "Candlebox",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:32:58.498Z",
+      "via": "seed-resolve"
+    },
+    "cheap trick": {
+      "mbid": "9f870653-72b0-4c6d-8c59-439a95963e09",
+      "name": "Cheap Trick",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:33:03.934Z",
+      "via": "seed-resolve"
+    },
+    "christ on a crutch": {
+      "mbid": "5c8c891c-04b5-49d1-94c2-2ed242a93df0",
+      "name": "Christ on a Crutch",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:33:05.035Z",
+      "via": "seed-resolve"
+    },
+    "cold war kids": {
+      "mbid": "0741b30d-e15b-4a8c-b2e5-8834a03d6116",
+      "name": "Cold War Kids",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:33:05.201Z",
+      "via": "seed-resolve"
+    },
+    "critters buggin": {
+      "mbid": "20231423-121d-4012-99eb-c3c52da0c64c",
+      "name": "Critters Buggin",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:33:05.609Z",
+      "via": "seed-resolve"
+    },
+    "crowded house": {
+      "mbid": "9854d99f-d954-4c0f-9ae5-58a0cdd885f5",
+      "name": "Crowded House",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:33:05.956Z",
+      "via": "seed-resolve"
+    },
+    "culprit": {
+      "mbid": "1aaa4310-2e4b-4d92-ba2c-976fab852885",
+      "name": "Culprit",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:33:06.441Z",
+      "via": "seed-resolve"
+    },
+    "death cab for cutie": {
+      "mbid": "0039c7ae-e1a7-4a7d-9b49-0cbc716821a6",
+      "name": "Death Cab for Cutie",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:33:13.349Z",
+      "via": "seed-resolve"
+    },
+    "duran duran": {
+      "mbid": "1a1cd7f3-e5df-4eca-bae2-2757c9e656b5",
+      "name": "Duran Duran",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:34:52.846Z",
+      "via": "seed-resolve"
+    },
+    "dust moth": {
+      "mbid": "d3aac24e-b964-45f6-b24b-51bc88d960d7",
+      "name": "Dust Moth",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:35:45.161Z",
+      "via": "seed-resolve"
+    },
+    "fastbacks": {
+      "mbid": "3fe64039-d8e0-4ac2-838f-9a3bf97c4931",
+      "name": "Fastbacks",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:35:45.747Z",
+      "via": "seed-resolve"
+    },
+    "fifth angel": {
+      "mbid": "5be4aa0b-438a-4c6c-b050-a002a54a812d",
+      "name": "Fifth Angel",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:35:46.027Z",
+      "via": "seed-resolve"
+    },
+    "foo fighters": {
+      "mbid": "67f66c07-6e61-4026-ade5-7e782fad3a5d",
+      "name": "Foo Fighters",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:35:48.070Z",
+      "via": "seed-resolve"
+    },
+    "forced entry": {
+      "mbid": "e8f43705-a197-44a8-9fe2-971972ae9454",
+      "name": "Forced Entry",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:35:48.917Z",
+      "via": "seed-resolve"
+    },
+    "goodness": {
+      "mbid": "9b921f65-218b-4688-b0ed-bec623313230",
+      "name": "Goodness",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:35:49.054Z",
+      "via": "seed-resolve"
+    },
+    "green apple quickstep": {
+      "mbid": "3b5869cb-0051-4ecb-9812-db4585c17d2d",
+      "name": "Green Apple Quickstep",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:36:14.033Z",
+      "via": "seed-resolve"
+    },
+    "green river": {
+      "mbid": "78f56916-fe11-4110-8f10-d553ddf8de7b",
+      "name": "Green River",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:36:15.210Z",
+      "via": "seed-resolve"
+    },
+    "gruntruck": {
+      "mbid": "d094cf6a-ad9e-4640-a44e-91de1f365185",
+      "name": "Gruntruck",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:36:21.042Z",
+      "via": "seed-resolve"
+    },
+    "guns n roses": {
+      "mbid": "eeb1195b-f213-4ce1-b28c-8565211f8e43",
+      "name": "Guns N' Roses",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:36:22.217Z",
+      "via": "seed-resolve"
+    },
+    "hammerbox": {
+      "mbid": "a6b1d4ba-6c12-488a-a05c-366a9e17de7d",
+      "name": "Hammerbox",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:36:36.786Z",
+      "via": "seed-resolve"
+    },
+    "harkonen": {
+      "mbid": "300c0909-19cc-4ca2-bee2-82a355d4ac81",
+      "name": "Harkonen",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:36:37.821Z",
+      "via": "seed-resolve"
+    },
+    "harvey danger": {
+      "mbid": "822cb123-f728-4a1a-931c-fa27257bb83f",
+      "name": "Harvey Danger",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:36:38.198Z",
+      "via": "seed-resolve"
+    },
+    "heart by heart": {
+      "mbid": "c55cea18-30a3-4316-9218-b19b76a4021c",
+      "name": "Heart by Heart",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:37:04.198Z",
+      "via": "seed-resolve"
+    },
+    "helms alee": {
+      "mbid": "86f45ba7-c21a-466d-aaf8-6bde7f13a71a",
+      "name": "Helms Alee",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:37:05.374Z",
+      "via": "seed-resolve"
+    },
+    "high on fire": {
+      "mbid": "720249d5-62c5-4679-8ead-dcda3329d6e7",
+      "name": "High on Fire",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:38:18.854Z",
+      "via": "seed-resolve"
+    },
+    "hum": {
+      "mbid": "04c5ca8a-4afa-4031-aced-6357440dbc25",
+      "name": "Hum",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:38:19.871Z",
+      "via": "seed-resolve"
+    },
+    "infectious grooves": {
+      "mbid": "7e14cf06-532b-4789-8c03-5aa13da4f6f3",
+      "name": "Infectious Grooves",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:38:20.128Z",
+      "via": "seed-resolve"
+    },
+    "inspector luv and the ride me babys": {
+      "mbid": "9bc06fd2-909a-4ee5-98ad-f2e3671e403f",
+      "name": "Inspector Luv and the Ride Me Babys",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:38:32.939Z",
+      "via": "seed-resolve"
+    },
+    "inxs": {
+      "mbid": "481bf5f9-2e7c-4c44-b08a-05b32bc7c00d",
+      "name": "INXS",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:38:33.938Z",
+      "via": "seed-resolve"
+    },
+    "janes addiction": {
+      "mbid": "e3434cc7-d348-491a-9dc8-325af3d9086d",
+      "name": "Jane's Addiction",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:38:34.077Z",
+      "via": "seed-resolve"
+    },
+    "kill sadie": {
+      "mbid": "1b2717df-9eea-423b-8ee6-6d678d0cd35a",
+      "name": "Kill Sadie",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:38:37.328Z",
+      "via": "seed-resolve"
+    },
+    "kultur shock": {
+      "mbid": "fddb7d67-7977-4ab5-884c-f5644c78b700",
+      "name": "Kultur Shock",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:38:43.140Z",
+      "via": "seed-resolve"
+    },
+    "kyuss": {
+      "mbid": "ea0f2a37-7007-4217-a812-396227f5013a",
+      "name": "Kyuss",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:38:44.418Z",
+      "via": "seed-resolve"
+    },
+    "loaded": {
+      "mbid": "6dbeab82-c7df-496d-9311-cd666f337ee3",
+      "name": "Loaded",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:40:01.583Z",
+      "via": "seed-resolve"
+    },
+    "love battery": {
+      "mbid": "20fa3e73-7ac4-4550-b9f5-6ac8c523bda5",
+      "name": "Love Battery",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:40:09.151Z",
+      "via": "seed-resolve"
+    },
+    "mad season": {
+      "mbid": "bfd085b8-0bbf-46b3-8ab9-193bca5c85e7",
+      "name": "Mad Season",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:40:15.460Z",
+      "via": "seed-resolve"
+    },
+    "maktub": {
+      "mbid": "0d8af401-9461-41c2-b612-a8d0123db604",
+      "name": "Maktub",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:40:16.313Z",
+      "via": "seed-resolve"
+    },
+    "malfunkshun": {
+      "mbid": "71f4a8ff-97ba-47c6-a729-7f87de77c796",
+      "name": "Malfunkshun",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:40:16.818Z",
+      "via": "seed-resolve"
+    },
+    "melvins": {
+      "mbid": "9ccfbc94-a4f4-42f7-b6f5-d903ab77cccb",
+      "name": "Melvins",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:40:19.001Z",
+      "via": "seed-resolve"
+    },
+    "metal church": {
+      "mbid": "09830e79-cc8d-422f-ae25-6efde4320b73",
+      "name": "Metal Church",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:40:25.665Z",
+      "via": "seed-resolve"
+    },
+    "minus the bear": {
+      "mbid": "c1e98e4a-4628-4c89-a7a6-0e0171600b05",
+      "name": "Minus the Bear",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:41:23.165Z",
+      "via": "seed-resolve"
+    },
+    "modest mouse": {
+      "mbid": "a96ac800-bfcb-412a-8a63-0a98df600700",
+      "name": "Modest Mouse",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:41:29.965Z",
+      "via": "seed-resolve"
+    },
+    "mogwai": {
+      "mbid": "d700b3f5-45af-4d02-95ed-57d301bda93e",
+      "name": "Mogwai",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:41:32.947Z",
+      "via": "seed-resolve"
+    },
+    "mother love bone": {
+      "mbid": "a5585acd-9b65-49a7-a63b-3cc4ee18846e",
+      "name": "Mother Love Bone",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:41:33.806Z",
+      "via": "seed-resolve"
+    },
+    "mudhoney": {
+      "mbid": "e675295a-1efe-4247-aa3b-53b78d0cdffc",
+      "name": "Mudhoney",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:41:34.003Z",
+      "via": "seed-resolve"
+    },
+    "nada surf": {
+      "mbid": "b9a2a9a6-7a40-48a6-bcb1-8eff5b89ad5b",
+      "name": "Nada Surf",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:41:40.033Z",
+      "via": "seed-resolve"
+    },
+    "neverland": {
+      "mbid": "edcc34ed-0100-4af0-b424-0e80615999a8",
+      "name": "Neverland",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:41:53.565Z",
+      "via": "seed-resolve"
+    },
+    "nevermore": {
+      "mbid": "7d093650-89be-4108-842b-ba7f5367504b",
+      "name": "Nevermore",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:07.068Z",
+      "via": "seed-resolve"
+    },
+    "oceansize": {
+      "mbid": "c147b96e-3428-4604-9b6c-d931f980f684",
+      "name": "Oceansize",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:07.510Z",
+      "via": "seed-resolve"
+    },
+    "pink floyd": {
+      "mbid": "83d91898-7763-47d7-b03b-b92132375c47",
+      "name": "Pink Floyd",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:09.268Z",
+      "via": "seed-resolve"
+    },
+    "point one": {
+      "mbid": "44d6725f-8f36-455d-a5eb-5446b983581b",
+      "name": "Point One",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:09.268Z",
+      "via": "seed-resolve"
+    },
+    "poor old lu": {
+      "mbid": "a01be3c2-6a84-4f3e-8b36-394cd387a88e",
+      "name": "Poor Old Lu",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:10.353Z",
+      "via": "seed-resolve"
+    },
+    "post stardom depression": {
+      "mbid": "4a0f6ebc-3440-463f-95ed-40aa0c7e05c2",
+      "name": "Post Stardom Depression",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:10.577Z",
+      "via": "seed-resolve"
+    },
+    "pretty girls make graves": {
+      "mbid": "b2274e6d-10e8-4068-9dd2-eb55d4a144b5",
+      "name": "Pretty Girls Make Graves",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:12.409Z",
+      "via": "seed-resolve"
+    },
+    "q5": {
+      "mbid": "024b4580-8341-4541-bd90-97a9b872cf18",
+      "name": "Q5",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:13.424Z",
+      "via": "seed-resolve"
+    },
+    "queens of the stone age": {
+      "mbid": "7dc8f5bd-9d0b-4087-9f73-dc164950bbd8",
+      "name": "Queens of the Stone Age",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:24.856Z",
+      "via": "seed-resolve"
+    },
+    "queensryche": {
+      "mbid": "deeea939-7f89-4762-b09f-79269cd70d3b",
+      "name": "Queensryche",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:25.597Z",
+      "via": "seed-resolve"
+    },
+    "raft of dead monkeys": {
+      "mbid": "09dfa980-2989-4c68-87cd-d9480db4e319",
+      "name": "Raft of Dead Monkeys",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:31.392Z",
+      "via": "seed-resolve"
+    },
+    "rail": {
+      "mbid": "96988900-dca6-4e25-af32-08b02a0c7dff",
+      "name": "Rail",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:32.423Z",
+      "via": "seed-resolve"
+    },
+    "rhino humpers": {
+      "mbid": "2778df03-f7e1-4a80-a9ea-3842f2da5f71",
+      "name": "Rhino Humpers",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:35.727Z",
+      "via": "seed-resolve"
+    },
+    "roadside monument": {
+      "mbid": "8fdd1726-db3e-4a27-a717-90259231e035",
+      "name": "Roadside Monument",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:40.365Z",
+      "via": "seed-resolve"
+    },
+    "rose blossom punch": {
+      "mbid": "258da25e-8eff-4785-895c-3f68638b43e0",
+      "name": "Rose Blossom Punch",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:41.442Z",
+      "via": "seed-resolve"
+    },
+    "roy": {
+      "mbid": "07d69b37-185c-4ee9-a845-73a2061e364d",
+      "name": "Roy",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:42:55.722Z",
+      "via": "seed-resolve"
+    },
+    "sadhappy": {
+      "mbid": "278dad58-ee48-40e2-9868-e303e2b681a3",
+      "name": "Sadhappy",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:08.457Z",
+      "via": "seed-resolve"
+    },
+    "saigon kick": {
+      "mbid": "4d4965c5-1717-468c-a99b-932eac623eba",
+      "name": "Saigon Kick",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:08.458Z",
+      "via": "seed-resolve"
+    },
+    "sanctuary": {
+      "mbid": "cd783c5c-4035-4bd3-92d3-4dfa3dd51483",
+      "name": "Sanctuary",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:08.458Z",
+      "via": "seed-resolve"
+    },
+    "satchel": {
+      "mbid": "d24d132f-90f1-4c34-b0df-19792bc2401c",
+      "name": "Satchel",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:08.459Z",
+      "via": "seed-resolve"
+    },
+    "screaming trees": {
+      "mbid": "bc5e6e42-73ba-44fa-a41e-3379402f0429",
+      "name": "Screaming Trees",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:08.460Z",
+      "via": "seed-resolve"
+    },
+    "second coming": {
+      "mbid": "9849ab49-6c0a-4331-94b0-fba99c1589f1",
+      "name": "Second Coming",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:09.508Z",
+      "via": "seed-resolve"
+    },
+    "sgm": {
+      "mbid": "be6ed581-acfd-408b-95f5-5d24ad4bc3a6",
+      "name": "SGM",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:09.508Z",
+      "via": "seed-resolve"
+    },
+    "shiner": {
+      "mbid": "85e4c862-bafe-48a2-a7af-b87cc3d8a7f3",
+      "name": "Shiner",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:09.633Z",
+      "via": "seed-resolve"
+    },
+    "skin yard": {
+      "mbid": "0119843b-4d56-47b6-ac0d-11528259bf0a",
+      "name": "Skin Yard",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:09.842Z",
+      "via": "seed-resolve"
+    },
+    "sky cries mary": {
+      "mbid": "fac20eaa-297c-4d54-a84f-e7c845a7d184",
+      "name": "Sky Cries Mary",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:33.259Z",
+      "via": "seed-resolve"
+    },
+    "sledgeback": {
+      "mbid": "55ec2e94-0bde-4d7e-987b-4a6c9639d381",
+      "name": "Sledgeback",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:33.259Z",
+      "via": "seed-resolve"
+    },
+    "soulbender": {
+      "mbid": "0164153c-34a6-4f06-a5bc-4f3079a38282",
+      "name": "Soulbender",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:33.259Z",
+      "via": "seed-resolve"
+    },
+    "soundgarden": {
+      "mbid": "153c9281-268f-4cf3-8938-f5a4593e5df4",
+      "name": "Soundgarden",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:33.259Z",
+      "via": "seed-resolve"
+    },
+    "split endz": {
+      "mbid": "2bbdc83c-3d4d-44f4-8e26-6bc748d358dd",
+      "name": "Split Endz",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:33.260Z",
+      "via": "seed-resolve"
+    },
+    "suicidal tendencies": {
+      "mbid": "e9e2a634-984f-4c10-bf7b-7970179e1ef1",
+      "name": "Suicidal Tendencies",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:33.261Z",
+      "via": "seed-resolve"
+    },
+    "sunny day real estate": {
+      "mbid": "86b24e8f-a4d9-4c84-83ee-fde0d14ad9fa",
+      "name": "Sunny Day Real Estate",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:33.262Z",
+      "via": "seed-resolve"
+    },
+    "super deluxe": {
+      "mbid": "c795a5df-7327-4375-b39f-89b6141b827f",
+      "name": "Super Deluxe",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:33.262Z",
+      "via": "seed-resolve"
+    },
+    "sweaty nipples": {
+      "mbid": "643b1a84-7d6b-46ff-ad2b-f9093964a39c",
+      "name": "Sweaty Nipples",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:33.262Z",
+      "via": "seed-resolve"
+    },
+    "sweet water": {
+      "mbid": "7283a37d-000f-4912-aa97-c0a2633421b7",
+      "name": "Sweet Water",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:33.262Z",
+      "via": "seed-resolve"
+    },
+    "tad": {
+      "mbid": "867d3fb7-9cd1-47a4-a8f0-de29cdca2004",
+      "name": "Tad",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:33.262Z",
+      "via": "seed-resolve"
+    },
+    "temple of the dog": {
+      "mbid": "e9571c17-817f-4d34-ae3f-0c7a96f822c1",
+      "name": "Temple of the Dog",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:39.620Z",
+      "via": "seed-resolve"
+    },
+    "accused": {
+      "mbid": "36bcdf2f-f481-4669-a0fd-23049377cbab",
+      "name": "The Accused",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:39.620Z",
+      "via": "seed-resolve"
+    },
+    "accused ad": {
+      "mbid": "27387802-0551-4c22-a136-464f8b85b947",
+      "name": "The Accused A.D",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:39.621Z",
+      "via": "seed-resolve"
+    },
+    "fartz": {
+      "mbid": "2e95c700-0e9c-4fc9-9828-ddaebba37632",
+      "name": "The Fartz",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:39.621Z",
+      "via": "seed-resolve"
+    },
+    "fire theft": {
+      "mbid": "cb8b0935-af9d-4d26-8ceb-dbfeeaf75aad",
+      "name": "The Fire Theft",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:40.845Z",
+      "via": "seed-resolve"
+    },
+    "gits": {
+      "mbid": "b916a410-ee27-4f15-92ce-1ce2b60e7697",
+      "name": "The Gits",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:43.722Z",
+      "via": "seed-resolve"
+    },
+    "lemons": {
+      "mbid": "b06928d4-f2e8-4ec3-901f-69c5ff542999",
+      "name": "The Lemons",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:45.096Z",
+      "via": "seed-resolve"
+    },
+    "minus 5": {
+      "mbid": "7acfc09d-1b3b-4524-aff0-c705844109c6",
+      "name": "The Minus 5",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:58.569Z",
+      "via": "seed-resolve"
+    },
+    "missionary position": {
+      "mbid": "d3caf1b1-39c7-4f6a-aa0a-d796ef6c5772",
+      "name": "The Missionary Position",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:59.600Z",
+      "via": "seed-resolve"
+    },
+    "nixons": {
+      "mbid": "b66325fe-3993-4eb9-83ac-051c2b00c2b8",
+      "name": "The Nixons",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:59.729Z",
+      "via": "seed-resolve"
+    },
+    "posies": {
+      "mbid": "4e083f26-965f-436f-9227-c2c47ad18ffc",
+      "name": "The Posies",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:43:59.866Z",
+      "via": "seed-resolve"
+    },
+    "power station": {
+      "mbid": "9b0534f9-8582-40b9-b34b-17aed3a638f0",
+      "name": "The Power Station",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:13.607Z",
+      "via": "seed-resolve"
+    },
+    "rolling stones": {
+      "mbid": "b071f9fa-14b0-4217-8e97-eb41da73f598",
+      "name": "The Rolling Stones",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:13.608Z",
+      "via": "seed-resolve"
+    },
+    "walkabouts": {
+      "mbid": "f50a96b5-a890-4442-ae30-6ce307dd7e20",
+      "name": "The Walkabouts",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:20.519Z",
+      "via": "seed-resolve"
+    },
+    "these arms are snakes": {
+      "mbid": "e95a296e-a34c-4496-9a7c-a95683d487b5",
+      "name": "These Arms Are Snakes",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:21.719Z",
+      "via": "seed-resolve"
+    },
+    "tko": {
+      "mbid": "0934e9af-14c7-4405-b873-fcc31c302d07",
+      "name": "TKO",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:21.863Z",
+      "via": "seed-resolve"
+    },
+    "tortoise": {
+      "mbid": "e0953daa-860f-4dc8-9f1a-b12587cdaf17",
+      "name": "Tortoise",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:22.426Z",
+      "via": "seed-resolve"
+    },
+    "ugly kid joe": {
+      "mbid": "91f32a6b-fc11-45b6-a243-4dd90eaee781",
+      "name": "Ugly Kid Joe",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:22.633Z",
+      "via": "seed-resolve"
+    },
+    "unified theory": {
+      "mbid": "79f55ad0-2253-4e3e-a812-cc87c132a132",
+      "name": "Unified Theory",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:22.823Z",
+      "via": "seed-resolve"
+    },
+    "voyager one": {
+      "mbid": "2b8cfa10-cc42-4ae4-b0d3-5937e03dd239",
+      "name": "Voyager One",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:25.917Z",
+      "via": "seed-resolve"
+    },
+    "walking papers": {
+      "mbid": "cf7e57f4-d310-4a00-8bbb-6c30e2046ae8",
+      "name": "Walking Papers",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:40.405Z",
+      "via": "seed-resolve"
+    },
+    "war babies": {
+      "mbid": "f7e99ebe-bea6-46b4-82a4-5b775a168594",
+      "name": "War Babies",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:42.826Z",
+      "via": "seed-resolve"
+    },
+    "zeke": {
+      "mbid": "f49cea96-c237-4c0d-8332-98859274cc52",
+      "name": "Zeke",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:43.665Z",
+      "via": "seed-resolve"
+    },
+    "3rd secret": {
+      "mbid": "257f77a9-d394-48c3-ba87-05bce2d60199",
+      "name": "3rd Secret",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:43.910Z",
+      "via": "seed-resolve"
+    },
+    "citizen dick": {
+      "mbid": "7cad2a31-aaf7-4e9d-966d-770976ab9003",
+      "name": "Citizen Dick",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:44.047Z",
+      "via": "seed-resolve"
+    },
+    "desert sessions": {
+      "mbid": "7a2e6b55-f149-4e74-be6a-30a1b1a387bb",
+      "name": "Desert Sessions",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:46.063Z",
+      "via": "seed-resolve"
+    },
+    "fecal matter": {
+      "mbid": "552f7965-a23a-4e2f-9ef2-ac2989dea9f0",
+      "name": "Fecal Matter",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:44:53.363Z",
+      "via": "seed-resolve"
+    },
+    "kings of chaos": {
+      "mbid": "56396fbe-e455-4526-a5e4-2a8f9b01c435",
+      "name": "Kings of Chaos",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:45:07.505Z",
+      "via": "seed-resolve"
+    },
+    "raw power": {
+      "mbid": "c98e8896-9727-486f-a4a7-0ff75593e18e",
+      "name": "Raw Power",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:45:13.824Z",
+      "via": "seed-resolve"
+    },
+    "rockfords": {
+      "mbid": "f40ce3f1-9dcf-41c9-89ca-3bf25bd629e3",
+      "name": "The Rockfords",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:03.214Z",
+      "via": "seed-resolve"
+    },
+    "velvet revolver": {
+      "mbid": "3a528006-1429-47f4-ae9b-2ea95343e16a",
+      "name": "Velvet Revolver",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:17.222Z",
+      "via": "seed-resolve"
+    },
+    "alice mudgarden": {
+      "mbid": "06932306-df61-4d21-8f47-916d55e417ee",
+      "name": "Alice Mudgarden",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:22.850Z",
+      "via": "seed-resolve"
+    },
+    "bam bam": {
+      "mbid": "64d11ae5-713d-40bb-9a92-81e0320d9b52",
+      "name": "Bam Bam",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:23.910Z",
+      "via": "seed-resolve"
+    },
+    "black phoebe": {
+      "mbid": "8e4f1308-a1f5-4934-a584-b1b087c587ca",
+      "name": "Black Phoebe",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:29.587Z",
+      "via": "seed-resolve"
+    },
+    "cardboard vampyres": {
+      "mbid": "97fcf76d-87a1-4612-ae49-f1d2c2365c10",
+      "name": "Cardboard Vampyres",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:30.649Z",
+      "via": "seed-resolve"
+    },
+    "diamond lie": {
+      "mbid": "cf1928ca-bc80-4ca2-a7d8-8476f46321ab",
+      "name": "Diamond Lie",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:30.813Z",
+      "via": "seed-resolve"
+    },
+    "drink the sea": {
+      "mbid": "9532a91c-a499-46d6-b2d6-1b5f21a77f18",
+      "name": "Drink the Sea",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:36.600Z",
+      "via": "seed-resolve"
+    },
+    "giants in the trees": {
+      "mbid": "3b9d785f-8188-4397-9f7b-5ed3828cb32e",
+      "name": "Giants in the Trees",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:37.651Z",
+      "via": "seed-resolve"
+    },
+    "gypsy rose": {
+      "mbid": "fc22e17c-95da-4a3f-9527-35fb427d9df1",
+      "name": "Gypsy Rose",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:37.822Z",
+      "via": "seed-resolve"
+    },
+    "neurotic outsiders": {
+      "mbid": "897dc9d4-f6ca-4646-8a74-e8ef08aa0fb5",
+      "name": "Neurotic Outsiders",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:38.022Z",
+      "via": "seed-resolve"
+    },
+    "pen cap chew": {
+      "mbid": "25d7fdbc-4560-46cf-81dc-097f2a035e26",
+      "name": "Pen Cap Chew",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:40.702Z",
+      "via": "seed-resolve"
+    },
+    "sound city players": {
+      "mbid": "b9a9487b-abf6-4a95-a8fd-238cc093e99b",
+      "name": "Sound City Players",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:40.864Z",
+      "via": "seed-resolve"
+    },
+    "sweet 75": {
+      "mbid": "0882763d-d200-4422-b962-6023a5c0fc54",
+      "name": "Sweet 75",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:42.782Z",
+      "via": "seed-resolve"
+    },
+    "tenacious d": {
+      "mbid": "148ddea2-6839-4354-8e2c-5dfadf136b7f",
+      "name": "Tenacious D",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:43.845Z",
+      "via": "seed-resolve"
+    },
+    "birds of satan": {
+      "mbid": "93557aa9-1ced-421a-b026-5a0aee62fa75",
+      "name": "The Birds of Satan",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:43.979Z",
+      "via": "seed-resolve"
+    },
+    "them crooked vultures": {
+      "mbid": "4bc09c51-5d42-4c93-9ba6-8cc21a0edb8d",
+      "name": "Them Crooked Vultures",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:45.815Z",
+      "via": "seed-resolve"
+    },
+    "tone dogs": {
+      "mbid": "beacb6ea-a477-4f2f-935a-550faccb2c13",
+      "name": "Tone Dogs",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:46:47.177Z",
+      "via": "seed-resolve"
+    },
+    "wylde ratttz": {
+      "mbid": "e6d8c1dd-e7bc-4e44-87ad-66aa2d3e6580",
+      "name": "Wylde Ratttz",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:47:40.305Z",
+      "via": "seed-resolve"
+    },
+    "alice n chains": {
+      "mbid": "5b47f93e-bae5-4c6a-b1c7-fe0abd65fcd0",
+      "name": "Alice n’ Chains",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:47:40.954Z",
+      "via": "seed-resolve"
+    },
+    "bush pig": {
+      "mbid": "441e55d7-f3b4-4501-b5c7-a49b8ff31262",
+      "name": "Bush Pig",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:47:42.828Z",
+      "via": "seed-resolve"
+    },
+    "dain bramage": {
+      "mbid": "61de09bc-78ad-45cf-a551-aa1f916a2790",
+      "name": "Dain Bramage",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:47:43.866Z",
+      "via": "seed-resolve"
+    },
+    "dee gees": {
+      "mbid": "d4bac396-867c-431d-8cec-ef508eee0204",
+      "name": "Dee Gees",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:47:44.009Z",
+      "via": "seed-resolve"
+    },
+    "duff mckagans loaded": {
+      "mbid": "85382364-e2bc-4803-90b4-29bb3da200ce",
+      "name": "Duff McKagan’s Loaded",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:47:45.753Z",
+      "via": "seed-resolve"
+    },
+    "filthy friends": {
+      "mbid": "f319b299-2d27-4b47-af56-a5747d7ac0f3",
+      "name": "Filthy Friends",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:47:46.815Z",
+      "via": "seed-resolve"
+    },
+    "levee walkers": {
+      "mbid": "d4123128-b8a7-4b1d-8ae9-2943ed867c8c",
+      "name": "Levee Walkers",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:47:46.944Z",
+      "via": "seed-resolve"
+    },
+    "ten commandos": {
+      "mbid": "40b12b19-ffab-41b4-90dd-67a1b0c7b637",
+      "name": "Ten Commandos",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:12.122Z",
+      "via": "seed-resolve"
+    },
+    "backbeat band": {
+      "mbid": "9fc6c5d5-295d-433b-a960-ef7a4469d4de",
+      "name": "The Backbeat Band",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:19.003Z",
+      "via": "seed-resolve"
+    },
+    "no wto combo": {
+      "mbid": "a9208290-48fe-49fb-876c-6b8a18654bc7",
+      "name": "The No W.T.O. Combo",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:19.830Z",
+      "via": "seed-resolve"
+    },
+    "three fish": {
+      "mbid": "5cf17a36-08e6-4054-bf00-8868438d33d3",
+      "name": "Three Fish",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:19.964Z",
+      "via": "seed-resolve"
+    },
+    "a perfect circle": {
+      "mbid": "078a9376-3c04-4280-b7d7-b20e158f345d",
+      "name": "A Perfect Circle",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:20.192Z",
+      "via": "seed-resolve"
+    },
+    "ciccone youth": {
+      "mbid": "b36d22e9-7f2c-42ff-98a6-b0e3f2cb36f5",
+      "name": "Ciccone Youth",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:22.004Z",
+      "via": "seed-resolve"
+    },
+    "fantômas": {
+      "mbid": "057aa66c-cf6e-499d-bda8-5adc47ad4197",
+      "name": "Fantômas",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:23.058Z",
+      "via": "seed-resolve"
+    },
+    "land": {
+      "mbid": "3877a6a1-093c-4478-b5a6-58a99a1338db",
+      "name": "Land",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:24.907Z",
+      "via": "seed-resolve"
+    },
+    "lard": {
+      "mbid": "4430600b-0fdb-43a1-be52-c81aa7ab1682",
+      "name": "Lard",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:25.940Z",
+      "via": "seed-resolve"
+    },
+    "medication": {
+      "mbid": "03214f15-3323-4964-8b9e-1d71496fa524",
+      "name": "Medication",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:26.099Z",
+      "via": "seed-resolve"
+    },
+    "nine inch nails": {
+      "mbid": "b7ffd2af-418f-4be2-bdd1-22f8b48613da",
+      "name": "Nine Inch Nails",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:26.480Z",
+      "via": "seed-resolve"
+    },
+    "pigface": {
+      "mbid": "11137c88-a9a2-4ffa-a97d-fb058c6d6ce2",
+      "name": "Pigface",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:31.977Z",
+      "via": "seed-resolve"
+    },
+    "sleep": {
+      "mbid": "6fc69ec6-3e59-4ff7-849d-b5da932abe4d",
+      "name": "Sleep",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:33.014Z",
+      "via": "seed-resolve"
+    },
+    "spys4darwin": {
+      "mbid": "8ffcd1ac-7b0e-407d-8b9f-3a9dbe6ccd69",
+      "name": "Spys4Darwin",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:34.838Z",
+      "via": "seed-resolve"
+    },
+    "hookers": {
+      "mbid": "f6bf0154-52ca-43ee-ad59-a1385c88af09",
+      "name": "The Hookers",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:35.891Z",
+      "via": "seed-resolve"
+    },
+    "murder city devils": {
+      "mbid": "32705a3c-54cf-4e48-a3ab-2801157a09dc",
+      "name": "The Murder City Devils",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:36.057Z",
+      "via": "seed-resolve"
+    },
+    "twilight singers": {
+      "mbid": "53a4de34-35ca-4ad0-aa4b-67382435ed69",
+      "name": "The Twilight Singers",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:36.274Z",
+      "via": "seed-resolve"
+    },
+    "1000 homo djs": {
+      "mbid": "4c44479c-8fde-4754-b9e2-5129eb6fb28d",
+      "name": "1000 Homo DJs",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:50.912Z",
+      "via": "seed-resolve"
+    },
+    "45 grave": {
+      "mbid": "337027f4-4f29-42f4-bc4d-63e7d4e74e1a",
+      "name": "45 Grave",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:51.937Z",
+      "via": "seed-resolve"
+    },
+    "acid horse": {
+      "mbid": "ea9ea256-362b-41b7-9ad6-cc308d9909a2",
+      "name": "Acid Horse",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:52.086Z",
+      "via": "seed-resolve"
+    },
+    "adolescents": {
+      "mbid": "c43c7134-5d6f-4bfa-8275-b4012ae97c46",
+      "name": "Adolescents",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:52.268Z",
+      "via": "seed-resolve"
+    },
+    "angels of light": {
+      "mbid": "310e4c19-d810-42f1-947f-76889e8bfcf2",
+      "name": "Angels of Light",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:52.471Z",
+      "via": "seed-resolve"
+    },
+    "area 51": {
+      "mbid": "4199a513-2ad3-420d-8f4e-6943706aa696",
+      "name": "Area 51",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:48:58.253Z",
+      "via": "seed-resolve"
+    },
+    "avenged sevenfold": {
+      "mbid": "24e1b53c-3085-4581-8472-0b0088d2508c",
+      "name": "Avenged Sevenfold",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:49:00.917Z",
+      "via": "seed-resolve"
+    },
+    "bad religion": {
+      "mbid": "149e6720-4e4a-41a4-afca-6d29083fc091",
+      "name": "Bad Religion",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:49:01.948Z",
+      "via": "seed-resolve"
+    },
+    "big star": {
+      "mbid": "21d177ba-3d51-461e-9b3f-ad9a80b419dc",
+      "name": "Big Star",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:52:59.822Z",
+      "via": "seed-resolve"
+    },
+    "big talk": {
+      "mbid": "84b522bb-8934-40f0-a5c3-290178841d7e",
+      "name": "Big Talk",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:02.653Z",
+      "via": "seed-resolve"
+    },
+    "blackouts": {
+      "mbid": "4341e6c4-a940-45f5-9e02-b6b287da70f6",
+      "name": "Blackouts",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:05.347Z",
+      "via": "seed-resolve"
+    },
+    "chelsea light moving": {
+      "mbid": "e8b2f9f2-f5fd-4a24-aaa4-d9bebf8675e7",
+      "name": "Chelsea Light Moving",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:06.432Z",
+      "via": "seed-resolve"
+    },
+    "danzig": {
+      "mbid": "8925a01a-8608-411d-a90b-f3a52d061208",
+      "name": "Danzig",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:12.251Z",
+      "via": "seed-resolve"
+    },
+    "daredevils": {
+      "mbid": "64b20ec0-db9e-4a06-924e-1f5d87e26669",
+      "name": "Daredevils",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:13.320Z",
+      "via": "seed-resolve"
+    },
+    "devo": {
+      "mbid": "d2db1078-c170-4e22-b261-14f3ad60a690",
+      "name": "DEVO",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:13.498Z",
+      "via": "seed-resolve"
+    },
+    "eleven": {
+      "mbid": "bf600e2b-dc2d-4839-a1be-6ebef4087cd0",
+      "name": "Eleven",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:19.103Z",
+      "via": "seed-resolve"
+    },
+    "fear and the nervous system": {
+      "mbid": "0fcb6511-41bd-4888-af58-344dd6b6ec5c",
+      "name": "Fear and the Nervous System",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:20.393Z",
+      "via": "seed-resolve"
+    },
+    "filter": {
+      "mbid": "6ae51665-8261-4ae5-883f-1899651ad31b",
+      "name": "Filter",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:20.775Z",
+      "via": "seed-resolve"
+    },
+    "germs": {
+      "mbid": "42c4b58d-2e28-41d4-bfe5-4edee68386cf",
+      "name": "Germs",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:26.131Z",
+      "via": "seed-resolve"
+    },
+    "jackson united": {
+      "mbid": "25c7930a-499d-460f-a26b-7baaf3460d2c",
+      "name": "Jackson United",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:27.184Z",
+      "via": "seed-resolve"
+    },
+    "kidbug": {
+      "mbid": "bd39dbc4-8260-474e-830f-787dad44066c",
+      "name": "Kidbug",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:27.322Z",
+      "via": "seed-resolve"
+    },
+    "king crimson": {
+      "mbid": "b38225b8-8e5f-42aa-bcdc-7bae5b5bdab3",
+      "name": "King Crimson",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:40.597Z",
+      "via": "seed-resolve"
+    },
+    "kmfdm": {
+      "mbid": "45074d7c-5307-44a8-854f-ae072e1622ae",
+      "name": "KMFDM",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:43.392Z",
+      "via": "seed-resolve"
+    },
+    "magnapop": {
+      "mbid": "7ba311d4-c068-4b85-a64f-c7d4f1adb868",
+      "name": "Magnapop",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:44.365Z",
+      "via": "seed-resolve"
+    },
+    "me first and the gimme gimmes": {
+      "mbid": "9478e346-7c52-4780-9555-3d1577f0b905",
+      "name": "Me First and the Gimme Gimmes",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:44.534Z",
+      "via": "seed-resolve"
+    },
+    "ministry": {
+      "mbid": "13df2a46-f72f-40e7-aa63-26fcf62c7048",
+      "name": "Ministry",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:46.464Z",
+      "via": "seed-resolve"
+    },
+    "no use for a name": {
+      "mbid": "d7bd0fad-2f06-4936-89ad-60c5b6ada3c1",
+      "name": "No Use for a Name",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:49.368Z",
+      "via": "seed-resolve"
+    },
+    "revolting cocks": {
+      "mbid": "2865730a-5757-4005-875e-84d6274cb1c0",
+      "name": "Revolting Cocks",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:53:50.728Z",
+      "via": "seed-resolve"
+    },
+    "salt": {
+      "mbid": "26bcd35d-56a3-4e4d-8ad7-7bc5787c3af1",
+      "name": "SALT",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:54:20.048Z",
+      "via": "seed-resolve"
+    },
+    "shrinebuilder": {
+      "mbid": "2cffac8e-9bb3-47f2-b59e-0781398b0c7e",
+      "name": "Shrinebuilder",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:54:22.555Z",
+      "via": "seed-resolve"
+    },
+    "skeriks syncopated taint septet": {
+      "mbid": "f863d7ac-b34f-4032-a2e6-cdb8b745de72",
+      "name": "Skerik's Syncopated Taint Septet",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:54:25.484Z",
+      "via": "seed-resolve"
+    },
+    "slow music": {
+      "mbid": "62e39496-5a3f-49db-a097-28f1fbd80e26",
+      "name": "Slow Music",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:54:26.543Z",
+      "via": "seed-resolve"
+    },
+    "spinnerette": {
+      "mbid": "009a44cd-e5b7-4b0f-beee-64391f8e93fd",
+      "name": "Spinnerette",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:54:26.680Z",
+      "via": "seed-resolve"
+    },
+    "sublime with rome": {
+      "mbid": "079f2e2b-b3f9-4574-ac5c-add977b40762",
+      "name": "Sublime with Rome",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:54:32.549Z",
+      "via": "seed-resolve"
+    },
+    "swans": {
+      "mbid": "3285dc48-9505-469d-ad8a-bdf2d3dba632",
+      "name": "Swans",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:54:33.585Z",
+      "via": "seed-resolve"
+    },
+    "baseball project": {
+      "mbid": "fbc4d88b-ee30-4cb8-b102-37826d88206b",
+      "name": "The Baseball Project",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:55:02.707Z",
+      "via": "seed-resolve"
+    },
+    "les claypool frog brigade": {
+      "mbid": "e61eedbd-3c87-4d26-a35f-e24e36a0302f",
+      "name": "The Les Claypool Frog Brigade",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:55:03.406Z",
+      "via": "seed-resolve"
+    },
+    "orange humble band": {
+      "mbid": "91826b4b-cae7-4297-af6c-b25c63e99e2a",
+      "name": "The Orange Humble Band",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:55:05.466Z",
+      "via": "seed-resolve"
+    },
+    "replacements": {
+      "mbid": "dc0d05ce-2f47-4962-b4fa-8631a0a51987",
+      "name": "The Replacements",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:55:06.536Z",
+      "via": "seed-resolve"
+    },
+    "summer obsession": {
+      "mbid": "0329701a-ecb1-40e8-a382-2a9418c078a7",
+      "name": "The Summer Obsession",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:55:06.698Z",
+      "via": "seed-resolve"
+    },
+    "vandals": {
+      "mbid": "f54fc7c3-3a40-4f26-83cf-328d9b097e93",
+      "name": "The Vandals",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:55:06.871Z",
+      "via": "seed-resolve"
+    },
+    "wallflowers": {
+      "mbid": "d9c90718-d54d-4ccf-a92e-37a5415ce299",
+      "name": "The Wallflowers",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:55:36.548Z",
+      "via": "seed-resolve"
+    },
+    "young fresh fellows": {
+      "mbid": "f3e93b5f-33ae-4b30-8e22-0a0fb4c4847e",
+      "name": "The Young Fresh Fellows",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:55:42.611Z",
+      "via": "seed-resolve"
+    },
+    "thurston moore group": {
+      "mbid": "8221912e-6c34-4b6e-9cf6-93e7084efd30",
+      "name": "Thurston Moore Group",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:55:56.429Z",
+      "via": "seed-resolve"
+    },
+    "tribe after tribe": {
+      "mbid": "a882b584-d089-4143-969d-45922f4a9304",
+      "name": "Tribe After Tribe",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:55:59.547Z",
+      "via": "seed-resolve"
+    },
+    "ugly casanova": {
+      "mbid": "5c2d7596-2366-47c5-b4a2-0550ac8f9e69",
+      "name": "Ugly Casanova",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:56:00.625Z",
+      "via": "seed-resolve"
+    },
+    "venomous concept": {
+      "mbid": "c5185e76-0ba3-4d04-98f1-f6f8b6cccf75",
+      "name": "Venomous Concept",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:56:00.768Z",
+      "via": "seed-resolve"
+    },
+    "wasted youth": {
+      "mbid": "377ae24e-1aa9-4e4e-8bcb-dc845f0179e1",
+      "name": "Wasted Youth",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:56:00.916Z",
+      "via": "seed-resolve"
+    },
+    "ween": {
+      "mbid": "c0eee88b-47f2-4cd2-ac48-a045e902a432",
+      "name": "Ween",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:56:01.065Z",
+      "via": "seed-resolve"
+    },
+    "weezer": {
+      "mbid": "6fe07aa5-fec0-4eca-a456-f29bff451b04",
+      "name": "Weezer",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:56:07.834Z",
+      "via": "seed-resolve"
+    },
+    "what is this?": {
+      "mbid": "309879f6-77a0-4660-999c-310223a4ef97",
+      "name": "What Is This?",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:56:08.465Z",
+      "via": "seed-resolve"
+    },
+    "altamont": {
+      "mbid": "62919714-39b2-4195-8710-0872f3b1b4f2",
+      "name": "Altamont",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:56:21.299Z",
+      "via": "seed-resolve"
+    },
+    "ashes divide": {
+      "mbid": "7acc6c97-2654-4ffa-945f-daeabaa8e5ae",
+      "name": "Ashes Divide",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:56:22.369Z",
+      "via": "seed-resolve"
+    },
+    "black light burns": {
+      "mbid": "a33ecf1b-a4ed-43e4-b6ab-26623b40cfad",
+      "name": "Black Light Burns",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:56:35.118Z",
+      "via": "seed-resolve"
+    },
+    "death wish kids": {
+      "mbid": "7269df7e-b0b9-4ddf-8833-6f088d9ded50",
+      "name": "Death Wish Kids",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:56:36.152Z",
+      "via": "seed-resolve"
+    },
+    "dim stars": {
+      "mbid": "5f984344-da28-4d68-ae1c-8bce9637180a",
+      "name": "Dim Stars",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:56:36.309Z",
+      "via": "seed-resolve"
+    },
+    "garage a trois": {
+      "mbid": "1002a330-c6eb-4a8e-bafd-bb8e612c3a57",
+      "name": "Garage a Trois",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:56:36.504Z",
+      "via": "seed-resolve"
+    },
+    "hindu love gods": {
+      "mbid": "3e409194-d1e7-45c2-8e91-b4918e86da7d",
+      "name": "Hindu Love Gods",
+      "score": 100,
+      "resolvedAt": "2026-08-29T21:57:56.417Z",
+      "via": "seed-resolve"
+    },
+    "les claypools fancy band": {
+      "mbid": "8ce33b82-9485-41de-83bf-3177e6353500",
+      "name": "Les Claypool's Fancy Band",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:03:34.480Z",
+      "via": "seed-resolve"
+    },
+    "pailhead": {
+      "mbid": "9714bcae-da69-4189-84a3-6e226802eddb",
+      "name": "Pailhead",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:03:34.480Z",
+      "via": "seed-resolve"
+    },
+    "peeping tom": {
+      "mbid": "4caec583-cdcb-437c-af84-8797b11b6807",
+      "name": "Peeping Tom",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:03:34.480Z",
+      "via": "seed-resolve"
+    },
+    "ponga": {
+      "mbid": "592def1a-10f0-4f86-8be7-fad7da4be9ea",
+      "name": "Ponga",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:03:34.480Z",
+      "via": "seed-resolve"
+    },
+    "record club": {
+      "mbid": "8dd30e73-c5e9-43bf-bcce-8fc44d54a84d",
+      "name": "Record Club",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:03:34.481Z",
+      "via": "seed-resolve"
+    },
+    "slash featuring myles kennedy and the conspirators": {
+      "mbid": "7ce51ba7-91f4-46aa-a030-1e22aaa7510d",
+      "name": "Slash featuring Myles Kennedy and the Conspirators",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:03:34.924Z",
+      "via": "seed-resolve"
+    },
+    "slashs snakepit": {
+      "mbid": "40ec273c-85dd-487c-8935-ccbc7d866119",
+      "name": "Slash’s Snakepit",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:03:35.054Z",
+      "via": "seed-resolve"
+    },
+    "suicide squad": {
+      "mbid": "6a9ad749-def6-4569-9a58-09a8769ddcb0",
+      "name": "Suicide Squad",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:03:35.239Z",
+      "via": "seed-resolve"
+    },
+    "tapeworm": {
+      "mbid": "2913dd78-49e9-4f01-a6ce-ecd3dcb15b77",
+      "name": "Tapeworm",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:05:16.815Z",
+      "via": "seed-resolve"
+    },
+    "disciplines": {
+      "mbid": "ff66fa8b-28b5-4d57-9290-2b88fab174b9",
+      "name": "The Disciplines",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:05:18.322Z",
+      "via": "seed-resolve"
+    },
+    "i dont cares": {
+      "mbid": "0efa265c-e11a-4a37-a0de-5b40417587de",
+      "name": "The I Don't Cares",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:06:34.935Z",
+      "via": "seed-resolve"
+    },
+    "presidents of the united states of america": {
+      "mbid": "7509421d-1074-442f-be8f-b526167afcb3",
+      "name": "The Presidents of the United States of America",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:06:41.950Z",
+      "via": "seed-resolve"
+    },
+    "ronnie wood band": {
+      "mbid": "f80bf66a-c771-48ef-b1d3-ed76c433675a",
+      "name": "The Ronnie Wood Band",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:06:43.005Z",
+      "via": "seed-resolve"
+    },
+    "tired pony": {
+      "mbid": "768d9d72-53f6-4ea3-b66f-5a9a9328d1be",
+      "name": "Tired Pony",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:06:43.167Z",
+      "via": "seed-resolve"
+    },
+    "to live and shave in la": {
+      "mbid": "083941cf-8183-4cba-b49f-16681f04eb63",
+      "name": "To Live and Shave in L.A.",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:06:45.071Z",
+      "via": "seed-resolve"
+    },
+    "viva death": {
+      "mbid": "0cdf71c3-1265-4e48-b211-61800be4d5ab",
+      "name": "Viva Death",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:06:46.206Z",
+      "via": "seed-resolve"
+    },
+    "barrett martin group": {
+      "mbid": "0bf9501f-6d9d-4c08-a886-382d7cd99a3b",
+      "name": "Barrett Martin Group",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:06:52.122Z",
+      "via": "seed-resolve"
+    },
+    "big stars third": {
+      "mbid": "fb97fe09-a136-4711-ba1b-9b51795c1cc3",
+      "name": "Big Star’s Third",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:06:53.029Z",
+      "via": "seed-resolve"
+    },
+    "bingo hand job": {
+      "mbid": "44e9e832-3f85-4094-a332-7d0548224cb2",
+      "name": "Bingo Hand Job",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:06:53.437Z",
+      "via": "seed-resolve"
+    },
+    "broken bat": {
+      "mbid": "7e2b4350-4c9a-446a-8630-e51a5a10b324",
+      "name": "Broken Bat",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:06:59.111Z",
+      "via": "seed-resolve"
+    },
+    "brown towel": {
+      "mbid": "0f8e6822-3672-400c-a87c-792c7a293544",
+      "name": "Brown Towel",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:07:02.425Z",
+      "via": "seed-resolve"
+    },
+    "gossman project": {
+      "mbid": "47a4728c-1016-4e7f-996e-6e182ede7fa0",
+      "name": "Gossman Project",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:07:03.124Z",
+      "via": "seed-resolve"
+    },
+    "jihad jerry & the evildoers": {
+      "mbid": "0612a024-6265-4179-a1a6-12d4141aeccc",
+      "name": "Jihad Jerry & The Evildoers",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:07:03.398Z",
+      "via": "seed-resolve"
+    },
+    "mass mental?": {
+      "mbid": "f28fabab-7535-417c-a89e-9df4287ffe29",
+      "name": "Mass Mental?",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:07:05.189Z",
+      "via": "seed-resolve"
+    },
+    "monster in the machine": {
+      "mbid": "73333565-3dff-48da-9c60-f2bf100e25e9",
+      "name": "Monster in the Machine",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:07:31.198Z",
+      "via": "seed-resolve"
+    },
+    "plainfield": {
+      "mbid": "77ba21ef-c587-45a0-b330-888f311e821d",
+      "name": "Plainfield",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:07:32.012Z",
+      "via": "seed-resolve"
+    },
+    "polo": {
+      "mbid": "b6ea3598-fb94-4a35-b89c-229920e799db",
+      "name": "Polo",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:07:32.174Z",
+      "via": "seed-resolve"
+    },
+    "porn": {
+      "mbid": "293c472b-d932-451f-b0ef-2c8e8cda24cf",
+      "name": "Porn",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:07:34.191Z",
+      "via": "seed-resolve"
+    },
+    "rat pack": {
+      "mbid": "35e227e5-f724-4699-91b2-d5184cdc7411",
+      "name": "Rat Pack",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:07:35.329Z",
+      "via": "seed-resolve"
+    },
+    "road crew": {
+      "mbid": "97d6fd34-1d8c-443f-9b6d-dd6b35060aa6",
+      "name": "Road Crew",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:07:37.167Z",
+      "via": "seed-resolve"
+    },
+    "seattle guitar circle": {
+      "mbid": "7abd9d0f-1744-4698-aeda-4921e2889776",
+      "name": "Seattle Guitar Circle",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:07:51.145Z",
+      "via": "seed-resolve"
+    },
+    "slider": {
+      "mbid": "d48a1b03-50b1-4be6-be27-92530600e917",
+      "name": "Slider",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:07:57.312Z",
+      "via": "seed-resolve"
+    },
+    "societys ills": {
+      "mbid": "f39385a0-4a98-4347-8a25-f539cc54341e",
+      "name": "Society's Ills",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:08:54.276Z",
+      "via": "seed-resolve"
+    },
+    "stiff woodies": {
+      "mbid": "b12602a1-77c4-4d5f-8c5e-9e4b2fa2e812",
+      "name": "Stiff Woodies",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:08:55.033Z",
+      "via": "seed-resolve"
+    },
+    "stripsearch": {
+      "mbid": "18841602-6ee9-4d0c-8864-e3c0498ed49e",
+      "name": "Stripsearch",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:08:55.163Z",
+      "via": "seed-resolve"
+    },
+    "bells": {
+      "mbid": "909b258d-0628-4f80-9998-0c649d2bcd0e",
+      "name": "The Bells",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:08:55.296Z",
+      "via": "seed-resolve"
+    },
+    "clinton administration": {
+      "mbid": "d23a3d0f-569f-4b40-9b70-dd07d1f76bbc",
+      "name": "The Clinton Administration",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:08:55.502Z",
+      "via": "seed-resolve"
+    },
+    "damning well": {
+      "mbid": "2a3dc878-34f8-48a6-8591-caa8f7b1f70f",
+      "name": "The Damning Well",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:09:00.908Z",
+      "via": "seed-resolve"
+    },
+    "dead kenny gs": {
+      "mbid": "7c03c416-7ca5-49dc-9571-85c56295f97e",
+      "name": "The Dead Kenny G's",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:09:02.009Z",
+      "via": "seed-resolve"
+    },
+    "fantômas melvins big band": {
+      "mbid": "81295bc0-44c8-4cd4-a83c-5b374453cbfd",
+      "name": "The Fantômas Melvins Big Band",
+      "score": 100,
+      "resolvedAt": "2026-08-29T22:09:02.142Z",
+      "via": "seed-resolve"
     }
   },
   "persons": {
@@ -1694,5 +3556,5 @@
       "resolvedAt": "2026-07-15T01:52:41.452Z"
     }
   },
-  "generatedAt": "2026-07-15T01:53:08.769Z"
+  "generatedAt": "2026-08-29T22:09:02.142Z"
 }
