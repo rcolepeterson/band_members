@@ -1127,8 +1127,21 @@ export function initSigmaExplorer({
       // One canonical parameter for the anchor. The other accepted spellings
       // (?band=, ?member=, ?node=, ?person=) are inbound-only, and are cleared
       // so a stale one cannot contradict the view being shown.
+      const INBOUND_ANCHOR_KEYS = ['band', 'member', 'node', 'person', 'anchor'];
+      // Only a visitor who arrived on a link that named a node gets a canonical
+      // ?anchor= written back. A plain visit to / stays / : Aaron is the opening
+      // view because he is the home star, not because the visitor asked for him,
+      // and stamping his name into the address bar made the site's own front
+      // door look like a deep link to one musician (and got copied around as
+      // one). Shared links such as /?anchor=KISS are still canonicalised and
+      // preserved, so Share, reload-in-place and the previews keep working.
+      const arrivedAnchored = INBOUND_ANCHOR_KEYS.some(key => url.searchParams.has(key));
       ['band', 'member', 'node', 'person'].forEach(key => url.searchParams.delete(key));
-      url.searchParams.set('anchor', state.anchorId);
+      if (arrivedAnchored) {
+        url.searchParams.set('anchor', state.anchorId);
+      } else {
+        url.searchParams.delete('anchor');
+      }
       win.history.replaceState(win.history.state, '', url);
     } catch (error) {
       // A malformed or opaque location is not worth breaking exploration over.
