@@ -7330,21 +7330,28 @@ function downloadPngBlob(blob) {
     }
 
     function openNodeCard(node) {
-      if (!node) return;
-      nodeCardState.node = node;
-      populateNodeCard(node);
-      nodeCardEl.hidden = false;
-      // Force a reflow so the transition from opacity 0 → 1 fires reliably.
-      // eslint-disable-next-line no-unused-expressions
-      nodeCardEl.offsetWidth;
-      nodeCardEl.classList.add('is-open');
-      nodeCardEl.setAttribute('aria-hidden', 'false');
-      positionNodeCard();
-    }
+  if (!node) return;
+  nodeCardState.node = node;
+  populateNodeCard(node);
+  nodeCardEl.hidden = false;
+  // Force a reflow so the transition from opacity 0 → 1 fires reliably.
+  // eslint-disable-next-line no-unused-expressions
+  nodeCardEl.offsetHeight;
+  nodeCardEl.classList.add('is-open');
+
+  const mobileSheet = window.matchMedia('(max-width: 700px)').matches;
+  nodeCardEl.classList.toggle('node-card--peek', mobileSheet);
+  nodeCardEl.setAttribute('data-sheet-state', mobileSheet ? 'peek' : 'expanded');
+
+  nodeCardEl.setAttribute('aria-hidden', 'false');
+  positionNodeCard();
+}
 
     function closeNodeCard() {
       nodeCardState.node = null;
       nodeCardEl.classList.remove('is-open');
+	  nodeCardEl.classList.remove('node-card--peek');
+      nodeCardEl.removeAttribute('data-sheet-state');
       nodeCardEl.setAttribute('aria-hidden', 'true');
       // Both highlights belong to a selection, and the card is the only
       // thing on screen that names which node they belong to. Tying their
