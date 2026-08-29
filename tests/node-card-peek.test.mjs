@@ -113,19 +113,91 @@ test('the existing close button survives as the dismissal control', () => {
 });
 
 // -----------------------------------------------------------------------
-// 3. Peek keeps the sheet clear of the footer / "Show next group".
+// 3. Peek shows the connections, and the footer steps aside.
 // -----------------------------------------------------------------------
 
-test('Peek does not move the sheet off its footer-clearing offset', () => {
+test('Peek keeps the connections list and hides only secondary blocks', () => {
   const block = mobileSheetBlock();
+  const hidden = block.slice(block.indexOf('.node-card.is-open.node-card--peek .node-card__rows'));
+  const hiddenRule = hidden.slice(0, hidden.indexOf('}'));
+  for (const part of ['node-card__rows', 'node-card__verify-toggle', 'node-card__signin-hint']) {
+    assert.ok(hiddenRule.includes(part), `Expected Peek to hide .${part}.`);
+  }
+  // The regression this guards: an earlier version capped the card's height and
+  // nothing else, which hid the band/member chips — the most useful thing on
+  // the card. Peek must never hide the connections block.
   assert.ok(
-    block.includes('bottom: 72px !important;'),
-    'Expected the mobile sheet to keep its 72px bottom offset above the stage footer.'
+    !hiddenRule.includes('node-card__connections'),
+    'Peek must keep the connections block: the bands are the point of the card.'
   );
-  const peekRule = block.slice(block.indexOf('.node-card.is-open.node-card--peek'));
+  assert.match(
+    block,
+    /\.node-card\.is-open\.node-card--peek \.node-card__chips\s*{[^}]*max-height/,
+    'Expected the chips to be clipped to a couple of rows in Peek, not hidden.'
+  );
+});
+
+test('the sheet docks at the bottom edge rather than floating above the footer', () => {
+  const block = mobileSheetBlock();
+  const bottom = block.match(/\.node-card\s*{[\s\S]*?bottom:\s*(\d+)px\s*!important/);
+  assert.ok(bottom, 'Expected an explicit bottom offset on the mobile sheet.');
+  const px = Number(bottom[1]);
+  assert.ok(px <= 24, `Expected the sheet docked near the bottom edge, found ${px}px.`);
+  assert.ok(px > 0, 'Expected a small gap so the last chip row clears the gesture bar.');
+});
+
+test('the stage footer steps aside for an open sheet instead of being overlapped', () => {
+  const block = mobileSheetBlock();
+  assert.match(
+    block,
+    /body\.node-card-sheet-open \.sigma-footer\s*{[^}]*bottom:\s*calc\(var\(--sheet-height,\s*var\(--peek-height\)\)/,
+    'Expected the footer lifted by the measured sheet height, falling back to --peek-height.'
+  );
+  assert.match(
+    block,
+    /body\.node-card-sheet-expanded \.sigma-footer\s*{[^}]*display:\s*none/,
+    'Expected the footer hidden under an Expanded sheet rather than half-covered.'
+  );
+  assert.match(
+    INDEX_HTML,
+    /:root\s*{\s*--peek-height:\s*\d+px;\s*}/,
+    'Expected --peek-height on :root so the footer can read the same number as the sheet.'
+  );
+});
+
+test('the sheet publishes its measured height and clears it again', () => {
+  // A wrapped two-line band name changes the sheet's real height, so the footer
+  // offset is measured rather than assumed. If the property is never cleared,
+  // a stale height follows the footer around after the card is dismissed.
+  assert.match(
+    INDEX_HTML,
+    /setProperty\('--sheet-height',\s*nodeCardEl\.offsetHeight/,
+    'Expected the live sheet height to be published for the footer.'
+  );
+  const idx = INDEX_HTML.indexOf('function closeNodeCard');
   assert.ok(
-    !/transform:/.test(peekRule.slice(0, peekRule.indexOf('}'))),
-    'Peek must cap height, not re-translate the card: a transform here would slide it over or under the footer.'
+    INDEX_HTML.slice(idx, idx + 1500).includes("removeProperty('--sheet-height')"),
+    'Expected --sheet-height cleared on close.'
+  );
+});
+
+test('the body sheet classes are set on open and cleared on close', () => {
+  assert.match(
+    INDEX_HTML,
+    /classList\.toggle\('node-card-sheet-open',\s*sheet\)/,
+    'Expected the sheet-open body class to track the mobile sheet.'
+  );
+  assert.match(
+    INDEX_HTML,
+    /classList\.toggle\('node-card-sheet-expanded',\s*sheet && !peek\)/,
+    'Expected the expanded body class to track the expanded state.'
+  );
+  const idx = INDEX_HTML.indexOf('function closeNodeCard');
+  const body = INDEX_HTML.slice(idx, idx + 1400);
+  assert.ok(
+    body.includes("classList.remove('node-card-sheet-open')") &&
+      body.includes("classList.remove('node-card-sheet-expanded')"),
+    'Expected both body classes cleared on close, or the footer never comes back.'
   );
 });
 

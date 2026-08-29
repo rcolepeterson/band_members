@@ -2606,6 +2606,17 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 */
 .node-card__peek-toggle { display: none; }
 
+/*
+  One number, two owners. The Peek sheet caps its height at --peek-height, and
+  the Sigma stage footer lifts its disconnected-group control by the same amount
+  so the two dock as a stack instead of overlapping. Declared on :root because
+  the footer is not inside .node-card and cannot inherit it from there.
+
+  200px is sized for the content Peek actually shows: handle, name, subtitle,
+  the connections label, and two rows of band/member chips.
+*/
+:root { --peek-height: 200px; }
+
 /* --- Mobile fallback: fixed bottom sheet, not anchored to the node ---
    On narrow screens the anchored card is impractical (thumb blocks the
    node, screen is narrow). We turn the same card into a bottom-anchored
@@ -2616,12 +2627,14 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     left: 8px !important;
     right: 8px !important;
     top: auto !important;
-    /* Lift the mobile card up off the very bottom edge so the last row
-       of member chips is fully visible — the previous 12px hugged the
-       viewport bottom and clipped the last row of chips. Also cap the
-       card's max-height so long member lists scroll internally instead
-       of extending upward off-screen. */
-    bottom: 72px !important;
+    /* Dock to the bottom edge. This was 72px for a while, to hold the sheet
+       clear of the Sigma stage footer, but a card floating that far up left
+       the footer's narration bleeding out from underneath it — which read as
+       a layering bug on a real phone. The footer now steps aside instead
+       (see the body.node-card-sheet-* rules below), so the sheet can sit
+       where a bottom sheet belongs. 16px, not 0, keeps the last row of chips
+       off the very edge and clear of a phone's gesture bar. */
+    bottom: 16px !important;
     max-width: none;
     min-width: 0;
     width: auto;
@@ -2636,15 +2649,61 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     transform: translateY(0);
   }
   /*
-    Peek: the card opens in place (still 72px above the stage bottom, so it
-    never covers the group-status footer / "Show next group") but is capped
-    to a strip that shows the grab handle, the name and the subtitle. The
-    height cap rather than a translateY offset keeps the card inside its
-    known-good position and keeps the close button on screen.
+    Peek shows the two things worth tapping a node for: who this is, and who
+    they played with. A first pass capped the card's height and nothing else,
+    which cut the sheet off mid-way through the "years active" row and hid the
+    band chips entirely — the most useful content on the card was the part that
+    got hidden. So Peek now hides the secondary blocks and keeps the
+    connections list, rather than trusting a pixel height to land in the right
+    place. The height cap stays as a safety net for a long wrapped name.
+
+    Everything hidden here is one tap away via the handle, and none of it is
+    removed from the DOM: Expanded reveals the same nodes in place.
   */
   .node-card.is-open.node-card--peek {
-    max-height: var(--peek-height, 112px);
+    max-height: var(--peek-height);
     overflow: hidden;
+  }
+  .node-card.is-open.node-card--peek .node-card__rows,
+  .node-card.is-open.node-card--peek .node-card__verify-toggle,
+  .node-card.is-open.node-card--peek .node-card__verify-details,
+  .node-card.is-open.node-card--peek .node-card__signin-hint {
+    display: none !important;
+  }
+  /* Exactly two rows of chips, clipped rather than scrolled: a scrollable strip
+     inside a collapsed sheet competes with the graph's own pan gesture. The
+     height is two chip rows and the gap between them and no more — 68px left a
+     third row sliced in half at the sheet's edge, which looks like a rendering
+     fault rather than a deliberate cut. */
+  .node-card.is-open.node-card--peek .node-card__chips {
+    max-height: 56px;
+    overflow: hidden;
+  }
+
+  /*
+    While a sheet is open the stage footer's narration is noise — it describes
+    the view, not the selection — and on a phone it was left visibly bleeding
+    out from under the card. Hide it, and lift the disconnected-group jump to
+    sit directly above the sheet where it stays readable and tappable.
+
+    !important because the Sigma stage scopes these rules behind its stage id,
+    which outranks a class selector on its own.
+  */
+  body.node-card-sheet-open .sigma-footer .sigma-hint,
+  body.node-card-sheet-open .sigma-footer .sigma-context,
+  body.node-card-sheet-open .sigma-footer .sigma-frontier {
+    display: none !important;
+  }
+  body.node-card-sheet-open .sigma-footer {
+    /* --sheet-height is measured from the live card once it is populated, since
+       a wrapped two-line band name changes the sheet's real height. The
+       --peek-height fallback covers the frame before that measurement lands. */
+    bottom: calc(var(--sheet-height, var(--peek-height)) + 14px) !important;
+  }
+  /* Expanded fills that area anyway, and a half-covered control is worse than
+     an absent one. It comes back on collapse or close. */
+  body.node-card-sheet-expanded .sigma-footer {
+    display: none !important;
   }
   .node-card__peek-toggle {
     display: flex;
@@ -7420,6 +7479,14 @@ function downloadPngBlob(blob) {
       const peek = state === 'peek';
       nodeCardEl.classList.toggle('node-card--peek', peek);
       nodeCardEl.setAttribute('data-sheet-state', peek ? 'peek' : 'expanded');
+      // The Sigma stage footer is not inside the card, so it cannot be reached
+      // with a descendant or sibling selector. Two body classes let the CSS
+      // move it out of the sheet's way: 'open' lifts the disconnected-group
+      // control above a Peek sheet, 'expanded' hides it while the full card
+      // covers that area. Desktop gets neither -- there is no sheet there.
+      const sheet = isMobileSheet();
+      document.body.classList.toggle('node-card-sheet-open', sheet);
+      document.body.classList.toggle('node-card-sheet-expanded', sheet && !peek);
       if (nodeCardPeekToggle) {
         nodeCardPeekToggle.setAttribute('aria-expanded', peek ? 'false' : 'true');
         nodeCardPeekToggle.setAttribute('aria-label', peek ? 'Expand details' : 'Collapse details');
@@ -7427,6 +7494,15 @@ function downloadPngBlob(blob) {
       // Expanding scrolls back to the top: a card can be left scrolled halfway
       // down its member chips, and reopening mid-list reads as a broken card.
       if (!peek) nodeCardEl.scrollTop = 0;
+      // Publish the sheet's real height so the stage footer can sit directly on
+      // top of it. Reading offsetHeight here forces the layout that the class
+      // change just invalidated, which is exactly the flush we need before
+      // measuring. Peek only: an expanded sheet hides the footer outright.
+      if (sheet && peek) {
+        document.body.style.setProperty('--sheet-height', nodeCardEl.offsetHeight + 'px');
+      } else {
+        document.body.style.removeProperty('--sheet-height');
+      }
     }
 
     function toggleNodeCardSheet() {
@@ -7456,6 +7532,10 @@ function downloadPngBlob(blob) {
       // Expanded card from the last one.
       nodeCardEl.classList.remove('node-card--peek');
       nodeCardEl.removeAttribute('data-sheet-state');
+      // Give the stage footer its narration and its normal position back.
+      document.body.classList.remove('node-card-sheet-open');
+      document.body.classList.remove('node-card-sheet-expanded');
+      document.body.style.removeProperty('--sheet-height');
       if (nodeCardPeekToggle) {
         nodeCardPeekToggle.setAttribute('aria-expanded', 'false');
         nodeCardPeekToggle.setAttribute('aria-label', 'Expand details');
