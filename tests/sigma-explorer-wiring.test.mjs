@@ -337,7 +337,21 @@ test('CDN versions are pinned in the import map, matching package.json', () => {
     !PACKAGE.devDependencies['@sigma/edge-curve'],
     'edge-curve must stay out of package.json: the constellation uses straight lines',
   );
-  assert.match(EXPLORER, /^import Sigma from 'sigma';$/m);
+  // The invariant is ONE shared Sigma via a bare specifier, not the exact shape of
+  // the import statement. createNodeBorderProgram is imported from that same
+  // specifier on purpose: @sigma/node-border needs sigma's own program base
+  // classes, and giving it a second bundle would put a second copy of the WebGL
+  // node-program machinery in the same GL context.
+  assert.match(EXPLORER, /^import Sigma(?:, \{ [^}]+ \})? from 'sigma';$/m);
+  const nodeBorder = PACKAGE.devDependencies['@sigma/node-border'];
+  assert.ok(nodeBorder, '@sigma/node-border must be a devDependency so the pin is reviewable');
+  assert.ok(
+    sigmaBundle.includes(`@sigma/node-border@${version(nodeBorder)}`),
+    `vendor/sigma.mjs must record @sigma/node-border@${version(nodeBorder)} to match package.json`,
+  );
+  // And it must ride in the shared bundle rather than getting an import-map entry
+  // of its own, which would have to stay version-locked to sigma's by hand.
+  assert.doesNotMatch(INDEX_HTML, /@sigma\/node-border/);
   assert.match(EXPLORER, /^import Graph from 'graphology';$/m);
 });
 
