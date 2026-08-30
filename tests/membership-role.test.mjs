@@ -25,6 +25,8 @@ import {
   roleForNode,
   toGraphologyGraph,
   classifyNode,
+  NODE_TYPES,
+  nodeTypeForRole,
 } from '../scripts/neighborhood-helpers.mjs';
 
 const FOUNDER = MEMBERSHIP_ROLES.FOUNDER;
@@ -247,4 +249,89 @@ test('the view role is computed against the current anchor and the full link set
   const call = build.slice(build.indexOf('roleForNode('), build.indexOf('viewGraph.addNode('));
   assert.match(call, /anchorId/);
   assert.match(call, /links: master\.links/);
+});
+
+// ---------------------------------------------------------------------------
+// Shape: solid, ringed, hollow
+//
+// The three treatments from the original design legend, which #119 could not
+// build because a border needs a WebGL node program and the vendored Sigma
+// bundle exported none.
+//
+// Shape is a SECOND channel on top of hue, and it earns its keep in exactly the
+// case hue cannot cover: a click paints every highlighted node one colour, so
+// gold-means-founder vanishes the moment gold also means selected. Geometry
+// survives that.
+// ---------------------------------------------------------------------------
+
+test('each role maps to its treatment from the design legend', () => {
+  assert.equal(nodeTypeForRole(MEMBERSHIP_ROLES.FOUNDER), NODE_TYPES.SOLID);
+  assert.equal(nodeTypeForRole(MEMBERSHIP_ROLES.MEMBER), NODE_TYPES.RINGED);
+  assert.equal(nodeTypeForRole(MEMBERSHIP_ROLES.TOURING), NODE_TYPES.HOLLOW);
+});
+
+test('a node with no role keeps the plain disc', () => {
+  // Bands, and anyone whose memberships are not in view. Falling through to a
+  // ring would put a member treatment on a band.
+  for (const role of [null, undefined, '', 'nonsense']) {
+    assert.equal(nodeTypeForRole(role), NODE_TYPES.SOLID);
+  }
+});
+
+test("founder is Sigma's own circle program, so the default path is unchanged", () => {
+  // Only two programs are registered. If SOLID were a custom type, every band and
+  // the home star's under-node would need one too.
+  assert.equal(NODE_TYPES.SOLID, 'circle');
+});
+
+test('both border programs are registered on the renderer', () => {
+  const settings = EXPLORER.slice(
+    EXPLORER.indexOf('new SigmaConstructor(viewGraph, canvasHost, {'),
+    EXPLORER.indexOf('enableCameraRotation: false'),
+  );
+  assert.match(settings, /nodeProgramClasses:/);
+  assert.match(settings, /\[NODE_TYPES\.RINGED\]: RINGED_PROGRAM/);
+  assert.match(settings, /\[NODE_TYPES\.HOLLOW\]: HOLLOW_PROGRAM/);
+});
+
+test('type is set on the node, not in the per-frame reducer', () => {
+  // A program change is a different draw call, not a style tweak. Setting it in
+  // reduceNode would ask Sigma to move a node between programs every frame.
+  const build = EXPLORER.slice(EXPLORER.indexOf('viewGraph.clear();'), EXPLORER.indexOf('state.layoutExtent ='));
+  assert.match(build, /type: kind === NODE_KINDS\.HOME_STAR \? NODE_TYPES\.SOLID : nodeTypeForRole\(role\)/);
+  const reduce = EXPLORER.slice(EXPLORER.indexOf('function reduceNode('), EXPLORER.indexOf('function reduceEdge('));
+  assert.doesNotMatch(reduce, /nodeTypeForRole/, 'the reducer must not switch programs');
+});
+
+test('the home star is forced plain, so two rings cannot stack', () => {
+  // Its identity is the DOM ringed-star overlay; the WebGL node under it is tiny
+  // and label-free. A ring of its own would sit at a second radius.
+  const build = EXPLORER.slice(EXPLORER.indexOf('viewGraph.clear();'), EXPLORER.indexOf('state.layoutExtent ='));
+  assert.match(build, /kind === NODE_KINDS\.HOME_STAR \? NODE_TYPES\.SOLID/);
+});
+
+test('ring gaps are painted in the stage background, never left transparent', () => {
+  // These are opaque WebGL discs. A "transparent" band shows the node's own fill
+  // through it and reads as solid, which would silently collapse ringed into
+  // founder — the exact distinction being added.
+  const block = EXPLORER.slice(EXPLORER.indexOf('const STAGE_BG'), EXPLORER.indexOf('// Hover styling.'));
+  assert.match(EXPLORER, /const STAGE_BG = '#04070b'/, "must match the dark theme's --color-bg");
+  assert.match(block, /color: \{ value: STAGE_BG \}/);
+  assert.doesNotMatch(block, /transparent/);
+});
+
+test('the borders read the colour attribute, so a highlight still recolours them', () => {
+  // This is why shape survives selection: the programs take colour from the same
+  // attribute reduceNode overwrites, and keep their geometry either way.
+  const block = EXPLORER.slice(EXPLORER.indexOf('const RINGED_PROGRAM'), EXPLORER.indexOf('// Hover styling.'));
+  assert.match(block, /color: \{ attribute: 'color' \}/);
+});
+
+test('hollow is the lightest treatment of the three', () => {
+  // A touring stint should recede next to a founder. Hollow is an outline plus
+  // background; ringed adds a centre dot; solid is a full disc.
+  const hollow = EXPLORER.slice(EXPLORER.indexOf('const HOLLOW_PROGRAM'), EXPLORER.indexOf('// Hover styling.'));
+  const ringed = EXPLORER.slice(EXPLORER.indexOf('const RINGED_PROGRAM'), EXPLORER.indexOf('const HOLLOW_PROGRAM'));
+  assert.equal((hollow.match(/attribute: 'color'/g) || []).length, 1, 'hollow paints the node colour once');
+  assert.equal((ringed.match(/attribute: 'color'/g) || []).length, 2, 'ringed paints it twice: ring and centre');
 });

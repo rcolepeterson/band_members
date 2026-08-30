@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.5",
+    "@sigma/node-border": "^3.0.0",
     "d3": "^7.9.0",
     "esbuild": "^0.28.2",
     "graphology": "^0.26.0",

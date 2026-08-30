@@ -477,6 +477,30 @@ export function roleForNode(node, { anchorId = null, links = [] } = {}) {
   return strongestRole(memberships);
 }
 
+// Node shape, the second visual channel beside role colour.
+//
+// The three treatments from the original design legend: a founding member is a
+// solid disc, a long-time member a ringed circle with a dot in the centre, a
+// touring player a hollow outline. SOLID is deliberately Sigma's own built-in
+// 'circle' program, so bands, the home star's under-node, and anyone with no role
+// in view all keep the default draw path and need no program registered.
+//
+// The mapping lives here rather than in the renderer because it is pure and the
+// renderer cannot be imported outside a browser -- it needs a WebGL context.
+export const NODE_TYPES = Object.freeze({
+  SOLID: 'circle',
+  RINGED: 'ringed',
+  HOLLOW: 'hollow',
+});
+
+// Role -> treatment. A node with no role (a band, or a person with no membership
+// in view) keeps the plain disc.
+export function nodeTypeForRole(role) {
+  if (role === MEMBERSHIP_ROLES.MEMBER) return NODE_TYPES.RINGED;
+  if (role === MEMBERSHIP_ROLES.TOURING) return NODE_TYPES.HOLLOW;
+  return NODE_TYPES.SOLID;
+}
+
 export const NODE_KINDS = Object.freeze({
   HOME_STAR: 'home-star',
   SOLAR_SYSTEM: 'solar-system',

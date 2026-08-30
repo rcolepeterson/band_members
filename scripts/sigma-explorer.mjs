@@ -38,7 +38,7 @@
 // ---------------------------------------------------------------------------
 
 import Graph from 'graphology';
-import Sigma from 'sigma';
+import Sigma, { createNodeBorderProgram } from 'sigma';
 
 import {
   rendererFromSearch,
@@ -51,6 +51,8 @@ import {
   toGraphologyGraph,
   NEIGHBORHOOD_BUDGET,
   NODE_KINDS,
+  NODE_TYPES,
+  nodeTypeForRole,
   MEMBERSHIP_ROLES,
   roleForNode,
   roleFromMembership,
@@ -117,6 +119,50 @@ const ROLE_STYLE = {
 // is what a legend or a "show only founders" filter would read, and deriving it
 // at render time later would mean plumbing weight through the view builder a
 // second time.
+
+// Node treatments: solid, ringed, hollow.
+//
+// The three shapes from the original design legend --
+//
+//   Founding band member   solid filled circle
+//   Long time band member  ringed circle, dot in the centre
+//   Short term / touring   hollow outline
+//
+// -- which were never built, because a border needs a WebGL node program and the
+// vendored Sigma bundle exported none. @sigma/node-border is the official one and
+// now rides inside that bundle (see scripts/vendor-libs.mjs).
+//
+// This is a SECOND channel on top of hue, not a replacement for it, and it earns
+// its keep in exactly the case hue cannot cover: a click sets every highlighted
+// node to one colour, so gold-means-founder disappears the moment gold also means
+// selected. Shape survives that, because the border programs read the `color`
+// attribute the highlight overwrites and keep their geometry regardless.
+//
+// Ring gaps are painted in the stage background (#04070b, the dark theme's
+// --color-bg) rather than left transparent: these are opaque WebGL discs, and a
+// "transparent" band would show the node's own fill through it and read as solid.
+const STAGE_BG = '#04070b';
+
+// Sizes are fractions of the node radius, drawn outside in.
+const RINGED_PROGRAM = createNodeBorderProgram({
+  borders: [
+    // Outer ring in the node's colour.
+    { color: { attribute: 'color' }, size: { value: 0.28 } },
+    // Gap, so the ring reads as a ring and not a thick edge.
+    { color: { value: STAGE_BG }, size: { value: 0.26 } },
+    // Centre dot, the rest of the way in.
+    { color: { attribute: 'color' }, size: { fill: true } },
+  ],
+});
+
+const HOLLOW_PROGRAM = createNodeBorderProgram({
+  borders: [
+    // A thin outline and nothing else. Deliberately the lightest visual mass of
+    // the three: a touring stint should recede next to a founder.
+    { color: { attribute: 'color' }, size: { value: 0.3 } },
+    { color: { value: STAGE_BG }, size: { fill: true } },
+  ],
+});
 
 // Hover styling. Sigma's default hover draws a WHITE rounded plate behind the
 // node and its label, which is jarring on a dark starfield and washes the label
@@ -745,6 +791,13 @@ export function initSigmaExplorer({
   const viewGraph = new GraphConstructor({ type: 'undirected', multi: false, allowSelfLoops: false });
 
   const renderer = new SigmaConstructor(viewGraph, canvasHost, {
+    // The two border programs from the design legend. 'circle' is Sigma's own and
+    // stays the default, so a node with no `type` renders exactly as before --
+    // bands, the home star's tiny under-node, and anyone with no role in view.
+    nodeProgramClasses: {
+      [NODE_TYPES.RINGED]: RINGED_PROGRAM,
+      [NODE_TYPES.HOLLOW]: HOLLOW_PROGRAM,
+    },
     // 2.5D contract: pan and zoom only. Sigma's camera rotation stays off.
     enableCameraRotation: false,
     // Deliberately tiny: framingRatio() zooms in hard on big views, and a floor
@@ -995,6 +1048,15 @@ export function initSigmaExplorer({
         hop: point.hop,
         kind,
         role,
+        // The shape channel. Sigma picks the node program off `type`, and it is
+        // set here rather than in reduceNode because a program change is a
+        // different draw call, not a per-frame style tweak.
+        //
+        // The home star is forced plain. Its visual identity is the DOM ringed-star
+        // overlay and the WebGL node beneath it is deliberately tiny and
+        // label-free; giving that a ring of its own would put two different rings
+        // on one node at two different radii.
+        type: kind === NODE_KINDS.HOME_STAR ? NODE_TYPES.SOLID : nodeTypeForRole(role),
         entityType: node.type,
         size: style.size,
         color: style.color,

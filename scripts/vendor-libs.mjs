@@ -38,12 +38,31 @@ await build({
 // Sigma, with graphology left external so the two do not each ship a copy. The
 // bare specifier is rewritten to the vendored path, which keeps the import map
 // honest and means no bare specifier survives into the browser.
+//
+// @sigma/node-border rides in the SAME bundle rather than getting its own file.
+// It imports sigma/rendering and sigma/utils for the program base classes, so
+// bundling it separately inlines 43KB of Sigma internals -- a second copy of the
+// WebGL node-program machinery, with its own class identities, sharing one GL
+// context with the first. One bundle means one copy, and it keeps the import map
+// at a single "sigma" entry instead of growing a parallel specifier that has to
+// stay version-locked to it by hand.
+//
+// The stdin entry exists only to name what goes in; it is not a source file, so
+// there is nothing to drift out of sync with this call.
 await build({
-  entryPoints: ['node_modules/sigma/dist/sigma.esm.js'],
+  stdin: {
+    contents: [
+      "export { default } from 'sigma';",
+      "export * from 'sigma';",
+      "export { createNodeBorderProgram, NodeBorderProgram } from '@sigma/node-border';",
+    ].join('\n'),
+    resolveDir: process.cwd(),
+    loader: 'js',
+  },
   outfile: 'vendor/sigma.mjs',
   bundle: true, format: 'esm', platform: 'browser', minify: true,
   external: ['graphology'],
-  banner: { js: banner(['sigma', 'graphology-utils']) },
+  banner: { js: banner(['sigma', 'graphology-utils', '@sigma/node-border']) },
 });
 
 // d3 is loaded lazily at runtime (see ensureD3 in index.html), as a classic script
