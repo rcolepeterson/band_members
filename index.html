@@ -125,6 +125,27 @@
     subsetting and format conversion.
   -->
   <link rel="stylesheet" href="/vendor/fonts.css">
+
+  <!--
+    Preload hints (mobile perf pass, 2026-08-31). Pure hints -- a browser that
+    ignores them just falls back to discovering these resources the normal
+    way, so there is no functional change here, only earlier fetch starts.
+
+    Fonts: only the two weights the H1 (#hero-title, weight 700) and body
+    text (weight 400) actually need on first paint. Deliberately NOT Boska --
+    .stage-title is dead CSS with no matching element in the markup, so
+    nothing visible on load uses the display face.
+
+    Scripts: sigma.mjs + graphology.mjs are the default renderer's hard
+    dependencies (see the import map above and the comment on why d3 is
+    NOT included here -- it's lazy-loaded on demand and preloading it would
+    undo that fix for the majority of visitors who never touch it).
+  -->
+  <link rel="preload" href="/vendor/fonts/satoshi-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/vendor/fonts/satoshi-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="modulepreload" href="/vendor/graphology.mjs">
+  <link rel="modulepreload" href="/vendor/sigma.mjs">
+  <link rel="modulepreload" href="/scripts/sigma-explorer.mjs">
   <style>
     :root, [data-theme="light"] {
       /* Type ramp. Every step below --text-xl was raised by 1px at both ends
