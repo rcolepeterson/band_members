@@ -252,10 +252,34 @@ test('graph nodes have exactly one click handler and no touch/pointer variant', 
     1,
     'Expected exactly one node click handler, so mobile taps and desktop clicks share a code path.'
   );
+  // Scoped to bindings on the graph node selection, not to the file.
+  //
+  // This started as a whole-file ban on the four event names, which was a fair
+  // proxy while nothing else on the page used pointer events. The node card's
+  // bottom sheet now drags open on pointerdown/pointermove -- a card gesture,
+  // not a graph-node gesture, and the thing that finally made Expanded
+  // discoverable. Banning the strings outright would have forced that gesture
+  // onto touch events or off the page entirely, neither of which protects what
+  // this test is actually for: a node tap and a node click sharing one path.
   ['touchstart', 'touchend', 'pointerdown', 'pointerup'].forEach(event => {
     assert.ok(
-      !html.includes(`'${event}'`) && !html.includes(`"${event}"`),
-      `Found a ${event} handler -- graph node interaction must stay on the single click path for mobile parity.`
+      !new RegExp(`node\\.on\\(\\s*['"]${event}['"]`).test(html),
+      `Found a node.on('${event}') binding -- graph node interaction must stay on the single click path for mobile parity.`
+    );
+    assert.ok(
+      !new RegExp(`(nodeSel|nodeGroup|nodeEnter|graphNodes)\\.on\\(\\s*['"]${event}['"]`).test(html),
+      `Found a ${event} binding on the node selection -- graph node interaction must stay on the single click path.`
+    );
+  });
+
+  // The card's pointer handlers are allowed, and are the reason this test was
+  // narrowed; assert they are what is actually present, so the exemption cannot
+  // quietly become cover for a graph-node pointer handler.
+  const pointerBindings = html.match(/(\w+)\.addEventListener\('pointer(?:down|move|up|cancel|leave)'/g) || [];
+  pointerBindings.forEach(binding => {
+    assert.ok(
+      binding.startsWith('nodeCardEl.'),
+      `Unexpected pointer binding outside the node card sheet: ${binding}`
     );
   });
 });
