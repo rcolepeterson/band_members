@@ -566,6 +566,35 @@ export function classifyNode(node, { anchorId = null, adjacency = null, links = 
 // ---------------------------------------------------------------------------
 
 /**
+ * Is this link safe to write into `graph` as an edge?
+ *
+ * Exists because it was NOT shared, and the drift cost the site five broken
+ * constellations. The canonical adapter below has always skipped self-loops;
+ * the explorer's own view-graph writer checked hasNode and hasEdge and not
+ * source === target. Graphology is constructed with allowSelfLoops: false, so
+ * the first self-referential membership it met THREW, out of a forEach, out of
+ * renderView, and out of the controller's init -- leaving nodes on screen with
+ * only the handful of edges written before the throw, and no controller. That
+ * is the "broken strings" bug: not an edge-resolution mistake, an exception.
+ *
+ * Self-referential memberships are real and legitimate in this data: a solo act
+ * whose band name IS the artist's name (Jeremy Enigk, Sir Mix-a-Lot, Ayron
+ * Jones, Randy Hansen, LL Cool J) collapses to one node, because node identity
+ * here is the display name. A loop from that node to itself carries no
+ * information a viewer could use, so the right handling is to skip the edge and
+ * keep the node -- never to abort the drawing.
+ *
+ * One predicate, both writers, so this cannot drift a second time.
+ */
+export function canRenderEdge(graph, source, target) {
+  if (!graph || source === undefined || target === undefined) return false;
+  if (source === target) return false;
+  if (!graph.hasNode(source) || !graph.hasNode(target)) return false;
+  if (graph.hasEdge(source, target)) return false;
+  return true;
+}
+
+/**
  * Builds a canonical Graphology graph from the master band/member data.
  *
  * `GraphConstructor` is injected (browser: CDN graphology; tests: the
@@ -612,8 +641,7 @@ export function toGraphologyGraph({ nodes = [], links = [] } = {}, GraphConstruc
 
   links.forEach(link => {
     const [source, target] = linkEndpoints(link);
-    if (!graph.hasNode(source) || !graph.hasNode(target) || source === target) return;
-    if (graph.hasEdge(source, target)) return;
+    if (!canRenderEdge(graph, source, target)) return;
     graph.addEdge(source, target, {
       relation: link.relation || 'member',
       weight: Number(link.weight || 1),

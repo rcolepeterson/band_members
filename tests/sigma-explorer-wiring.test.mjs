@@ -1496,3 +1496,54 @@ test('the SVG escape hatch keeps the older export', () => {
   assert.match(INDEX_HTML, /if \(sigmaCanvas && capture\.hostBox\) \{/);
   assert.match(INDEX_HTML, /const poster = await renderSharePosterBlob\(sigmaCanvas, capture\);/);
 });
+
+// ---------------------------------------------------------------------------
+// One edge-writing rule, two writers.
+//
+// The "broken strings" outage was drift, not logic: toGraphologyGraph skipped
+// self-loops and the explorer's own view-graph writer did not, so a solo act
+// whose band name is their own name threw out of renderView and took the
+// controller with it. These tests exist so the two writers cannot diverge
+// again — a local copy of the check is exactly how this happened.
+// ---------------------------------------------------------------------------
+
+test('the explorer writes view edges through the shared guard', () => {
+  assert.match(
+    EXPLORER,
+    /canRenderEdge,/,
+    'Expected the explorer to import the shared edge guard rather than re-deriving it.'
+  );
+  assert.match(
+    EXPLORER,
+    /if \(!canRenderEdge\(viewGraph, source, target\)\) return;/,
+    'Expected the view-graph writer to defer to canRenderEdge before addEdge.'
+  );
+});
+
+test('neither writer keeps a private copy of the edge checks', () => {
+  // The specific shape that broke: hasNode/hasEdge tested inline, source ===
+  // target forgotten. Any inline re-test is a chance to forget it again.
+  const writer = EXPLORER.slice(EXPLORER.indexOf('view.links.forEach'), EXPLORER.indexOf('state.layoutExtent'));
+  assert.ok(
+    !/viewGraph\.hasNode\(/.test(writer) && !/viewGraph\.hasEdge\(/.test(writer),
+    'The view writer must not re-test edge preconditions inline; that is what drifted.'
+  );
+  assert.ok(
+    /export function canRenderEdge/.test(HELPERS),
+    'Expected canRenderEdge to live in the helpers, as the single definition.'
+  );
+  assert.match(
+    HELPERS,
+    /if \(!canRenderEdge\(graph, source, target\)\) return;/,
+    'Expected toGraphologyGraph to use the same guard it exports.'
+  );
+});
+
+test('the shared guard rejects the self-loop that caused the outage', () => {
+  const guard = HELPERS.slice(HELPERS.indexOf('export function canRenderEdge'));
+  assert.match(
+    guard.slice(0, 400),
+    /if \(source === target\) return false;/,
+    'The self-loop check is the whole point of the shared guard.'
+  );
+});
