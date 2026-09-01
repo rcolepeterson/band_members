@@ -20,6 +20,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Graph from 'graphology';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { bidirectional } from 'graphology-shortest-path/unweighted.js';
 
 import {
@@ -35,6 +38,7 @@ import {
   NODE_KINDS,
   HOME_STAR_STYLE,
   toGraphologyGraph,
+  canRenderEdge,
   pathToUserFacingDegrees,
   linkEndpoints,
 } from '../scripts/neighborhood-helpers.mjs';
@@ -1013,4 +1017,88 @@ test('accepts a precomputed adjacency map instead of rebuilding one', () => {
   const adjacency = buildAdjacency(nodes, links);
   const components = getConnectedComponents(nodes, links, adjacency);
   assert.equal(components.length, 2);
+});
+
+// ---------------------------------------------------------------------------
+// Self-referential memberships must never abort a drawing.
+//
+// The bug: a solo act whose band name IS the artist's name collapses to a
+// single node, because node identity in this graph is the display name. Five
+// of them exist in production — Jeremy Enigk, Sir Mix-a-Lot, Ayron Jones,
+// Randy Hansen, LL Cool J — and every one of them produced a self-loop.
+// Graphology is built with allowSelfLoops: false, so addEdge THREW. The throw
+// escaped a forEach, escaped renderView, and escaped the controller's init,
+// leaving nodes on screen with only the edges written before the bad one.
+// Every constellation within two hops of those five names lost its strings.
+// ---------------------------------------------------------------------------
+
+const soloActFixture = () => ({
+  // "Jeremy Enigk" is both a band (the solo project) and the person.
+  nodes: [
+    { id: 'Sunny Day Real Estate', type: 'band' },
+    { id: 'Jeremy Enigk', type: 'band' },
+    { id: 'Nate Mendel', type: 'person' },
+    { id: 'Foo Fighters', type: 'band' },
+  ],
+  links: [
+    { source: 'Sunny Day Real Estate', target: 'Jeremy Enigk' },
+    // The poison row: the solo project's membership points back at itself.
+    { source: 'Jeremy Enigk', target: 'Jeremy Enigk' },
+    { source: 'Sunny Day Real Estate', target: 'Nate Mendel' },
+    { source: 'Foo Fighters', target: 'Nate Mendel' },
+  ],
+});
+
+test('canRenderEdge rejects exactly the four things that cannot be drawn', () => {
+  const graph = new Graph({ type: 'undirected', multi: false, allowSelfLoops: false });
+  ['a', 'b'].forEach(id => graph.addNode(id));
+
+  assert.equal(canRenderEdge(graph, 'a', 'b'), true, 'a normal link is renderable');
+  assert.equal(canRenderEdge(graph, 'a', 'a'), false, 'a self-loop is the production bug');
+  assert.equal(canRenderEdge(graph, 'a', 'missing'), false, 'an endpoint outside the view is not renderable');
+  assert.equal(canRenderEdge(null, 'a', 'b'), false, 'no graph, nothing to add to');
+
+  graph.addEdge('a', 'b');
+  assert.equal(canRenderEdge(graph, 'a', 'b'), false, 'a duplicate would throw on a non-multi graph');
+  assert.equal(canRenderEdge(graph, 'b', 'a'), false, 'undirected: reversed is still a duplicate');
+});
+
+test('a solo act does not take the whole graph down with it', () => {
+  const fixture = soloActFixture();
+  let graph;
+  assert.doesNotThrow(() => {
+    graph = toGraphologyGraph(fixture, Graph);
+  }, 'A self-referential membership must be skipped, not thrown on.');
+
+  // The node survives — it is a real band and a real person, and dropping it
+  // would silently delete an artist from the map.
+  assert.ok(graph.hasNode('Jeremy Enigk'), 'the solo act keeps its node');
+  assert.equal(graph.hasEdge('Jeremy Enigk', 'Jeremy Enigk'), false, 'the loop itself is not drawn');
+});
+
+test('every other edge in the view survives the poison row', () => {
+  // This is the actual regression: not the missing loop, but the 13 strings
+  // that vanished with it. The order matters — the bad row sits in the middle,
+  // so a throw would take the links after it and leave the ones before.
+  const graph = toGraphologyGraph(soloActFixture(), Graph);
+  assert.equal(graph.size, 3, 'expected all three real memberships, minus the loop');
+  [
+    ['Sunny Day Real Estate', 'Jeremy Enigk'],
+    ['Sunny Day Real Estate', 'Nate Mendel'],
+    ['Foo Fighters', 'Nate Mendel'],
+  ].forEach(([a, b]) => {
+    assert.ok(graph.hasEdge(a, b), `expected the ${a} - ${b} string to survive`);
+  });
+});
+
+test('the graph is still built with self-loops forbidden', () => {
+  // The alternative fix was allowSelfLoops: true, which would draw a circle
+  // from a node to itself. It carries no information a viewer can use, and it
+  // would put one on five artists. Skipping the edge is the deliberate choice;
+  // this test states it so the constructor option is not "fixed" later.
+  assert.match(
+    readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'neighborhood-helpers.mjs'), 'utf8'),
+    /allowSelfLoops: false/,
+    'Self-loops stay forbidden; the writer skips them instead.'
+  );
 });

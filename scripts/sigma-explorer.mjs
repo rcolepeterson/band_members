@@ -49,6 +49,7 @@ import {
   radialLayout,
   classifyNode,
   toGraphologyGraph,
+  canRenderEdge,
   NEIGHBORHOOD_BUDGET,
   NODE_KINDS,
   NODE_TYPES,
@@ -1064,8 +1065,15 @@ export function initSigmaExplorer({
     });
     view.links.forEach(link => {
       const [source, target] = linkEndpoints(link);
-      if (!viewGraph.hasNode(source) || !viewGraph.hasNode(target)) return;
-      if (viewGraph.hasEdge(source, target)) return;
+      // Shared with toGraphologyGraph, because this check being local is what
+      // broke the site: this writer never tested source === target, viewGraph
+      // forbids self-loops, and a solo act whose band name IS their own name
+      // (Jeremy Enigk, Sir Mix-a-Lot, Ayron Jones, Randy Hansen, LL Cool J)
+      // collapses to exactly that. The throw escaped this forEach and killed
+      // the rest of renderView, so every constellation within two hops of one
+      // of those five names drew its nodes, whatever edges happened to precede
+      // the bad one, and then stopped -- no layout, no chrome, no controller.
+      if (!canRenderEdge(viewGraph, source, target)) return;
       // weight rides along because the role is derived from it, and because an
       // edge that has lost its weight cannot be re-classified later.
       viewGraph.addEdge(source, target, {
