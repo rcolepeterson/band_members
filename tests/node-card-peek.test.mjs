@@ -320,3 +320,76 @@ test('the mobile sheet claims the vertical drag', () => {
     'Expected overscroll containment so hitting the end of the list does not scroll the page behind it.'
   );
 });
+
+// -----------------------------------------------------------------------
+// 7. Peek has to be legible as a collapsed sheet.
+//
+// Field report, Android: "The Accused card is still not scrolling. Only shows
+// first 4 members and the rest of the card is static." Both halves were true
+// and neither was the scroll bug — the card was in Peek, which is static by
+// design, and nothing on screen said 17 more members existed or that a 4px
+// grip was the way to them.
+// -----------------------------------------------------------------------
+
+test('the connections heading carries the real count', () => {
+  assert.match(
+    INDEX_HTML,
+    /function connectionsLabel\(singular, plural, count\)/,
+    'Expected a single helper building the connections heading.'
+  );
+  assert.match(
+    INDEX_HTML,
+    /nodeCardConnLabel\.textContent = connectionsLabel\('Member', 'Members', memberRows\.length\)/,
+    'Expected the band card heading to count its members.'
+  );
+  assert.match(
+    INDEX_HTML,
+    /nodeCardConnLabel\.textContent = connectionsLabel\('Band', 'Bands', bandRows\.length\)/,
+    'Expected the musician card heading to count their bands.'
+  );
+  // A clipped list under a bare "MEMBERS" is indistinguishable from a short
+  // list. The count is what makes Peek readable as a collapsed state.
+  assert.ok(
+    !/textContent = \w+Rows\.length === 1 \? '(Member|Band)' : '(Members|Bands)'/.test(INDEX_HTML),
+    'The uncounted heading must not come back.'
+  );
+});
+
+test('a tap anywhere on a collapsed sheet expands it', () => {
+  const idx = INDEX_HTML.indexOf("nodeCardEl.addEventListener('click'");
+  assert.ok(idx > 0, 'Expected a click handler on the card itself.');
+  const body = INDEX_HTML.slice(idx, idx + 700);
+  assert.ok(
+    body.includes("classList.contains('node-card--peek')"),
+    'Expected the handler to act only while collapsed, so it cannot re-open a card mid-scroll.'
+  );
+  assert.ok(
+    body.includes("setNodeCardSheetState('expanded')"),
+    'Expected the body tap to expand rather than toggle: a tap on an expanded card must do nothing.'
+  );
+});
+
+test('the expand-on-tap handler yields to every interactive child', () => {
+  const idx = INDEX_HTML.indexOf("nodeCardEl.addEventListener('click'");
+  const body = INDEX_HTML.slice(idx, idx + 700);
+  const guard = body.match(/event\.target\.closest\(([^)]*)\)/);
+  assert.ok(guard, 'Expected a closest() guard before expanding.');
+  for (const sel of ['button', 'a', 'input', 'select']) {
+    assert.ok(
+      guard[1].includes(sel),
+      `Expected <${sel}> excluded: a member chip must still travel, the X must still close.`
+    );
+  }
+});
+
+test('Peek fades its clipped edge instead of cutting it flat', () => {
+  const block = mobileSheetBlock();
+  const peek = block.match(/\.node-card\.is-open\.node-card--peek \.node-card__chips\s*{([^}]*)}/);
+  assert.ok(peek, 'Expected the Peek chip rule.');
+  assert.match(peek[1], /mask-image:\s*linear-gradient/, 'Expected a fade so the cut row reads as "more below".');
+  assert.match(
+    peek[1],
+    /-webkit-mask-image:\s*linear-gradient/,
+    'Expected the -webkit- prefix: Safari on iOS still needs it.'
+  );
+});
