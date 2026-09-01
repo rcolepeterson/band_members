@@ -257,3 +257,66 @@ test('the expanded mobile sheet still scrolls inside itself', () => {
     'Expected Peek itself to hide overflow so the strip cannot be scrolled while collapsed.'
   );
 });
+
+// -----------------------------------------------------------------------
+// 6. The expanded sheet is the ONLY scroll container on a phone.
+//
+// The bug this section locks out: .node-card__chips carries a 130px cap with
+// its own overflow, which is right for the desktop card (a wheel over the strip
+// scrolls the strip) and wrong for the sheet. On a phone a 121-member roster is
+// ~1750px of chips inside a 130px window in the middle of the card, while the
+// card itself never overflowed — so a drag anywhere but those 130px scrolled
+// nothing at all and the roster read as truncated with no way to see the rest.
+// -----------------------------------------------------------------------
+
+test('the expanded mobile sheet un-caps the member chips so the card owns the scroll', () => {
+  const block = mobileSheetBlock();
+  const match = block.match(
+    /\.node-card\.is-open:not\(\.node-card--peek\) \.node-card__chips\s*{([^}]*)}/
+  );
+  assert.ok(
+    match,
+    'Expected an expanded-only rule releasing the chip strip so the sheet scrolls as one.'
+  );
+  assert.match(match[1], /max-height:\s*none/, 'Expected the 130px chip cap released when expanded.');
+  assert.match(match[1], /overflow:\s*visible/, 'Expected no nested scroller inside the expanded sheet.');
+});
+
+test('Peek still clips the chips, so releasing them is expanded-only', () => {
+  const block = mobileSheetBlock();
+  const peek = block.match(
+    /\.node-card\.is-open\.node-card--peek \.node-card__chips\s*{([^}]*)}/
+  );
+  assert.ok(peek, 'Expected the Peek chip clip to survive.');
+  assert.match(peek[1], /max-height:\s*\d+px/, 'Peek must stay two clipped rows, not a released list.');
+  assert.match(peek[1], /overflow:\s*hidden/, 'Peek must clip rather than scroll: it competes with the graph pan.');
+});
+
+test('the desktop card keeps its own scrollable chip strip', () => {
+  const block = mobileSheetBlock();
+  const outside = INDEX_HTML.replace(block, '');
+  const base = outside.match(/\.node-card__chips\s*{([^}]*)}/);
+  assert.ok(base, 'Expected the base .node-card__chips rule.');
+  assert.match(
+    base[1],
+    /max-height:\s*130px/,
+    'The desktop card still wants a capped chip strip; only the phone sheet releases it.'
+  );
+  assert.match(base[1], /overflow-y:\s*auto/, 'Expected the desktop strip to stay scrollable.');
+});
+
+test('the mobile sheet claims the vertical drag', () => {
+  const block = mobileSheetBlock();
+  const card = block.match(/\.node-card\s*{([\s\S]*?)}/);
+  assert.ok(card, 'Expected the mobile .node-card rule.');
+  assert.match(
+    card[1],
+    /touch-action:\s*pan-y/,
+    'Expected touch-action: pan-y so a drag on the sheet scrolls it instead of panning the graph.'
+  );
+  assert.match(
+    card[1],
+    /overscroll-behavior:\s*contain/,
+    'Expected overscroll containment so hitting the end of the list does not scroll the page behind it.'
+  );
+});

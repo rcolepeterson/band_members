@@ -2683,6 +2683,10 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+    /* Claim the vertical drag for the sheet. Without this the browser is free
+       to hand a touch that starts on the card to the page/graph behind it, and
+       a sheet that sometimes scrolls and sometimes pans reads as broken. */
+    touch-action: pan-y;
     transform: translateY(120%);
     transition: transform 200ms ease-out, opacity 120ms ease-out;
   }
@@ -2719,6 +2723,27 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   .node-card.is-open.node-card--peek .node-card__chips {
     max-height: 56px;
     overflow: hidden;
+  }
+
+  /*
+    Expanded: the CARD is the only scroll container on a phone.
+
+    The desktop card keeps its 130px chip strip, which works with a mouse
+    because a wheel over the strip scrolls the strip. On a phone that strip was
+    the whole bug behind "band cards won't scroll": a 121-member roster is
+    ~1750px of chips crammed into a 130px window sitting in the MIDDLE of the
+    sheet, while the sheet itself never overflowed and therefore never scrolled.
+    Dragging anywhere except inside those 130px moved nothing, the list was cut
+    off top and bottom with no affordance saying it could move, and even a drag
+    that landed inside it advanced three rows at a time.
+
+    Un-capping the strip makes the roster part of the sheet's own scroll, so a
+    drag anywhere on the card walks the whole member list, the sheet's cap does
+    the clipping, and there is no nested scroller to fight the graph's pan.
+  */
+  .node-card.is-open:not(.node-card--peek) .node-card__chips {
+    max-height: none;
+    overflow: visible;
   }
 
   /*
