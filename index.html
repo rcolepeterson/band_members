@@ -2723,7 +2723,15 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   .node-card.is-open.node-card--peek .node-card__chips {
     max-height: 56px;
     overflow: hidden;
+    /* Fade the cut edge so the clipped row reads as "there is more here" rather
+       than as a rendering fault. The heading now carries the real count next to
+       it, so this only has to sell the direction, not the number. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 34px, transparent);
+    mask-image: linear-gradient(to bottom, #000 34px, transparent);
   }
+  /* The whole collapsed sheet is the expand target (see the click handler), so
+     it should say so under a finger. */
+  .node-card.is-open.node-card--peek { cursor: pointer; }
 
   /*
     Expanded: the CARD is the only scroll container on a phone.
@@ -6954,6 +6962,18 @@ function downloadPngBlob(blob) {
       nodeCardRows.appendChild(v);
     }
 
+    // "Members · 21" rather than "Members".
+    //
+    // The mobile sheet opens in Peek, which clips the list to two rows. With a
+    // bare "MEMBERS" heading a 21-member band looked like a 4-member band that
+    // happened to be cut off, and there was nothing on screen saying otherwise
+    // -- the reason "the card only shows the first four members" reads as a bug
+    // rather than as a collapsed sheet. The count is cheap, it is true in every
+    // state, and it is the thing that makes the clipped row obviously a clip.
+    function connectionsLabel(singular, plural, count) {
+      return `${count === 1 ? singular : plural} · ${count}`;
+    }
+
     function populateNodeCard(node) {
       // Header: name + secondary line ("Genre · Location" for band, primary
       // instruments for musician). Genre lives here — as plain text next to /
@@ -6980,7 +7000,7 @@ function downloadPngBlob(blob) {
         // tenure years shown next to each name inside the chip.
         const memberRows = getBandMembersWithTenure(node.id);
         if (memberRows.length) {
-          nodeCardConnLabel.textContent = memberRows.length === 1 ? 'Member' : 'Members';
+          nodeCardConnLabel.textContent = connectionsLabel('Member', 'Members', memberRows.length);
           memberRows.forEach(({ person, tenure }) => {
             appendTenureChip(nodeCardConn, person.id, tenure, () => selectMemberNode(person, { source: 'chip' }));
           });
@@ -7005,7 +7025,7 @@ function downloadPngBlob(blob) {
         // Foo Fighters 1994" at a glance.
         const bandRows = getPersonBandsWithTenure(node.id);
         if (bandRows.length) {
-          nodeCardConnLabel.textContent = bandRows.length === 1 ? 'Band' : 'Bands';
+          nodeCardConnLabel.textContent = connectionsLabel('Band', 'Bands', bandRows.length);
           bandRows.forEach(({ band, tenure }) => {
             appendTenureChip(nodeCardConn, band.id, tenure, () => selectBandNode(band, { source: 'chip' }));
           });
@@ -7883,6 +7903,24 @@ function downloadPngBlob(blob) {
 
     if (nodeCardCloseBtn) nodeCardCloseBtn.addEventListener('click', closeNodeCard);
     if (nodeCardPeekToggle) nodeCardPeekToggle.addEventListener('click', toggleNodeCardSheet);
+
+    // A tap anywhere on a collapsed sheet expands it.
+    //
+    // The 4px grip was the only way out of Peek, and a 4px bar is not an
+    // affordance -- testers read the clipped two-row member list as the whole
+    // list and never found the handle. Expanding on a tap of the sheet's body
+    // is what every other bottom sheet on a phone does, and it costs nothing:
+    // the interactive children keep their own behaviour (a member chip must
+    // still travel to that member, the X must still close, the sign-in link
+    // must still sign in), and Expanded is not sticky -- the grip and the next
+    // selection both put it back.
+    nodeCardEl.addEventListener('click', event => {
+      if (!nodeCardEl.classList.contains('node-card--peek')) return;
+      // closest() over the interactive set rather than a target check, so a tap
+      // that lands on the <span> inside a chip is still a tap on the chip.
+      if (event.target.closest('button, a, input, select, textarea, [role="button"]')) return;
+      setNodeCardSheetState('expanded');
+    });
     // Rotating a phone, or resizing a desktop window past the breakpoint, swaps
     // which layout the open card is in. Re-derive the state rather than leaving
     // a desktop card wearing the Peek height cap (or a phone card stuck open).
