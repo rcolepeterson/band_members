@@ -93,9 +93,13 @@ test('the card markup contains an accessible Peek toggle button', () => {
 });
 
 test('the Peek toggle is wired to a click handler', () => {
-  assert.match(
-    INDEX_HTML,
-    /nodeCardPeekToggle\.addEventListener\('click',\s*toggleNodeCardSheet\)/,
+  // The handler gained a drag guard (see section 8), so it is a wrapper rather
+  // than a bare reference now. What matters is unchanged: a click on the grip
+  // toggles the sheet.
+  const idx = INDEX_HTML.indexOf("nodeCardPeekToggle.addEventListener('click'");
+  assert.ok(idx > 0, 'Expected a click listener on the Peek toggle.');
+  assert.ok(
+    INDEX_HTML.slice(idx, idx + 220).includes('toggleNodeCardSheet()'),
     'Expected the Peek toggle to call toggleNodeCardSheet on click.'
   );
 });
@@ -391,5 +395,116 @@ test('Peek fades its clipped edge instead of cutting it flat', () => {
     peek[1],
     /-webkit-mask-image:\s*linear-gradient/,
     'Expected the -webkit- prefix: Safari on iOS still needs it.'
+  );
+});
+
+// -----------------------------------------------------------------------
+// 8. The grab handle answers to a drag, not only a tap.
+//
+// Two testers independently tried to PULL the grip up and got nothing. A 44x4
+// bar drawn like a drag handle on a bottom sheet is a promise; tap-only was
+// why neither of them found Expanded on their own.
+// -----------------------------------------------------------------------
+
+test('the sheet has a pointer drag with a deliberate threshold', () => {
+  assert.match(
+    INDEX_HTML,
+    /const SHEET_DRAG_PX = \d+;/,
+    'Expected a named drag threshold rather than a bare number in the handler.'
+  );
+  const px = Number(INDEX_HTML.match(/const SHEET_DRAG_PX = (\d+);/)[1]);
+  assert.ok(px >= 12, `A ${px}px threshold turns a shaky tap into a drag.`);
+  assert.ok(px <= 48, `A ${px}px threshold is further than a thumb travels to nudge a sheet.`);
+  assert.match(
+    INDEX_HTML,
+    /nodeCardEl\.addEventListener\('pointerdown'/,
+    'Expected the drag to start from a pointerdown on the card.'
+  );
+  assert.match(
+    INDEX_HTML,
+    /nodeCardEl\.addEventListener\('pointermove'/,
+    'Expected the drag to resolve on pointermove.'
+  );
+});
+
+test('drag direction maps to the state it should produce', () => {
+  const idx = INDEX_HTML.indexOf("nodeCardEl.addEventListener('pointermove'");
+  const body = INDEX_HTML.slice(idx, idx + 900);
+  assert.match(
+    body,
+    /sheetDrag\.peek && up\)\s*setNodeCardSheetState\('expanded'\)/,
+    'Expected a pull UP on a collapsed sheet to expand it: the gesture two testers reached for.'
+  );
+  assert.match(
+    body,
+    /!sheetDrag\.peek && !up\)\s*setNodeCardSheetState\('peek'\)/,
+    'Expected a pull DOWN on an expanded sheet to collapse it.'
+  );
+});
+
+test('an expanded card only drags by its grip, so the member list still scrolls', () => {
+  const idx = INDEX_HTML.indexOf("nodeCardEl.addEventListener('pointerdown'");
+  const body = INDEX_HTML.slice(idx, idx + 900);
+  assert.match(
+    body,
+    /const onGrip = !!event\.target\.closest\('\.node-card__peek-toggle'\)/,
+    'Expected the grip to be identified.'
+  );
+  assert.match(
+    body,
+    /if \(!peek && !onGrip\) return;/,
+    'An expanded card must only drag by its grip, or dragging the body would stop scrolling the list.'
+  );
+  assert.match(
+    body,
+    /event\.pointerType === 'mouse'/,
+    'Expected mouse pointers excluded: the desktop card is not a sheet.'
+  );
+});
+
+test('a drag swallows the click it ends in, exactly once', () => {
+  // Without this, a pull up expands and the trailing click toggles straight
+  // back to Peek — the gesture appears to do nothing at all.
+  assert.match(INDEX_HTML, /function consumeSheetGesture\(\)/, 'Expected a one-shot gesture guard.');
+  const guard = INDEX_HTML.slice(INDEX_HTML.indexOf('function consumeSheetGesture()'), INDEX_HTML.indexOf('function consumeSheetGesture()') + 200);
+  assert.ok(
+    guard.includes('sheetGestureHandled = false'),
+    'Expected the flag cleared when consumed, so it can never eat a second, real tap.'
+  );
+  const down = INDEX_HTML.slice(INDEX_HTML.indexOf("nodeCardEl.addEventListener('pointerdown'"), INDEX_HTML.indexOf("nodeCardEl.addEventListener('pointermove'"));
+  assert.ok(
+    down.includes('sheetGestureHandled = false'),
+    'Expected each new gesture to reset the flag, so a stale one cannot linger.'
+  );
+  for (const site of ["nodeCardPeekToggle.addEventListener('click'", "nodeCardEl.addEventListener('click'"]) {
+    const at = INDEX_HTML.indexOf(site);
+    assert.ok(at > 0, `Expected the ${site} handler.`);
+    assert.ok(
+      INDEX_HTML.slice(at, at + 400).includes('consumeSheetGesture()'),
+      `Expected ${site} to yield to a completed drag.`
+    );
+  }
+});
+
+test('the drag surfaces opt out of touch scrolling, the scroll surface keeps it', () => {
+  const block = mobileSheetBlock();
+  const grip = block.match(/\.node-card__peek-toggle\s*{([^}]*)}/);
+  assert.ok(grip, 'Expected the mobile grip rule.');
+  assert.match(
+    grip[1],
+    /touch-action:\s*none/,
+    'The grip is a drag surface: pan-y there scrolls the list out from under the gesture.'
+  );
+  const peek = block.match(/\.node-card\.is-open\.node-card--peek\s*{([^}]*)}/);
+  assert.match(
+    peek[1],
+    /touch-action:\s*none/,
+    'Peek has nothing to scroll; pan-y let the compositor cancel the pull mid-gesture.'
+  );
+  const card = block.match(/\.node-card\s*{([\s\S]*?)}/);
+  assert.match(
+    card[1],
+    /touch-action:\s*pan-y/,
+    'The expanded sheet must keep pan-y: it is the scroll container for the member list.'
   );
 });

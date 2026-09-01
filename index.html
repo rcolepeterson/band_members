@@ -2708,6 +2708,11 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   .node-card.is-open.node-card--peek {
     max-height: var(--peek-height);
     overflow: hidden;
+    /* Peek has nothing to scroll, so the whole sheet is a drag surface. Leaving
+       the expanded card's pan-y in place here let the compositor claim a pull
+       as a scroll and fire pointercancel mid-gesture, which made pulling up on
+       the sheet body work only sometimes -- worse than not working at all. */
+    touch-action: none;
   }
   .node-card.is-open.node-card--peek .node-card__rows,
   .node-card.is-open.node-card--peek .node-card__verify-toggle,
@@ -2802,7 +2807,11 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     background: rgba(11, 15, 22, 0.96);
     border: 0;
     border-radius: 8px;
-    cursor: pointer;
+    cursor: grab;
+    /* The grip is a drag surface, so it must not also be a scroll surface: with
+       the card's pan-y in force, a pull on the handle would scroll the member
+       list out from under the gesture instead of collapsing the sheet. */
+    touch-action: none;
     -webkit-tap-highlight-color: transparent;
   }
   .node-card__peek-grip {
@@ -7902,7 +7911,74 @@ function downloadPngBlob(blob) {
     }
 
     if (nodeCardCloseBtn) nodeCardCloseBtn.addEventListener('click', closeNodeCard);
-    if (nodeCardPeekToggle) nodeCardPeekToggle.addEventListener('click', toggleNodeCardSheet);
+
+    // Drag the sheet, because that is what a grab handle promises.
+    //
+    // Two testers independently tried to PULL the grip up and got nothing --
+    // it only answered to a tap. A 44x4 bar drawn like a drag handle, on a
+    // bottom sheet, in 2026, is a promise; not honouring it is why neither of
+    // them found Expanded on their own. Tap still works, this is additive.
+    //
+    // Where a drag is allowed differs by state, and that asymmetry is the whole
+    // design:
+    //   - Peek has nothing to scroll, so the entire sheet is a drag surface.
+    //   - Expanded is a scroll container holding the member list, so ONLY the
+    //     grip drags. If the body dragged too, the list would stop scrolling --
+    //     which is the bug this whole branch exists to fix.
+    const SHEET_DRAG_PX = 24;
+    let sheetDrag = null;
+    // A drag ends in a click on the same element, and that click would undo the
+    // drag: pull up to expand, then the click toggles straight back to Peek.
+    // The flag swallows exactly one click, and is cleared by the next gesture
+    // so it can never go stale and eat a real tap.
+    let sheetGestureHandled = false;
+
+    function consumeSheetGesture() {
+      if (!sheetGestureHandled) return false;
+      sheetGestureHandled = false;
+      return true;
+    }
+
+    nodeCardEl.addEventListener('pointerdown', event => {
+      sheetGestureHandled = false;
+      sheetDrag = null;
+      // Mouse pointers are the desktop card, which is not a sheet and has no
+      // Peek state to drag between.
+      if (event.pointerType === 'mouse' || !isMobileSheet()) return;
+      const peek = nodeCardEl.classList.contains('node-card--peek');
+      const onGrip = !!event.target.closest('.node-card__peek-toggle');
+      if (!peek && !onGrip) return;
+      sheetDrag = { startY: event.clientY, peek, onGrip };
+    });
+
+    nodeCardEl.addEventListener('pointermove', event => {
+      if (!sheetDrag) return;
+      const dy = event.clientY - sheetDrag.startY;
+      if (Math.abs(dy) < SHEET_DRAG_PX) return;
+      // Resolve as soon as the threshold is crossed rather than waiting for the
+      // finger to lift: a sheet that only moves after you let go feels broken
+      // in a different way.
+      const up = dy < 0;
+      if (sheetDrag.peek && up) setNodeCardSheetState('expanded');
+      else if (!sheetDrag.peek && !up) setNodeCardSheetState('peek');
+      // A downward pull on a collapsed sheet is left alone deliberately. It is
+      // the standard dismiss gesture, and dismissing on an accidental drag --
+      // while the card is the only thing naming the highlighted nodes -- costs
+      // more than it saves. The X stays the one way to close.
+      sheetGestureHandled = true;
+      sheetDrag = null;
+    });
+
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
+      nodeCardEl.addEventListener(type, () => { sheetDrag = null; });
+    });
+
+    if (nodeCardPeekToggle) {
+      nodeCardPeekToggle.addEventListener('click', () => {
+        if (consumeSheetGesture()) return;
+        toggleNodeCardSheet();
+      });
+    }
 
     // A tap anywhere on a collapsed sheet expands it.
     //
@@ -7915,6 +7991,7 @@ function downloadPngBlob(blob) {
     // must still sign in), and Expanded is not sticky -- the grip and the next
     // selection both put it back.
     nodeCardEl.addEventListener('click', event => {
+      if (consumeSheetGesture()) return;
       if (!nodeCardEl.classList.contains('node-card--peek')) return;
       // closest() over the interactive set rather than a target check, so a tap
       // that lands on the <span> inside a chip is still a tap on the chip.
