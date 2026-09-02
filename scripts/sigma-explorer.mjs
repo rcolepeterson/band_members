@@ -536,23 +536,56 @@ body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
 }
 
 @media (max-width:720px){
-  #${STAGE_ID} .sigma-hero{width:min(94vw,620px);gap:10px}
-  #${STAGE_ID} .sigma-prompt{gap:8px}
-  #${STAGE_ID} .sigma-prompt form{gap:8px}
-  /* One row, all six words. The wrap to a second row was never a shortage of
-     space -- at the old padding the row measured 353px inside 390px and still
-     broke. Tightened padding and font bring the rightmost edge to 366px, so
-     every action stays visible and named rather than being renamed, hidden
-     behind a menu, or pushed off a scrolling edge. Height stays at 44px for the
-     tap target even though only width was ever the constraint. */
-  #${STAGE_ID} .sigma-actions{gap:5px;flex-wrap:nowrap}
-  #${STAGE_ID} .sigma-action{padding:0 9px;font-size:12px;height:44px}
-  /* Keeps "Explore" from eating the field's width on a narrow phone, without
-     dropping the input's font below the 16px no-zoom threshold. */
-  #${STAGE_ID} .sigma-prompt button{padding:0 18px}
-  #${STAGE_ID} .sigma-footer .sigma-hint{font-size:12px}
+  #${STAGE_ID} .sigma-hero{width:min(94vw,620px);gap:5px}
+  #${STAGE_ID} .sigma-prompt{gap:5px}
+  #${STAGE_ID} .sigma-prompt form{gap:4px}
+  /*
+    Half-height chrome on a phone.
+
+    The stage is the content here, and on a 390x664 viewport the hero plus the
+    footer were eating a third of it. Both rows keep every word -- nothing is
+    renamed, hidden behind a menu, or pushed off a scrolling edge -- they just
+    stop claiming desktop-sized boxes.
+
+    The pills drop from 44px to 22px. That is below the 44px tap target the
+    previous pass deliberately held, which was the right call when the row was
+    the only chrome on screen; it is a considered trade for stage room, and the
+    row is still 22px of unbroken height with 3px gaps rather than a set of
+    cramped icons.
+  */
+  #${STAGE_ID} .sigma-actions{gap:3px;flex-wrap:nowrap}
+  #${STAGE_ID} .sigma-action{padding:0 6px;font-size:10px;height:22px}
+  /* min-height, not just height. The page's global form styling
+     (input,select,textarea{...min-height:48px}) is written for stacked fields
+     and leaks in here -- the same leak the margin:0 above exists for. A floor
+     of 48px silently beat height:24px, leaving the field full size next to a
+     halved Explore button. */
+  #${STAGE_ID} .sigma-prompt input,
+  #${STAGE_ID} .sigma-prompt button{height:24px;min-height:24px}
+  /* Halved padding keeps the shorter field wide enough for the placeholder.
+     The FONT stays at 16px: iOS Safari zooms the whole page when a focused
+     input's text is smaller than that, which yanks the constellation off
+     screen. That is the one measurement on this row that cannot be halved. */
+  #${STAGE_ID} .sigma-prompt input{padding:0 10px}
+  #${STAGE_ID} .sigma-prompt button{padding:0 9px;font-size:12px}
   #${STAGE_ID} .sigma-expand{right:12px;bottom:20px}
-  #${STAGE_ID} .sigma-context{font-size:11px;max-width:70vw}
+  /*
+    The footer keeps the introduction and the group jump. Nothing else.
+
+    A phone has room for one sentence of narration, and the introduction is the
+    one that earns it: it explains why a stranger is standing on Aaron's node.
+    The rest is desktop commentary -- the centred-on readout, the frontier
+    count, and the sentence in front of "Show next group" -- which described the
+    view to someone who could already see all of it.
+
+    The BUTTON survives without its sentence, because jumping to a
+    disconnected group is an action, not a description.
+  */
+  #${STAGE_ID} .sigma-footer .sigma-hint{font-size:12px}
+  #${STAGE_ID} .sigma-footer .sigma-hint:not(.sigma-hint--intro){display:none}
+  #${STAGE_ID} .sigma-footer .sigma-context,
+  #${STAGE_ID} .sigma-footer .sigma-frontier,
+  #${STAGE_ID} .sigma-other-groups__text{display:none}
 }
 `;
 
@@ -1207,6 +1240,12 @@ export function initSigmaExplorer({
     if (hintEl) {
       const onHomeStar = Boolean(homeStarId) && homeStarId === state.anchorId;
       hintEl.innerHTML = onHomeStar ? introCopy(homeStarId) : EXPLORE_COPY;
+      // The class is what lets the phone keep the introduction and drop the
+      // generic commentary. Both live in this one element, so without a marker
+      // CSS cannot tell "Hey, I'm Aaron" from "You are viewing one region of a
+      // much larger music universe" -- and hiding the element outright would
+      // take the introduction with it.
+      hintEl.classList.toggle('sigma-hint--intro', onHomeStar);
     }
     positionOverlays();
 
