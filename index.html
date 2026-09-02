@@ -4049,6 +4049,70 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
     }
 
+    /* ----------------------------------------------------------------------
+       Band and person identity.
+
+       Node identity in this graph is the display name, which is fine until a
+       band and a musician share one. Five acts in the data do: Jeremy Enigk,
+       Ayron Jones, LL Cool J, Randy Hansen and Sir Mix-a-Lot each have a band
+       row (genre, city, years) AND a person row (instruments, bio), joined by
+       a real membership. They are not duplicates. A solo project named after
+       its artist is a band, because whatever is in the band name field IS a
+       band name.
+
+       Keyed by name alone, those two rows became ONE node. Whichever row was
+       read first won the type, so Jeremy Enigk rendered as a band and his
+       instruments and bio were silently discarded -- and the membership
+       joining them became a self-loop, which is what crashed the renderer
+       (see canRenderEdge in neighborhood-helpers.mjs).
+
+       The rule: the BAND keeps the plain name. A person who collides with a
+       band name gets a suffixed id. Only the id changes; every label, card,
+       chip and API call uses the display name, so nothing a visitor sees or a
+       server receives is affected.
+
+       Why a readable suffix rather than a 'person:' prefix: ids travel in
+       shareable ?anchor= links. '?anchor=Jeremy Enigk (musician)' explains
+       itself in a way '?anchor=person:Jeremy Enigk' does not, and a plain
+       '?anchor=Jeremy Enigk' still lands on the band, which is what a link
+       shared before this change meant.
+       ---------------------------------------------------------------------- */
+    const PERSON_ID_SUFFIX = ' (musician)';
+
+    /**
+       One rule, both writers.
+
+       buildMasterGraph (page load) and applyDraftToMaster (live submission)
+       both mint node ids, and a rule implemented twice is a rule that drifts.
+       The predicate differs -- one has a pre-scanned set of band names, the
+       other has the master node list -- so the CALLER supplies it and the
+       decision lives here.
+     */
+    function personNodeId(name, isBandName) {
+      const clean = String(name || '').trim();
+      if (!clean) return clean;
+      if (clean.endsWith(PERSON_ID_SUFFIX)) return clean;
+      return isBandName(clean) ? clean + PERSON_ID_SUFFIX : clean;
+    }
+
+    // The display name for a node id. Pure and cheap on purpose: it is called
+    // per chip while rendering a 121-member roster, so it strips the suffix
+    // rather than searching 5,000 nodes for a name attribute.
+    function displayNameForId(id) {
+      const raw = String(id || '');
+      return raw.endsWith(PERSON_ID_SUFFIX)
+        ? raw.slice(0, -PERSON_ID_SUFFIX.length)
+        : raw;
+    }
+
+    // What a human should see for this node, and what the API should receive
+    // for it. Accepts a node or a bare id so callers holding either can ask.
+    function nodeName(node) {
+      if (!node) return '';
+      if (typeof node === 'string') return displayNameForId(node);
+      return node.name || displayNameForId(node.id);
+    }
+
     function getPersonRadius(node) {
   if (node.type === "band") return 11;
   if (node.weight === 1) return 8.5;
@@ -5693,6 +5757,16 @@ function downloadPngBlob(blob) {
       const nodeMap = new Map();
       const links = [];
 
+      // Every band name in the file, collected BEFORE any row is turned into a
+      // node. A pre-pass is required rather than deciding as we go: the row
+      // 'Sunny Day Real Estate, Jeremy Enigk' can arrive long before the row
+      // that establishes Jeremy Enigk as a band, and the person's id has to be
+      // the same on both.
+      const bandNameKeys = new Set(
+        rows.map(row => normalizeKey(row && row.source)).filter(Boolean)
+      );
+      const isBandName = name => bandNameKeys.has(normalizeKey(name));
+
       rows.forEach(row => {
         const source = (row.source || '').trim();
         const target = (row.target || '').trim();
@@ -5721,10 +5795,14 @@ function downloadPngBlob(blob) {
         // Recently-added filter treats as "not datable".
         const bandCreatedAt = String(row.bandCreatedAt || row.created_at || '').trim();
 
+        // The band always keeps the plain name; only a colliding person is
+        // given a distinct id.
+        const personId = personNodeId(target, isBandName);
+
         if (!nodeMap.has(source)) {
           // Genre lives on the band node only. If any row for this band has
           // a non-empty genre it wins over rows that leave the field blank.
-          nodeMap.set(source, { id: source, type: 'band', city, state, country, genre, yearsActive: bandYearsActive, createdAt: bandCreatedAt });
+          nodeMap.set(source, { id: source, name: source, type: 'band', city, state, country, genre, yearsActive: bandYearsActive, createdAt: bandCreatedAt });
         } else {
           const existingBand = nodeMap.get(source);
           if (genre && !existingBand.genre) existingBand.genre = genre;
@@ -5732,10 +5810,10 @@ function downloadPngBlob(blob) {
           if (bandYearsActive && !existingBand.yearsActive) existingBand.yearsActive = bandYearsActive;
           if (bandCreatedAt && !existingBand.createdAt) existingBand.createdAt = bandCreatedAt;
         }
-        if (!nodeMap.has(target)) {
-          nodeMap.set(target, { id: target, type: 'person', city, state, country, instrument1, instrument2, bio, yearsActive: personYearsActive });
+        if (!nodeMap.has(personId)) {
+          nodeMap.set(personId, { id: personId, name: target, type: 'person', city, state, country, instrument1, instrument2, bio, yearsActive: personYearsActive });
         } else {
-          const existing = nodeMap.get(target);
+          const existing = nodeMap.get(personId);
           if (!existing.instrument1 && instrument1) existing.instrument1 = instrument1;
           if (!existing.instrument2 && instrument2) existing.instrument2 = instrument2;
           if (!existing.bio && bio) existing.bio = bio;
@@ -5744,7 +5822,7 @@ function downloadPngBlob(blob) {
 
         links.push({
           source,
-          target,
+          target: personId,
           relation: (row.relation_type || row.relationship || 'member').trim(),
           weight: Number(row.weight || 1),
           // Member's tenure at THIS specific band. Optional — renders as
@@ -5877,7 +5955,7 @@ function downloadPngBlob(blob) {
     // /api/bands yet).
     function bandUuidForNode(node) {
       if (!node || node.type !== 'band') return null;
-      const raw = findRawBandByName(node.id);
+      const raw = findRawBandByName(nodeName(node));
       return raw ? raw.id : null;
     }
 
@@ -6400,6 +6478,37 @@ function downloadPngBlob(blob) {
     // member-to-band link for a single draft. Mirrors the exact node/link shape
     // produced by buildMasterGraph() so user-added data is indistinguishable
     // from CSV-derived data. Returns { added: boolean, reason?: string }.
+    /**
+       Moves an existing PERSON node off a plain name so a band can take it.
+
+       Only reachable in a live session: page load's pre-pass already knows
+       every band name before it mints a single id. Here, someone adds the band
+       'Jeremy Enigk' while the musician Jeremy Enigk is already on the graph
+       holding that id.
+
+       Link endpoints are rewritten alongside the id because d3 mutates links
+       in place, replacing the string endpoints with node references -- so an
+       endpoint may be either, and a rename that only touched the node would
+       leave the string endpoints pointing at an id no node has any more.
+     */
+    function makeRoomForBandNamed(master, bandName) {
+      const key = normalizeKey(bandName);
+      const person = master.nodes.find(node => node.type === 'person' && normalizeKey(node.id) === key);
+      if (!person) return false;
+      const from = person.id;
+      const to = personNodeId(person.name || from, () => true);
+      if (from === to || master.nodes.some(node => node.id === to)) return false;
+      person.id = to;
+      if (!person.name) person.name = from;
+      master.links.forEach(link => {
+        if (typeof link.source === 'string' && link.source === from) link.source = to;
+        if (typeof link.target === 'string' && link.target === from) link.target = to;
+        // Object endpoints are the same node instance we just renamed, so they
+        // need no rewrite -- they carry the new id already.
+      });
+      return true;
+    }
+
     function applyDraftToMaster(master, draft) {
       if (!master || !draft || typeof draft !== 'object') return { added: false, reason: 'No graph data available yet.' };
       const band = String(draft.band || '').trim();
@@ -6444,13 +6553,21 @@ function downloadPngBlob(blob) {
       // matches by name, we reuse it and only fill in city/state/country if
       // it was blank.
       let bandNode = master.nodes.find(node => node.type === 'band'
-        && normalizeKey(node.id) === normalizeKey(band));
+        && normalizeKey(nodeName(node)) === normalizeKey(band));
       if (!bandNode) {
+        // The mirror case, and the one that bites in a live session: a person
+        // named X is already on the graph and a BAND named X is now being
+        // added. Page load resolves this with its pre-pass; here the person
+        // already owns the plain id, so it has to move aside before the band
+        // takes it. Without this the graph ends up holding two nodes with one
+        // id, and Sigma throws on the duplicate -- the same class of failure
+        // as the self-loop crash.
+        makeRoomForBandNamed(master, band);
         // savedAt is the submission timestamp, which is exactly what
         // bands.created_at will hold once the draft reaches Neon — so a band
         // added in this session shows up under Recently added immediately,
         // without waiting for a reload.
-        master.nodes.push({ id: band, type: 'band', city, state, country, genre, yearsActive, label: bandLabel, albums, createdAt: String(draft.savedAt || '').trim() });
+        master.nodes.push({ id: band, name: band, type: 'band', city, state, country, genre, yearsActive, label: bandLabel, albums, createdAt: String(draft.savedAt || '').trim() });
         changed = true;
       } else {
         if (!bandNode.city && city) {
@@ -6490,11 +6607,20 @@ function downloadPngBlob(blob) {
         // A single bio field is shared per submission; attach it to the first member.
         const bio = index === 0 ? bandBio : '';
 
+        // Same rule as page load, asking the live graph instead of a
+        // pre-scanned row set. The band node for THIS draft was pushed just
+        // above, so a solo-act submission (band X, member X) sees it and the
+        // person correctly becomes 'X (musician)'.
+        const isBandName = name => master.nodes.some(node => node.type === 'band'
+          && normalizeKey(node.id) === normalizeKey(name));
+        const memberId = personNodeId(member, isBandName);
+
         let personNode = master.nodes.find(node => node.type === 'person'
-          && normalizeKey(node.id) === normalizeKey(member));
+          && normalizeKey(node.id) === normalizeKey(memberId));
         if (!personNode) {
           master.nodes.push({
-            id: member,
+            id: memberId,
+            name: member,
             type: 'person',
             city,
             state,
@@ -6514,10 +6640,10 @@ function downloadPngBlob(blob) {
         const linkExists = master.links.some(link => {
           const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
           const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-          return normalizeKey(sourceId) === normalizeKey(band) && normalizeKey(targetId) === normalizeKey(member);
+          return normalizeKey(sourceId) === normalizeKey(band) && normalizeKey(targetId) === normalizeKey(memberId);
         });
         if (!linkExists) {
-          master.links.push({ source: band, target: member, relation: 'member', weight });
+          master.links.push({ source: band, target: memberId, relation: 'member', weight });
           changed = true;
           membersAdded += 1;
         }
@@ -6692,7 +6818,7 @@ function downloadPngBlob(blob) {
         const term = currentSearch.toLowerCase();
         const matchedNodes = nodes.filter(node => {
           const instruments = [node.instrument1, node.instrument2].filter(Boolean).join(' ').toLowerCase();
-          return node.id.toLowerCase().includes(term) || instruments.includes(term) || locationLabel(node).toLowerCase().includes(term);
+          return nodeName(node).toLowerCase().includes(term) || instruments.includes(term) || locationLabel(node).toLowerCase().includes(term);
         });
         const matchedIds = new Set(matchedNodes.map(node => node.id));
         const keepIds = new Set(matchedIds);
@@ -6762,7 +6888,7 @@ function downloadPngBlob(blob) {
       }
       items.forEach(item => {
         const chip = document.createElement('span');
-        chip.textContent = item;
+        chip.textContent = nodeName(item);
         container.appendChild(chip);
       });
     }
@@ -6779,7 +6905,7 @@ function downloadPngBlob(blob) {
           return graphState.master.nodes.find(node => node.id === targetId);
         })
         .filter(Boolean)
-        .sort((a, b) => a.id.localeCompare(b.id));
+        .sort((a, b) => nodeName(a).localeCompare(nodeName(b)));
     }
 
     function renderBandMemberButtons(members, emptyText = 'Select a band to see its members') {
@@ -6797,7 +6923,7 @@ function downloadPngBlob(blob) {
         button.type = 'button';
         button.className = 'member-chip';
         const instruments = [person.instrument1, person.instrument2].filter(Boolean).join(', ');
-        button.textContent = instruments ? `${person.id} — ${instruments}` : person.id;
+        button.textContent = instruments ? `${nodeName(person)} — ${instruments}` : nodeName(person);
         button.addEventListener('click', () => selectMemberNode(person, { source: 'chip' }));
         container.appendChild(button);
       });
@@ -6825,7 +6951,7 @@ function downloadPngBlob(blob) {
         renderBandMemberButtons([]);
         return;
       }
-      selectedName.textContent = node.id;
+      selectedName.textContent = nodeName(node);
       selectedCopy.textContent = node.type === 'band'
         ? 'Band node selected. Use this card to track scene, total relationships, and prepare deeper drill-down views.'
         : 'Musician node selected. This is a good place for bio details, instruments, and future profile notes.';
@@ -6892,7 +7018,7 @@ function downloadPngBlob(blob) {
         const ay = yearsActiveStart(a.tenure);
         const by = yearsActiveStart(b.tenure);
         if (ay !== by) return ay - by;
-        return a.band.id.localeCompare(b.band.id);
+        return nodeName(a.band).localeCompare(nodeName(b.band));
       });
       return rows;
     }
@@ -6911,7 +7037,7 @@ function downloadPngBlob(blob) {
         const ay = yearsActiveStart(a.tenure);
         const by = yearsActiveStart(b.tenure);
         if (ay !== by) return ay - by;
-        return a.person.id.localeCompare(b.person.id);
+        return nodeName(a.person).localeCompare(nodeName(b.person));
       });
       return rows;
     }
@@ -6987,7 +7113,7 @@ function downloadPngBlob(blob) {
       // Header: name + secondary line ("Genre · Location" for band, primary
       // instruments for musician). Genre lives here — as plain text next to /
       // under the band name — not as a pill, per design.
-      nodeCardName.textContent = node.id;
+      nodeCardName.textContent = nodeName(node);
       nodeCardSub.textContent = '';
       nodeCardRows.innerHTML = '';
       nodeCardConn.innerHTML = '';
@@ -7011,7 +7137,7 @@ function downloadPngBlob(blob) {
         if (memberRows.length) {
           nodeCardConnLabel.textContent = connectionsLabel('Member', 'Members', memberRows.length);
           memberRows.forEach(({ person, tenure }) => {
-            appendTenureChip(nodeCardConn, person.id, tenure, () => selectMemberNode(person, { source: 'chip' }));
+            appendTenureChip(nodeCardConn, nodeName(person), tenure, () => selectMemberNode(person, { source: 'chip' }));
           });
           nodeCardConnWrap.hidden = false;
         }
@@ -7036,7 +7162,7 @@ function downloadPngBlob(blob) {
         if (bandRows.length) {
           nodeCardConnLabel.textContent = connectionsLabel('Band', 'Bands', bandRows.length);
           bandRows.forEach(({ band, tenure }) => {
-            appendTenureChip(nodeCardConn, band.id, tenure, () => selectBandNode(band, { source: 'chip' }));
+            appendTenureChip(nodeCardConn, nodeName(band), tenure, () => selectBandNode(band, { source: 'chip' }));
           });
           nodeCardConnWrap.hidden = false;
         }
@@ -8056,13 +8182,14 @@ function downloadPngBlob(blob) {
     // 'all' and not a country chip), the suffix is redundant and dropped.
     // Person nodes never get this suffix.
     function bandNodeLabel(d) {
+      const name = nodeName(d);
       const isSingleSceneView = currentScene && currentScene !== 'all' && !currentScene.startsWith('country:');
-      if (isSingleSceneView) return d.id;
+      if (isSingleSceneView) return name;
       const country = normalizeCountry(d.country);
       const city = normalizeLocationField(d.city);
-      if (!city) return d.id;
+      if (!city) return name;
       const suffix = country && country !== 'USA' ? `${city}, ${country}` : city;
-      return `${d.id} · ${suffix}`;
+      return `${name} · ${suffix}`;
     }
 
     // ---------------------------------------------------------------------
@@ -8644,7 +8771,8 @@ function downloadPngBlob(blob) {
         .text(d => {
           if (d.type === 'band') return bandNodeLabel(d);
           const instruments = [d.instrument1, d.instrument2].filter(Boolean).join(', ');
-          return instruments ? `${d.id} — ${instruments}` : d.id;
+          const name = nodeName(d);
+          return instruments ? `${name} — ${instruments}` : name;
         })
         .style('font-size', d => `${nodeLabelPx(d)}px`)
         .style('opacity', d => d.type === 'band' ? 0.98 : 0.8)
@@ -8900,13 +9028,13 @@ function downloadPngBlob(blob) {
     function findCanonicalBandName(typed) {
       if (!typed || !graphState || !graphState.master) return null;
       const key = normalizeKey(typed);
-      const match = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(node.id) === key);
+      const match = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(nodeName(node)) === key);
       return match ? match.id : null;
     }
     function findCanonicalMemberName(typed) {
       if (!typed || !graphState || !graphState.master) return null;
       const key = normalizeKey(typed);
-      const match = graphState.master.nodes.find(node => node.type === 'person' && normalizeKey(node.id) === key);
+      const match = graphState.master.nodes.find(node => node.type === 'person' && normalizeKey(nodeName(node)) === key);
       return match ? match.id : null;
     }
 
@@ -9056,10 +9184,10 @@ function downloadPngBlob(blob) {
 
       let matchedNode = null;
       if (member) {
-        matchedNode = graphState.master.nodes.find(node => node.type === 'person' && normalizeKey(node.id) === normalizeKey(member));
+        matchedNode = graphState.master.nodes.find(node => node.type === 'person' && normalizeKey(nodeName(node)) === normalizeKey(member));
       }
       if (!matchedNode && band) {
-        matchedNode = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(node.id) === normalizeKey(band) && (!scene || normalizeKey(locationLabel(node) || '') === normalizeKey(scene)));
+        matchedNode = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(nodeName(node)) === normalizeKey(band) && (!scene || normalizeKey(locationLabel(node) || '') === normalizeKey(scene)));
       }
 
       if (!matchedNode) {
@@ -9078,7 +9206,7 @@ function downloadPngBlob(blob) {
       }
 
       const connections = getNodeConnections(matchedNode.id);
-      previewName.textContent = matchedNode.id;
+      previewName.textContent = nodeName(matchedNode);
       previewCopy.textContent = matchedNode.type === 'person'
         ? `Existing member found in the tree. Connected bands: ${connections.join(', ') || 'none yet'}.`
         : `Existing band found in the tree. Connected members: ${connections.join(', ') || 'none yet'}.`;
@@ -9513,7 +9641,7 @@ function downloadPngBlob(blob) {
       }
 
       const bandExisted = !!master && master.nodes.some(node => node.type === 'band'
-        && normalizeKey(node.id) === normalizeKey(band)
+        && normalizeKey(nodeName(node)) === normalizeKey(band)
         && normalizeKey(locationLabel(node) || '') === normalizeKey(scene));
 
       // Genre is a per-band attribute: only send it if this submission is
@@ -9868,7 +9996,7 @@ function downloadPngBlob(blob) {
     // still opens but with an inline warning and a disabled roster, since
     // there is no backend band id to PATCH against.
     function openEditBandPopover(node) {
-      const rawBand = findRawBandByName(node.id);
+      const rawBand = findRawBandByName(nodeName(node));
       const feedback = document.getElementById('edit-band-feedback');
       const validation = document.getElementById('edit-band-validation');
       if (feedback) { feedback.textContent = ''; feedback.classList.remove('is-visible', 'is-warning', 'is-success'); }
@@ -9889,9 +10017,9 @@ function downloadPngBlob(blob) {
       editBandState.band = node;
       editBandState.bandId = rawBand ? rawBand.id : null;
 
-      document.getElementById('edit-band-title').textContent = `Edit band: ${node.id}`;
+      document.getElementById('edit-band-title').textContent = `Edit band: ${nodeName(node)}`;
       document.getElementById('edit-band-id').value = editBandState.bandId || '';
-      document.getElementById('edit-band-name').value = (rawBand && rawBand.name) || node.id || '';
+      document.getElementById('edit-band-name').value = (rawBand && rawBand.name) || nodeName(node) || '';
       document.getElementById('edit-band-city').value = (rawBand && rawBand.city) || node.city || '';
       populateCountryOptions('edit-band-country');
       document.getElementById('edit-band-country').value = (rawBand && rawBand.country) || node.country || 'USA';
@@ -10390,11 +10518,13 @@ function downloadPngBlob(blob) {
       // Prefer the backend uuid if we can resolve it (keeps the PATCH target
       // stable even if the person is later renamed); fall back to the
       // display name, which edit-person.mjs also accepts.
-      const rawMember = typeof findRawMemberByName === 'function' ? findRawMemberByName(node.id) : null;
-      editPersonState.personId = (rawMember && rawMember.id) || node.id;
+      const rawMember = typeof findRawMemberByName === 'function' ? findRawMemberByName(nodeName(node)) : null;
+      // Falls back to the display NAME, never the node id: edit-person.mjs
+      // accepts a name, and 'Jeremy Enigk (musician)' matches no row.
+      editPersonState.personId = (rawMember && rawMember.id) || nodeName(node);
 
       const nameEl = document.getElementById('edit-person-name');
-      if (nameEl) nameEl.textContent = node.id || '';
+      if (nameEl) nameEl.textContent = nodeName(node) || '';
       const bioField = document.getElementById('edit-person-bio');
       if (bioField) bioField.value = node.bio || '';
 

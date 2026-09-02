@@ -46,6 +46,13 @@ const LOCATION_HELPERS = [
   'parseLegacyScene',
 ];
 
+// Helper to extract a one-line `const NAME = value;` declaration.
+function extractConst(name) {
+  const start = html.indexOf(`const ${name} = `);
+  assert.ok(start >= 0, `const ${name} not found in index.html`);
+  return html.slice(start, html.indexOf(';', start) + 1);
+}
+
 // Helper to extract a `const NAME = { ... };` declaration from index.html.
 function extractConstObject(name) {
   const start = html.indexOf(`const ${name}`);
@@ -62,6 +69,14 @@ const factory = new Function(
     extractConstObject('KNOWN_CITY_LOCATIONS'),
     ...LOCATION_HELPERS.map(extract),
     extract('normalizeKey'),
+    // The identity split gave applyDraftToMaster two new collaborators: the
+    // shared id rule and the person-node rename that frees a plain name for an
+    // incoming band. Both must come along or the extracted function throws.
+    extractConst('PERSON_ID_SUFFIX'),
+    extract('personNodeId'),
+    extract('displayNameForId'),
+    extract('nodeName'),
+    extract('makeRoomForBandNamed'),
     extract('applyDraftToMaster'),
     extract('mergeSubmissionsIntoMaster'),
   ].join('\n') +
