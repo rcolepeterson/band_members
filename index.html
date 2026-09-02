@@ -816,18 +816,41 @@ body.rbft-sigma-boot .header-right .header-btn {
   border-radius: var(--radius-full);
 }
 @media (max-width: 720px) {
-  body.rbft-sigma-boot .header-right { gap: 5px; padding: 8px 8px 0 0; }
+  body.rbft-sigma-boot .header-right { gap: 5px; padding: 6px 8px 0 0; }
+  /*
+    Sized with the rest of the phone chrome, not against it.
+
+    This corner was deliberately raised to 40px when it became the only way in
+    on a phone, and that reasoning was sound while everything around it was
+    full-height. Now the shortcut pills are 22px and the search row is 24px, and
+    a 40px Sign in was simply the largest object on the stage -- it read as the
+    point of the page rather than as the way back to your account.
+
+    24px matches the search row rather than the 22px pills: signing in is a
+    primary action and the pair sits alone in the corner, so it can afford the
+    extra two pixels the secondary row cannot.
+  */
   body.rbft-sigma-boot .header-right .header-btn {
-    min-height: 40px !important;
+    min-height: 24px !important;
+    /* The BOX halves; the text does not. 11px would have been proportional and
+       is below the sheet's 11px-with-one-exemption legibility floor (see
+       text-legibility.test.mjs), and this is the only auth control on a phone.
+       12px in a 24px pill is the same trade the search field makes at 16px. */
     font-size: 12px !important;
-    padding: 0 11px !important;
+    padding: 0 9px !important;
   }
   /* Icons come off on a phone: the two labels have to fit beside a centred
      wordmark, and the words are what carry the meaning. */
   body.rbft-sigma-boot .header-right .header-btn svg { display: none; }
   /* And the hero drops below that row, or the wordmark prints through it --
-     measured overlapping by 93px before this. */
-  body.rbft-sigma-boot #sigma-stage .sigma-hero { top: 56px; }
+     measured overlapping by 93px before this. 56px was clearance for a 40px
+     button; holding it would have banked the shrink as empty space instead of
+     stage. 40px is the shrunken row's exact bottom edge (6px padding + 24px
+     button + 10px breathing room), so the wordmark and the corner never share a
+     horizontal band at all -- 36px cleared the wordmark only because it is
+     centred and narrow, which stops being true the moment a signed-in account
+     strip is wider than "Sign in". */
+  body.rbft-sigma-boot #sigma-stage .sigma-hero { top: 40px; }
 }
 /* Sign up reads as the primary of the pair without shouting: a warmer fill, no
    extra weight. */

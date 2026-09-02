@@ -1216,15 +1216,26 @@ test('the corner the hamburger vacated carries ONE way in', () => {
 test('the auth corner is reachable on a phone, where it is the only way in', () => {
   const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
   // The base stylesheet hides .header-right below 720px; with the sheet gone that
-  // would leave a phone with no way to sign in at all.
+  // would leave a phone with no way to sign in at all. THIS is what the test is
+  // for, and it is unchanged: the corner must exist and must be reachable.
   assert.match(css, /body\.rbft-sigma-boot \.header-right \{\s*\n\s*display: flex !important;/);
-  // A density pass pins .header-btn to min-height:26px !important, which is why
-  // Sign in has always been a 26px target. Survivable as a desktop convenience,
-  // not as the only entry on a phone.
+  // A density pass pins .header-btn to min-height:26px !important, so every
+  // size here has to be an override carrying the same weight.
   assert.match(css, /body\.rbft-sigma-boot \.header-right \.header-btn \{\s*\n\s*min-height: 36px !important;/);
-  assert.match(css, /min-height: 40px !important;/);
-  // And the hero drops below that row, or the wordmark prints through it.
-  assert.match(css, /body\.rbft-sigma-boot #sigma-stage \.sigma-hero \{ top: 56px; \}/);
+  // The phone size was 40px, set when this corner was the only chrome that had
+  // been given a real tap target. It is 24px now: the pills around it are 22px
+  // and the search row is 24px, and a 40px Sign in was the largest object on
+  // the stage, reading as the point of the page rather than as the way back to
+  // an account. Pinned as a number so a future density pass has to argue with
+  // this comment rather than drift past it.
+  assert.match(css, /min-height: 24px !important;/);
+  // And the hero drops below that row, or the wordmark prints through it. The
+  // offset tracks the button: 40px is the shrunken row's exact bottom edge, so
+  // the wordmark and the corner never share a horizontal band. Anything larger
+  // banks the shrink as empty space; anything smaller relies on the wordmark
+  // being centred and narrow, which stops being true once a signed-in account
+  // strip is wider than the words "Sign in".
+  assert.match(css, /body\.rbft-sigma-boot #sigma-stage \.sigma-hero \{ top: 40px; \}/);
 });
 
 test('the phone pill row fits on one line with every word intact', () => {
