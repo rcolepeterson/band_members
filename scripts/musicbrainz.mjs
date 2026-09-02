@@ -244,6 +244,68 @@ export function extractMemberRelations(artistBody) {
     .filter(r => r.relatedMbid && r.relatedName);
 }
 
+// MusicBrainz artist types that are a GROUP of people rather than a person.
+// 'Group' covers bands; orchestras and choirs are the same thing for our
+// purposes -- a collection of musicians, not a musician.
+const GROUP_ARTIST_TYPES = new Set(['Group', 'Orchestra', 'Choir']);
+
+/**
+ * Is this related artist a person, i.e. someone who can be a MEMBER here?
+ *
+ * The schema this feeds has exactly one relationship: band -> person. MB has
+ * no such restriction, and it uses the SAME 'member of band' relation to say
+ * "these three bands are part of this billing":
+ *
+ *   Claypool Gold (Group)
+ *     backward  The Claypool Lennon Delirium   Group
+ *     backward  Les Claypool                   Person
+ *     backward  The Les Claypool Frog Brigade  Group
+ *     backward  Primus                         Group
+ *
+ * Claypool Gold is a 2026 tour, not a band. An automated batch copied that
+ * faithfully and, having nowhere else to put a Group, wrote Primus, The
+ * Claypool Lennon Delirium and The Les Claypool Frog Brigade into the graph as
+ * PEOPLE -- three phantom musicians who were members of nothing else, each
+ * colliding with the real band of the same name.
+ *
+ * The type was on the relation the whole time (`relatedType`); nothing looked
+ * at it. Unknown/blank types are treated as people, because MB leaves the type
+ * empty on plenty of legitimate obscure musicians and dropping those would
+ * lose real members. Only an explicit group type is refused.
+ */
+export function isPersonRelation(relation = {}) {
+  return !GROUP_ARTIST_TYPES.has(String(relation.relatedType || '').trim());
+}
+
+/**
+ * Splits member relations into the people we can store and the groups we
+ * cannot, rather than silently dropping the latter: a candidate whose members
+ * are mostly groups is a collective or a tour billing, and that is worth
+ * reporting to a human instead of quietly importing half of it.
+ */
+export function partitionMemberRelations(relations = []) {
+  const people = [];
+  const groups = [];
+  relations.forEach(relation => {
+    (isPersonRelation(relation) ? people : groups).push(relation);
+  });
+  return { people, groups };
+}
+
+/**
+ * A billing, festival line-up or tour dressed as a band: an entity whose
+ * 'member of band' relations are mostly other groups.
+ *
+ * Claypool Gold scores 3 groups to 1 person. A real band scores 0 groups.
+ * Requiring at least two groups keeps a band with one guest ensemble out of
+ * this bucket, and comparing against the person count keeps a genuine
+ * supergroup (many people, maybe one affiliated group) out of it too.
+ */
+export function looksLikeCollective(relations = []) {
+  const { people, groups } = partitionMemberRelations(relations);
+  return groups.length >= 2 && groups.length >= people.length;
+}
+
 // Convenience: fetch an artist + return normalized members in one call.
 // Distinguishes bands (members) from persons (bands they're in) by
 // examining relation direction.

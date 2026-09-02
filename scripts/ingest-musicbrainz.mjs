@@ -39,6 +39,8 @@ import { fileURLToPath } from 'node:url';
 import {
   searchArtist,
   getArtistMembers,
+  partitionMemberRelations,
+  looksLikeCollective,
 } from './musicbrainz.mjs';
 import { hasWikipediaArticle } from './wikipedia.mjs';
 import {
@@ -282,6 +284,9 @@ async function main() {
 
   // For each candidate, fetch its full detail + Wikipedia check.
   const scored = [];
+  // Candidates that are billings rather than bands. Held out of scoring and
+  // out of the merge, and written to the run summary so the call is a human's.
+  const collectives = [];
   let idx = 0;
   for (const candidate of candidates.values()) {
     idx++;
@@ -300,12 +305,38 @@ async function main() {
       candidate.wikipedia = { exists: false, error: err.message };
     }
 
-    const memberCount = candidate.detail.relations.length;
+    // Groups are not people, and this graph's only relationship is
+    // band -> person. MB uses one 'member of band' relation for both, so a
+    // tour billing like Claypool Gold arrives as a "band" whose members are
+    // three other bands. Left unfiltered, those became phantom musicians named
+    // Primus, The Claypool Lennon Delirium and The Les Claypool Frog Brigade,
+    // each colliding with the real band of the same name.
+    const { people: personRelations, groups: groupRelations } =
+      partitionMemberRelations(candidate.detail.relations);
+    const isCollective = looksLikeCollective(candidate.detail.relations);
+    if (groupRelations.length) {
+      log(`  (groups) ${groupRelations.length} group member(s) skipped: ${groupRelations.map(r => r.relatedName).join(', ')}`);
+    }
+    if (isCollective) {
+      // Not scored, not merged, but reported: a human decides whether the
+      // billing is worth representing, and how.
+      log('  ! looks like a tour/collective (members are mostly groups) — held for review');
+      collectives.push({
+        mbid: candidate.mbid,
+        name: candidate.name,
+        groupMembers: groupRelations.map(r => r.relatedName),
+        personMembers: personRelations.map(r => r.relatedName),
+        bridgesFrom: candidate.bridgesFrom.map(b => b.personName),
+      });
+      continue;
+    }
+
+    const memberCount = personRelations.length;
     // The bridge count = how many members of this candidate band are
     // already in the seed graph (matched by name). This is the "≥1
     // existing musician" signal, and it can be >1 if multiple members
     // are already known — which is the strongest bridge-fill signal.
-    const memberNamesInGraph = candidate.detail.relations
+    const memberNamesInGraph = personRelations
       .map(r => normalizeNameKey(r.relatedName))
       .filter(k => seed.persons.has(k));
     const existingConnections = new Set(memberNamesInGraph).size;
@@ -334,7 +365,7 @@ async function main() {
       wikipediaDisambiguation: !!candidate.wikipedia?.isDisambiguation,
       bridgesFrom: candidate.bridgesFrom.map(b => b.personName),
       tenures: candidate.bridgesFrom,
-      members: candidate.detail.relations.map(r => ({
+      members: personRelations.map(r => ({
         name: r.relatedName,
         mbid: r.relatedMbid,
         tenure: formatTenure(r),
@@ -383,7 +414,9 @@ async function main() {
       overrides: Object.keys(overrides),
       resolved: resolveLog,
       candidates: scored,
+      collectives,
       counts: {
+        collectivesHeld: collectives.length,
         candidates: scored.length,
         high: tiers.high.length,
         medium: tiers.medium.length,
