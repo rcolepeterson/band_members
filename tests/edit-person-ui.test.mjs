@@ -94,7 +94,22 @@ test('openEditPersonPopover resolves a backend id via findRawMemberByName with a
   const endIdx = INDEX_HTML.indexOf('\n    }', idx);
   const block = INDEX_HTML.slice(idx, endIdx);
   assert.ok(block.includes('findRawMemberByName'), 'Expected openEditPersonPopover to call findRawMemberByName.');
-  assert.ok(block.includes('node.id'), 'Expected a fallback to node.id (the display name) when no raw record is found.');
+  // The fallback must be the display NAME, not the node id. Since the
+  // band/person identity split, a musician who shares a band's name carries a
+  // suffixed id: 'Jeremy Enigk (musician)' matches no row in band_members, so
+  // sending it would either fail the edit or, worse, target the wrong person.
+  assert.ok(
+    block.includes('findRawMemberByName(nodeName(node))'),
+    'Expected the raw-record lookup to use the display name.'
+  );
+  assert.ok(
+    block.includes('|| nodeName(node)'),
+    'Expected the fallback to be nodeName(node), not the raw node id.'
+  );
+  assert.ok(
+    !/\|\| node\.id;/.test(block),
+    'A bare node.id fallback would send a suffixed id to the API.'
+  );
 });
 
 test('closeEditPersonPopover hides the panel and clears state', () => {

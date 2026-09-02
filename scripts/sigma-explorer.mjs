@@ -50,6 +50,8 @@ import {
   classifyNode,
   toGraphologyGraph,
   canRenderEdge,
+  nodeLabel,
+  displayNameForId,
   NEIGHBORHOOD_BUDGET,
   NODE_KINDS,
   NODE_TYPES,
@@ -1043,7 +1045,9 @@ export function initSigmaExplorer({
         links: master.links,
       });
       viewGraph.addNode(node.id, {
-        label: node.id,
+        // The label is the display NAME, not the id: a musician who shares a
+        // band's name carries a suffixed id and must still read as himself.
+        label: nodeLabel(node),
         x: point.x,
         y: point.y,
         hop: point.hop,
@@ -1234,10 +1238,12 @@ export function initSigmaExplorer({
     // Musicians are deliberately not listed: 2,700 names would bury the bands,
     // and typing any musician's name still resolves through resolveAnchor.
     const suggestions = new Set([...view.frontier.slice(0, 40), ...bandNames]);
-    datalist.innerHTML = Array.from(suggestions)
+    // Frontier entries are node IDS, so a suffixed musician id would be
+    // offered verbatim as a suggestion. Names are what a person types.
+    datalist.innerHTML = Array.from(new Set(Array.from(suggestions).map(displayNameForId)))
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }))
       .slice(0, MAX_SUGGESTIONS)
-      .map(id => `<option value="${escapeHtml(id)}"></option>`)
+      .map(name => `<option value="${escapeHtml(name)}"></option>`)
       .join('');
   }
 

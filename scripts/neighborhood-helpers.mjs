@@ -562,6 +562,48 @@ export function classifyNode(node, { anchorId = null, adjacency = null, links = 
 }
 
 // ---------------------------------------------------------------------------
+// Band and person identity
+// ---------------------------------------------------------------------------
+
+/**
+ * The suffix that keeps a musician's node id distinct from a band of the same
+ * name.
+ *
+ * Node identity here is the display name, and five acts in the data are both:
+ * Jeremy Enigk, Ayron Jones, LL Cool J, Randy Hansen and Sir Mix-a-Lot each
+ * have a band row and a person row joined by a real membership. A solo project
+ * named after its artist IS a band -- whatever is in the band name field is a
+ * band name -- so the band keeps the plain name and the person is suffixed.
+ *
+ * index.html carries a hand-synced inline copy of this constant and of
+ * displayNameForId, because its main script is a classic script and cannot
+ * import. tests/band-person-identity.test.mjs runs both against the same
+ * inputs, so any drift surfaces there.
+ */
+export const PERSON_ID_SUFFIX = ' (musician)';
+
+/**
+ * The name a human should see for a node id.
+ *
+ * Ids reach the UI in places that never look up a node: the search datalist
+ * offers frontier ids, and share posters read labels back off the graph.
+ * Stripping is a pure string operation, so those paths do not need the node.
+ */
+export function displayNameForId(id) {
+  const raw = String(id || '');
+  return raw.endsWith(PERSON_ID_SUFFIX)
+    ? raw.slice(0, -PERSON_ID_SUFFIX.length)
+    : raw;
+}
+
+/** A node's display name, preferring the name it carries. */
+export function nodeLabel(node) {
+  if (!node) return '';
+  if (typeof node === 'string') return displayNameForId(node);
+  return node.name || displayNameForId(node.id);
+}
+
+// ---------------------------------------------------------------------------
 // Graphology adapter
 // ---------------------------------------------------------------------------
 
@@ -617,7 +659,7 @@ export function toGraphologyGraph({ nodes = [], links = [] } = {}, GraphConstruc
   nodes.forEach(node => {
     if (graph.hasNode(node.id)) return;
     graph.addNode(node.id, {
-      label: node.id,
+      label: nodeLabel(node),
       entityType: node.type,
       kind: classifyNode(node, { anchorId, adjacency, links }),
       // Two independent axes, so neither can erase the other. `kind` answers
