@@ -295,12 +295,29 @@ test('stage chrome is not hidden on small screens', () => {
   const mediaBlocks = [...css.matchAll(/@media[^{]*\{([\s\S]*?)\n\}/g)].map(m => m[1]);
   assert.ok(mediaBlocks.length, 'expected at least one responsive block');
   assert.ok(css.includes('#stage .sigma-prompt'), 'the prompt must be tuned for mobile');
+  // Narration a phone deliberately drops, with the reason each one is allowed.
+  //
+  // The ban exists to protect the CONTROLS -- prompt, pills, hero -- because
+  // hiding those is the PR #42/#44/#45/#63 trap. It never meant "a phone must
+  // print every sentence a desktop prints": the centred-on readout, the
+  // frontier count and the sentence in front of "Show next group" described a
+  // view the visitor could already see, and on a 664px-tall screen they cost a
+  // third of the stage. The group-jump BUTTON is not in this list and must
+  // stay.
+  const NARRATION_A_PHONE_MAY_DROP = [
+    '.sigma-context',
+    '.sigma-frontier',
+    '.sigma-other-groups__text',
+    '.sigma-hint:not(.sigma-hint--intro)',
+  ];
   mediaBlocks.forEach(block => {
     [...block.matchAll(/([^{}\n]*#stage[^{]*)\{([^}]*)\}/g)].forEach(([, selector, body]) => {
+      const trimmed = selector.trim();
+      if (NARRATION_A_PHONE_MAY_DROP.some(allowed => trimmed.includes(allowed))) return;
       assert.doesNotMatch(
         body,
         /display:\s*none/,
-        `a responsive rule hides stage chrome: ${selector.trim()}`,
+        `a responsive rule hides stage chrome: ${trimmed}`,
       );
     });
   });
@@ -1212,11 +1229,17 @@ test('the auth corner is reachable on a phone, where it is the only way in', () 
 
 test('the phone pill row fits on one line with every word intact', () => {
   // The wrap was never a shortage of space: at the old padding the row measured
-  // 353px inside 390px and still broke. Tightening brings it to 366px, so nothing
-  // has to be renamed, hidden behind a menu, or pushed off a scrolling edge.
+  // 353px inside 390px and still broke. Tightening brings it well inside 390px,
+  // so nothing has to be renamed, hidden behind a menu, or pushed off a
+  // scrolling edge.
+  //
+  // The row is now half height (22px, from 44px) as part of the phone density
+  // pass -- see mobile-chrome-scale.test.mjs, which owns the halving itself.
+  // What this test still guards is the property that survived it: six words,
+  // one line, nowrap.
   const phone = EXPLORER.slice(EXPLORER.indexOf('@media (max-width:720px)'));
-  assert.match(phone, /\.sigma-actions\{gap:5px;flex-wrap:nowrap\}/);
-  assert.match(phone, /\.sigma-action\{padding:0 9px;font-size:12px;height:44px\}/);
+  assert.match(phone, /\.sigma-actions\{gap:3px;flex-wrap:nowrap\}/);
+  assert.match(phone, /\.sigma-action\{padding:0 6px;font-size:10px;height:22px\}/);
 });
 
 test('the page title carries no version number', () => {
