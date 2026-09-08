@@ -522,6 +522,12 @@ const STAGE_CSS = `
   font-size:clamp(16px,1.7vw,18px);line-height:1.2;
   box-shadow:0 8px 28px rgba(4,7,12,0.55);backdrop-filter:blur(6px);
   transition:border-color 140ms ease, box-shadow 140ms ease}
+/* The native "clear" x a type="search" field draws once it has text. Site
+   already has its own controls right next to this field (a hamburger and,
+   on a phone, a search icon sharing the same pill) -- a second, browser-
+   grey x a few px away read as visual noise, and unlike the datalist arrow
+   below, this ONE actually responds to being hidden. */
+#${STAGE_ID} .sigma-prompt input::-webkit-search-cancel-button{display:none;-webkit-appearance:none}
 #${STAGE_ID} .sigma-prompt input::placeholder{color:#93a1b2}
 #${STAGE_ID} .sigma-prompt input:focus{outline:none;border-color:rgba(143,232,246,0.75);
   box-shadow:0 8px 28px rgba(4,7,12,0.55),0 0 0 3px rgba(143,232,246,0.18)}
@@ -643,8 +649,17 @@ body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
      stacked fields with a label above, and nothing else in this rule
      overrides it -- without this, the field renders at 48px inside a 44px
      pill regardless of height:100%, since min-height wins as a floor. */
+  /* padding-right leaves room for the browser's own datalist dropdown arrow
+     -- a native affordance of the list="..." attribute, drawn by Chrome/
+     Safari themselves once the field has focus or a value. It cannot be
+     hidden with CSS (tried -webkit-calendar-picker-indicator, -webkit-
+     list-button, appearance:none, and -webkit-textfield-decoration-
+     container -- none of them touch it in current Chrome, unlike the
+     search-cancel "x" above, which does respond). Tight padding here made
+     it read as jammed against the search icon; this just gives it space to
+     sit in instead of fighting to remove it. */
   #${STAGE_ID} .sigma-prompt input{
-    height:100%;min-height:0;padding:0 8px 0 18px;border:0;background:none;box-shadow:none}
+    height:100%;min-height:0;padding:0 28px 0 18px;border:0;background:none;box-shadow:none}
   /* Both buttons share this: a borderless 36px circle centred in the 44px
      pill (a few px of breathing room top/bottom, rather than the circle's
      own edge touching the pill's border), icon-only. */
