@@ -226,12 +226,17 @@ test('the open menu stacks its circles in a column, not a row', () => {
 });
 
 // -------------------------------------------------------------------------
-// 3. The auth corner is sized with the rest of the chrome.
+// 3. The auth corner matches its own signed-in state instead of being sized
+//    against the rest of the chrome.
 //
 // It was raised to 40px when it became the only way in on a phone, shrunk to
 // 24px to match a search row that had itself been squeezed to fit six pills
-// on one line, then back to 44px (redesign/mobile-hamburger-nav) once those
-// pills moved into a hamburger sheet and the row got its size back.
+// on one line, then back to 44px once those pills moved into a hamburger
+// sheet and the row got its size back. All of that was resizing a BUTTON.
+// A later pass noticed the signed-IN state had never been a button at all --
+// just plain text ("Sign out") -- and switched the signed-OUT state to
+// match it, rather than keep tuning a button shape that only existed on one
+// side of the same corner.
 // -------------------------------------------------------------------------
 
 // The phone block in index.html that restyles the constellation's header.
@@ -244,42 +249,46 @@ function phoneAuthBlock() {
   return INDEX_HTML.slice(start, end);
 }
 
-test('the phone auth button matches the search row, not the old squeeze', () => {
+test('the phone auth control is text, matching the OTHER auth state', () => {
+  // Signed in, this corner has always been plain text: an initials chip, a
+  // name, and "Sign out" styled as .link-btn -- no border, no fill. Signed
+  // out, it used to be a bordered/filled button instead, which meant the
+  // one corner had two different visual languages depending on whether you
+  // were logged in (and was consistently the boxiest thing in the phone
+  // header). This matches "Sign out"'s own treatment instead of continuing
+  // to resize a button shape.
   const block = phoneAuthBlock();
-  const height = Number((block.match(/min-height:\s*(\d+)px !important/) || [])[1]);
-  assert.equal(height, 44, 'Expected a 44px auth button, the same height as the search row.');
-  assert.ok(
-    !/min-height:\s*24px !important/.test(block),
-    'The intermediate 24px phone size must not come back without an argument.'
+  assert.match(block, /min-height: auto !important;/);
+  assert.doesNotMatch(
+    block,
+    /min-height:\s*\d+px !important/,
+    'Expected no fixed pixel button height left over from the button era.'
   );
 });
 
-test('the auth button keeps its !important, or the density pass wins', () => {
-  // .header-btn is pinned to min-height:26px !important elsewhere in the sheet.
-  // An override without the same weight silently loses.
+test('the phone auth control keeps its !important, or the density pass wins', () => {
+  // .header-btn is pinned to min-height:26px !important and other sizing
+  // elsewhere in the sheet. An override without the same weight silently loses.
   const block = phoneAuthBlock();
-  assert.match(block, /min-height:\s*44px !important/);
-  assert.match(block, /font-size:\s*14px !important/);
-  assert.match(block, /padding:\s*0 14px !important/);
+  assert.match(block, /min-height: auto !important;/);
+  assert.match(block, /padding: 0 !important;/);
+  assert.match(block, /border: 0 !important;/);
+  assert.match(block, /background: none !important;/);
 });
 
-test('the hero clears the header row exactly', () => {
-  // padding + button height + 10px breathing room = the row's bottom edge.
-  // Holding a larger top would bank the shrink as empty space instead of
-  // stage; holding a smaller one risks the wordmark printing through the row.
-  const block = phoneAuthBlock();
-  const padding = block.match(/\.header-right \{ gap: 5px; padding: (\d+)px/);
-  assert.ok(padding, 'Expected the header padding to be declared.');
+test('the hero clears the header row', () => {
+  // There is no button height left to compute this from the way earlier
+  // passes could -- a text link's line box isn't a number anywhere in this
+  // stylesheet. The row's real bottom edge (~40px: 6px padding + the link's
+  // own line height) was measured directly in the browser instead. 50px
+  // leaves it the same ~10px breathing room the row has held at every size
+  // it's been; the range below is deliberately a little generous around
+  // that measurement rather than pinned to a single px, since it came from
+  // the browser and not from arithmetic on other rules in this file.
   const top = Number((INDEX_HTML.match(/#sigma-stage \.sigma-hero \{ top: (\d+)px; \}/) || [])[1]);
-  const height = Number((block.match(/min-height:\s*(\d+)px !important/) || [])[1]);
-  const rowBottom = Number(padding[1]) + height;
   assert.ok(
-    top >= rowBottom,
-    `The hero must start at or below the header row's bottom (${rowBottom}px), found ${top}px.`
-  );
-  assert.ok(
-    top - rowBottom <= 12,
-    `The hero must not leave more than 12px of dead space; found ${top - rowBottom}px.`
+    top >= 46 && top <= 56,
+    `Expected the hero to clear the measured ~40px row with a reasonable margin, found top:${top}px.`
   );
 });
 

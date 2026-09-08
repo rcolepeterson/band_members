@@ -1278,21 +1278,23 @@ test('the auth corner is reachable on a phone, where it is the only way in', () 
   // A density pass pins .header-btn to min-height:26px !important, so every
   // size here has to be an override carrying the same weight.
   assert.match(css, /body\.rbft-sigma-boot \.header-right \.header-btn \{\s*\n\s*min-height: 36px !important;/);
-  // The phone size went 40px -> 24px when the search row beside it was
-  // squeezed to fit six action pills on one line, then back to 44px once
-  // those pills moved into a sheet (redesign/mobile-hamburger-nav) and the
-  // row got its comfortable size back. This corner tracks that row, not a
-  // fixed number of its own -- see mobile-chrome-scale.test.mjs, which owns
-  // the row's own height.
-  assert.match(css, /min-height: 44px !important;/);
-  // And the hero drops below that row, or the wordmark prints through it. The
-  // offset tracks the button: 60px is the row's exact bottom edge (6px
-  // padding + 44px button + 10px breathing room), so the wordmark and the
-  // corner never share a horizontal band. Anything larger banks the shrink as
-  // empty space; anything smaller relies on the wordmark being centred and
-  // narrow, which stops being true once a signed-in account strip is wider
-  // than the words "Sign in".
-  assert.match(css, /body\.rbft-sigma-boot #sigma-stage \.sigma-hero \{ top: 60px; \}/);
+  // The phone size went 40px button -> 24px button -> 44px button as the
+  // search row beside it changed shape (see git history on this test for
+  // that chain). Then it stopped being a button at all: signed OUT, this
+  // corner used to be the one place with two different visual languages
+  // depending on auth state -- a bordered/filled pill here, but plain text
+  // ("Sign out") once signed in. Matching that instead gives the corner one
+  // consistent shape AND less visual weight, which is what a "move Sign In
+  // into the hamburger" design ask was actually reaching for, without that
+  // idea's real cost of hiding auth state behind a tap.
+  assert.match(css, /min-height: auto !important;/);
+  assert.match(css, /text-decoration: underline;/);
+  assert.match(css, /color: var\(--color-accent, #7cc4ff\) !important;/);
+  // And the hero drops below that row, or the wordmark prints through it.
+  // 50px leaves the row's measured ~40px bottom edge the same ~10px
+  // breathing room it has held at every size it's been -- measured in the
+  // browser, since there is no button height left to compute it from.
+  assert.match(css, /body\.rbft-sigma-boot #sigma-stage \.sigma-hero \{ top: 50px; \}/);
 });
 
 test('the phone action row is a hamburger menu, not a squeezed line', () => {

@@ -818,29 +818,51 @@ body.rbft-sigma-boot .header-right .header-btn {
 @media (max-width: 720px) {
   body.rbft-sigma-boot .header-right { gap: 5px; padding: 6px 8px 0 0; }
   /*
-    Sized with the rest of the phone chrome, not against it.
+    Text, not a pill -- matching the OTHER state this same corner can be in.
+
+    Signed in, this corner is already plain text: an initials chip, a name,
+    and "Sign out" styled as a link (.link-btn, no border or fill -- see
+    that class). Signed out, it had been a bordered/filled button instead,
+    which meant the one corner had two different visual languages depending
+    on auth state, and the button was consistently the largest, boxiest
+    thing in the phone header. Matching "Sign out"'s own treatment fixes
+    both at once: one consistent shape for the corner, and less visual
+    weight freeing room for the graph -- the thing a design pass asked for
+    by way of "move Sign In into the hamburger," which this achieves without
+    that idea's real cost (auth state becomes invisible until you open a
+    menu to check it).
 
     This corner was raised to 40px when it became the only way in on a phone,
     then shrunk to 24px to match a search row that had itself been squeezed
-    down to fit six action pills on one line (see sigma-explorer.mjs's phone
-    block). The mobile-hamburger-nav redesign moved those six pills into a
-    sheet, which freed the search row to go back to a comfortable 44px --
-    so this corner goes back up with it, for the same reason it came down:
-    matching, not fighting, the row it sits beside.
+    down to fit six action pills on one line, then back up to 44px once that
+    row got its size back (see sigma-explorer.mjs's phone block) -- all of
+    that was sizing a BUTTON. There is no button here any more to size.
   */
   body.rbft-sigma-boot .header-right .header-btn {
-    min-height: 44px !important;
-    font-size: 14px !important;
-    padding: 0 14px !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    background: none !important;
+    border-radius: 0 !important;
+    font-size: var(--text-sm, 0.85rem) !important;
+    color: var(--color-accent, #7cc4ff) !important;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
-  /* Icons come off on a phone: the two labels have to fit beside a centred
-     wordmark, and the words are what carry the meaning. */
+  body.rbft-sigma-boot .header-right .header-btn:hover,
+  body.rbft-sigma-boot .header-right .header-btn:focus-visible {
+    color: var(--color-accent-hover, #a9d8ff) !important;
+  }
+  /* Icons come off on a phone: a link doesn't carry one either way, but this
+     stays so the rule survives if the button styling ever comes back. */
   body.rbft-sigma-boot .header-right .header-btn svg { display: none; }
-  /* The hero drops below that row, or the wordmark prints through it. 60px is
-     the row's exact bottom edge (6px padding + 44px button + 10px breathing
-     room) -- the same 10px margin the row held at its previous size, just
-     measured against the new height. */
-  body.rbft-sigma-boot #sigma-stage .sigma-hero { top: 60px; }
+  /* The hero drops below that row, or the wordmark prints through it. The
+     row's own bottom edge measures ~40px in the browser (there's no fixed
+     button height to compute this from any more, so it was measured rather
+     than derived); 50px leaves it the same ~10px breathing room the row has
+     held at every size it's been. */
+  body.rbft-sigma-boot #sigma-stage .sigma-hero { top: 50px; }
 }
 /* Sign up reads as the primary of the pair without shouting: a warmer fill, no
    extra weight. */
