@@ -171,32 +171,30 @@ test('the action circles are a real tap target in the open menu', () => {
 });
 
 test('the search row is a real tap target again on a phone', () => {
-  // The selector spans two lines (field and Explore share the rule), so the
-  // height is read from the declaration block rather than by scanning forward
-  // from the selector's first line.
-  const block = mobileBlock();
-  const rule = block.match(/\.sigma-prompt input,\s*#\$\{STAGE_ID\} \.sigma-prompt button\{([^}]*)\}/);
-  assert.ok(rule, 'Expected one rule sizing both the field and the Explore button.');
-  const height = Number((rule[1].match(/height:\s*(\d+)px/) || [])[1]);
-  // 44px, not the 24px this row briefly held: with the six pills moved into
-  // a sheet, the row no longer has to give up its own size for their sake.
-  assert.equal(height, 44, 'Expected a 44px field and Explore button.');
+  // Second pass (redesign/mobile-hamburger-nav): the field, the search icon
+  // and the hamburger now share one bordered pill -- the FORM itself, not
+  // the input -- so the row's height is set there and the field/buttons
+  // fill it, rather than each control declaring its own 44px.
+  const height = pxIn(mobileBlock(), '.sigma-prompt form{', 'height');
+  // 44px, not the 24px this row briefly held: with the six pills moved out
+  // of this row entirely, it no longer has to give up its own size for
+  // their sake.
+  assert.equal(height, 44, 'Expected a 44px pill.');
   // The desktop row is clamp(48px,5.4vw,58px) and is untouched by this redesign.
   assert.match(EXPLORER, /height:clamp\(48px,5\.4vw,58px\)/, 'Expected the desktop row height to be unchanged.');
 });
 
-test('the field also carries its min-height, or the page overrides it', () => {
-  // The page's global form styling sets input{...min-height:48px} for stacked
-  // fields with a label above -- irrelevant now that the phone rule matches
-  // it (44 < 48 would still be silently beaten by the floor), but pinned as
-  // min-height alongside height for the same reason it was pinned before:
-  // this rule has to be read as authoritative, not as a value the global
-  // floor happens to agree with today.
+test('the field fills the pill without the global min-height fighting it', () => {
+  // The page's global form styling sets input{...min-height:48px} for
+  // stacked fields with a label above. Nothing else in the phone rule
+  // overrides it, so without an explicit min-height:0 the field renders at
+  // 48px height:100% or not -- the floor wins regardless -- one px taller
+  // than the 44px pill it lives inside.
   assert.match(INDEX_HTML, /input,select,textarea\{[^}]*min-height:48px/, 'Expected the global 48px floor to still exist.');
   assert.match(
     mobileBlock(),
-    /\.sigma-prompt input,\s*#\$\{STAGE_ID\} \.sigma-prompt button\{height:44px;min-height:44px\}/,
-    'Expected the phone rule to set both height and min-height explicitly.'
+    /\.sigma-prompt input\{\s*height:100%;min-height:0;/,
+    'Expected the phone field rule to fill the pill and zero out the global min-height floor.'
   );
 });
 

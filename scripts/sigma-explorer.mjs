@@ -608,11 +608,7 @@ body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
 
 @media (max-width:720px){
   #${STAGE_ID} .sigma-hero{width:min(94vw,620px);gap:8px}
-  #${STAGE_ID} .sigma-prompt{gap:8px;position:relative}
-  /* padding-right reserves room for .sigma-menu-toggle, which is absolutely
-     positioned over this row -- without it the toggle sat on top of the
-     Explore button instead of beside it. */
-  #${STAGE_ID} .sigma-prompt form{gap:8px;padding-right:52px}
+  #${STAGE_ID} .sigma-prompt{gap:8px}
   /*
     Mobile chrome, redesign/mobile-hamburger-nav: a hamburger instead of a
     shrunken row, icon-only controls instead of printed labels.
@@ -628,34 +624,42 @@ body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
     back, and the actions move into small circles (.sigma-actions.is-open
     below) that clear a real 44px each. Same buttons, same click handlers
     (runAction / STAGE_ACTIONS) -- only the container and its default
-    visibility changed. The search button and the hamburger get the same
-    icon-first treatment for the same reason: a printed "Explore" next to a
-    hamburger read as two different vocabularies on one row.
-  */
-  #${STAGE_ID} .sigma-prompt input,
-  #${STAGE_ID} .sigma-prompt button{height:44px;min-height:44px}
-  #${STAGE_ID} .sigma-prompt input{padding:0 16px}
-  /* Icon-only submit, matching the mockup: a printed "Explore" next to a
-     printed "Filter"/"Share"/etc. inside the menu was two different ways of
-     labelling a control on the same screen. Square instead of the desktop
-     pill shape -- same tap target as the hamburger beside it (44px), not a
-     wide CTA competing with it for attention. */
-  #${STAGE_ID} .sigma-prompt button{width:44px;padding:0;flex:none}
-  #${STAGE_ID} .sigma-prompt .sigma-submit-label{display:none}
-  #${STAGE_ID} .sigma-prompt .sigma-submit-icon{display:block}
+    visibility changed.
 
-  /* .sigma-prompt .sigma-menu-toggle, not just .sigma-menu-toggle: same
-     specificity reasoning as the desktop display:none rule above -- this has
-     to outweigh "#stage .sigma-prompt button"'s padding and font-size, which
-     otherwise wins on specificity regardless of which rule is declared last. */
+    Second pass: the field, the search icon and the hamburger now share ONE
+    bordered pill (the form itself), matching the mockup -- rather than three
+    separately-bordered circles sitting in a row, which read as "big and
+    boxy" compared side by side with it. The form carries the border and
+    background that used to live on the input alone; the field and both
+    buttons go borderless/transparent so they read as one control with three
+    zones, not three controls.
+  */
+  #${STAGE_ID} .sigma-prompt form{
+    gap:0;height:44px;align-items:center;
+    border-radius:999px;border:1px solid rgba(143,232,246,0.38);
+    background:rgba(10,14,20,0.86);box-shadow:0 8px 28px rgba(4,7,12,0.55)}
+  /* min-height:0 is load-bearing, not decorative: the page's global form
+     styling (input,select,textarea{...min-height:48px}) is written for
+     stacked fields with a label above, and nothing else in this rule
+     overrides it -- without this, the field renders at 48px inside a 44px
+     pill regardless of height:100%, since min-height wins as a floor. */
+  #${STAGE_ID} .sigma-prompt input{
+    height:100%;min-height:0;padding:0 8px 0 18px;border:0;background:none;box-shadow:none}
+  /* Both buttons share this: a borderless 36px circle centred in the 44px
+     pill (a few px of breathing room top/bottom, rather than the circle's
+     own edge touching the pill's border), icon-only. */
+  #${STAGE_ID} .sigma-prompt button,
   #${STAGE_ID} .sigma-prompt .sigma-menu-toggle{
     display:inline-flex;align-items:center;justify-content:center;
-    position:absolute;top:0;right:0;width:44px;height:44px;padding:0;margin:0;
-    border-radius:999px;border:1px solid rgba(190,206,224,0.28);
-    background:rgba(10,14,20,0.7);color:#c3d0de;cursor:pointer;z-index:5;
-    transition:color 140ms ease,border-color 140ms ease,background 140ms ease}
+    height:36px;width:36px;padding:0;margin:0 4px 0 0;flex:none;
+    border:0;background:none;border-radius:50%;color:#c3d0de;cursor:pointer;
+    transition:color 140ms ease,background 140ms ease}
+  #${STAGE_ID} .sigma-prompt button:hover,
+  #${STAGE_ID} .sigma-prompt button:focus-visible,
   #${STAGE_ID} .sigma-prompt .sigma-menu-toggle:hover,
-  #${STAGE_ID} .sigma-prompt .sigma-menu-toggle:focus-visible{color:#eaf4fb;border-color:rgba(143,232,246,0.6)}
+  #${STAGE_ID} .sigma-prompt .sigma-menu-toggle:focus-visible{color:#eaf4fb;background:rgba(143,232,246,0.16)}
+  #${STAGE_ID} .sigma-prompt .sigma-submit-label{display:none}
+  #${STAGE_ID} .sigma-prompt .sigma-submit-icon{display:block}
   #${STAGE_ID} .sigma-menu-toggle-icon{
     position:relative;display:block;width:18px;height:2px;
     background:currentColor;border-radius:999px;
@@ -781,14 +785,20 @@ function buildStage(doc, mount) {
                aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <span class="sigma-submit-label">Explore</span>
         </button>
+        <!-- Mobile-only: collapses .sigma-actions into a menu. display:none on
+             a desktop (see the base rule above), so it never intrudes there.
+             type="button", not "submit" -- it must never trigger the form's
+             own submit just for living inside it. Placed inside the form
+             (rather than beside it, absolutely positioned over a reserved
+             gap, which is how this used to work) so it can share the same
+             bordered pill as the field and the search icon, per the mockup:
+             one continuous control, not three separate circles in a row. -->
+        <button type="button" class="sigma-menu-toggle" id="sigma-menu-toggle"
+                aria-label="Open graph actions" aria-expanded="false" aria-controls="sigma-actions-panel">
+          <span class="sigma-menu-toggle-icon" aria-hidden="true"></span>
+        </button>
       </form>
       <datalist id="sigma-search-options"></datalist>
-      <!-- Mobile-only: collapses .sigma-actions into a sheet. display:none on a
-           desktop (see the base rule above), so it never intrudes there. -->
-      <button type="button" class="sigma-menu-toggle" id="sigma-menu-toggle"
-              aria-label="Open graph actions" aria-expanded="false" aria-controls="sigma-actions-panel">
-        <span class="sigma-menu-toggle-icon" aria-hidden="true"></span>
-      </button>
     </div>
     </div>
     <!--
