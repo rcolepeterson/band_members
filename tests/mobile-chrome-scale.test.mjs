@@ -153,12 +153,15 @@ test('a desktop keeps every line of narration', () => {
 // 2. The search row is full-size again, and the pills moved into a sheet.
 // -------------------------------------------------------------------------
 
-test('the action pills are a real tap target inside the sheet', () => {
-  // Superseded 22px pills (below the platform's 44px minimum) with rows in
-  // the hamburger sheet -- see .sigma-actions.is-open in the mobile block.
-  // min-height, not height: the label can wrap to two lines on a narrow
-  // phone without shrinking the tap target below the floor.
-  const mobileHeight = pxIn(mobileBlock(), '.sigma-actions .sigma-action{', 'min-height');
+test('the action circles are a real tap target in the open menu', () => {
+  // Superseded 22px pills (below the platform's 44px minimum) -- first with
+  // full-width sheet rows, then (redesign/mobile-hamburger-nav, after a
+  // mockup comparison found the sheet read as big boxy bars) with small
+  // 44px circles anchored near the hamburger. Fixed height, not min-height:
+  // there is no label inside to wrap any more (icon only -- see
+  // .sigma-actions .sigma-action-label / -icon below), so the box has a
+  // definite size instead of a floor.
+  const mobileHeight = pxIn(mobileBlock(), '.sigma-actions .sigma-action{', 'height');
   assert.ok(mobileHeight >= 44, `Expected at least a 44px tap target, got ${mobileHeight}px.`);
   // The desktop pill is untouched by this redesign.
   const desktopRule = desktopCss();
@@ -212,15 +215,15 @@ test('the field font stays at 16px so iOS does not zoom', () => {
   assert.match(EXPLORER, /font-size:clamp\(16px,1\.7vw,18px\)/, 'Expected the 16px floor on the field to survive.');
 });
 
-test('the sheet stacks its rows instead of fighting to fit them on one line', () => {
+test('the open menu stacks its circles in a column, not a row', () => {
   // Superseded: the six pills used to fight a wrap to a second row via
-  // nowrap + shrinking. They now stack vertically in the open sheet by
-  // design, so wrapping is not a failure mode any more -- what matters is
-  // that the sheet is a column, not a row.
+  // nowrap + shrinking. They now stack vertically -- first as sheet rows,
+  // now (redesign/mobile-hamburger-nav) as small circles -- by design, so
+  // wrapping is not a failure mode any more.
   assert.match(
     mobileBlock(),
-    /\.sigma-actions\{[^}]*flex-direction:column;max-height:70vh;overflow-y:auto/,
-    'Expected the open sheet to stack its rows in a scrollable column.'
+    /\.sigma-actions\{[^}]*flex-direction:column;gap:10px;\s*max-height:70vh;overflow-y:auto/,
+    'Expected the open menu to stack its circles in a scrollable column.'
   );
 });
 

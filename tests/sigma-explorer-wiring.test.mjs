@@ -318,6 +318,16 @@ test('stage chrome is not hidden on small screens with no way back', () => {
   const CONTROLS_BEHIND_AN_ALWAYS_VISIBLE_TOGGLE = {
     '.sigma-actions': '.sigma-menu-toggle',
   };
+  // Printed labels hidden on a phone in favour of an icon (redesign/mobile-
+  // hamburger-nav): not the trap either, since the CONTROL is still on
+  // screen and still works -- only which of its two representations is
+  // drawn changes. Verified by checking the icon it swaps to is NOT itself
+  // display:none in the same block, so a genuine "both are gone" regression
+  // still fails loudly.
+  const LABELS_SWAPPED_FOR_AN_ICON = {
+    '.sigma-actions .sigma-action-label': '.sigma-actions .sigma-action-icon',
+    '.sigma-prompt .sigma-submit-label': '.sigma-prompt .sigma-submit-icon',
+  };
   mediaBlocks.forEach(block => {
     [...block.matchAll(/([^{}\n]*#stage[^{]*)\{([^}]*)\}/g)].forEach(([, selector, body]) => {
       const trimmed = selector.trim();
@@ -334,6 +344,16 @@ test('stage chrome is not hidden on small screens with no way back', () => {
         assert.ok(
           new RegExp(`#stage [^{]*\\${triggerSelector}\\{[^}]*display:`).test(css),
           `${trimmed} is hidden on a phone; expected its trigger ${triggerSelector} to exist and stay visible`,
+        );
+        return;
+      }
+      const swap = LABELS_SWAPPED_FOR_AN_ICON[trimmed.replace(/^#stage /, '')];
+      if (swap) {
+        const escapedSwap = swap.replace(/\./g, '\\.');
+        assert.doesNotMatch(
+          block,
+          new RegExp(`#stage ${escapedSwap}\\{[^}]*display:\\s*none`),
+          `${trimmed} swaps to ${swap} on a phone, but that is ALSO display:none there -- the control would vanish entirely`,
         );
         return;
       }
@@ -1029,9 +1049,22 @@ test('the filter panel is placed under its pill, not off the bottom of the stage
   // doing everything else correctly, entirely off screen, which is why driving
   // the selects directly in a test found nothing wrong.
   assert.match(EXPLORER, /function positionFilters\(\)/);
-  const css = EXPLORER.slice(EXPLORER.indexOf('.sigma-filters{'), EXPLORER.indexOf('.sigma-filters[hidden]'));
+  // Only the BASE (desktop) rule is checked against the old bug -- not the
+  // gap up to .sigma-filters[hidden], which as of redesign/mobile-hamburger-nav
+  // also contains a deliberate `left:50%` for the mobile modal centering
+  // below (see that block's own comment for why this panel needs a SECOND,
+  // different fix on a phone).
+  const css = EXPLORER.slice(EXPLORER.indexOf('.sigma-filters{'), EXPLORER.indexOf('text-align:left}') + 'text-align:left}'.length);
   assert.doesNotMatch(css, /top:calc\(100% \+ 10px\)/);
   assert.doesNotMatch(css, /left:50%/);
+  // On a phone, positionFilters()'s inline style is deliberately overridden
+  // by a centred, fixed modal -- the trigger it was computed from lives
+  // inside the hamburger sheet and is gone by the time this panel opens.
+  assert.match(
+    EXPLORER,
+    /@media \(max-width:720px\)\{\s*#\$\{STAGE_ID\} \.sigma-filters\{position:fixed !important;left:50% !important;\s*top:50% !important;transform:translate\(-50%,-50%\) !important;/,
+    'Expected a phone-only centred-modal override for the filter panel.'
+  );
   // Placed from the pill's own rect, and clamped inside the stage.
   const fn = EXPLORER.slice(EXPLORER.indexOf('function positionFilters()'), EXPLORER.indexOf('function hideTip()'));
   assert.match(fn, /actionButtons\.get\('filter'\)/);
@@ -1262,21 +1295,25 @@ test('the auth corner is reachable on a phone, where it is the only way in', () 
   assert.match(css, /body\.rbft-sigma-boot #sigma-stage \.sigma-hero \{ top: 60px; \}/);
 });
 
-test('the phone action row is a hamburger sheet, not a squeezed line', () => {
+test('the phone action row is a hamburger menu, not a squeezed line', () => {
   // Superseded by redesign/mobile-hamburger-nav: the six action pills used to
   // be forced onto one nowrap line at 22px each (see git history on this
   // test). That fit, but landed under the platform's 44px tap-target minimum.
-  // They now live in a bottom sheet toggled by .sigma-menu-toggle, where every
-  // row is a real target again -- see mobile-chrome-scale.test.mjs for the
-  // sheet's own dimensions.
+  // A first pass moved them into a full-width bottom sheet; compared side by
+  // side with the actual mockup, that read as big boxy bars, so they became
+  // small 44px circles anchored near the hamburger instead -- see
+  // mobile-chrome-scale.test.mjs for the circles' own dimensions.
   //
   // Matched directly against EXPLORER rather than by slicing out a media
   // query: an earlier, unrelated @media (max-width:720px) block (the share
   // popover) sits before this one in the file, so "everything after the
   // first @media" is not the same thing as "the phone chrome block."
   assert.match(EXPLORER, /\.sigma-actions\{\s*display:none;/);
-  assert.match(EXPLORER, /position:fixed;left:0;right:0;bottom:0;top:auto !important;/);
+  assert.match(EXPLORER, /position:fixed;left:auto;bottom:auto;/);
   assert.match(EXPLORER, /\.sigma-actions\.is-open\{display:flex\}/);
+  // Positioned from the toggle's rect, not a fixed corner -- see
+  // positionActionsRow()'s mobile branch.
+  assert.match(EXPLORER, /const toggleBox = menuToggle\.getBoundingClientRect\(\);/);
   assert.match(EXPLORER, /\.sigma-menu-toggle\{/);
   // The row is still the always-visible horizontal group on a desktop --
   // moved out from under .sigma-hero (see the CSS comment on this rule: a

@@ -234,6 +234,34 @@ const STAGE_ACTIONS = [
   },
 ];
 
+// One icon per action, for the mobile hamburger menu (redesign/mobile-
+// hamburger-nav): a stack of small circles has no room for a printed word, so
+// the icon has to carry the meaning that the label carries on a desktop. Each
+// button still keeps the word too -- see ICON_LABEL_MARKUP below -- just
+// visually hidden there and shown on a desktop instead, so nothing about
+// accessibility or the desktop row changes.
+//
+// Same stroke language as the sign-in/add-band icons already in index.html's
+// (retired) hamburger sheet: 1.8px stroke, round caps/joins, 24x24 viewBox.
+// "add" reuses that exact path for the same reason those two already shared
+// one: it is the same plus-sign action wherever it appears.
+const ACTION_ICON_PATHS = {
+  expand: '<path d="M4 14v4a2 2 0 0 0 2 2h4M20 10V6a2 2 0 0 0-2-2h-4M4 10V6a2 2 0 0 1 2-2h4M20 14v4a2 2 0 0 1-2 2h-4"/>',
+  reset: '<path d="M3 11a9 9 0 1 1 2.6 6.4"/><path d="M3 4v7h7"/>',
+  filter: '<path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8Z"/>',
+  add: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  share: '<path d="M4 12v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><polyline points="16 7 12 3 8 7"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  feedback: '<path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2Z"/>',
+};
+
+function actionIconSvg(key) {
+  const path = ACTION_ICON_PATHS[key];
+  if (!path) return '';
+  return `<svg class="sigma-action-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" `
+    + `stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" `
+    + `aria-hidden="true">${path}</svg>`;
+}
+
 // Upper bound on datalist options. Comfortably above the band count, low
 // enough that a pathological graph cannot stall the browser building the list.
 const MAX_SUGGESTIONS = 800;
@@ -365,6 +393,20 @@ const STAGE_CSS = `
   border-radius:var(--radius-card,12px);border:1px solid rgba(143,232,246,0.3);background:rgba(9,12,18,0.97);
   box-shadow:0 18px 44px rgba(3,6,10,0.7);display:flex;flex-direction:column;gap:12px;
   text-align:left}
+/* On a phone, centred as a fixed modal instead -- same treatment as
+   .share-popover above, and for the same reason. positionFilters() anchors
+   this panel to the Filter control's own rect; on a phone that control lives
+   inside the hamburger sheet (redesign/mobile-hamburger-nav), which CLOSES
+   the instant Filter is tapped, so the rect it was positioned from describes
+   a trigger that is about to vanish. The computed top routinely landed the
+   panel mostly below the visible screen, unreachable. !important because
+   positionFilters() always writes an inline style regardless of viewport
+   width; only outranking that unconditionally keeps it from winning back. */
+@media (max-width:720px){
+  #${STAGE_ID} .sigma-filters{position:fixed !important;left:50% !important;
+    top:50% !important;transform:translate(-50%,-50%) !important;
+    width:94vw;max-height:82vh;overflow-y:auto}
+}
 #${STAGE_ID} .sigma-filters[hidden]{display:none}
 #${STAGE_ID} .sigma-filters__title{margin:0;font-size:14px;color:#e6f1f8;letter-spacing:0.01em}
 #${STAGE_ID} .sigma-filters__close{position:absolute;top:8px;right:10px;width:28px;height:28px;
@@ -431,7 +473,10 @@ const STAGE_CSS = `
    + type) outweighs a plain id + class rule regardless of source order. The
    only way to reliably win is to be the more specific one. */
 #${STAGE_ID} .sigma-prompt .sigma-menu-toggle{display:none}
-#${STAGE_ID} .sigma-actions__handle{display:none}
+/* Icon markup exists in every button (see actionIconSvg()) so the mobile
+   menu can be icon-first without a second template; a desktop just never
+   shows it. */
+#${STAGE_ID} .sigma-action-icon{display:none}
 #${STAGE_ID} .sigma-action{height:clamp(40px,4.2vw,44px);padding:0 clamp(14px,1.6vw,20px);
   border-radius:999px;border:1px solid rgba(190,206,224,0.22);background:rgba(10,14,20,0.55);
   color:#c3d0de;font-size:clamp(13px,1.2vw,14px);line-height:1;white-space:nowrap;
@@ -488,6 +533,9 @@ const STAGE_CSS = `
      height; a button's default "normal" line-height made it 8px taller. */
   font-size:clamp(15px,1.6vw,17px);line-height:1.2;font-weight:500;letter-spacing:0.01em;cursor:pointer;
   box-shadow:0 8px 28px rgba(4,7,12,0.45);transition:background 140ms ease, border-color 140ms ease}
+/* Icon markup exists unconditionally (see the submit button's template);
+   a desktop just never shows it, mirroring .sigma-action-icon above. */
+#${STAGE_ID} .sigma-submit-icon{display:none}
 #${STAGE_ID} .sigma-prompt button:hover{background:rgba(143,232,246,0.28);
   border-color:rgba(143,232,246,0.7)}
 #${STAGE_ID} .sigma-prompt button:focus-visible{outline:2px solid rgba(143,232,246,0.8);
@@ -566,29 +614,35 @@ body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
      Explore button instead of beside it. */
   #${STAGE_ID} .sigma-prompt form{gap:8px;padding-right:52px}
   /*
-    Mobile chrome, take two: a hamburger instead of a shrunken row.
+    Mobile chrome, redesign/mobile-hamburger-nav: a hamburger instead of a
+    shrunken row, icon-only controls instead of printed labels.
 
     The previous pass squeezed the six action pills to 22px and the search row
     to 24px so everything fit on one line without wrapping -- see git history
     on this block. It kept every word on screen, but the pills landed below
-    the platform's 44px tap-target minimum, and a design pass on the header
-    (redesign/mobile-hamburger-nav) called that out as the thing keeping the
-    phone layout from reading as finished.
+    the platform's 44px tap-target minimum, and a mockup review called that
+    out as the thing keeping the phone layout from reading as finished.
 
     Collapsing the six actions behind a hamburger removes the fit problem
     instead of continuing to shrink it: the search row gets a proper size
-    back, and the actions move into a full-width sheet (.sigma-actions.is-open
-    below) where every row is a real 44px+ target again. Same buttons, same
-    click handlers (runAction / STAGE_ACTIONS) -- only the container and its
-    default visibility changed.
+    back, and the actions move into small circles (.sigma-actions.is-open
+    below) that clear a real 44px each. Same buttons, same click handlers
+    (runAction / STAGE_ACTIONS) -- only the container and its default
+    visibility changed. The search button and the hamburger get the same
+    icon-first treatment for the same reason: a printed "Explore" next to a
+    hamburger read as two different vocabularies on one row.
   */
   #${STAGE_ID} .sigma-prompt input,
   #${STAGE_ID} .sigma-prompt button{height:44px;min-height:44px}
   #${STAGE_ID} .sigma-prompt input{padding:0 16px}
-  /* The FONT stays at 16px: iOS Safari zooms the whole page when a focused
-     input's text is smaller than that, which yanks the constellation off
-     screen. That is inherited from the shared clamp() below, not set here. */
-  #${STAGE_ID} .sigma-prompt button{padding:0 18px;font-size:14px}
+  /* Icon-only submit, matching the mockup: a printed "Explore" next to a
+     printed "Filter"/"Share"/etc. inside the menu was two different ways of
+     labelling a control on the same screen. Square instead of the desktop
+     pill shape -- same tap target as the hamburger beside it (44px), not a
+     wide CTA competing with it for attention. */
+  #${STAGE_ID} .sigma-prompt button{width:44px;padding:0;flex:none}
+  #${STAGE_ID} .sigma-prompt .sigma-submit-label{display:none}
+  #${STAGE_ID} .sigma-prompt .sigma-submit-icon{display:block}
 
   /* .sigma-prompt .sigma-menu-toggle, not just .sigma-menu-toggle: same
      specificity reasoning as the desktop display:none rule above -- this has
@@ -619,39 +673,47 @@ body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
   #${STAGE_ID} .sigma-menu-toggle[aria-expanded="true"] .sigma-menu-toggle-icon::before{top:0;transform:rotate(45deg)}
   #${STAGE_ID} .sigma-menu-toggle[aria-expanded="true"] .sigma-menu-toggle-icon::after{top:0;transform:rotate(-45deg)}
 
-  /* The six actions as a bottom sheet. Closed by default (this rule wins
-     over the desktop display:flex because it is declared later in the same
-     cascade layer); .is-open is toggled by toggleActionsMenu() in the wiring
-     below. */
+  /*
+    Take two on the open menu: a small stack of icon-only circles anchored
+    near the hamburger, not a full-width sheet. The sheet (a git-history-only
+    shape now) read as a set of big boxy bars once actually built and
+    compared side by side with the mockup's own small circles -- this
+    matches the mockup instead, and every circle still clears the 44px tap
+    target the sheet rows held, just without the width or the borders-as-
+    dividers look that made them feel boxy.
+
+    top/right come from positionActionsRow() (in the wiring below), which
+    branches on this same breakpoint to measure the toggle's rect instead of
+    the hero's -- there is no row to hang under any more. Closed by default
+    (this rule wins over the desktop display:flex because it is declared
+    later in the same cascade layer); .is-open is toggled by
+    toggleActionsMenu().
+  */
   #${STAGE_ID} .sigma-actions{
     display:none;
-    /* top and width fight the desktop rule above (position:absolute;
-       left:50%;top:<js-measured>px;transform:translateX(-50%);width:min(...))
-       -- top carries !important because positionActionsRow() sets an inline
-       style, which would otherwise outrank a plain media-query rule
-       regardless of source order. */
-    position:fixed;left:0;right:0;bottom:0;top:auto !important;
+    position:fixed;left:auto;bottom:auto;
     transform:none;width:auto;z-index:16;
-    flex-direction:column;max-height:70vh;overflow-y:auto;
-    margin:0;padding:6px 0 calc(env(safe-area-inset-bottom,0px) + 8px);
-    border-top:1px solid rgba(190,206,224,0.22);border-radius:16px 16px 0 0;
-    background:rgba(9,12,18,0.97);box-shadow:0 -14px 34px rgba(3,6,10,0.55);
-    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-  #${STAGE_ID} .sigma-actions.is-open{display:flex}
-  #${STAGE_ID} .sigma-actions__handle{
-    display:block;width:36px;height:4px;margin:2px auto 8px;border-radius:999px;
-    background:rgba(190,206,224,0.35)}
-  #${STAGE_ID} .sigma-actions .sigma-action{
-    display:flex;align-items:center;width:100%;min-height:50px;height:auto;
-    margin:0;padding:0 20px;border:0;border-bottom:1px solid rgba(190,206,224,0.12);
-    border-radius:0;background:none;font-size:15px;text-align:left;
+    flex-direction:column;gap:10px;
+    max-height:70vh;overflow-y:auto;
+    margin:0;padding:2px;background:none;border:0;box-shadow:none;border-radius:0;
     backdrop-filter:none}
-  #${STAGE_ID} .sigma-actions .sigma-action:last-child{border-bottom:0}
+  #${STAGE_ID} .sigma-actions.is-open{display:flex}
+  #${STAGE_ID} .sigma-actions .sigma-action{
+    position:relative;width:44px;height:44px;min-height:0;flex:none;
+    margin:0;padding:0;border-radius:50%;
+    display:flex;align-items:center;justify-content:center}
+  /* The word is what a desktop shows; the icon (hidden there, see the base
+     rule above) is what a phone's open menu shows instead. */
+  #${STAGE_ID} .sigma-actions .sigma-action-label{display:none}
+  #${STAGE_ID} .sigma-actions .sigma-action-icon{display:block}
   #${STAGE_ID} .sigma-actions .sigma-action:hover,
-  #${STAGE_ID} .sigma-actions .sigma-action:active{background:rgba(143,232,246,0.08);color:#eaf4fb}
-  /* The "a filter is active" dot: flush right, like a proper list row,
-     instead of hugging the label the way it does in the horizontal row. */
-  #${STAGE_ID} .sigma-actions .sigma-action[data-active="true"]::after{margin-left:auto}
+  #${STAGE_ID} .sigma-actions .sigma-action:active{background:rgba(143,232,246,0.14);
+    color:#eaf4fb;border-color:rgba(143,232,246,0.6)}
+  /* The "a filter is active" dot, as a small badge on the circle's corner --
+     there is no trailing edge of a row to hug here the way there was in the
+     horizontal desktop group. */
+  #${STAGE_ID} .sigma-actions .sigma-action[data-active="true"]::after{
+    position:absolute;top:1px;right:1px;margin-left:0}
   #${STAGE_ID} .sigma-expand{right:12px;bottom:20px}
   /*
     The footer keeps the introduction and the group jump. Nothing else.
@@ -709,7 +771,16 @@ function buildStage(doc, mount) {
         <input type="search" name="favorite-band" placeholder="Who&rsquo;s your favorite band?"
                aria-label="Search any band or artist to open their corner of the music universe"
                list="sigma-search-options" />
-        <button type="submit">Explore</button>
+        <!-- aria-label carries the accessible name unconditionally, same
+             reasoning as the .sigma-action buttons: which of icon/label is
+             VISIBLE changes per breakpoint (see the CSS), so the name can't
+             depend on either one specifically. -->
+        <button type="submit" aria-label="Explore">
+          <svg class="sigma-submit-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span class="sigma-submit-label">Explore</span>
+        </button>
       </form>
       <datalist id="sigma-search-options"></datalist>
       <!-- Mobile-only: collapses .sigma-actions into a sheet. display:none on a
@@ -722,20 +793,25 @@ function buildStage(doc, mount) {
     </div>
     <!--
       A sibling of .sigma-hero, NOT a child of it -- deliberately. .sigma-hero
-      carries transform:translateX(-50%) to centre itself, and a transform
-      on an ancestor makes any position:fixed descendant fix itself against
-      THAT box instead of the real viewport (CSS containing-block rules).
-      Nested here, the mobile sheet's position:fixed;bottom:0 pinned itself
-      to the bottom of the (short, top-of-screen) hero instead of the bottom
-      of the phone -- caught visually in the redesign/mobile-hamburger-nav
-      pass, not by any of the structural tests, which is why this comment
-      exists: nothing else currently guards against it moving back in.
+      carries transform:translateX(-50%) to centre itself, and a transform on
+      an ancestor makes any position:fixed descendant fix itself against THAT
+      box instead of the real viewport (CSS containing-block rules) -- and on
+      a phone this stack of circles IS position:fixed, anchored near the
+      hamburger via positionMobileActionsMenu(). Caught visually in the
+      redesign/mobile-hamburger-nav pass, not by any of the structural tests,
+      which is why this comment exists: nothing else currently guards against
+      it moving back in.
+
+      Each button carries BOTH an icon and the printed word: a desktop shows
+      the word and hides the icon, a phone's open menu does the reverse (see
+      the CSS), so nothing about which one is accessible depends on which is
+      drawn. aria-label is set explicitly rather than left to infer from
+      content, since the visible content itself changes per breakpoint.
     -->
     <div class="sigma-actions" id="sigma-actions-panel" role="group" aria-label="Graph actions">
-      <div class="sigma-actions__handle" aria-hidden="true"></div>
       ${STAGE_ACTIONS.map(item => `
         <button type="button" class="sigma-action" data-key="${item.key}"
-                aria-describedby="${TIP_ID}">${escapeHtml(item.label)}</button>`).join('')}
+                aria-label="${escapeHtml(item.label)}" aria-describedby="${TIP_ID}">${actionIconSvg(item.key)}<span class="sigma-action-label">${escapeHtml(item.label)}</span></button>`).join('')}
     </div>
     <div class="sigma-tip" id="${TIP_ID}" role="tooltip" hidden></div>
     <!-- The page's own scene and genre <select> elements are MOVED in here at
@@ -1867,17 +1943,36 @@ export function initSigmaExplorer({
   }
 
   /**
-   * Sits the actions row directly under the hero on a desktop. Needed because
-   * .sigma-actions is a SIBLING of .sigma-hero, not a child of it (see the CSS
-   * comment on .sigma-actions for why) -- so it no longer inherits a position
-   * from the hero's own flex layout and has to be told where the hero's
-   * bottom edge actually is. Harmless to call on a phone: the mobile rule's
-   * `top:auto !important` overrides whatever this sets there.
+   * Sits the actions row where its own layout needs it to be. .sigma-actions
+   * is a SIBLING of .sigma-hero, not a child of it (see the CSS comment on
+   * .sigma-actions for why), so it no longer inherits a position from
+   * whatever it would otherwise be laid out inside of -- on a desktop that
+   * means the hero's flex column, on a phone the (closed, until now) menu's
+   * own trigger. Both need a real measurement: the hero's height is type set
+   * in clamp()/vw units, and the toggle moves whenever the header itself is
+   * resized.
+   *
+   * Branches on the same breakpoint the CSS uses rather than having two
+   * separate functions, so there is exactly one place a resize has to remember
+   * to call -- see the 'resize' listener below, and toggleActionsMenu(), which
+   * also calls this right before opening so the circles are never stale from
+   * a scroll or an orientation change since the last resize.
    */
   function positionActionsRow() {
-    const heroBox = heroEl.getBoundingClientRect();
     const stageBox = stage.getBoundingClientRect();
-    actionRow.style.top = `${heroBox.bottom - stageBox.top + 16}px`;
+    const mobile = doc.defaultView.matchMedia('(max-width:720px)').matches;
+    if (mobile) {
+      if (!menuToggle) return;
+      const toggleBox = menuToggle.getBoundingClientRect();
+      actionRow.style.top = `${toggleBox.bottom - stageBox.top + 10}px`;
+      actionRow.style.right = `${stageBox.right - toggleBox.right}px`;
+      actionRow.style.left = 'auto';
+    } else {
+      const heroBox = heroEl.getBoundingClientRect();
+      actionRow.style.top = `${heroBox.bottom - stageBox.top + 16}px`;
+      actionRow.style.right = 'auto';
+      actionRow.style.left = '50%';
+    }
   }
 
   function hideTip() {
@@ -1934,6 +2029,10 @@ export function initSigmaExplorer({
    */
   function toggleActionsMenu(force = null) {
     const open = force === null ? !actionRow.classList.contains('is-open') : force;
+    // Measured fresh right before showing, same reasoning as
+    // positionFilters() being called from toggleFilters(): the toggle's rect
+    // can be stale from a scroll or a device rotation since the last resize.
+    if (open) positionActionsRow();
     actionRow.classList.toggle('is-open', open);
     if (menuToggle) menuToggle.setAttribute('aria-expanded', String(open));
     if (!open) hideTip();
