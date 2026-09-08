@@ -284,9 +284,9 @@ test('a disconnected group in the filtered graph is disclosed, not silently drop
 // 6. Mobile parity + dependency pinning
 // ---------------------------------------------------------------------------
 
-test('stage chrome is not hidden on small screens', () => {
+test('stage chrome is not hidden on small screens with no way back', () => {
   // The prompt and shortcut pills get repositioned under 720px, never
-  // display:none -- the PR #42/#44/#45/#63 trap.
+  // display:none with no recourse -- the PR #42/#44/#45/#63 trap.
   //
   // Checks rules rather than a slice of text: the module now also contains
   // legitimate display:none rules for the PAGE's duplicate toolbar, and a
@@ -310,14 +310,57 @@ test('stage chrome is not hidden on small screens', () => {
     '.sigma-other-groups__text',
     '.sigma-hint:not(.sigma-hint--intro)',
   ];
+  // Controls that default to display:none on a phone but are NOT the trap:
+  // each one has an always-visible trigger that reveals it (a toggle button,
+  // not a vanished control with no way back). The original PR #42/#44/#45/#63
+  // bug hid a control with nothing left on screen to bring it back; a
+  // hamburger sheet is the opposite of that by construction.
+  const CONTROLS_BEHIND_AN_ALWAYS_VISIBLE_TOGGLE = {
+    '.sigma-actions': '.sigma-menu-toggle',
+  };
+  // Printed labels hidden on a phone in favour of an icon (redesign/mobile-
+  // hamburger-nav): not the trap either, since the CONTROL is still on
+  // screen and still works -- only which of its two representations is
+  // drawn changes. Verified by checking the icon it swaps to is NOT itself
+  // display:none in the same block, so a genuine "both are gone" regression
+  // still fails loudly.
+  const LABELS_SWAPPED_FOR_AN_ICON = {
+    '.sigma-actions .sigma-action-label': '.sigma-actions .sigma-action-icon',
+    '.sigma-prompt .sigma-submit-label': '.sigma-prompt .sigma-submit-icon',
+  };
   mediaBlocks.forEach(block => {
     [...block.matchAll(/([^{}\n]*#stage[^{]*)\{([^}]*)\}/g)].forEach(([, selector, body]) => {
       const trimmed = selector.trim();
       if (NARRATION_A_PHONE_MAY_DROP.some(allowed => trimmed.includes(allowed))) return;
+      const toggle = Object.entries(CONTROLS_BEHIND_AN_ALWAYS_VISIBLE_TOGGLE)
+        .find(([selectorPrefix]) => trimmed === `#stage ${selectorPrefix}` || trimmed.startsWith(`#stage ${selectorPrefix}.`));
+      if (toggle) {
+        const [, triggerSelector] = toggle;
+        // Not anchored to "#stage <trigger>{" exactly: the toggle is scoped
+        // through an ancestor class (.sigma-prompt .sigma-menu-toggle) to
+        // out-specificity a generic "#stage .sigma-prompt button" rule that
+        // would otherwise also match it -- so only the trigger class itself,
+        // as its own rule with a display, is required to exist.
+        assert.ok(
+          new RegExp(`#stage [^{]*\\${triggerSelector}\\{[^}]*display:`).test(css),
+          `${trimmed} is hidden on a phone; expected its trigger ${triggerSelector} to exist and stay visible`,
+        );
+        return;
+      }
+      const swap = LABELS_SWAPPED_FOR_AN_ICON[trimmed.replace(/^#stage /, '')];
+      if (swap) {
+        const escapedSwap = swap.replace(/\./g, '\\.');
+        assert.doesNotMatch(
+          block,
+          new RegExp(`#stage ${escapedSwap}\\{[^}]*display:\\s*none`),
+          `${trimmed} swaps to ${swap} on a phone, but that is ALSO display:none there -- the control would vanish entirely`,
+        );
+        return;
+      }
       assert.doesNotMatch(
         body,
         /display:\s*none/,
-        `a responsive rule hides stage chrome: ${trimmed}`,
+        `a responsive rule hides stage chrome with no visible way to reveal it again: ${trimmed}`,
       );
     });
   });
@@ -1006,9 +1049,22 @@ test('the filter panel is placed under its pill, not off the bottom of the stage
   // doing everything else correctly, entirely off screen, which is why driving
   // the selects directly in a test found nothing wrong.
   assert.match(EXPLORER, /function positionFilters\(\)/);
-  const css = EXPLORER.slice(EXPLORER.indexOf('.sigma-filters{'), EXPLORER.indexOf('.sigma-filters[hidden]'));
+  // Only the BASE (desktop) rule is checked against the old bug -- not the
+  // gap up to .sigma-filters[hidden], which as of redesign/mobile-hamburger-nav
+  // also contains a deliberate `left:50%` for the mobile modal centering
+  // below (see that block's own comment for why this panel needs a SECOND,
+  // different fix on a phone).
+  const css = EXPLORER.slice(EXPLORER.indexOf('.sigma-filters{'), EXPLORER.indexOf('text-align:left}') + 'text-align:left}'.length);
   assert.doesNotMatch(css, /top:calc\(100% \+ 10px\)/);
   assert.doesNotMatch(css, /left:50%/);
+  // On a phone, positionFilters()'s inline style is deliberately overridden
+  // by a centred, fixed modal -- the trigger it was computed from lives
+  // inside the hamburger sheet and is gone by the time this panel opens.
+  assert.match(
+    EXPLORER,
+    /@media \(max-width:720px\)\{\s*#\$\{STAGE_ID\} \.sigma-filters\{position:fixed !important;left:50% !important;\s*top:50% !important;transform:translate\(-50%,-50%\) !important;/,
+    'Expected a phone-only centred-modal override for the filter panel.'
+  );
   // Placed from the pill's own rect, and clamped inside the stage.
   const fn = EXPLORER.slice(EXPLORER.indexOf('function positionFilters()'), EXPLORER.indexOf('function hideTip()'));
   assert.match(fn, /actionButtons\.get\('filter'\)/);
@@ -1222,35 +1278,49 @@ test('the auth corner is reachable on a phone, where it is the only way in', () 
   // A density pass pins .header-btn to min-height:26px !important, so every
   // size here has to be an override carrying the same weight.
   assert.match(css, /body\.rbft-sigma-boot \.header-right \.header-btn \{\s*\n\s*min-height: 36px !important;/);
-  // The phone size was 40px, set when this corner was the only chrome that had
-  // been given a real tap target. It is 24px now: the pills around it are 22px
-  // and the search row is 24px, and a 40px Sign in was the largest object on
-  // the stage, reading as the point of the page rather than as the way back to
-  // an account. Pinned as a number so a future density pass has to argue with
-  // this comment rather than drift past it.
-  assert.match(css, /min-height: 24px !important;/);
+  // The phone size went 40px -> 24px when the search row beside it was
+  // squeezed to fit six action pills on one line, then back to 44px once
+  // those pills moved into a sheet (redesign/mobile-hamburger-nav) and the
+  // row got its comfortable size back. This corner tracks that row, not a
+  // fixed number of its own -- see mobile-chrome-scale.test.mjs, which owns
+  // the row's own height.
+  assert.match(css, /min-height: 44px !important;/);
   // And the hero drops below that row, or the wordmark prints through it. The
-  // offset tracks the button: 40px is the shrunken row's exact bottom edge, so
-  // the wordmark and the corner never share a horizontal band. Anything larger
-  // banks the shrink as empty space; anything smaller relies on the wordmark
-  // being centred and narrow, which stops being true once a signed-in account
-  // strip is wider than the words "Sign in".
-  assert.match(css, /body\.rbft-sigma-boot #sigma-stage \.sigma-hero \{ top: 40px; \}/);
+  // offset tracks the button: 60px is the row's exact bottom edge (6px
+  // padding + 44px button + 10px breathing room), so the wordmark and the
+  // corner never share a horizontal band. Anything larger banks the shrink as
+  // empty space; anything smaller relies on the wordmark being centred and
+  // narrow, which stops being true once a signed-in account strip is wider
+  // than the words "Sign in".
+  assert.match(css, /body\.rbft-sigma-boot #sigma-stage \.sigma-hero \{ top: 60px; \}/);
 });
 
-test('the phone pill row fits on one line with every word intact', () => {
-  // The wrap was never a shortage of space: at the old padding the row measured
-  // 353px inside 390px and still broke. Tightening brings it well inside 390px,
-  // so nothing has to be renamed, hidden behind a menu, or pushed off a
-  // scrolling edge.
+test('the phone action row is a hamburger menu, not a squeezed line', () => {
+  // Superseded by redesign/mobile-hamburger-nav: the six action pills used to
+  // be forced onto one nowrap line at 22px each (see git history on this
+  // test). That fit, but landed under the platform's 44px tap-target minimum.
+  // A first pass moved them into a full-width bottom sheet; compared side by
+  // side with the actual mockup, that read as big boxy bars, so they became
+  // small 44px circles anchored near the hamburger instead -- see
+  // mobile-chrome-scale.test.mjs for the circles' own dimensions.
   //
-  // The row is now half height (22px, from 44px) as part of the phone density
-  // pass -- see mobile-chrome-scale.test.mjs, which owns the halving itself.
-  // What this test still guards is the property that survived it: six words,
-  // one line, nowrap.
-  const phone = EXPLORER.slice(EXPLORER.indexOf('@media (max-width:720px)'));
-  assert.match(phone, /\.sigma-actions\{gap:3px;flex-wrap:nowrap\}/);
-  assert.match(phone, /\.sigma-action\{padding:0 6px;font-size:10px;height:22px\}/);
+  // Matched directly against EXPLORER rather than by slicing out a media
+  // query: an earlier, unrelated @media (max-width:720px) block (the share
+  // popover) sits before this one in the file, so "everything after the
+  // first @media" is not the same thing as "the phone chrome block."
+  assert.match(EXPLORER, /\.sigma-actions\{\s*display:none;/);
+  assert.match(EXPLORER, /position:fixed;left:auto;bottom:auto;/);
+  assert.match(EXPLORER, /\.sigma-actions\.is-open\{display:flex\}/);
+  // Positioned from the toggle's rect, not a fixed corner -- see
+  // positionActionsRow()'s mobile branch.
+  assert.match(EXPLORER, /const toggleBox = menuToggle\.getBoundingClientRect\(\);/);
+  assert.match(EXPLORER, /\.sigma-menu-toggle\{/);
+  // The row is still the always-visible horizontal group on a desktop --
+  // moved out from under .sigma-hero (see the CSS comment on this rule: a
+  // transformed ancestor breaks position:fixed on the mobile sheet), but
+  // still flex-wrapped and centred exactly as before.
+  assert.match(EXPLORER, /\.sigma-actions\{position:absolute;left:50%;top:0;transform:translateX\(-50%\);/);
+  assert.match(EXPLORER, /display:flex;flex-wrap:wrap;justify-content:center;gap:8px\}/);
 });
 
 test('the page title carries no version number', () => {

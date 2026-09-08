@@ -1,4 +1,5 @@
-// Phone chrome: one sentence of narration, half-height controls.
+// Phone chrome: one sentence of narration, and (as of redesign/
+// mobile-hamburger-nav) a hamburger sheet instead of a squeezed control row.
 //
 // The stage IS the content. On a 390x664 viewport the hero and the footer were
 // between them eating a third of it, and most of what they spent that space on
@@ -11,6 +12,16 @@
 //
 // What goes: the centred-on readout, the frontier count, and the sentence in
 // front of the group jump.
+//
+// A separate pass first shrank the six action pills to 22px and the search
+// row to 24px so both fit on screen without giving up any content. That made
+// them smaller than the platform's 44px tap-target minimum, which a header
+// redesign (mockup-driven, see the redesign/mobile-hamburger-nav branch)
+// flagged as the thing keeping the phone layout from reading as finished. The
+// pills now live behind a hamburger in a bottom sheet, which let the search
+// row and the auth corner go back to a real 44px -- the tests below in
+// section 2 and 3 assert the CURRENT (post-redesign) numbers; only the
+// footer-narration behaviour in section 1 is unchanged by that redesign.
 //
 // Both the introduction and the generic "You are viewing one region..." copy
 // live in the SAME element (.sigma-hint), so the element cannot simply be
@@ -139,45 +150,51 @@ test('a desktop keeps every line of narration', () => {
 });
 
 // -------------------------------------------------------------------------
-// 2. Half-size pills and search row.
+// 2. The search row is full-size again, and the pills moved into a sheet.
 // -------------------------------------------------------------------------
 
-test('the pills are half height on a phone', () => {
-  const mobileHeight = pxIn(mobileBlock(), '.sigma-action{', 'height');
-  // The desktop pill is clamp(40px,4.2vw,44px); 44 is what a wide screen gets.
+test('the action circles are a real tap target in the open menu', () => {
+  // Superseded 22px pills (below the platform's 44px minimum) -- first with
+  // full-width sheet rows, then (redesign/mobile-hamburger-nav, after a
+  // mockup comparison found the sheet read as big boxy bars) with small
+  // 44px circles anchored near the hamburger. Fixed height, not min-height:
+  // there is no label inside to wrap any more (icon only -- see
+  // .sigma-actions .sigma-action-label / -icon below), so the box has a
+  // definite size instead of a floor.
+  const mobileHeight = pxIn(mobileBlock(), '.sigma-actions .sigma-action{', 'height');
+  assert.ok(mobileHeight >= 44, `Expected at least a 44px tap target, got ${mobileHeight}px.`);
+  // The desktop pill is untouched by this redesign.
   const desktopRule = desktopCss();
   const idx = desktopRule.indexOf('.sigma-action{');
   const clamp = desktopRule.slice(idx, desktopRule.indexOf('}', idx)).match(/height:clamp\((\d+)px,[^,]+,(\d+)px\)/);
-  assert.ok(clamp, 'Expected a clamped desktop pill height.');
-  const desktopMax = Number(clamp[2]);
-  assert.equal(mobileHeight, 22, 'Expected 22px pills on a phone.');
-  assert.equal(mobileHeight * 2, desktopMax, 'Expected exactly half the desktop pill height.');
+  assert.ok(clamp, 'Expected a clamped desktop pill height, unchanged by the mobile redesign.');
 });
 
-test('the search row is half height on a phone', () => {
-  // The selector spans two lines (field and Explore share the rule), so the
-  // height is read from the declaration block rather than by scanning forward
-  // from the selector's first line.
-  const block = mobileBlock();
-  const rule = block.match(/\.sigma-prompt input,\s*#\$\{STAGE_ID\} \.sigma-prompt button\{([^}]*)\}/);
-  assert.ok(rule, 'Expected one rule sizing both the field and the Explore button.');
-  const height = Number((rule[1].match(/height:\s*(\d+)px/) || [])[1]);
-  assert.equal(height, 24, 'Expected a 24px field and Explore button.');
-  // The desktop row is clamp(48px,5.4vw,58px): 48 is the narrow-screen value
-  // the phone was inheriting before this change.
+test('the search row is a real tap target again on a phone', () => {
+  // Second pass (redesign/mobile-hamburger-nav): the field, the search icon
+  // and the hamburger now share one bordered pill -- the FORM itself, not
+  // the input -- so the row's height is set there and the field/buttons
+  // fill it, rather than each control declaring its own 44px.
+  const height = pxIn(mobileBlock(), '.sigma-prompt form{', 'height');
+  // 44px, not the 24px this row briefly held: with the six pills moved out
+  // of this row entirely, it no longer has to give up its own size for
+  // their sake.
+  assert.equal(height, 44, 'Expected a 44px pill.');
+  // The desktop row is clamp(48px,5.4vw,58px) and is untouched by this redesign.
   assert.match(EXPLORER, /height:clamp\(48px,5\.4vw,58px\)/, 'Expected the desktop row height to be unchanged.');
 });
 
-test('the field also drops its min-height, or the page overrides it', () => {
-  // The page's global form styling sets input{...min-height:48px} for stacked
-  // fields with a label above. A floor beats height:24px, which left the field
-  // full size next to a halved Explore button. Same leak the margin:0 in the
-  // base rule exists for.
+test('the field fills the pill without the global min-height fighting it', () => {
+  // The page's global form styling sets input{...min-height:48px} for
+  // stacked fields with a label above. Nothing else in the phone rule
+  // overrides it, so without an explicit min-height:0 the field renders at
+  // 48px height:100% or not -- the floor wins regardless -- one px taller
+  // than the 44px pill it lives inside.
   assert.match(INDEX_HTML, /input,select,textarea\{[^}]*min-height:48px/, 'Expected the global 48px floor to still exist.');
   assert.match(
     mobileBlock(),
-    /\.sigma-prompt input,\s*#\$\{STAGE_ID\} \.sigma-prompt button\{height:24px;min-height:24px\}/,
-    'Expected the phone rule to override the global min-height as well as the height.'
+    /\.sigma-prompt input\{\s*height:100%;min-height:0;/,
+    'Expected the phone field rule to fill the pill and zero out the global min-height floor.'
   );
 });
 
@@ -196,18 +213,25 @@ test('the field font stays at 16px so iOS does not zoom', () => {
   assert.match(EXPLORER, /font-size:clamp\(16px,1\.7vw,18px\)/, 'Expected the 16px floor on the field to survive.');
 });
 
-test('the phone row still fits its six words on one line', () => {
-  // The previous pass fought a wrap to a second row; shrinking must not undo
-  // that by letting the row wrap again.
-  assert.match(mobileBlock(), /\.sigma-actions\{gap:3px;flex-wrap:nowrap\}/, 'Expected the action row to stay nowrap.');
+test('the open menu stacks its circles in a column, not a row', () => {
+  // Superseded: the six pills used to fight a wrap to a second row via
+  // nowrap + shrinking. They now stack vertically -- first as sheet rows,
+  // now (redesign/mobile-hamburger-nav) as small circles -- by design, so
+  // wrapping is not a failure mode any more.
+  assert.match(
+    mobileBlock(),
+    /\.sigma-actions\{[^}]*flex-direction:column;gap:10px;\s*max-height:70vh;overflow-y:auto/,
+    'Expected the open menu to stack its circles in a scrollable column.'
+  );
 });
 
 // -------------------------------------------------------------------------
 // 3. The auth corner is sized with the rest of the chrome.
 //
-// It was raised to 40px when it became the only way in on a phone, which was
-// right while everything around it was full height. Once the pills went to 22px
-// and the search row to 24px, it was the largest object on the stage.
+// It was raised to 40px when it became the only way in on a phone, shrunk to
+// 24px to match a search row that had itself been squeezed to fit six pills
+// on one line, then back to 44px (redesign/mobile-hamburger-nav) once those
+// pills moved into a hamburger sheet and the row got its size back.
 // -------------------------------------------------------------------------
 
 // The phone block in index.html that restyles the constellation's header.
@@ -220,13 +244,13 @@ function phoneAuthBlock() {
   return INDEX_HTML.slice(start, end);
 }
 
-test('the phone auth button matches the search row, not the old 40px', () => {
+test('the phone auth button matches the search row, not the old squeeze', () => {
   const block = phoneAuthBlock();
   const height = Number((block.match(/min-height:\s*(\d+)px !important/) || [])[1]);
-  assert.equal(height, 24, 'Expected a 24px auth button, the same height as the search row.');
+  assert.equal(height, 44, 'Expected a 44px auth button, the same height as the search row.');
   assert.ok(
-    !/min-height:\s*40px !important/.test(block),
-    'The 40px phone size must not come back without an argument.'
+    !/min-height:\s*24px !important/.test(block),
+    'The intermediate 24px phone size must not come back without an argument.'
   );
 });
 
@@ -234,17 +258,15 @@ test('the auth button keeps its !important, or the density pass wins', () => {
   // .header-btn is pinned to min-height:26px !important elsewhere in the sheet.
   // An override without the same weight silently loses.
   const block = phoneAuthBlock();
-  assert.match(block, /min-height:\s*24px !important/);
-  // 12px, not a proportional 11px: the sheet has an 11px legibility floor with
-  // a single documented exemption, and this is the only auth control a phone
-  // has. The box halves; the text does not.
-  assert.match(block, /font-size:\s*12px !important/);
-  assert.match(block, /padding:\s*0 9px !important/);
+  assert.match(block, /min-height:\s*44px !important/);
+  assert.match(block, /font-size:\s*14px !important/);
+  assert.match(block, /padding:\s*0 14px !important/);
 });
 
-test('the hero clears the shrunken header exactly', () => {
-  // 6px padding + 24px button + 10px = 40px. Holding the old 56px would have
-  // banked the shrink as empty space instead of stage.
+test('the hero clears the header row exactly', () => {
+  // padding + button height + 10px breathing room = the row's bottom edge.
+  // Holding a larger top would bank the shrink as empty space instead of
+  // stage; holding a smaller one risks the wordmark printing through the row.
   const block = phoneAuthBlock();
   const padding = block.match(/\.header-right \{ gap: 5px; padding: (\d+)px/);
   assert.ok(padding, 'Expected the header padding to be declared.');
