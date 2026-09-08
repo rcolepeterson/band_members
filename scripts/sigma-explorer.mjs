@@ -522,12 +522,6 @@ const STAGE_CSS = `
   font-size:clamp(16px,1.7vw,18px);line-height:1.2;
   box-shadow:0 8px 28px rgba(4,7,12,0.55);backdrop-filter:blur(6px);
   transition:border-color 140ms ease, box-shadow 140ms ease}
-/* The native "clear" x a type="search" field draws once it has text. Site
-   already has its own controls right next to this field (a hamburger and,
-   on a phone, a search icon sharing the same pill) -- a second, browser-
-   grey x a few px away read as visual noise, and unlike the datalist arrow
-   below, this ONE actually responds to being hidden. */
-#${STAGE_ID} .sigma-prompt input::-webkit-search-cancel-button{display:none;-webkit-appearance:none}
 #${STAGE_ID} .sigma-prompt input::placeholder{color:#93a1b2}
 #${STAGE_ID} .sigma-prompt input:focus{outline:none;border-color:rgba(143,232,246,0.75);
   box-shadow:0 8px 28px rgba(4,7,12,0.55),0 0 0 3px rgba(143,232,246,0.18)}
@@ -640,24 +634,34 @@ body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
     buttons go borderless/transparent so they read as one control with three
     zones, not three controls.
   */
+  /* gap:6px, not 0: the field's native decorations (the search-clear "x"
+     and the datalist dropdown arrow -- see the input rule below) render
+     right at the field's own edge, INSIDE its padding-right, not respecting
+     it the way ordinary content would. At gap:0 that edge sat flush against
+     the search button, so Chrome's own boundary line for that decoration
+     area printed as a hard seam between the two. The gap gives it a few px
+     of the pill's own background to dissolve into instead. */
   #${STAGE_ID} .sigma-prompt form{
-    gap:0;height:44px;align-items:center;
+    gap:6px;height:44px;align-items:center;
     border-radius:999px;border:1px solid rgba(143,232,246,0.38);
     background:rgba(10,14,20,0.86);box-shadow:0 8px 28px rgba(4,7,12,0.55)}
   /* min-height:0 is load-bearing, not decorative: the page's global form
      styling (input,select,textarea{...min-height:48px}) is written for
      stacked fields with a label above, and nothing else in this rule
      overrides it -- without this, the field renders at 48px inside a 44px
-     pill regardless of height:100%, since min-height wins as a floor. */
-  /* padding-right leaves room for the browser's own datalist dropdown arrow
-     -- a native affordance of the list="..." attribute, drawn by Chrome/
-     Safari themselves once the field has focus or a value. It cannot be
-     hidden with CSS (tried -webkit-calendar-picker-indicator, -webkit-
-     list-button, appearance:none, and -webkit-textfield-decoration-
-     container -- none of them touch it in current Chrome, unlike the
-     search-cancel "x" above, which does respond). Tight padding here made
-     it read as jammed against the search icon; this just gives it space to
-     sit in instead of fighting to remove it. */
+     pill regardless of height:100%, since min-height wins as a floor.
+
+     padding-right leaves the native search-clear "x" and datalist dropdown
+     arrow room to sit without crowding the search icon beside them. Both
+     are drawn by Chrome/Safari themselves (the "x" for any type="search"
+     field with text, the arrow for the list="..." attribute) and neither
+     is fully stylable: the "x" at least responds to being REPOSITIONED via
+     padding, and the arrow's own boundary is what gap:6px above is for --
+     tried hiding both outright first (-webkit-search-cancel-button,
+     -webkit-calendar-picker-indicator, -webkit-list-button, appearance:none,
+     -webkit-textfield-decoration-container); only the "x" ever responded,
+     and hiding just that one lost the tap-to-clear a phone keyboard doesn't
+     otherwise offer. */
   #${STAGE_ID} .sigma-prompt input{
     height:100%;min-height:0;padding:0 28px 0 18px;border:0;background:none;box-shadow:none}
   /* Both buttons share this: a borderless 36px circle centred in the 44px
