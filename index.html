@@ -4309,9 +4309,9 @@ async function tryNativeShare() {
 
 // Wire the two share-popover action buttons. These were declared above
 // but previously had no click handlers, which meant the popover was
-// visible but non-functional. Both handlers stopPropagation so the
-// document-level 'click outside to close' listener doesn't slam the
-// popover shut mid-action.
+// visible but non-functional. Both handlers stopPropagation as a defensive
+// measure so a document-level click listener can never slam the popover
+// shut mid-action.
 if (downloadPngBtn) {
   downloadPngBtn.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -4461,14 +4461,17 @@ function downloadPngBlob(blob) {
   });
 });
 
-    // Bottom-floating panel toggles (Add your band). Same click-to-open,
-    // click-outside-to-close pattern as the share popover. Project Pulse
-    // used to live here alongside — replaced by the always-on
+    // Bottom-floating panel toggles (Add your band). Only the Add-band
+    // popover is persistent: it stays open until its X, its trigger toggle,
+    // or another popover is opened -- an accidental click away used to throw
+    // away an in-progress form. The other popovers (search, scene, genre,
+    // feedback) and share keep the classic click-outside / Escape dismissal.
+    // Project Pulse used to live here alongside — replaced by the always-on
     // #graph-stats-badge in the top-left of the stage.
-    // All click-open / click-outside-to-close popovers on the top toolbar
-    // share one registry. Add-band still uses the same button+popover pair;
-    // the three filter popovers (Search/Scene/Genre) piggy-back on the same
-    // open/close machinery. Naming kept as "bottomPopovers" for backward-
+    // All click-open popovers on the top toolbar share one registry.
+    // Add-band still uses the same button+popover pair; the three filter
+    // popovers (Search/Scene/Genre) piggy-back on the same open/close
+    // machinery. Naming kept as "bottomPopovers" for backward-
     // compatibility across the file even though everything now anchors up
     // top after the unified-toolbar refactor.
     const bottomPopovers = [
@@ -4537,16 +4540,25 @@ function downloadPngBlob(blob) {
 
     if (sharePopover) {
       sharePopover.addEventListener('click', (event) => event.stopPropagation());
+      // The share popover is not in the bottomPopovers registry (its trigger
+      // has bespoke mobile native-share handling), so wire its X directly,
+      // the same as the registry loop does for the other popovers.
+      sharePopover.querySelectorAll('[data-popover-close]').forEach(closer => {
+        closer.addEventListener('click', () => toggleSharePopover(false));
+      });
     }
 
+    // Passive dismissal: a click anywhere outside the popovers closes them --
+    // EXCEPT the Add-band popover, which holds in-progress form input and
+    // only closes via its X, its trigger toggle, or opening another popover.
     document.addEventListener('click', () => {
-      closeBottomPopovers(null);
+      closeBottomPopovers(document.getElementById('add-band-popover'));
       toggleSharePopover(false);
     });
 
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
-      closeBottomPopovers(null);
+      closeBottomPopovers(document.getElementById('add-band-popover'));
       toggleSharePopover(false);
     });
 
@@ -8399,8 +8411,10 @@ function downloadPngBlob(blob) {
         sheetQuery.addListener(onSheetBreakpointChange);
       }
     }
-    // ESC key closes the card, matching the popover convention already used
-    // for Add-Your-Band.
+    // ESC key closes the card. (The toolbar popovers no longer listen for
+    // Escape -- they stay open until the X -- but the node card keeps its
+    // own dismiss paths: X, Escape, empty-SVG-background click, travel,
+    // and filter changes.)
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && nodeCardState.node) closeNodeCard();
     });
@@ -8765,9 +8779,8 @@ function downloadPngBlob(blob) {
     });
 
     document.getElementById('graph-empty-state-cta')?.addEventListener('click', event => {
-      // Same reason as the mobile Add-your-band trigger: stop the
-      // document-level "click outside → close popovers" handler from
-      // dismissing the popover we are about to open.
+      // Defensive: keep this click from reaching any document-level handler
+      // that might dismiss the popover we are about to open.
       event.stopPropagation();
       openAddBandFromEmptyState();
     });
@@ -10527,9 +10540,9 @@ function downloadPngBlob(blob) {
     }
 
     document.getElementById('sign-in-btn')?.addEventListener('click', (event) => {
-      // The document-level "click outside → close popovers" handler would
-      // otherwise dismiss the panel we just opened, since #sign-in-btn lives
-      // in .site-header, outside the popover subtree.
+      // Defensive: #sign-in-btn lives in .site-header, outside the popover
+      // subtree, so keep its click from reaching any document-level handler
+      // that might dismiss the panel we just opened.
       event.stopPropagation();
       openSignInFlow();
     });
@@ -11182,10 +11195,9 @@ function downloadPngBlob(blob) {
         const mobileShareBtn = document.getElementById('mobile-share-btn');
         if (mobileShareBtn) {
           mobileShareBtn.addEventListener('click', async (event) => {
-            // Stop the click from bubbling to the document-level
-            // 'click outside → close popovers' handler. Without this, if
-            // we fall back to opening the share popover below, it'd be
-            // slammed shut in the same event loop tick.
+            // Defensive: keep this click from reaching any document-level
+            // handler that might dismiss the share popover we fall back to
+            // opening below.
             event.stopPropagation();
             closeSheet();
             // Wait for the sheet close animation so the OS share sheet
@@ -11233,9 +11245,8 @@ function downloadPngBlob(blob) {
         const mobileAddBandBtn = document.getElementById('mobile-add-band-btn');
         if (mobileAddBandBtn) {
           mobileAddBandBtn.addEventListener('click', async (event) => {
-            // Prevent the document-level 'click outside → close popovers'
-            // handler from immediately dismissing the popover we're
-            // about to open.
+            // Defensive: keep this click from reaching any document-level
+            // handler that might dismiss the popover we're about to open.
             event.stopPropagation();
             closeSheet();
             // Wait for the sheet close animation so the add-band bottom
