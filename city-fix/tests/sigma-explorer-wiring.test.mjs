@@ -1,0 +1,1720 @@
+// Structural tests for the Sigma renderer's page wiring (issue #80).
+//
+// The explorer itself (scripts/sigma-explorer.mjs) imports sigma and
+// graphology from the CDN, so node --test cannot execute it -- same constraint
+// the repo already lives with for d3. These are static assertions in the style
+// of mobile-toolbar-parity.test.mjs and search-empty-state.test.mjs, and they
+// exist to catch the regressions that would actually hurt:
+//
+//   1. The flag really is opt-in. index.html must not activate Sigma for
+//      normal visitors, and the SVG renderer must stay in place.
+//   2. The data bridge exists. index.html publishes its master graph and
+//      announces it; the module listens for exactly that event name. A
+//      renamed event on one side and not the other is a silent blank stage.
+//   3. The interaction contract survives: electric blue on band click, gold
+//      on member click, using the same hex values as the SVG renderer's CSS.
+//   4. The 2.5D promise: no camera rotation, no orbit, no pilot mode.
+//   5. The exploration affordances promised in the issue are present: the
+//      "Who's your favorite band?" prompt, the expand action, the
+//      larger-universe copy, and the silver ringed home star.
+//   6. Mobile parity: the new stage chrome is not desktop-only.
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { RENDERERS, DEFAULT_RENDERER } from '../scripts/neighborhood-helpers.mjs';
+
+// Assertions about what the page LOADS must not be satisfiable by deleting the
+// comments that explain why -- and the comments explaining which hosts are gone
+// necessarily name those hosts.
+//
+// Strips HTML comments and JS line comments. The (?<!:) guard is the whole trick:
+// without it, `//` in `https://d3js.org` would itself look like the start of a
+// comment, so a REAL script tag would be stripped too and the assertion below could
+// never fail. Verified by reinstating the tag.
+const stripComments = html =>
+  String(html)
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/(?<!:)\/\/[^\n]*/g, '');
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(__dirname, '..');
+const INDEX_HTML = readFileSync(join(ROOT, 'index.html'), 'utf8');
+const EXPLORER = readFileSync(join(ROOT, 'scripts', 'sigma-explorer.mjs'), 'utf8');
+const HELPERS = readFileSync(join(ROOT, 'scripts', 'neighborhood-helpers.mjs'), 'utf8');
+const PACKAGE = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+
+// ---------------------------------------------------------------------------
+// 1. Opt-in only
+// ---------------------------------------------------------------------------
+
+test('index.html loads the explorer as a module and nothing else changes renderer', () => {
+  assert.match(
+    INDEX_HTML,
+    /<script type="module" src="scripts\/sigma-explorer\.mjs"><\/script>/,
+    'the explorer must be loaded as an ES module from index.html'
+  );
+  assert.match(INDEX_HTML, /<svg id="graph-svg"/);
+  // d3 used to be a render-blocking <script> from d3js.org here. It is now vendored
+  // and fetched on demand, so what has to exist is the loader, not the tag.
+  assert.match(INDEX_HTML, /function ensureD3\(\)/);
+  assert.doesNotMatch(stripComments(INDEX_HTML), /<script src="https:\/\/d3js\.org/);
+});
+
+test('the module self-boots unless the SVG renderer was asked for', () => {
+  assert.match(EXPLORER, /rendererFromSearch\(win\.location\.search\) !== 'sigma'\) return;/);
+  assert.match(HELPERS, /export const DEFAULT_RENDERER = 'sigma';/);
+});
+
+test('the node card is bound to Sigma selection before the flip', () => {
+  // Without this the constellation cannot be the default: the card is where a
+  // band's city, years, line-up, albums and verification live, and it carries
+  // the edit pencil, so a visitor could look but neither read nor contribute.
+  assert.match(INDEX_HTML, /window\.addEventListener\('rbft:sigma-select'/);
+  assert.match(INDEX_HTML, /selectBandNode\(detail\.id, \{ source: 'sigma' \}\)/);
+  assert.match(INDEX_HTML, /selectMemberNode\(detail\.id, \{ source: 'sigma' \}\)/);
+  // Travelling invalidates the open card: the view it described is gone.
+  assert.match(INDEX_HTML, /window\.addEventListener\('rbft:sigma-travel', \(\) => closeNodeCard\(\)\)/);
+  // Bound once, when the graph first becomes available.
+  assert.match(INDEX_HTML, /if \(!sigmaSelectionBound\) \{/);
+});
+
+// ---------------------------------------------------------------------------
+// 2. Data bridge
+// ---------------------------------------------------------------------------
+
+test('index.html publishes the master graph exactly where graphState is set', () => {
+  assert.match(INDEX_HTML, /function publishMasterGraph\(master\)/);
+  assert.match(INDEX_HTML, /window\.RBFT_MASTER_GRAPH = master;/);
+  const assignments = INDEX_HTML.match(/graphState = \{ master \};/g) || [];
+  const publishes = INDEX_HTML.match(/publishMasterGraph\(master\);/g) || [];
+  assert.ok(assignments.length > 0, 'expected graphState assignments to exist');
+  assert.equal(
+    publishes.length,
+    assignments.length,
+    'every graphState = { master } must be followed by publishMasterGraph(master)'
+  );
+});
+
+test('both sides of the bridge agree on the event and global names', () => {
+  assert.match(INDEX_HTML, /'rbft:graph-ready'/);
+  assert.match(EXPLORER, /'rbft:graph-ready'/);
+  assert.match(EXPLORER, /win\.RBFT_MASTER_GRAPH/);
+});
+
+// ---------------------------------------------------------------------------
+// 3. Interaction contract (blue / gold)
+// ---------------------------------------------------------------------------
+
+test('highlight hues match the SVG renderer CSS exactly', () => {
+  assert.match(EXPLORER, /BAND_HIGHLIGHT_COLOR = '#27b8ff'/);
+  assert.match(EXPLORER, /MEMBER_HIGHLIGHT_COLOR = '#ffb454'/);
+  // The values the SVG renderer already ships.
+  assert.match(INDEX_HTML, /\.node\.band-highlight \.node-core,[\s\S]{0,120}stroke: #27b8ff;/);
+  assert.match(INDEX_HTML, /\.node\.member-highlight \.node-core,[\s\S]{0,120}stroke: #ffb454;/);
+});
+
+test('band click highlights members, member click highlights bands', () => {
+  assert.match(
+    EXPLORER,
+    /entityType === 'band' \? BAND_HIGHLIGHT_COLOR : MEMBER_HIGHLIGHT_COLOR/,
+    'selection colour must be chosen by the clicked entity type'
+  );
+  assert.match(EXPLORER, /renderer\.on\('clickNode'/);
+  assert.match(EXPLORER, /renderer\.on\('clickStage', \(\) => clearHighlight\(\)\)/);
+});
+
+// ---------------------------------------------------------------------------
+// 4. 2.5D only
+// ---------------------------------------------------------------------------
+
+test('camera rotation, orbit and pilot mode are absent', () => {
+  assert.match(EXPLORER, /enableCameraRotation: false/);
+  assert.doesNotMatch(EXPLORER, /enableCameraRotation:\s*true/);
+  // Comments stripped first: the file's header comment names the very
+  // features these assertions check are not implemented.
+  const code = EXPLORER.replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(code, /pilot/i, 'no pilot mode');
+  assert.doesNotMatch(code, /orbit/i, 'no orbit controls');
+  // No middle-click orbit handlers.
+  assert.doesNotMatch(code, /auxclick|button === 1/);
+});
+
+// ---------------------------------------------------------------------------
+// 5. Exploration affordances + home star
+// ---------------------------------------------------------------------------
+
+test('the discovery prompt and larger-universe copy are present', () => {
+  assert.match(EXPLORER, /Who&rsquo;s your favorite band\?/);
+  assert.match(EXPLORER, /larger music universe/);
+  // Expand moved from a lone bottom-right button ("Expand this constellation")
+  // into the shortcut row, where a one-word label carries the sentence in its
+  // popover instead of in the label itself.
+  const expand = STAGE_ACTIONS().find(item => item.key === 'expand');
+  assert.ok(expand, 'the shortcut row must include an expand action');
+  assert.equal(expand.label, 'Expand');
+  assert.match(expand.detail, /horizon|beyond/i);
+});
+
+/** Parses the STAGE_ACTIONS table out of the module source. */
+function STAGE_ACTIONS() {
+  const block = EXPLORER.slice(
+    EXPLORER.indexOf('const STAGE_ACTIONS = ['),
+    EXPLORER.indexOf('// Upper bound on datalist options'),
+  );
+  // Tolerates comment lines between the fields: the copy carries reasoning, and
+  // an entry is allowed to explain itself without breaking this parser.
+  return [...block.matchAll(/key: '([a-z]+)',([\s\S]*?)\n\s*(?:target|action):/g)].map(
+    ([, key, body]) => ({
+      key,
+      label: (body.match(/label: '([^']+)'/) || [])[1] || '',
+      detail: (body.match(/detail:\s*'([^']+)'/) || [])[1] || '',
+    }),
+  );
+}
+
+test('every shortcut pill has a one-word label and a sentence explaining it', () => {
+  const actions = STAGE_ACTIONS();
+  // The whole row, per the agreed design: nothing else competes with the hero.
+  assert.deepEqual(
+    actions.map(item => item.key),
+    // No Sign-in pill: the page's account strip in the site header is kept as
+    // the single entry point, top-right where a search homepage puts the avatar.
+    ['expand', 'reset', 'filter', 'add', 'share', 'feedback'],
+  );
+  actions.forEach(({ key, label, detail }) => {
+    // A pill only fits a short label; two words at most ("Sign in").
+    assert.ok(label.length <= 9, `${key}: label "${label}" is too long for a pill`);
+    assert.ok(label.split(' ').length <= 2, `${key}: label "${label}" is more than two words`);
+    // One word cannot explain itself -- "Reset" resets WHAT? -- so the sentence
+    // is required, and it has to be a sentence.
+    assert.ok(detail.length > 25, `${key}: detail is too terse to explain the button`);
+    assert.match(detail, /\.$/, `${key}: detail should read as a sentence`);
+  });
+});
+
+test('the shortcut popover works for hover, keyboard and touch', () => {
+  // A title attribute is invisible on touch and to keyboard users, so the
+  // popover is a real element driven by all three input paths.
+  assert.match(EXPLORER, /addEventListener\('pointerenter'/);
+  assert.match(EXPLORER, /addEventListener\('focus'/);
+  assert.match(EXPLORER, /addEventListener\('blur'/);
+  assert.match(EXPLORER, /aria-describedby="\$\{TIP_ID\}"/);
+  assert.match(EXPLORER, /role="tooltip"/);
+  // And it must be dismissable, or a tap-opened popover traps a phone user.
+  assert.match(EXPLORER, /if \(event\.key !== 'Escape'\) return;/);
+  assert.match(EXPLORER, /addEventListener\('pointerdown'/);
+  // Clamped so the end pills of a centred row cannot push it off screen.
+  assert.match(EXPLORER, /Math\.max\(margin, Math\.min\(left, stageBox\.width - width - margin\)\)/);
+});
+
+test('the page\'s own duplicate chrome stands down while Sigma renders', () => {
+  // Both renderers share index.html. Without this the visitor saw two toolbars
+  // for one graph.
+  assert.match(EXPLORER, /const BODY_ACTIVE_CLASS = 'rbft-sigma-chrome';/);
+  assert.match(EXPLORER, /doc\.body\.classList\.add\(BODY_ACTIVE_CLASS\)/);
+  // And it must be given back, since the flag is switchable at runtime.
+  assert.match(EXPLORER, /doc\.body\.classList\.remove\(BODY_ACTIVE_CLASS\)/);
+  ['.hero', '.graph-overlay-top', '.graph-stats-badge'].forEach(selector => {
+    assert.ok(
+      EXPLORER.includes(`body.\${BODY_ACTIVE_CLASS} ${selector}`),
+      `${selector} should stand down while Sigma renders`,
+    );
+  });
+});
+
+test('the wordmark stays on screen above the search field', () => {
+  assert.match(EXPLORER, /class="sigma-wordmark">Six Degrees of Rock<\/h1>/);
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
+  const hero = css.match(/\.sigma-hero\{[^}]*\}/s);
+  assert.ok(hero, 'the hero needs a style rule');
+  // Anchored to the top of the stage, like a search homepage.
+  assert.match(hero[0], /top:clamp\(/);
+});
+
+test('a search miss invites the visitor to add the band', () => {
+  // The footer line is deliberately terse now: the "No Rawk Found" panel carries
+  // the offer to add the band, and two copies of that sentence on one screen
+  // read as a fault. The invitation itself is asserted in the empty-state test.
+  assert.match(EXPLORER, /No match for/);
+  assert.match(EXPLORER, /rbft:sigma-search-miss/);
+});
+
+test('the anchor renders as a silver ringed star with a you-are-here label', () => {
+  assert.match(HELPERS, /nodeType: 'ringed-star'/);
+  assert.match(HELPERS, /label: 'You are here'/);
+  assert.match(EXPLORER, /sigma-home-star/);
+  assert.match(EXPLORER, /you are here/);
+  // The ring and the silver core are both drawn.
+  assert.match(EXPLORER, /\.sigma-home-star \.ring\{/);
+  assert.match(EXPLORER, /\.sigma-home-star \.core\{/);
+});
+
+test('the opening view is capped and the frontier is surfaced', () => {
+  assert.match(EXPLORER, /NEIGHBORHOOD_BUDGET\.OPENING_MAX_NODES/);
+  assert.match(EXPLORER, /just beyond this view/);
+  assert.match(HELPERS, /OPENING_MAX_NODES: 60/);
+  assert.match(HELPERS, /MAX_NODES: 100/);
+});
+
+test('a disconnected group in the filtered graph is disclosed, not silently dropped', () => {
+  // "Expand" only ever grows the anchor's own component -- a scene filter can
+  // leave other bands with no shared members at all, invisible forever no
+  // matter how far that expands. This is the honesty fix: say so, and offer
+  // a one-click way to actually see them, reusing the same render path a
+  // node click already uses rather than rendering every group at once.
+  assert.match(HELPERS, /export function getConnectedComponents\(/);
+  assert.match(EXPLORER, /getConnectedComponents,?\s*\n/, 'must import the helper');
+  assert.match(EXPLORER, /no shared members with what's on screen/);
+  assert.match(EXPLORER, /Show next group/);
+  assert.match(EXPLORER, /Show that group/, 'singular phrasing for exactly one other group');
+  // Recomputed whenever the filtered graph changes, not just once at boot.
+  assert.match(EXPLORER, /components = getConnectedComponents\(master\.nodes, master\.links, adjacency\)/);
+  // The click handler reuses renderNeighborhood -- no separate multi-group
+  // rendering path, which is the deferred, bigger version of this feature.
+  const clickHandler = EXPLORER.slice(EXPLORER.indexOf('otherGroupsBtn.addEventListener'));
+  assert.match(clickHandler.slice(0, 400), /renderNeighborhood\(\{/);
+  assert.match(clickHandler.slice(0, 400), /state\.nextGroupAnchor/);
+});
+
+// ---------------------------------------------------------------------------
+// 6. Mobile parity + dependency pinning
+// ---------------------------------------------------------------------------
+
+test('stage chrome is not hidden on small screens with no way back', () => {
+  // The prompt and shortcut pills get repositioned under 720px, never
+  // display:none with no recourse -- the PR #42/#44/#45/#63 trap.
+  //
+  // Checks rules rather than a slice of text: the module now also contains
+  // legitimate display:none rules for the PAGE's duplicate toolbar, and a
+  // blunt "no display:none after this point" search flagged those.
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
+  const mediaBlocks = [...css.matchAll(/@media[^{]*\{([\s\S]*?)\n\}/g)].map(m => m[1]);
+  assert.ok(mediaBlocks.length, 'expected at least one responsive block');
+  assert.ok(css.includes('#stage .sigma-prompt'), 'the prompt must be tuned for mobile');
+  // Narration a phone deliberately drops, with the reason each one is allowed.
+  //
+  // The ban exists to protect the CONTROLS -- prompt, pills, hero -- because
+  // hiding those is the PR #42/#44/#45/#63 trap. It never meant "a phone must
+  // print every sentence a desktop prints": the centred-on readout, the
+  // frontier count and the sentence in front of "Show next group" described a
+  // view the visitor could already see, and on a 664px-tall screen they cost a
+  // third of the stage. The group-jump BUTTON is not in this list and must
+  // stay.
+  const NARRATION_A_PHONE_MAY_DROP = [
+    '.sigma-context',
+    '.sigma-frontier',
+    '.sigma-other-groups__text',
+    '.sigma-hint:not(.sigma-hint--intro)',
+  ];
+  // Controls that default to display:none on a phone but are NOT the trap:
+  // each one has an always-visible trigger that reveals it (a toggle button,
+  // not a vanished control with no way back). The original PR #42/#44/#45/#63
+  // bug hid a control with nothing left on screen to bring it back; a
+  // hamburger sheet is the opposite of that by construction.
+  const CONTROLS_BEHIND_AN_ALWAYS_VISIBLE_TOGGLE = {
+    '.sigma-actions': '.sigma-menu-toggle',
+  };
+  // Printed labels hidden on a phone in favour of an icon (redesign/mobile-
+  // hamburger-nav): not the trap either, since the CONTROL is still on
+  // screen and still works -- only which of its two representations is
+  // drawn changes. Verified by checking the icon it swaps to is NOT itself
+  // display:none in the same block, so a genuine "both are gone" regression
+  // still fails loudly.
+  const LABELS_SWAPPED_FOR_AN_ICON = {
+    '.sigma-actions .sigma-action-label': '.sigma-actions .sigma-action-icon',
+    '.sigma-prompt .sigma-submit-label': '.sigma-prompt .sigma-submit-icon',
+  };
+  mediaBlocks.forEach(block => {
+    [...block.matchAll(/([^{}\n]*#stage[^{]*)\{([^}]*)\}/g)].forEach(([, selector, body]) => {
+      const trimmed = selector.trim();
+      if (NARRATION_A_PHONE_MAY_DROP.some(allowed => trimmed.includes(allowed))) return;
+      const toggle = Object.entries(CONTROLS_BEHIND_AN_ALWAYS_VISIBLE_TOGGLE)
+        .find(([selectorPrefix]) => trimmed === `#stage ${selectorPrefix}` || trimmed.startsWith(`#stage ${selectorPrefix}.`));
+      if (toggle) {
+        const [, triggerSelector] = toggle;
+        // Not anchored to "#stage <trigger>{" exactly: the toggle is scoped
+        // through an ancestor class (.sigma-prompt .sigma-menu-toggle) to
+        // out-specificity a generic "#stage .sigma-prompt button" rule that
+        // would otherwise also match it -- so only the trigger class itself,
+        // as its own rule with a display, is required to exist.
+        assert.ok(
+          new RegExp(`#stage [^{]*\\${triggerSelector}\\{[^}]*display:`).test(css),
+          `${trimmed} is hidden on a phone; expected its trigger ${triggerSelector} to exist and stay visible`,
+        );
+        return;
+      }
+      const swap = LABELS_SWAPPED_FOR_AN_ICON[trimmed.replace(/^#stage /, '')];
+      if (swap) {
+        const escapedSwap = swap.replace(/\./g, '\\.');
+        assert.doesNotMatch(
+          block,
+          new RegExp(`#stage ${escapedSwap}\\{[^}]*display:\\s*none`),
+          `${trimmed} swaps to ${swap} on a phone, but that is ALSO display:none there -- the control would vanish entirely`,
+        );
+        return;
+      }
+      assert.doesNotMatch(
+        body,
+        /display:\s*none/,
+        `a responsive rule hides stage chrome with no visible way to reveal it again: ${trimmed}`,
+      );
+    });
+  });
+});
+
+test('CDN versions are pinned in the import map, matching package.json', () => {
+  // The explorer imports bare specifiers now; index.html's import map is the
+  // single place the versions live, so that is what has to agree with
+  // package.json (and what makes one shared Sigma instance possible).
+  const graphology = PACKAGE.devDependencies.graphology;
+  const sigma = PACKAGE.devDependencies.sigma;
+  assert.ok(graphology, 'graphology must be a devDependency for the test suite');
+  assert.ok(sigma, 'sigma must be a devDependency so the CDN pin is reviewable');
+  const version = range => String(range).replace(/^[^0-9]*/, '');
+  assert.match(INDEX_HTML, /<script type="importmap">/);
+  // The map now points at this origin, so the version it resolves to is recorded in
+  // the vendored file's banner rather than in a URL. Same requirement -- the shipped
+  // version must be reviewable and must agree with package.json -- different place.
+  const sigmaBundle = readFileSync(new URL('../vendor/sigma.mjs', import.meta.url), 'utf8').slice(0, 400);
+  const graphologyBundle = readFileSync(new URL('../vendor/graphology.mjs', import.meta.url), 'utf8').slice(0, 400);
+  assert.ok(
+    sigmaBundle.includes(`sigma@${version(sigma)}`),
+    `vendor/sigma.mjs must record sigma@${version(sigma)} to match package.json`
+  );
+  assert.ok(
+    graphologyBundle.includes(`graphology@${version(graphology)}`),
+    `vendor/graphology.mjs must record graphology@${version(graphology)} to match package.json`
+  );
+  // @sigma/edge-curve was removed when the constellation went to straight
+  // lines: curved threads crossed each other and read as tangled tension. Its
+  // absence is the invariant now -- if it comes back, so do the curves.
+  assert.doesNotMatch(INDEX_HTML, /@sigma\/edge-curve/);
+  assert.ok(
+    !PACKAGE.devDependencies['@sigma/edge-curve'],
+    'edge-curve must stay out of package.json: the constellation uses straight lines',
+  );
+  // The invariant is ONE shared Sigma via a bare specifier, not the exact shape of
+  // the import statement. createNodeBorderProgram is imported from that same
+  // specifier on purpose: @sigma/node-border needs sigma's own program base
+  // classes, and giving it a second bundle would put a second copy of the WebGL
+  // node-program machinery in the same GL context.
+  assert.match(EXPLORER, /^import Sigma(?:, \{ [^}]+ \})? from 'sigma';$/m);
+  const nodeBorder = PACKAGE.devDependencies['@sigma/node-border'];
+  assert.ok(nodeBorder, '@sigma/node-border must be a devDependency so the pin is reviewable');
+  assert.ok(
+    sigmaBundle.includes(`@sigma/node-border@${version(nodeBorder)}`),
+    `vendor/sigma.mjs must record @sigma/node-border@${version(nodeBorder)} to match package.json`,
+  );
+  // And it must ride in the shared bundle rather than getting an import-map entry
+  // of its own, which would have to stay version-locked to sigma's by hand.
+  assert.doesNotMatch(INDEX_HTML, /@sigma\/node-border/);
+  assert.match(EXPLORER, /^import Graph from 'graphology';$/m);
+});
+
+test('the explorer keeps its logic in the tested helper module', () => {
+  // Anything worth asserting about traversal, budgets, anchors, layout or
+  // classification belongs in neighborhood-helpers.mjs, which has real unit
+  // tests. The renderer should import it, not reimplement it.
+  ['getNeighborhood', 'resolveAnchor', 'radialLayout', 'classifyNode', 'buildAdjacency'].forEach(
+    name => assert.match(EXPLORER, new RegExp(`\\b${name}\\b`), `${name} must come from the helpers`)
+  );
+  assert.doesNotMatch(EXPLORER, /forceSimulation/, 'no force layout on the Sigma path');
+});
+
+test('Aaron\'s name moves aside when the focus ring is close', () => {
+  // Aaron is often one hop from whatever a visitor searched for, so his name
+  // would print across the focus ring. Only his star carries a label now -- the
+  // focus ring's own label repeated the node label Sigma already draws -- so
+  // this is about moving one label, not separating two.
+  assert.match(EXPLORER, /Math\.hypot\(homePoint\.x - focusPoint\.x, homePoint\.y - focusPoint\.y\) < 120/);
+  assert.match(EXPLORER, /placeLabel\(homeLabelEl, homePoint, homeStarEl, homeScale, crowded\)/);
+  assert.doesNotMatch(EXPLORER, /sigma-focus-label/);
+});
+
+test('node sizes are scaled from the tested helpers, per view and on resize', () => {
+  assert.match(EXPLORER, /nodeSizeScale\(\{/);
+  assert.match(EXPLORER, /state\.sizeScale/);
+  // The resize handler also repositions the filter panel now, so it is a block
+  // rather than a one-liner.
+  assert.match(EXPLORER, /renderer\.on\('resize', \(\) => \{\s*\n\s*applySizeScale\(\);/);
+  assert.match(HELPERS, /export function densitySizeScale/);
+  assert.match(HELPERS, /export function viewportSizeScale/);
+  assert.match(HELPERS, /export function nodeSizeScale/);
+});
+
+test('label thresholds follow the drawn node size instead of a fixed 7', () => {
+  assert.match(EXPLORER, /labelSettings\(\{/);
+  assert.match(EXPLORER, /SMALLEST_NODE_SIZE \* state\.sizeScale/);
+  assert.doesNotMatch(EXPLORER, /labelRenderedSizeThreshold: 7/);
+  assert.match(HELPERS, /export function labelSettings/);
+});
+
+test('a highlight dims other nodes but keeps their names', () => {
+  // Blanking labels on dim made names appear only on click.
+  assert.match(EXPLORER, /labelColor: \{ attribute: 'labelColor', color: '#c8d3e0' \}/);
+  assert.match(EXPLORER, /res\.labelColor = DIM_LABEL_COLOR;/);
+  const code = EXPLORER.replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(code, /res\.label = '';\s*\n\s*\}\s*\n\s*\}/);
+});
+
+test('the layout is a proportional radial tree, not recursive wedge nesting', () => {
+  // Recursive wedge subdivision was the expanded-view overlap bug: every
+  // generation halved its slice until members landed on identical points.
+  // Uniform per-layer slots replaced it and fixed overlap, but let a member
+  // drift far from its own band, drawing membership edges across the middle.
+  // The current design: a BFS tree where each child sits inside a window
+  // centred on its parent, sized by what that subtree needs.
+  assert.match(HELPERS, /BFS tree/);
+  assert.match(HELPERS, /export const MAX_BRANCH_SPAN/);
+  assert.match(HELPERS, /Subtree weights/);
+  assert.match(HELPERS, /minSeparation/);
+  assert.doesNotMatch(HELPERS, /wedges\.set\(/);
+});
+
+test('hidden overlays are really hidden', () => {
+  // .sigma-home-star sets display:flex, which overrides the `hidden`
+  // attribute's default display:none unless we say otherwise -- that bug
+  // painted a phantom "you are here" star over unrelated views.
+  assert.match(EXPLORER, /\.sigma-home-star\[hidden\],\s*\n#\$\{STAGE_ID\} \.sigma-focus-ring\[hidden\]\{display:none\}/);
+});
+
+test('the explorer module parses', () => {
+  // node --test cannot import this file (it pulls sigma/graphology from the
+  // CDN), so nothing else here would catch a plain syntax error. One did slip
+  // in: a backtick inside a comment in the CSS template literal closed the
+  // string early and the whole renderer failed to boot, silently, because the
+  // flag is opt-in. `node --check` parses without executing imports.
+  execFileSync(process.execPath, ['--check', join(ROOT, 'scripts', 'sigma-explorer.mjs')]);
+  execFileSync(process.execPath, ['--check', join(ROOT, 'scripts', 'neighborhood-helpers.mjs')]);
+});
+
+test('the injected stylesheet contains no stray backticks', () => {
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `') + 19);
+  const body = css.slice(0, css.indexOf('\n`;'));
+  assert.ok(!body.includes('`'), 'a backtick inside STAGE_CSS would terminate the template literal');
+});
+
+test('dimmed nodes are opaque so edges cannot show through them', () => {
+  // A translucent dim fill let gold highlight edges draw through the node and
+  // read as two overlapping nodes.
+  assert.match(EXPLORER, /const DIM_NODE_COLOR = '#[0-9a-f]{6}';/);
+  assert.doesNotMatch(EXPLORER, /const DIM_NODE_COLOR = 'rgba/);
+});
+
+test('a framed view leaves room for labels', () => {
+  // At camera ratio 1 Sigma frames the nodes exactly and clips the names of
+  // everything near the edge.
+  assert.match(EXPLORER, /const FRAMED_RATIO = 1\.\d+;/);
+  // The framed ratio is compared with a tolerance rather than for equality,
+  // because framingRatio() may return a smaller (zoomed-in) ratio on dense
+  // views and the "already framed" branch must not fire on a float wobble.
+  // Compared through fitRatio() now: the same value has to drive both the framing
+  // call and the "did it fit?" test, or the branch mis-detects.
+  assert.match(EXPLORER, /ratio >= fitRatio\(\) - 1e-6/);
+});
+
+test('the renderer frames views through the tested framing helper', () => {
+  // The renderer must not compute its own camera ratio: framingRatio() in the
+  // helpers is the unit-tested owner of "how far out should this view sit",
+  // and the renderer reaches it through the local framedRatio() wrapper.
+  assert.match(EXPLORER, /framingRatio\(\{/);
+  assert.match(EXPLORER, /function framedRatio\(\)/);
+  assert.match(EXPLORER, /const ratio = framedRatio\(\);/);
+  assert.match(HELPERS, /export function framingRatio/);
+});
+
+test('hover is drawn in the theme, not with Sigma default white plate', () => {
+  // Sigma's built-in hover renderer draws a white rounded plate behind the node
+  // and label, which is jarring on a dark starfield and washes the label out.
+  assert.match(EXPLORER, /defaultDrawNodeHover: drawHover/);
+  assert.match(EXPLORER, /function drawHover\(context, data, settings\)/);
+  assert.match(EXPLORER, /const HOVER_PLATE_FILL = 'rgba\(9,12,18,/);
+  assert.doesNotMatch(EXPLORER, /HOVER_PLATE_FILL = '(#fff|white|rgba\(255)/);
+});
+
+test('the star label carries a dark halo so threads read as behind it', () => {
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
+  const rule = css.match(/\.sigma-star-label\{[^}]*\}/s);
+  assert.ok(rule, 'the star label needs a rule');
+  assert.match(rule[0], /text-shadow:0 0 7px rgba\(8,11,17/);
+});
+
+test('the star label is gold, larger than a node label, and not shouted', () => {
+  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
+  const rule = css.match(/\.sigma-home-label\{[^}]*\}/s);
+  assert.ok(rule, 'the home label needs a rule');
+  // Gold, so the one fixed point in the galaxy reads as a different kind of
+  // thing from the band and musician names around it.
+  assert.match(rule[0], /color:#ffc978/);
+  const size = rule[0].match(/font-size:(\d+(?:\.\d+)?)px/);
+  assert.ok(size && Number(size[1]) >= 13, `home label is ${size && size[1]}px; should be >= 13px`);
+  assert.doesNotMatch(rule[0], /text-transform:\s*uppercase/);
+});
+
+test('search suggestions are alphabetical, and cover every band', () => {
+  // Clicking the empty field shows the list as-is, so DOM order IS the order the
+  // visitor reads. Relevance ordering (frontier first, then an arbitrary corpus
+  // slice) looked random in that moment.
+  assert.match(EXPLORER, /\.sort\(\(a, b\) => a\.localeCompare\(b, undefined, \{ sensitivity: 'base', numeric: true \}\)\)/);
+  // Every band, not a slice of the node list.
+  assert.match(EXPLORER, /bandNames = master\.nodes\.filter\(node => node\.type === 'band'\)/);
+  assert.doesNotMatch(EXPLORER, /master\.nodes\.slice\(0, 200\)/);
+  assert.match(EXPLORER, /const MAX_SUGGESTIONS = \d+;/);
+});
+
+test('only bands are suggested, never the 2,700 musicians', () => {
+  // A deliberate product decision, not an accident of the corpus slice this
+  // replaced: musicians would outnumber bands roughly six to one and bury them.
+  // Typing a musician's name still resolves through resolveAnchor -- they are
+  // findable, just not offered.
+  const block = EXPLORER.slice(
+    EXPLORER.indexOf('// Search suggestions'),
+    EXPLORER.indexOf('datalist.innerHTML') + 400,
+  );
+  assert.ok(block.includes('bandNames'), 'suggestions come from the band list');
+  assert.ok(
+    !/type === 'person'/.test(block) && !/master\.nodes\.map/.test(block),
+    'suggestions must not be drawn from the full node list',
+  );
+  // The one non-band source is the frontier, which is what expanding would
+  // reach next; it is bounded so it cannot flood the list either.
+  assert.match(block, /view\.frontier\.slice\(0, \d+\)/);
+});
+
+test('the page panels the pills open are moved out of the retired toolbar', () => {
+  // Add / Share / Feedback panels are nested INSIDE the toolbar that stands
+  // down, so hiding the toolbar hid them too and the pills opened nothing.
+  assert.match(EXPLORER, /const RELOCATED_PANELS = \['#add-band-popover', '#share-popover', '#feedback-popover'\]/);
+  assert.match(EXPLORER, /stage\.appendChild\(panel\)/);
+  // And they must be put back, or switching the flag off loses them entirely.
+  assert.match(EXPLORER, /parent\.insertBefore\(panel, next\)/);
+  const destroy = EXPLORER.slice(EXPLORER.indexOf('    destroy() {'));
+  const restore = destroy.indexOf('parent.insertBefore(panel, next)');
+  const removeStage = destroy.indexOf('stage.remove()');
+  assert.ok(restore > -1 && removeStage > -1 && restore < removeStage,
+    'panels must be rescued before the stage is removed, or they go with it');
+});
+
+test('a pill click does not reach the page-wide popover closer', () => {
+  // The page closes its popovers on any click outside them. Without
+  // stopPropagation the pill's own click bubbled to that handler and shut the
+  // panel in the tick it opened -- the buttons looked broken.
+  const handler = EXPLORER.slice(
+    EXPLORER.indexOf("button.addEventListener('click', event => {"),
+    EXPLORER.indexOf('runAction(item);') + 40,
+  );
+  assert.match(handler, /event\.stopPropagation\(\)/);
+});
+
+test('pills drive the page\'s real controls rather than reimplementing them', () => {
+  // Two implementations of "add a band" would drift apart; these forward to the
+  // existing buttons instead.
+  assert.match(EXPLORER, /const target = doc\.querySelector\(item\.target\);\s*\n\s*if \(target\) target\.click\(\);/);
+  ['#add-band-btn', '#share-graph-btn', '#send-feedback-btn'].forEach(selector => {
+    assert.ok(EXPLORER.includes(selector), `${selector} should be driven by a pill`);
+  });
+});
+
+test('Reset returns to the opening view, not just the opening camera', () => {
+  const goHome = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function showTip'));
+  // Budgets have to be reset too: after two expands, recentring the camera alone
+  // would leave 220 nodes on screen.
+  assert.match(goHome, /state\.maxHops = NEIGHBORHOOD_BUDGET\.MAX_HOPS/);
+  assert.match(goHome, /maxNodes: NEIGHBORHOOD_BUDGET\.OPENING_MAX_NODES/);
+  assert.match(goHome, /clearHighlight\(\)/);
+});
+
+test('the star label keeps one size and one gap at every zoom', () => {
+  // The star scales with the camera so it keeps marking its node. Its label used
+  // to live inside that transform, so in a zoomed-in view -- which is what a
+  // phone gets -- the text grew with it AND drifted away from the star, since
+  // its offset scaled too. The label is now a sibling, placed in screen space.
+  assert.match(EXPLORER, /<span class="sigma-star-label sigma-home-label" hidden><\/span>/);
+  const place = EXPLORER.slice(EXPLORER.indexOf('const placeLabel ='), EXPLORER.indexOf('const zoomScale ='));
+  // Measured from the overlay's drawn edge, so the gap is constant on screen.
+  assert.match(place, /const GAP = \d+;/);
+  assert.match(place, /const radius = \(overlayEl\.offsetHeight \* scale\) \/ 2;/);
+  assert.match(place, /point\.y \+ radius \+ GAP/);
+  // And no scale on the label itself.
+  assert.doesNotMatch(place, /scale\(/);
+});
+
+
+test('clicking a node travels to it, keeping it lit on arrival', () => {
+  // The point of the whole explorer: Mike McCready is 6 degrees from Aaron and
+  // Pearl Jam is 7, so reaching Pearl Jam by expanding would pull in hundreds of
+  // nodes to show one band. Travelling to Mike puts it one hop away.
+  assert.match(EXPLORER, /renderer\.on\('clickNode', \(\{ node \}\) => travelTo\(node\)\)/);
+  const travel = EXPLORER.slice(EXPLORER.indexOf('function travelTo(node)'), EXPLORER.indexOf("renderer.on('clickNode'"));
+  // Clicking the current centre must not re-render the same view.
+  assert.match(travel, /if \(node === state\.anchorId\)/);
+  // Budgets open up for a requested anchor, as with a search.
+  assert.match(travel, /state\.anchorSource = 'requested'/);
+  assert.match(travel, /maxNodes: NEIGHBORHOOD_BUDGET\.MAX_NODES/);
+  // renderNeighborhood clears the highlight while drawing, so it is re-applied
+  // afterwards -- otherwise you arrive somewhere with nothing lit.
+  assert.match(travel, /if \(moved\) highlightFrom\(node\)/);
+  assert.match(travel, /rbft:sigma-travel/);
+});
+
+test('pill copy does not name the default anchor', () => {
+  // Every visitor reads this copy. Naming one person in it makes a shared tool
+  // read as somebody's personal page, and it goes stale if the default changes.
+  const actions = EXPLORER.slice(
+    EXPLORER.indexOf('const STAGE_ACTIONS = ['),
+    EXPLORER.indexOf('// Upper bound on datalist options'),
+  );
+  const details = [...actions.matchAll(/detail:\s*'([^']+)'/g)].map(m => m[1]);
+  assert.ok(details.length >= 5, `expected every pill to have copy, found ${details.length}`);
+  details.forEach(detail => {
+    assert.doesNotMatch(detail, /Aaron|McRae/i, `pill copy names the anchor: "${detail}"`);
+  });
+});
+
+test('Reset returns to the view the visitor arrived on', () => {
+  // Most people arrive on a link shared by another user, so "start over" means
+  // the band in THAT link. Sending them to the project's default anchor would
+  // drop them somewhere they have never been.
+  assert.match(EXPLORER, /state\.openingAnchorId = resolved\.anchorId;/);
+  const goHome = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function showTip'));
+  assert.match(goHome, /state\.openingAnchorId \|\| homeStarId \|\| NEIGHBORHOOD_BUDGET\.DEFAULT_ANCHOR/);
+});
+
+test('the address bar follows the current view', () => {
+  // Share reads the query string, so the URL has to describe what is on screen;
+  // it also makes reload and copy-from-the-bar work.
+  const sync = EXPLORER.slice(EXPLORER.indexOf('function syncAddressBar()'), EXPLORER.indexOf('// -- camera'));
+  assert.match(sync, /url\.searchParams\.set\('anchor', state\.anchorId\)/);
+  // replaceState, not pushState: travelling is not navigation, and a hundred
+  // history entries would bury whatever page the visitor came from.
+  assert.match(sync, /win\.history\.replaceState/);
+  assert.doesNotMatch(sync, /pushState/);
+  // The inbound spellings are cleared so a stale one cannot contradict the view.
+  assert.match(sync, /\['band', 'member', 'node', 'person'\]\.forEach\(key => url\.searchParams\.delete\(key\)\)/);
+  // Called from the same place the rest of the chrome is updated.
+  assert.match(EXPLORER, /syncAddressBar\(\);/);
+});
+
+test('a shared link carries the view, not just the site', () => {
+  // Sharing is the main way people arrive. This used to be
+  // origin + pathname, which threw the query string away: whatever you were
+  // centred on, the person you sent it to landed on the default anchor.
+  assert.match(INDEX_HTML, /function shareableUrl\(\)/);
+  assert.match(INDEX_HTML, /const SHAREABLE_PARAMS = \['anchor', 'band', 'member', 'node', 'person'\]/);
+  // `renderer` is deliberately absent. ?renderer=svg still works on the way IN,
+  // but copying it into a shared link would spread the slow escape-hatch renderer
+  // to everyone who opened that link, without the sharer ever knowing.
+  const params = INDEX_HTML.match(/const SHAREABLE_PARAMS = \[[^\]]*\]/)[0];
+  assert.ok(!params.includes('renderer'), 'renderer must not be copied into shared links');
+  // And the filename must not ride along. Both / and /index.html serve this page,
+  // so whichever the sharer happened to be on used to end up in the link.
+  assert.match(INDEX_HTML, /replace\(\/\(\^\|\\\/\)index\\\.html\$\/, '\$1'\)/);
+  // Every share path must go through it, Copy link included: one button, one
+  // answer, whatever view the sharer is on.
+  const shareSites = INDEX_HTML.match(/const siteUrl = [^;]+;/g) || [];
+  assert.ok(shareSites.length >= 4, `expected several share call sites, found ${shareSites.length}`);
+  shareSites.forEach(line => assert.match(line, /shareableUrl\(\)/));
+  // The bare front door is built by its own helper, never by hand, so that
+  // shareableUrl() and the "which link did I just copy" check agree on what the
+  // root even is.
+  assert.match(INDEX_HTML, /function siteRootUrl\(\)/);
+  // And it must not carry arbitrary query parameters onward.
+  const helper = INDEX_HTML.slice(INDEX_HTML.indexOf('function shareableUrl()'), INDEX_HTML.indexOf('function publishMasterGraph'));
+  assert.match(helper, /SHAREABLE_PARAMS\.forEach/);
+});
+
+test('label placement is measured, collision-free and stable', () => {
+  // Two label collisions reached production -- a band name printed across the
+  // gold you-are-here label, and another across the footer -- because every
+  // check measured node geometry and none measured text.
+  const block = EXPLORER.slice(
+    EXPLORER.indexOf('function updateLabelBlocking()'),
+    EXPLORER.indexOf('function updateParallax()'),
+  );
+  // Boxes are reconstructed the way Sigma draws a label.
+  assert.match(block, /point\.x \+ display\.size \+ 3/);
+  assert.match(block, /labelMetrics\.measureText\(attrs\.label\)\.width/);
+  // Chrome zones: the wordmark/field/pills block, the footer, and the gold label.
+  assert.match(block, /addZone\(heroEl\)/);
+  assert.match(block, /addZone\(footerEl\)/);
+  assert.match(block, /addZone\(homeLabelEl\)/);
+  // Bigger nodes win a collision, with a deterministic tie-break so a view does
+  // not flicker between two equally good answers.
+  assert.match(block, /candidates\.sort\(\(a, b\) => b\.size - a\.size \|\| \(a\.id < b\.id \? -1 : 1\)\)/);
+  // A selected node always keeps its name: it is the thing being read.
+  assert.match(block, /const selected = state\.selection && state\.selection\.id === candidate\.id/);
+  // Measured over EVERY labelled node, not the ones Sigma currently displays --
+  // suppressing a label removes it from that set, so reading it would make the
+  // answer depend on the previous frame and oscillate.
+  assert.match(block, /viewGraph\.forEachNode\(\(id, attrs\) => \{/);
+  assert.doesNotMatch(block, /getNodeDisplayedLabels/);
+  // Refresh only when the set changed, or every frame would re-render.
+  assert.match(block, /if \(!changed\) return;/);
+  assert.match(block, /renderer\.refresh\(\{ skipIndexation: true \}\)/);
+  // And the reducer is what applies it.
+  assert.match(EXPLORER, /if \(state\.labelBlocked\.has\(id\)\) res\.label = '';/);
+});
+
+test('the chrome band is measured, and used for centring only', () => {
+  const area = EXPLORER.slice(EXPLORER.indexOf('function chromeInsets()'), EXPLORER.indexOf('function cameraOffsetY('));
+  assert.match(area, /hero\.bottom - host\.top/);
+  assert.match(area, /host\.bottom - footer\.top/);
+  // A very short window must still leave a usable band rather than nothing.
+  assert.match(area, /Math\.max\(host\.height \* 0\.45/);
+  // Framing and sizing deliberately use the FULL canvas. Measured: handing them
+  // the band instead reads as "fitting would not be legible", so the camera zooms
+  // into a region -- the opening view went from 17 nodes on screen to 8. Nodes
+  // visible beats names hidden.
+  const framed = EXPLORER.slice(EXPLORER.indexOf('function framedRatio()'), EXPLORER.indexOf('function applySizeScale('));
+  assert.match(framed, /const rect = canvasHost\.getBoundingClientRect\(\);/);
+  assert.doesNotMatch(framed, /safeArea\(\)/);
+});
+
+test('the camera centres the drawing in that band, at the right zoom', () => {
+  const offset = EXPLORER.slice(EXPLORER.indexOf('function cameraOffsetY('), EXPLORER.indexOf('function fitRatio()'));
+  assert.match(offset, /viewportToFramedGraph/);
+  // The shift is applied in the same setState as a new ratio, so it has to be
+  // expressed at the TARGET zoom -- computing it at the current one overshot by
+  // half again as much on a short window.
+  assert.match(offset, /perPixel \*= targetRatio \/ current/);
+  assert.match(EXPLORER, /y: 0\.5 \+ cameraOffsetY\(ratio\)/);
+  assert.match(EXPLORER, /y: display\.y \+ cameraOffsetY\(nextRatio\)/);
+});
+
+test('the fit ratio is deliberately not loosened to clear the chrome', () => {
+  // Measured, not assumed: loosening the fit so the whole drawing clears the
+  // chrome pulls nodes closer together, and labels then collide with each other
+  // instead. On 1440x900 that traded 2 hidden names for 5.
+  const fit = EXPLORER.slice(EXPLORER.indexOf('function fitRatio()'), EXPLORER.indexOf('function framedRatio()'));
+  assert.match(fit, /return FRAMED_RATIO;/);
+});
+
+test('chrome zones are measured in the renderer\'s coordinate space', () => {
+  // This one shipped a false-clean gate. graphToViewport reports positions in the
+  // RENDERER'S container, and the stage wrapper sits ~280px down the page inside
+  // .graph-stage, so converting the chrome rects against the stage shifted every
+  // zone by that much -- one zone ended up with a negative top. Labels printed
+  // across the footer on screen while both the renderer and the audit called it
+  // clean.
+  const block = EXPLORER.slice(
+    EXPLORER.indexOf('function updateLabelBlocking()'),
+    EXPLORER.indexOf('function updateParallax()'),
+  );
+  assert.match(block, /const originBox = canvasHost\.getBoundingClientRect\(\);/);
+  assert.doesNotMatch(block, /stage\.getBoundingClientRect\(\)/);
+});
+
+test('blocking is recomputed when the chrome moves, not only per frame', () => {
+  // The footer grows a line when the context text wraps, which moves the zone
+  // under labels that were already placed. Sigma does not draw a frame for a DOM
+  // reflow, so waiting for afterRender left a label across the footer.
+  assert.match(EXPLORER, /new ResizeObserver\(\(\) => updateLabelBlocking\(\)\)/);
+  // The node card joined this list: it is chrome too while it is docked open.
+  assert.match(EXPLORER, /\[heroEl, footerEl, homeLabelEl, nodeCardEl\]\.forEach\(el => \{ if \(el\) chromeObserver\.observe\(el\); \}\)/);
+  assert.match(EXPLORER, /if \(chromeObserver\) chromeObserver\.disconnect\(\)/);
+  // And once more right after the chrome's own text is written.
+  const chrome = EXPLORER.slice(EXPLORER.indexOf('function updateChrome()'), EXPLORER.indexOf('// -- camera'));
+  assert.match(chrome, /updateLabelBlocking\(\);/);
+});
+
+test('filters narrow the constellation through one implementation', () => {
+  // Scene / Genre / Recently-added / search live in index.html and produce a
+  // filtered {nodes, links}. The explorer explores THAT, so there is one
+  // filtering implementation feeding two renderers.
+  assert.match(INDEX_HTML, /window\.RBFT_SIGMA\.setGraph\(filtered\)/);
+  const setGraph = EXPLORER.slice(EXPLORER.indexOf('function setGraph(next)'), EXPLORER.indexOf('// -- first paint'));
+  // An empty result is a real outcome of a narrow filter, not a crash.
+  assert.match(setGraph, /No bands match these filters\./);
+  // The "most connected survivor" fallback now lives in a shared helper (also
+  // used to pick where "Show next group" jumps to) -- setGraph must call it,
+  // not reimplement it.
+  assert.match(setGraph, /highestDegreeNode\(master\.nodes\.map\(node => node\.id\)\)/);
+  // buildAdjacency stores a Set per node: reading .length gave undefined, every
+  // comparison was false, no anchor was ever chosen, and filtering silently did
+  // nothing at all.
+  assert.match(EXPLORER, /neighbours \? neighbours\.size : 0/);
+  // A filter should narrow what you are looking at, not move you.
+  assert.match(setGraph, /masterById\.has\(state\.anchorId\) \? state\.anchorId : null/);
+  // And clearing it should put you back rather than leaving you somewhere you
+  // never chose.
+  assert.match(setGraph, /state\.displacedAnchorId/);
+});
+
+test('the filter panel reuses the page\'s own controls', () => {
+  // The scene and genre <select> elements are MOVED into the panel, keeping their
+  // existing change handlers; Recently-added and Clear press the page's chips.
+  assert.match(EXPLORER, /const RELOCATED_FILTERS = \[/);
+  assert.match(EXPLORER, /selector: '#scene-filter'/);
+  assert.match(EXPLORER, /selector: '#genre-filter'/);
+  assert.match(EXPLORER, /'\.tool-chip\[data-action="recent"\]'/);
+  assert.match(EXPLORER, /'\.tool-chip\[data-action="clear"\]'/);
+  // Filter state is read from the page, never mirrored: the same filters can be
+  // changed by Reset view or a country chip.
+  assert.match(EXPLORER, /function syncFilterState\(\)/);
+  // Same click-propagation trap as the pills.
+  const panel = EXPLORER.slice(EXPLORER.indexOf("filterPanel.addEventListener('click'"), EXPLORER.indexOf('function runAction'));
+  assert.match(panel, /event\.stopPropagation\(\)/);
+});
+
+test('one click both travels and leaves the card open', () => {
+  // The card needed a SECOND click to appear, and the cause was event ORDER.
+  // The page closes any open card on rbft:sigma-travel, because the view that
+  // card described is gone. highlightFrom() dispatches rbft:sigma-select, which
+  // opens the card for the clicked node. Travel was announced AFTER the
+  // highlight, so it closed the card that had just been opened -- and only a
+  // second click, which is not travel and therefore only re-highlights, made it
+  // stick. Stale card closes first, new card opens second.
+  const travel = EXPLORER.slice(EXPLORER.indexOf('function travelTo(node)'), EXPLORER.indexOf("renderer.on('clickNode'"));
+  const dispatchAt = travel.indexOf("'rbft:sigma-travel'");
+  const highlightAt = travel.indexOf('if (moved) highlightFrom(node)');
+  assert.ok(dispatchAt > 0 && highlightAt > 0, 'travelTo should both announce travel and re-highlight');
+  assert.ok(dispatchAt < highlightAt, 'travel must be announced BEFORE the highlight reopens the card');
+});
+
+test('search navigation retires the old card and opens the new one', () => {
+  // Searching for a band travelled the view but left the old band's card open
+  // and never opened the new one: exploreFor neither announced travel nor
+  // re-highlighted. Same close-then-highlight ordering as travelTo().
+  const explore = EXPLORER.slice(EXPLORER.indexOf('function exploreFor(rawQuery)'), EXPLORER.indexOf('function expand()'));
+  const dispatchAt = explore.indexOf("'rbft:sigma-travel'");
+  const highlightAt = explore.indexOf('highlightFrom(partial.id)');
+  assert.ok(dispatchAt > 0 && highlightAt > 0, 'exploreFor should announce travel and highlight the new anchor');
+  assert.ok(dispatchAt < highlightAt, 'travel must be announced BEFORE the highlight opens the new card');
+});
+
+test('reset retires the open card', () => {
+  // Reset view is navigation: the card described a view that is gone. Nothing
+  // is selected afterwards, so no new card -- just the travel announcement
+  // the page turns into closeNodeCard().
+  const goHome = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function showTip'));
+  assert.ok(goHome.indexOf("'rbft:sigma-travel'") > 0, 'goHome should announce travel so the stale card closes');
+});
+
+test('click-outside closes every popover except Add-band', () => {
+  // The Add-band form was losing in-progress input to stray clicks, so only
+  // it is exempt from the page-wide click-outside closer. Search, scene,
+  // genre, feedback and share keep the classic dismissal.
+  const findCloser = (kind) => {
+    let from = 0;
+    for (;;) {
+      const idx = INDEX_HTML.indexOf(`document.addEventListener('${kind}'`, from);
+      if (idx === -1) return -1;
+      if (INDEX_HTML.slice(idx, idx + 400).includes('closeBottomPopovers(')) return idx;
+      from = idx + 10;
+    }
+  };
+  const at = findCloser('click');
+  assert.ok(at > 0, 'the document click closer must exist');
+  const body = INDEX_HTML.slice(at, at + 400);
+  assert.match(body, /closeBottomPopovers\(document\.getElementById\('add-band-popover'\)\)/);
+  assert.match(body, /toggleSharePopover\(false\)/);
+});
+
+test('Escape closes every popover except Add-band', () => {
+  // Same exemption as click-outside: only the Add-band popover rides out
+  // Escape. The node card keeps its own Escape path.
+  const findCloser = (kind) => {
+    let from = 0;
+    for (;;) {
+      const idx = INDEX_HTML.indexOf(`document.addEventListener('${kind}'`, from);
+      if (idx === -1) return -1;
+      if (INDEX_HTML.slice(idx, idx + 400).includes('closeBottomPopovers(')) return idx;
+      from = idx + 10;
+    }
+  };
+  const at = findCloser('keydown');
+  assert.ok(at > 0, 'the document keydown closer must exist');
+  const body = INDEX_HTML.slice(at, at + 400);
+  assert.match(body, /event\.key !== 'Escape'/);
+  assert.match(body, /closeBottomPopovers\(document\.getElementById\('add-band-popover'\)\)/);
+  assert.match(INDEX_HTML, /if \(e\.key === 'Escape' && nodeCardState\.node\) closeNodeCard\(\);/);
+});
+
+test('the share popover X is wired', () => {
+  // The share popover is not in the bottomPopovers registry, so its X needs
+  // its own wiring -- the registry loop only covers the toolbar popovers.
+  assert.match(INDEX_HTML, /sharePopover\.querySelectorAll\('\[data-popover-close\]'\)/);
+});
+
+test('the docked node card counts as chrome while it is open', () => {
+  // It sits over the constellation, so a label underneath it would look culled
+  // for no reason -- the same fault as the hero and the footer, with a box that
+  // comes and goes.
+  const block = EXPLORER.slice(EXPLORER.indexOf('function updateLabelBlocking()'), EXPLORER.indexOf('function updateParallax()'));
+  assert.match(block, /nodeCardEl && !nodeCardEl\.hidden && nodeCardEl\.classList\.contains\('is-open'\)/);
+  assert.match(block, /addZone\(nodeCardEl\)/);
+  // Closing it is a class change, not a resize, so the size observer can miss it.
+  assert.match(EXPLORER, /cardStateObserver/);
+  assert.match(EXPLORER, /attributeFilter: \['class', 'hidden', 'style'\]/);
+  assert.match(EXPLORER, /if \(cardStateObserver\) cardStateObserver\.disconnect\(\)/);
+});
+
+test('the card docks to a corner on the constellation', () => {
+  // Clicking a node now flies the camera AND opens the card, so a node-anchored
+  // card would ride along with the flight and land under the hero or footer.
+  assert.match(EXPLORER, /body\.\$\{BODY_ACTIVE_CLASS\} \.node-card\{position:fixed/);
+  // The mobile bottom sheet still wins below 700px, where a corner card would
+  // cover the graph it describes.
+  assert.match(EXPLORER, /@media \(min-width:701px\)\{[\s\S]*?body\.\$\{BODY_ACTIVE_CLASS\} \.node-card\{/);
+  // CSS owns the position, so the page's node-following geometry must stand down.
+  assert.match(INDEX_HTML, /if \(document\.body && document\.body\.classList\.contains\('rbft-sigma-chrome'\)\) \{[\s\S]*?nodeCardEl\.style\.left = '';/);
+});
+
+test('relocated panels are restored to wherever they now live', () => {
+  // hookPopoverForMobile captured its parent at startup and a MutationObserver
+  // kept restoring it. The Sigma chrome MOVES these panels into its stage and
+  // hides the toolbar they came from, so "restoring" posted Add and Feedback
+  // back inside a display:none ancestor: both pills opened a panel that measured
+  // 0x0 and never appeared. Share was never hooked here, which is exactly why
+  // Share was the only one of the three that worked.
+  assert.match(INDEX_HTML, /function currentHome\(\)/);
+  assert.match(INDEX_HTML, /if \(stage && document\.body\.classList\.contains\('rbft-sigma-chrome'\)\) return stage;/);
+  assert.match(INDEX_HTML, /const home = currentHome\(\);/);
+});
+
+test('cards and popovers are radiused rectangles, not chamfered ones', () => {
+  // They were border-radius:0 plus a clip-path polygon cutting each corner at 45
+  // degrees. The shape read as a cut-off rectangle, and the diagonal sliced
+  // through the padding so text near a corner sat closer to the visible edge
+  // than the box model claimed.
+  const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
+  assert.doesNotMatch(css, /clip-path:\s*polygon/, 'no chamfered corners should remain');
+  assert.match(INDEX_HTML, /--radius-card: 12px;/);
+  assert.match(INDEX_HTML, /--radius-control: 8px;/);
+});
+
+test('the shared glass popover style carries its own padding', () => {
+  // .share-popover -- used by Share, Add your band and Feedback -- set colour,
+  // border and shadow but no padding at all, so every line sat one pixel off the
+  // border. Padding belongs on the shared style, not on each of the three
+  // panels; that is how it went missing in the first place.
+  const share = INDEX_HTML.slice(INDEX_HTML.indexOf('.share-popover {'));
+  const firstRule = share.slice(0, share.indexOf('}'));
+  assert.match(firstRule, /padding: 1\.1rem 1\.15rem 1\.15rem;/);
+});
+
+test('the focus ring marks a clicked node, not the centre of the view', () => {
+  // Anchored to state.anchorId the ring appeared without anyone asking: on a
+  // shared link (the way most visitors arrive), after a search, and after a
+  // filter displaced the anchor. That put two ringed, glowing objects on screen
+  // in the same visual language -- Aaron's Saturn star and the focus ring --
+  // both saying "look here", neither of them clicked. On load Aaron should be
+  // the only node wearing rings.
+  const overlays = EXPLORER.slice(EXPLORER.indexOf('const zoomScale ='), EXPLORER.indexOf('function updateLabelBlocking'));
+  assert.match(overlays, /const clickedId = state\.selection \? state\.selection\.id : null;/);
+  assert.match(overlays, /clickedId && clickedId !== homeStarId \? clickedId : null/);
+  // The old behaviour, explicitly gone.
+  assert.doesNotMatch(overlays, /state\.anchorId === homeStarId \? null : state\.anchorId/);
+});
+
+test('every non-click path clears the selection the ring depends on', () => {
+  // state.selection is the right signal only because it is set ONLY by a click
+  // and cleared by clearHighlight -- which each of these already calls. If any
+  // of them stopped, a ring would appear on a node nobody chose.
+  assert.match(EXPLORER, /function clearHighlight\(\) \{\s*state\.selection = null;/);
+  // First paint, search and filters all go through renderNeighborhood.
+  const render = EXPLORER.slice(EXPLORER.indexOf('state.layoutExtent = layoutExtent(positions)'));
+  assert.match(render.slice(0, 400), /clearHighlight\(\);/);
+  // Reset.
+  const home = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function goHome()') + 300);
+  assert.match(home, /clearHighlight\(\);/);
+  // A click on empty space.
+  assert.match(EXPLORER, /renderer\.on\('clickStage', \(\) => clearHighlight\(\)\)/);
+  // And a click on a node is what sets it.
+  const highlight = EXPLORER.slice(EXPLORER.indexOf('function highlightFrom(id)'), EXPLORER.indexOf('function exploreFor'));
+  assert.match(highlight, /state\.selection = \{ id, type: entityType \}/);
+});
+
+test('the old chrome is stood down before first paint, not on mount', () => {
+  // The Sigma chrome used to be applied when its module mounted -- after the
+  // band data was fetched AND the SVG graph drawn, about nine seconds. For those
+  // nine seconds a visitor got the whole old interface: toolbar, stats badge,
+  // version pill, sign-up nudge and a full 3,194-node SVG render, then all of it
+  // replaced. A synchronous inline script now marks the document first.
+  assert.match(INDEX_HTML, /document\.body\.classList\.add\('rbft-sigma-boot'\)/);
+  // Inline and synchronous is the whole point: a module or a DOMContentLoaded
+  // handler runs after the browser has already painted the old interface.
+  const bodyStart = INDEX_HTML.indexOf('<body>');
+  const bootScript = INDEX_HTML.indexOf("classList.add('rbft-sigma-boot')");
+  const firstModule = INDEX_HTML.indexOf('<script type="module"', bodyStart);
+  assert.ok(bootScript > bodyStart, 'the boot script belongs inside <body>');
+  assert.ok(firstModule === -1 || bootScript < firstModule, 'it must run before any module');
+  // The rules cannot live in the module's injected stylesheet, which does not
+  // exist yet at that moment.
+  const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
+  assert.match(css, /body\.rbft-sigma-boot \.graph-overlay-top,/);
+  assert.match(css, /body\.rbft-sigma-boot \.graph-stage > svg \{/);
+});
+
+test('the boot script mirrors rendererFromSearch', () => {
+  // If these drift, ?renderer=svg would get the new chrome bolted over the old
+  // interface, or every visitor would get a flash of the thing we just hid.
+  const script = INDEX_HTML.slice(
+    INDEX_HTML.indexOf("new URLSearchParams(window.location.search).get('renderer')"),
+    INDEX_HTML.indexOf("classList.add('rbft-sigma-boot')")
+  );
+  assert.match(script, /requested === 'svg' \|\| requested === 'sigma'/);
+  assert.match(script, /: 'sigma'/);          // unknown values fall back, as the module does
+  assert.deepEqual(RENDERERS, ['svg', 'sigma'], 'a new renderer needs adding to the boot script too');
+  assert.equal(DEFAULT_RENDERER, 'sigma');
+});
+
+test('a placeholder holds the new look until the real chrome mounts', () => {
+  // Hiding the old chrome without this would leave an empty page for the whole
+  // data load. Same wordmark, same field geometry, so the page a visitor lands
+  // on IS the new look and the constellation fills in behind it.
+  assert.match(INDEX_HTML, /class="rbft-boot-shell"/);
+  assert.match(INDEX_HTML, /rbft-boot-shell__wordmark/);
+  assert.match(INDEX_HTML, /Who&rsquo;s your favorite band\?/);
+  // And it must get out of the way the moment the real chrome is up.
+  assert.match(INDEX_HTML, /body\.rbft-sigma-chrome \.rbft-boot-shell \{ display: none !important; \}/);
+});
+
+test('the address bar names the view you arrived on, not the last node clicked', () => {
+  // Travelling used to rewrite ?anchor= on every move, so a refresh reopened the
+  // last node clicked and there was no way back to the start short of Reset --
+  // and the opening view was no longer Aaron's.
+  assert.match(EXPLORER, /\/\/ NOT syncAddressBar\(\)/);
+  const chrome = EXPLORER.slice(EXPLORER.indexOf('function updateChrome()'), EXPLORER.indexOf('// -- camera'));
+  assert.doesNotMatch(chrome, /^\s*syncAddressBar\(\);/m);
+  // Written exactly once, after the opening view, to canonicalise the inbound
+  // link (?band= / ?member= / ?node= / ?person= all collapse to ?anchor=).
+  const firstPaint = EXPLORER.slice(EXPLORER.indexOf('// -- first paint'));
+  assert.match(firstPaint, /syncAddressBar\(\);/);
+  assert.equal((EXPLORER.match(/^\s*syncAddressBar\(\);/gm) || []).length, 1, 'exactly one call site');
+});
+
+test('Share reads the live view, since the URL no longer follows travel', () => {
+  // Otherwise Share would send whatever view the visit STARTED from -- for most
+  // visitors, Aaron rather than the band they are looking at.
+  const share = INDEX_HTML.slice(INDEX_HTML.indexOf('function shareableUrl()'), INDEX_HTML.indexOf('let sigmaSelectionBound'));
+  assert.match(share, /window\.RBFT_SIGMA && window\.RBFT_SIGMA\.state/);
+  assert.match(share, /state\.anchorId/);
+  assert.match(share, /kept\.set\('anchor', live\)/);
+  // ...with one exception: the home star on a visit that never asked for it. It
+  // is the opening view because it is the home star, not because the visitor
+  // chose it, so stamping it into a shared link made every share of the front
+  // door read as a deep link to one musician. See tests/share-url-home-star.
+  assert.match(share, /onUnrequestedHomeStar/);
+  assert.match(share, /live === state\.homeStarId/);
+  assert.match(share, /!arrivedAnchored\(\)/);
+  // A stale ?band= alongside a fresh ?anchor= would contradict it.
+  assert.match(share, /\['band', 'member', 'node', 'person'\]\.forEach\(key => kept\.delete\(key\)\)/);
+});
+
+test('the filter panel is placed under its pill, not off the bottom of the stage', () => {
+  // It was left:50%; top:calc(100% + 10px), which reads like "hang below my
+  // trigger" -- but the panel is a child of the STAGE, not of the pill row. So
+  // 100% meant the full height of a 100dvh stage and the panel opened just below
+  // the bottom of the window: measured at top:910 in a 900px viewport. It was
+  // doing everything else correctly, entirely off screen, which is why driving
+  // the selects directly in a test found nothing wrong.
+  assert.match(EXPLORER, /function positionFilters\(\)/);
+  // Only the BASE (desktop) rule is checked against the old bug -- not the
+  // gap up to .sigma-filters[hidden], which as of redesign/mobile-hamburger-nav
+  // also contains a deliberate `left:50%` for the mobile modal centering
+  // below (see that block's own comment for why this panel needs a SECOND,
+  // different fix on a phone).
+  const css = EXPLORER.slice(EXPLORER.indexOf('.sigma-filters{'), EXPLORER.indexOf('text-align:left}') + 'text-align:left}'.length);
+  assert.doesNotMatch(css, /top:calc\(100% \+ 10px\)/);
+  assert.doesNotMatch(css, /left:50%/);
+  // On a phone, positionFilters()'s inline style is deliberately overridden
+  // by a centred, fixed modal -- the trigger it was computed from lives
+  // inside the hamburger sheet and is gone by the time this panel opens.
+  assert.match(
+    EXPLORER,
+    /@media \(max-width:720px\)\{\s*#\$\{STAGE_ID\} \.sigma-filters\{position:fixed !important;left:50% !important;\s*top:50% !important;transform:translate\(-50%,-50%\) !important;/,
+    'Expected a phone-only centred-modal override for the filter panel.'
+  );
+  // Placed from the pill's own rect, and clamped inside the stage.
+  const fn = EXPLORER.slice(EXPLORER.indexOf('function positionFilters()'), EXPLORER.indexOf('function hideTip()'));
+  assert.match(fn, /actionButtons\.get\('filter'\)/);
+  assert.match(fn, /box\.bottom - stageBox\.top \+ 10/);
+  assert.match(fn, /Math\.max\(margin, Math\.min\(left, stageBox\.width - width - margin\)\)/);
+  // Opening it places it; a resize rewraps the pill row and moves the trigger.
+  const toggle = EXPLORER.slice(EXPLORER.indexOf('function toggleFilters'), EXPLORER.indexOf('Reflects the page'));
+  assert.match(toggle, /positionFilters\(\);/);
+  assert.match(EXPLORER, /applySizeScale\(\);\s*\n\s*\/\/ The pill row rewraps[\s\S]*?positionFilters\(\);/);
+});
+
+test('an unmapped band still offers to add it', () => {
+  // The "No Rawk Found" panel and its CTA already existed, driven by
+  // syncSearchEmptyState() off the SVG renderer's search field. The
+  // constellation's search box goes through exploreFor() instead, which reported
+  // a miss only as a line of footer text -- so the offer looked deleted. Nothing
+  // listened for the event the module was already firing.
+  assert.match(INDEX_HTML, /window\.addEventListener\('rbft:sigma-search-miss', event => \{/);
+  assert.match(INDEX_HTML, /graphEmptyState\.hidden = false;/);
+  // The CTA pre-fills the Add-band form from currentSearch, which the
+  // constellation's search box never sets.
+  assert.match(INDEX_HTML, /currentSearch = query;/);
+  // And a drawn view retires the message -- one event rather than a list that
+  // has to keep up with every way the view can change.
+  assert.match(EXPLORER, /'rbft:sigma-view'/);
+  assert.match(INDEX_HTML, /window\.addEventListener\('rbft:sigma-view', \(\) => \{/);
+  // The footer line stays terse so the screen does not say it twice.
+  assert.match(EXPLORER, /No match for <strong>\$\{escapeHtml\(rawQuery\)\}<\/strong> in the tree yet\./);
+});
+
+test('the share image is captured from the constellation, not the hidden SVG', () => {
+  // "Could not generate the image. Try again in a moment." The export serialised
+  // #graph-svg, and hiding that SVG when the constellation became the default
+  // left a display:none element measuring 0x0 -- so the export canvas came out
+  // zero-sized and every share failed. Capturing Sigma is also the right picture
+  // rather than merely a working one: it is what the visitor is looking at.
+  assert.match(INDEX_HTML, /function captureSigmaCanvas\(\)/);
+  const capture = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('function captureSigmaCanvas()'),
+    INDEX_HTML.indexOf('async function renderGraphPngBlob()')
+  );
+  // WebGL discards its drawing buffer after compositing, so read it in the same
+  // turn as a fresh paint.
+  assert.match(capture, /renderer\.refresh\(\);/);
+  assert.match(capture, /renderer\.getCanvases\(\)/);
+  // Edges under nodes under labels; interaction layers excluded, because they
+  // carry a hover plate for wherever the pointer happened to be resting.
+  // Assert the DRAW LIST specifically -- the prose above it names the excluded
+  // layers, so scanning the whole function would match its own comment.
+  const drawList = capture.match(/\[(('|")[a-zA-Z]+\2,?\s*)+\]\.forEach/);
+  assert.ok(drawList, 'the capture should draw an explicit list of layers');
+  assert.equal(drawList[0], "['edges', 'edgeLabels', 'nodes', 'labels'].forEach");
+  // The starfield is CSS, so the field colour has to be painted in or the graph
+  // lands on transparency.
+  assert.match(capture, /target\.fillStyle = '#070b12'/);
+  // ?renderer=svg keeps the old path.
+  assert.match(capture, /if \(!renderer \|\| typeof renderer\.getCanvases !== 'function'\) return null;/);
+});
+
+test('the export sizes itself from the stage that is on screen', () => {
+  const png = INDEX_HTML.slice(INDEX_HTML.indexOf('async function renderGraphPngBlob()'));
+  assert.match(png, /sigmaCanvas && sigmaStage\s*\n\s*\? sigmaStage\.getBoundingClientRect\(\)/);
+  // A zero-sized rect is what produced the failure; refuse it outright.
+  assert.match(png, /if \(!rect\.width \|\| !rect\.height\) return null;/);
+  // Serialising the SVG clones three thousand nodes, so skip it entirely when
+  // the constellation is the picture.
+  assert.match(png, /const drawGraph = async \(\) => \{[\s\S]*?if \(sigmaCanvas\) \{/);
+});
+
+test('the shared picture includes the star, ring and gold label', () => {
+  // They are DOM overlays layered over the canvas, so a canvas capture misses
+  // them: the first working export had Aaron as an unmarked white dot. On a
+  // picture whose job is to advertise a shared link, the ringed star and the
+  // name are the subject.
+  const overlays = INDEX_HTML.slice(INDEX_HTML.indexOf('const drawOverlays = () =>'), INDEX_HTML.indexOf('try {\n        await drawGraph();'));
+  assert.match(overlays, /\.sigma-home-star/);
+  assert.match(overlays, /\.sigma-focus-ring/);
+  assert.match(overlays, /\.sigma-home-label/);
+  assert.match(overlays, /#ffc978/);           // the same gold as on screen
+  assert.match(overlays, /ctx\.ellipse\(/);    // the tilted ring
+  // Geometry is read from the live elements so it cannot drift from where they
+  // actually are.
+  assert.match(overlays, /getBoundingClientRect\(\)/);
+  assert.match(INDEX_HTML, /await drawGraph\(\);\s*\n\s*drawOverlays\(\);/);
+});
+
+test('the SVG is not drawn when the constellation is the renderer', () => {
+  // It was drawing a force layout over every node and roughly 16,500 SVG
+  // elements -- 89% of the elements on the page -- entirely behind display:none.
+  // Measured on the full graph, about fifteen seconds AFTER the data had already
+  // parsed, to produce a picture nobody sees.
+  const render = INDEX_HTML.slice(INDEX_HTML.indexOf('function renderGraph()'));
+  const stop = render.indexOf("if (document.body && document.body.classList.contains('rbft-sigma-boot'))");
+  assert.ok(stop > 0, 'renderGraph should bail before drawing on the constellation');
+
+  // Order matters: everything the constellation needs has to happen BEFORE the
+  // bail. If setGraph moved below it, filters would stop reaching Sigma.
+  const handOff = render.indexOf('window.RBFT_SIGMA.setGraph(filtered)');
+  assert.ok(handOff > 0 && handOff < stop, 'the filtered graph must reach Sigma before the bail');
+  const state = render.indexOf('graphState.rendered = { nodes, links }');
+  assert.ok(state > 0 && state < stop, 'the view must be recorded before the bail');
+  for (const marker of ['graphBadge.textContent', 'syncFilterBtn(', 'metricNodes.textContent']) {
+    const at = render.indexOf(marker);
+    assert.ok(at > 0 && at < stop, `${marker} must run before the bail`);
+  }
+  // And the drawing really is below it.
+  const wipe = render.indexOf("graphGroup.selectAll('*').remove()");
+  assert.ok(wipe > stop, 'the SVG wipe and draw must sit below the bail');
+});
+
+test('the view is read as data, not from the drawn SVG', () => {
+  // The node card's member list, the highlight sets and the connection names all
+  // read the data BOUND TO THE SVG, so they silently depended on the SVG having
+  // been drawn. Not drawing it would have emptied every band card.
+  assert.match(INDEX_HTML, /function renderedNodeData\(\) \{\s*\n\s*if \(graphState && graphState\.rendered\) return graphState\.rendered\.nodes;/);
+  assert.match(INDEX_HTML, /function renderedLinkData\(\) \{\s*\n\s*if \(graphState && graphState\.rendered\) return graphState\.rendered\.links;/);
+  // The DOM fallback stays, so the SVG path cannot regress.
+  assert.match(INDEX_HTML, /return graphGroup \? graphGroup\.selectAll\('g\.node'\)\.data\(\) : \[\];/);
+  assert.match(INDEX_HTML, /return graphGroup \? graphGroup\.selectAll\('line\.link'\)\.data\(\) : \[\];/);
+});
+
+test('?renderer=svg still draws, because it never gets the boot class', () => {
+  // The bail is keyed on the class the inline boot script only adds for the
+  // constellation, so the escape hatch is untouched: verified at 3,194 nodes and
+  // 3,766 links drawn and visible.
+  const script = INDEX_HTML.slice(
+    INDEX_HTML.indexOf("new URLSearchParams(window.location.search).get('renderer')"),
+    INDEX_HTML.indexOf("classList.add('rbft-sigma-boot')")
+  );
+  assert.match(script, /renderer === 'sigma'/);
+});
+
+test('the not-found card can be dismissed', () => {
+  // Reported by a tester: it offered adding the band and nothing else, so anyone
+  // who had simply mistyped was stuck looking at it.
+  assert.match(INDEX_HTML, /id="graph-empty-state-close"/);
+  assert.match(INDEX_HTML, /class="popover-close graph-empty-state__close"/);
+  assert.match(INDEX_HTML, /aria-label="Close"/);
+  const wiring = INDEX_HTML.slice(INDEX_HTML.indexOf("getElementById('graph-empty-state-close')"));
+  assert.match(wiring.slice(0, 320), /graphEmptyState\.hidden = true;/);
+  // Same stopPropagation trap as every other control inside the stage: without
+  // it the document-level outside-click closer swallows the event.
+  assert.match(wiring.slice(0, 320), /event\.stopPropagation\(\);/);
+});
+
+test('the home star introduces itself instead of just being a stranger', () => {
+  // Landing a visitor on one specific musician only works if they are told why --
+  // the Tom-from-Myspace trick works because Tom introduced himself. Without it
+  // the opening view reads as "here is a person you have never heard of".
+  assert.match(EXPLORER, /const introCopy = \(name\) => \{/);
+  assert.match(EXPLORER, /I built this site &mdash; you&rsquo;re starting on my node\./);
+  assert.match(EXPLORER, /Search for a band or artist above to find your place in the band universe\./);
+  // And it names Travel. Search was the only way in that the copy mentioned, which
+  // left clicking -- the primary way to move through the graph -- undiscoverable.
+  assert.match(EXPLORER, /Click any band or musician to travel there\./);
+  // The name is derived from the home star, so changing the default anchor cannot
+  // leave the copy claiming to be someone else.
+  // Plain substring checks: a regex for this line needs escaping that obscures
+  // what is being asserted.
+  assert.ok(EXPLORER.includes(".trim().split("), 'the first name should be split out of the id');
+  assert.ok(EXPLORER.includes("[0] || 'I'"), 'and it should fall back rather than print undefined');
+  assert.match(EXPLORER, /introCopy\(homeStarId\)/);
+  // Gold, matching his star label, so the voice and the node are visibly one.
+  assert.match(EXPLORER, /\.sigma-intro__hello\{color:#ffc978/);
+});
+
+test('the introduction gives way to the generic explainer once you travel', () => {
+  // Keyed on the anchor rather than on "first visit", so it also returns with
+  // Reset -- the other way to end up back on his node.
+  const chrome = EXPLORER.slice(EXPLORER.indexOf('function updateChrome()'), EXPLORER.indexOf('// -- camera'));
+  assert.match(chrome, /const onHomeStar = Boolean\(homeStarId\) && homeStarId === state\.anchorId;/);
+  assert.match(chrome, /hintEl\.innerHTML = onHomeStar \? introCopy\(homeStarId\) : EXPLORE_COPY;/);
+});
+
+test('the introduction reads before the node count', () => {
+  // A visitor dropped on a stranger's node needs to know why before being told
+  // how many degrees out it is.
+  const footer = EXPLORER.slice(EXPLORER.indexOf('<div class="sigma-footer">'), EXPLORER.indexOf('</div>\n  `;'));
+  assert.ok(footer.indexOf('sigma-hint') < footer.indexOf('sigma-context'), 'the hint should come first');
+});
+
+test('the hamburger is retired on the constellation', () => {
+  // It duplicated the pill row -- Add, Share, Feedback, the filters and search
+  // all had a second home inside it. Two ways to do the same thing, and the pills
+  // are the ones a visitor can see (feedback item xiv).
+  const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
+  assert.match(css, /body\.rbft-sigma-boot \.mobile-menu-btn,/);
+  assert.match(css, /body\.rbft-sigma-boot #mobile-menu-sheet,/);
+  assert.match(css, /body\.rbft-sigma-boot #mobile-sheet-backdrop,/);
+  // Sign-up must stop reaching through the retired sheet for its trigger.
+  assert.match(INDEX_HTML, /const onConstellation = document\.body && document\.body\.classList\.contains\('rbft-sigma-boot'\);/);
+  assert.match(INDEX_HTML, /const isMobile = !onConstellation && window\.matchMedia\('\(max-width: 900px\)'\)\.matches;/);
+});
+
+test('the corner the hamburger vacated carries ONE way in', () => {
+  // A pair shipped here a change ago, when both entry points still existed. With
+  // the flows merged, two controls for one room was the confusion rather than the
+  // cure, so there is a single control (feedback item x).
+  const right = INDEX_HTML.slice(INDEX_HTML.indexOf('<div class="header-right">'), INDEX_HTML.indexOf('id="header-user"'));
+  assert.doesNotMatch(right, /header-signup-btn/);
+  assert.match(right, /id="sign-in-btn"/);
+  assert.equal((right.match(/class="header-btn/g) || []).length, 1, 'exactly one auth control');
+});
+
+test('the auth corner is reachable on a phone, where it is the only way in', () => {
+  const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
+  // The base stylesheet hides .header-right below 720px; with the sheet gone that
+  // would leave a phone with no way to sign in at all. THIS is what the test is
+  // for, and it is unchanged: the corner must exist and must be reachable.
+  assert.match(css, /body\.rbft-sigma-boot \.header-right \{\s*\n\s*display: flex !important;/);
+  // A density pass pins .header-btn to min-height:26px !important, so every
+  // size here has to be an override carrying the same weight.
+  assert.match(css, /body\.rbft-sigma-boot \.header-right \.header-btn \{\s*\n\s*min-height: 36px !important;/);
+  // The phone size went 40px button -> 24px button -> 44px button as the
+  // search row beside it changed shape (see git history on this test for
+  // that chain). Then it stopped being a button at all: signed OUT, this
+  // corner used to be the one place with two different visual languages
+  // depending on auth state -- a bordered/filled pill here, but plain text
+  // ("Sign out") once signed in. Matching that instead gives the corner one
+  // consistent shape AND less visual weight, which is what a "move Sign In
+  // into the hamburger" design ask was actually reaching for, without that
+  // idea's real cost of hiding auth state behind a tap.
+  assert.match(css, /min-height: auto !important;/);
+  assert.match(css, /text-decoration: underline;/);
+  assert.match(css, /color: var\(--color-accent, #7cc4ff\) !important;/);
+  // And the hero drops below that row, or the wordmark prints through it.
+  // 50px leaves the row's measured ~40px bottom edge the same ~10px
+  // breathing room it has held at every size it's been -- measured in the
+  // browser, since there is no button height left to compute it from.
+  assert.match(css, /body\.rbft-sigma-boot #sigma-stage \.sigma-hero \{ top: 50px; \}/);
+});
+
+test('the phone action row is a hamburger menu, not a squeezed line', () => {
+  // Superseded by redesign/mobile-hamburger-nav: the six action pills used to
+  // be forced onto one nowrap line at 22px each (see git history on this
+  // test). That fit, but landed under the platform's 44px tap-target minimum.
+  // A first pass moved them into a full-width bottom sheet; compared side by
+  // side with the actual mockup, that read as big boxy bars, so they became
+  // small 44px circles anchored near the hamburger instead -- see
+  // mobile-chrome-scale.test.mjs for the circles' own dimensions.
+  //
+  // Matched directly against EXPLORER rather than by slicing out a media
+  // query: an earlier, unrelated @media (max-width:720px) block (the share
+  // popover) sits before this one in the file, so "everything after the
+  // first @media" is not the same thing as "the phone chrome block."
+  assert.match(EXPLORER, /\.sigma-actions\{\s*display:none;/);
+  assert.match(EXPLORER, /position:fixed;left:auto;bottom:auto;/);
+  assert.match(EXPLORER, /\.sigma-actions\.is-open\{display:flex\}/);
+  // Positioned from the toggle's rect, not a fixed corner -- see
+  // positionActionsRow()'s mobile branch.
+  assert.match(EXPLORER, /const toggleBox = menuToggle\.getBoundingClientRect\(\);/);
+  assert.match(EXPLORER, /\.sigma-menu-toggle\{/);
+  // The row is still the always-visible horizontal group on a desktop --
+  // moved out from under .sigma-hero (see the CSS comment on this rule: a
+  // transformed ancestor breaks position:fixed on the mobile sheet), but
+  // still flex-wrapped and centred exactly as before.
+  assert.match(EXPLORER, /\.sigma-actions\{position:absolute;left:50%;top:0;transform:translateX\(-50%\);/);
+  assert.match(EXPLORER, /display:flex;flex-wrap:wrap;justify-content:center;gap:8px\}/);
+});
+
+test('the page title carries no version number', () => {
+  // "v1" in the title told every visitor they had arrived at a draft, and it
+  // disagreed with og:title -- so a shared link and the tab it opened were
+  // labelled differently.
+  const title = INDEX_HTML.match(/<title>([^<]*)<\/title>/);
+  assert.ok(title, 'expected a title tag');
+  assert.equal(title[1], 'Six Degrees of Rock');
+  // Pinned as a shape too, so v2 cannot arrive the same way v1 did.
+  assert.doesNotMatch(title[1], /\bv\d+\b/i, 'no version number in the title');
+  // And it must agree with the card a shared link renders.
+  const og = INDEX_HTML.match(/<meta property="og:title" content="([^"]*)"/);
+  assert.ok(og, 'expected an og:title');
+  assert.equal(og[1], title[1], 'the tab and the shared card should say the same thing');
+});
+
+// --- no third party on the critical path -------------------------------------
+//
+// The page used to need d3js.org and esm.sh in order to boot. Blocking d3js.org
+// produced a blank page, not a slower one -- and that failure was invisible from a
+// machine whose network reaches those hosts, which is every machine we test on.
+// These assertions are the only thing standing between that and a quiet relapse.
+
+test('the import map points at this origin, not a CDN', () => {
+  const map = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('<script type="importmap">'),
+    INDEX_HTML.indexOf('</script>', INDEX_HTML.indexOf('<script type="importmap">')),
+  );
+  assert.ok(map.length > 0, 'expected an import map');
+  assert.match(map, /"sigma":\s*"\/vendor\/sigma\.mjs"/);
+  assert.match(map, /"graphology":\s*"\/vendor\/graphology\.mjs"/);
+  assert.doesNotMatch(map, /esm\.sh/, 'no module may resolve through esm.sh');
+  assert.doesNotMatch(map, /https?:\/\//, 'every mapping must be same-origin');
+});
+
+test('nothing loads a library from a third party', () => {
+  // esm.sh resolved graphology-utils@^2.5.2 -- a caret range -- at request time,
+  // so production JavaScript could change with no commit and no deploy.
+  //
+  // Comments are stripped first: the comments explaining WHY these hosts are gone
+  // name the hosts, and an assertion that forbids saying the words would have to be
+  // satisfied by deleting the explanation.
+  const markup = stripComments(INDEX_HTML);
+  assert.doesNotMatch(markup, /d3js\.org/, 'd3 must not come from d3js.org');
+  assert.doesNotMatch(markup, /esm\.sh/, 'no library may come from esm.sh');
+  assert.doesNotMatch(markup, /unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com/);
+});
+
+test('d3 is fetched on demand, not on every load', () => {
+  // d3's only jobs are the SVG force simulation and the CSV fallback. Neither runs
+  // on the constellation, so blocking every visitor on 278KB was pure waste.
+  assert.match(INDEX_HTML, /function ensureD3\(\)/);
+  assert.match(INDEX_HTML, /tag\.src = '\/vendor\/d3\.js';/);
+  // Cached, so several callers cannot start several downloads.
+  assert.match(INDEX_HTML, /if \(window\.d3\) return Promise\.resolve\(window\.d3\);/);
+  assert.match(INDEX_HTML, /if \(d3Loading\) return d3Loading;/);
+  // A failure must not be cached forever, or one flaky load would disable the SVG
+  // renderer for the rest of the session.
+  const loader = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('function ensureD3()'),
+    INDEX_HTML.indexOf('function setupSvgRenderer'),
+  );
+  assert.ok(loader.length > 0, 'expected to find the loader');
+  assert.match(loader, /d3Loading = null;/);
+});
+
+test('the SVG renderer is built only when it is the renderer', () => {
+  // This block used to run inline at boot, which is precisely why blocking d3
+  // blanked a page that draws no SVG at all.
+  assert.match(INDEX_HTML, /function setupSvgRenderer\(\)/);
+  assert.match(INDEX_HTML, /function onSigmaPath\(\)/);
+  assert.match(INDEX_HTML, /const rendererReady = onSigmaPath\(\)\s*\n\s*\? Promise\.resolve\(\)\s*\n\s*: ensureD3\(\)\.then\(setupSvgRenderer\);/);
+  // And the data load waits on it, so nothing draws before the renderer exists.
+  assert.match(INDEX_HTML, /rendererReady\.then\(loadGraphData\)\.then\(async rows => \{/);
+  // The CSV fallback is the constellation's only route to d3, and must await it.
+  const fallback = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('Falling back to CSV load'),
+    INDEX_HTML.indexOf('d3.csv('),
+  );
+  assert.ok(fallback.length > 0, 'expected to find the CSV fallback');
+  assert.match(fallback, /await ensureD3\(\);/);
+});
+
+test('the vendored bundles are self-contained and reproducible', () => {
+  const sigma = readFileSync(new URL('../vendor/sigma.mjs', import.meta.url), 'utf8');
+  const graphology = readFileSync(new URL('../vendor/graphology.mjs', import.meta.url), 'utf8');
+  // A surviving bare specifier would resolve through the import map at runtime and
+  // could quietly reach a network again.
+  for (const [name, src] of [['sigma', sigma], ['graphology', graphology]]) {
+    assert.doesNotMatch(src, /esm\.sh|d3js\.org|unpkg/, `${name} must not reference a CDN`);
+    assert.match(src, /Rebuild with: npm run vendor/, `${name} should record how it was built`);
+  }
+  // package-lock.json is gitignored here, so the lockfile cannot be the record of
+  // what ships -- the committed vendor/ files are, and they change only in a
+  // reviewable diff. The build script and the pinned devDependencies are what make
+  // regenerating them repeatable.
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(pkg.scripts.vendor, 'node scripts/vendor-libs.mjs');
+  for (const dep of ['sigma', 'graphology', 'd3']) {
+    assert.ok(pkg.devDependencies[dep], `${dep} must stay a pinned devDependency`);
+  }
+});
+
+test('no comment impersonates a live CDN script tag', () => {
+  // A comment used to contain the literal string `<script src="https://d3js.org/...">`
+  // to explain what had been removed. Harmless to the browser, but it made the
+  // served HTML read as though the CDN tag were still there -- it fooled a grep of
+  // the live page twice, including mine. Describing the tag beats quoting it.
+  assert.ok(
+    !INDEX_HTML.includes('<script src="https://d3js.org'),
+    'nothing in the file, comment or not, should look like a live d3js.org script tag'
+  );
+});
+
+// --- fonts come from this origin too ----------------------------------------
+
+test('no font is fetched from a third party', () => {
+  const markup = stripComments(INDEX_HTML);
+  assert.doesNotMatch(markup, /fontshare\.com/, 'fonts must not come from fontshare.com');
+  assert.doesNotMatch(markup, /fonts\.googleapis\.com|fonts\.gstatic\.com/);
+  assert.match(markup, /<link rel="stylesheet" href="\/vendor\/fonts\.css">/);
+  // The preconnect went with it -- a preconnect to a host we no longer use is a
+  // DNS and TLS handshake spent on nothing.
+  assert.doesNotMatch(markup, /rel="preconnect"[^>]*fontshare/);
+});
+
+test('the vendored sheet declares both families, at the weights the page asks for', () => {
+  const css = readFileSync(new URL('../vendor/fonts.css', import.meta.url), 'utf8');
+  // Boska is the point of this one. `--font-display: 'Boska', Georgia, serif` had
+  // been rendering as GEORGIA, because the Fontshare API returns Satoshi plus four
+  // faces of Outfit and no Boska when Satoshi is listed first in the request.
+  for (const family of ['Boska', 'Satoshi']) {
+    for (const weight of [400, 500, 700]) {
+      const face = css.split('@font-face').find(
+        b => b.includes(`'${family}'`) && new RegExp(`font-weight: ${weight}\\b`).test(b)
+      );
+      assert.ok(face, `expected a @font-face for ${family} ${weight}`);
+      assert.match(face, /url\('\/vendor\/fonts\/[a-z]+-\d+\.woff2'\)/, `${family} ${weight} must load locally`);
+      assert.match(face, /font-display: swap/, `${family} ${weight} should not block first paint`);
+    }
+  }
+  // Outfit was four faces nothing referenced, arriving only because of that quirk.
+  assert.doesNotMatch(css, /Outfit/);
+});
+
+test('every declared font file is actually present', () => {
+  // A @font-face pointing at a missing file fails silently -- the browser just uses
+  // the fallback, which is exactly how Boska went unnoticed in the first place.
+  const css = readFileSync(new URL('../vendor/fonts.css', import.meta.url), 'utf8');
+  const referenced = [...css.matchAll(/url\('(\/vendor\/fonts\/[^']+)'\)/g)].map(m => m[1]);
+  assert.equal(referenced.length, 6, 'expected six faces');
+  for (const href of referenced) {
+    const path = new URL('..' + href, import.meta.url);
+    const bytes = readFileSync(path);
+    assert.ok(bytes.length > 1000, `${href} looks too small to be a real font (${bytes.length}B)`);
+    // woff2 files start with the signature 'wOF2'. Guards against a saved error page.
+    assert.equal(bytes.subarray(0, 4).toString('latin1'), 'wOF2', `${href} is not a woff2`);
+  }
+});
+
+test('the font build records its licence position', () => {
+  // The ITF Free Font License permits self-hosting but prohibits subsetting and
+  // format conversion, which is why the build stores the CDN's own .woff2 rather
+  // than converting the OTF download. Worth keeping written down next to the code.
+  const script = readFileSync(new URL('../scripts/vendor-fonts.mjs', import.meta.url), 'utf8');
+  assert.match(script, /itf-ffl/, 'link the licence that permits this');
+  assert.match(script, /prohibits subsetting and format conversion|PROHIBITS subsetting/i);
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(pkg.scripts['vendor:fonts'], 'node scripts/vendor-fonts.mjs');
+});
+
+// --- the share poster --------------------------------------------------------
+//
+// The old export was the constellation and a thin title bar: no wordmark, no search
+// field, no pills, no card, no status lines, and a 10px URL. It also matched the
+// viewport, so a phone produced a tall image that feeds crop.
+
+test('the poster is a fixed square, not the viewport', () => {
+  assert.match(INDEX_HTML, /const SHARE_SIZE = 1200;/);
+  // 1200x1200 survives Facebook, Instagram and X without cropping.
+  assert.match(INDEX_HTML, /canvas\.width = SHARE_SIZE;\s*\n\s*canvas\.height = SHARE_SIZE;/);
+});
+
+test('the poster reads its content from the live page', () => {
+  const poster = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
+    INDEX_HTML.indexOf('async function renderGraphPngBlob'),
+  );
+  assert.ok(poster.length > 0, 'expected the poster function');
+  // Everything the user asked to see in the picture.
+  assert.match(poster, /SIX DEGREES OF ROCK/, 'the wordmark');
+  assert.match(poster, /\.sigma-prompt input/, 'the typed query');
+  assert.match(poster, /\.sigma-action/, 'the pill row');
+  // The lookup itself, not just the field names: replacing the querySelector with
+  // null left every field name in the file below it, so asserting only the names
+  // passed while the card silently stopped being drawn.
+  assert.match(poster, /const card = document\.querySelector\('\.node-card'\);/, 'the card lookup');
+  assert.match(poster, /visibleEl\(card\)/, 'the card is drawn only when it is open');
+  assert.match(poster, /\.node-card__name/, 'the card name');
+  assert.match(poster, /\.node-card__chips/, 'the card chips');
+  assert.match(poster, /'\.sigma-hint', '\.sigma-context', '\.sigma-frontier'/, 'the status lines');
+});
+
+test('the signed-in strip is never drawn into a shared picture', () => {
+  // It carries the sharer's name and a Sign out link, which has no business in a
+  // public post.
+  const poster = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
+    INDEX_HTML.indexOf('async function renderGraphPngBlob'),
+  );
+  assert.ok(!poster.includes('header-user'), 'the poster must not read the auth strip');
+  assert.ok(!poster.includes('Sign out'), 'and must not print it');
+});
+
+test('the URL on the poster is legible rather than a footnote', () => {
+  // Facebook and Instagram drop the link when a file is attached, so on a shared
+  // image this text is often the only route back to the graph. It used to be 10px.
+  const poster = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
+    INDEX_HTML.indexOf('async function renderGraphPngBlob'),
+  );
+  const match = poster.match(/const displayUrl[\s\S]{0,400}?fillText\(fitText\(ctx, decodeURIComponent\(displayUrl\)/);
+  assert.ok(match, 'expected the URL to be drawn through fitText');
+  const size = poster.match(/ctx\.font = `600 (\d+)px Satoshi[^`]*`;\s*\n\s*const displayUrl/);
+  assert.ok(size, 'expected an explicit font size for the URL');
+  assert.ok(Number(size[1]) >= 20, `the URL should be at least 20px, found ${size[1]}`);
+});
+
+test('everything positional is measured while the capture is re-framed', () => {
+  // This ordering has bitten twice. Measuring the host box after the restore made
+  // drawImage stretch a landscape render into a portrait slot, so every node came out
+  // an oval; measuring the overlay positions after the restore drew the focus ring
+  // around the wrong musician. Both looked like rendering faults and were neither.
+  const helper = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('async function captureSigmaCanvasWithAllLabels'),
+    INDEX_HTML.indexOf('const POSTER_GRAPH_ASPECT') > 0
+      ? INDEX_HTML.indexOf('async function renderSharePosterBlob')
+      : INDEX_HTML.length,
+  );
+  const measured = helper.indexOf('host.getBoundingClientRect()');
+  const overlays = helper.indexOf('graphToViewport');
+  // lastIndexOf, not indexOf: the same restore line also appears in the catch that
+  // handles a refused resize, which sits BEFORE the measurement. Matching that one
+  // made this assertion compare the wrong pair and fail on correct code.
+  const restored = helper.lastIndexOf('host.style.width = previous.width');
+  assert.ok(measured > 0 && overlays > 0 && restored > 0, 'expected all three');
+  assert.ok(measured < restored, 'the host box must be measured before the restore');
+  assert.ok(overlays < restored, 'overlay positions must be computed before the restore');
+  // And the poster must use the precomputed values rather than asking again.
+  const poster = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
+    INDEX_HTML.indexOf('async function renderGraphPngBlob'),
+  );
+  assert.ok(!poster.includes('graphToViewport'), 'the poster must not re-read positions');
+  assert.match(poster, /capture\.overlay && capture\.overlay\[which\]/);
+});
+
+test('the capture shows every name it can, and puts the screen back', () => {
+  const helper = INDEX_HTML.slice(
+    INDEX_HTML.indexOf('async function captureSigmaCanvasWithAllLabels'),
+    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
+  );
+  // Our own chrome-collision rule is lifted: in the poster the chrome sits in its own
+  // bands, so a suppressed label leaves an unexplained bare dot.
+  assert.match(helper, /blocked\.clear\(\)/);
+  assert.match(helper, /saved\.forEach\(id => blocked\.add\(id\)\)/);
+  // Sharing must not change what the visitor is looking at.
+  assert.match(helper, /host\.style\.right = previous\.right/);
+  assert.match(helper, /camera\.setState\(cameraBefore\)/);
+  // inset:0 pins right and bottom, so an explicit width is ambiguous until they go.
+  assert.match(helper, /host\.style\.right = 'auto'/);
+});
+
+test('the SVG escape hatch keeps the older export', () => {
+  // It is an escape hatch; a second poster layout to maintain buys nothing.
+  assert.match(INDEX_HTML, /if \(sigmaCanvas && capture\.hostBox\) \{/);
+  assert.match(INDEX_HTML, /const poster = await renderSharePosterBlob\(sigmaCanvas, capture\);/);
+});
+
+// ---------------------------------------------------------------------------
+// One edge-writing rule, two writers.
+//
+// The "broken strings" outage was drift, not logic: toGraphologyGraph skipped
+// self-loops and the explorer's own view-graph writer did not, so a solo act
+// whose band name is their own name threw out of renderView and took the
+// controller with it. These tests exist so the two writers cannot diverge
+// again — a local copy of the check is exactly how this happened.
+// ---------------------------------------------------------------------------
+
+test('the explorer writes view edges through the shared guard', () => {
+  assert.match(
+    EXPLORER,
+    /canRenderEdge,/,
+    'Expected the explorer to import the shared edge guard rather than re-deriving it.'
+  );
+  assert.match(
+    EXPLORER,
+    /if \(!canRenderEdge\(viewGraph, source, target\)\) return;/,
+    'Expected the view-graph writer to defer to canRenderEdge before addEdge.'
+  );
+});
+
+test('neither writer keeps a private copy of the edge checks', () => {
+  // The specific shape that broke: hasNode/hasEdge tested inline, source ===
+  // target forgotten. Any inline re-test is a chance to forget it again.
+  const writer = EXPLORER.slice(EXPLORER.indexOf('view.links.forEach'), EXPLORER.indexOf('state.layoutExtent'));
+  assert.ok(
+    !/viewGraph\.hasNode\(/.test(writer) && !/viewGraph\.hasEdge\(/.test(writer),
+    'The view writer must not re-test edge preconditions inline; that is what drifted.'
+  );
+  assert.ok(
+    /export function canRenderEdge/.test(HELPERS),
+    'Expected canRenderEdge to live in the helpers, as the single definition.'
+  );
+  assert.match(
+    HELPERS,
+    /if \(!canRenderEdge\(graph, source, target\)\) return;/,
+    'Expected toGraphologyGraph to use the same guard it exports.'
+  );
+});
+
+test('the shared guard rejects the self-loop that caused the outage', () => {
+  const guard = HELPERS.slice(HELPERS.indexOf('export function canRenderEdge'));
+  assert.match(
+    guard.slice(0, 400),
+    /if \(source === target\) return false;/,
+    'The self-loop check is the whole point of the shared guard.'
+  );
+});
