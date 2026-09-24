@@ -435,6 +435,21 @@ test('every popover inside .graph-overlay-top is either hookPopoverForMobile-reg
     'Expected at least one .share-popover inside .graph-overlay-top; regex may be stale.'
   );
 
+  // The account user card lives in the site header, not the overlay --
+  // but its .header-right ancestor is display:none on mobile, so it
+  // needs the same hookPopoverForMobile rescue as the overlay popovers.
+  // Collect header popover ids so the symmetric registration check
+  // below accepts them.
+  const headerMatch = INDEX_HTML.match(
+    /<header class="site-header">([\s\S]*?)<\/header>/
+  );
+  const headerPopoverIds = [];
+  if (headerMatch) {
+    for (const m of headerMatch[1].matchAll(popoverTagPattern)) {
+      headerPopoverIds.push(m[1]);
+    }
+  }
+
   // Which popovers does the code actually register with
   // hookPopoverForMobile? Strip JS *and* HTML comments first so a
   // stale mention of the function inside either flavor of comment
@@ -480,20 +495,22 @@ test('every popover inside .graph-overlay-top is either hookPopoverForMobile-reg
   );
 
   // Symmetric direction #2: catch registered popovers that don't live
-  // in .graph-overlay-top. Not strictly wrong, but usually means either
-  // the popover was moved out (great, in which case the hook isn't
-  // needed) or the registration is aimed at the wrong id.
+  // in .graph-overlay-top or the site header. Not strictly wrong, but
+  // usually means either the popover was moved out (great, in which case
+  // the hook isn't needed) or the registration is aimed at the wrong id.
+  // The site header counts because .header-right is display:none on
+  // mobile -- the user card needs the same detach-to-<body> rescue.
   const strandedRegistrations = [...registeredIds].filter(
-    (id) => !overlayPopoverIds.includes(id)
+    (id) => !overlayPopoverIds.includes(id) && !headerPopoverIds.includes(id)
   );
   assert.deepEqual(
     strandedRegistrations,
     [],
-    `hookPopoverForMobile is registered for popover ids that don't live ` +
-      `inside .graph-overlay-top:\n  - ${strandedRegistrations.join('\n  - ')}\n\n` +
-      `The hook exists specifically to rescue popovers from that ` +
-      `display:none ancestor. If the target no longer lives there, ` +
-      `remove the hookPopoverForMobile call.`
+    `hookPopoverForMobile is registered for popover ids that live ` +
+      `in neither .graph-overlay-top nor the site header:\n  - ${strandedRegistrations.join('\n  - ')}\n\n` +
+      `The hook exists specifically to rescue popovers from a ` +
+      `display:none ancestor on mobile. If the target no longer lives ` +
+      `in one, remove the hookPopoverForMobile call.`
   );
 });
 
