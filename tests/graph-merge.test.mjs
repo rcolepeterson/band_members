@@ -77,6 +77,13 @@ const factory = new Function(
     extract('displayNameForId'),
     extract('nodeName'),
     extract('makeRoomForBandNamed'),
+    // The city-aware band identity: same name + same city is the same band,
+    // same name + different city is a different band. applyDraftToMaster
+    // needs all four or the extracted function throws.
+    extract('normalizeIdentityKey'),
+    extract('citiesMatch'),
+    extract('sameBandIdentity'),
+    extract('disambiguatedBandId'),
     extract('applyDraftToMaster'),
     extract('mergeSubmissionsIntoMaster'),
   ].join('\n') +

@@ -236,13 +236,31 @@ export default async (req) => {
     `;
     results.push('table bands ready');
 
-    // Case-insensitive uniqueness on name, mirroring the users_email_lower_idx
-    // pattern. This is also what seed_bands.mjs upserts against.
+    // Case-insensitive uniqueness on (name, city, country), mirroring the
+    // users_email_lower_idx pattern. Band identity is name + location, not
+    // name alone: "Skid Row" in Toms River, NJ and "Skid Row" in Aberdeen,
+    // WA are different bands and must coexist. This is also what
+    // seed_bands.mjs upserts against.
+    //
+    // Migration note: the previous bands_name_lower_idx (name-only) is
+    // dropped because it would reject the very duplicates this index
+    // permits. Any data satisfying the old name-only constraint trivially
+    // satisfies the new (name, city, country) one, so the swap is safe.
+    //
+    // The expression mirrors normalizeIdentityKey() in _bands_write.mjs
+    // (lowercase, drop apostrophes, non-alnum runs become one space, trim)
+    // so the DB-level backstop enforces the same identity the app
+    // preflight checks: "Tom's River" and "Toms River" collide.
+    await sql`drop index if exists bands_name_lower_idx`;
     await sql`
-      create unique index if not exists bands_name_lower_idx
-      on bands (lower(name))
+      create unique index if not exists bands_name_city_country_lower_idx
+      on bands (
+        btrim(regexp_replace(regexp_replace(lower(name), '[''’]', '', 'g'), '[^a-z0-9]+', ' ', 'g')),
+        btrim(regexp_replace(regexp_replace(lower(coalesce(city, '')), '[''’]', '', 'g'), '[^a-z0-9]+', ' ', 'g')),
+        btrim(regexp_replace(regexp_replace(lower(coalesce(country, '')), '[''’]', '', 'g'), '[^a-z0-9]+', ' ', 'g'))
+      )
     `;
-    results.push('index bands_name_lower_idx ready');
+    results.push('index bands_name_city_country_lower_idx ready');
 
     // Query patterns we anticipate: filtering the graph by scene (city) or
     // by genre, both of which the client's existing dropdowns already do

@@ -1288,7 +1288,15 @@ export function initSigmaExplorer({
       viewGraph.addNode(node.id, {
         // The label is the display NAME, not the id: a musician who shares a
         // band's name carries a suffixed id and must still read as himself.
-        label: nodeLabel(node),
+        // Exception: when several BANDS share one name, the colliding nodes'
+        // ids carry a city suffix ("Skid Row — Tom's River, NJ") while their
+        // names stay plain — render the suffixed id so the two nodes are
+        // distinguishable on the canvas.
+        label: (() => {
+          const master = masterById.get(node.id);
+          if (master && master.type === 'band' && master.name && master.id !== master.name) return master.id;
+          return nodeLabel(node);
+        })(),
         x: point.x,
         y: point.y,
         hop: point.hop,
@@ -1806,6 +1814,14 @@ export function initSigmaExplorer({
     // view they were performed in, not to every later destination.
     state.maxHops = NEIGHBORHOOD_BUDGET.MAX_HOPS;
     renderNeighborhood({ anchorId: partial.id, maxNodes: NEIGHBORHOOD_BUDGET.MAX_NODES });
+    // Searching is navigation: the open card described the view we just left,
+    // so close it first, then open the card for the new anchor -- the same
+    // close-then-highlight ordering travelTo() uses for node clicks. Without
+    // this the old band's card stayed open over the new band's view.
+    stage.dispatchEvent(
+      new CustomEvent('rbft:sigma-travel', { bubbles: true, detail: { anchorId: partial.id } })
+    );
+    highlightFrom(partial.id);
     return { ok: true, anchorId: partial.id };
   }
 
@@ -1934,6 +1950,11 @@ export function initSigmaExplorer({
       maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
       animate: true,
     });
+    // Resetting is navigation too: retire any open card, since the view it
+    // described is gone. Nothing is selected afterwards, so no new card.
+    stage.dispatchEvent(
+      new CustomEvent('rbft:sigma-travel', { bubbles: true, detail: { anchorId: home } })
+    );
   }
 
   /**

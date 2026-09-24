@@ -56,6 +56,7 @@ import {
   serverError,
   methodNotAllowed,
 } from './_db.mjs';
+import { normalizeIdentityKey } from './_bands_write.mjs';
 
 const ADMIN_TOKEN_HEADER = 'x-admin-token';
 
@@ -180,8 +181,13 @@ function normalizeBlobSubmission(draft) {
     .filter(Boolean);
 }
 
-// Fill-missing upsert for one band. `on conflict (lower(name))` targets the
-// bands_name_lower_idx unique index created in migrate.mjs.
+// Fill-missing upsert for one band. The `on conflict (...)` expression must
+// match bands_name_city_country_lower_idx in migrate.mjs exactly (Postgres
+// requires the arbiter to mirror the index expression), so the apostrophe/
+// punctuation normalization below is duplicated there by design — keep the
+// two in sync. Band identity is name + location: a seed row for a
+// same-name band in a different city inserts a new row instead of merging
+// into the existing one.
 function buildBandUpsert(sql, band) {
   return sql`
     insert into bands (name, city, state, country, genre, years_active, label, albums, csv_origin)
@@ -190,7 +196,11 @@ function buildBandUpsert(sql, band) {
       ${band.genre || null}, ${band.years_active || null}, ${band.label || null}, ${band.albums || null},
       ${band.csv_origin}
     )
-    on conflict (lower(name)) do update set
+    on conflict (
+      btrim(regexp_replace(regexp_replace(lower(name), '[''’]', '', 'g'), '[^a-z0-9]+', ' ', 'g')),
+      btrim(regexp_replace(regexp_replace(lower(coalesce(city, '')), '[''’]', '', 'g'), '[^a-z0-9]+', ' ', 'g')),
+      btrim(regexp_replace(regexp_replace(lower(coalesce(country, '')), '[''’]', '', 'g'), '[^a-z0-9]+', ' ', 'g'))
+    ) do update set
       city = coalesce(nullif(bands.city, ''), excluded.city),
       state = coalesce(nullif(bands.state, ''), excluded.state),
       country = coalesce(nullif(bands.country, ''), excluded.country),
@@ -198,8 +208,20 @@ function buildBandUpsert(sql, band) {
       years_active = coalesce(nullif(bands.years_active, ''), excluded.years_active),
       label = coalesce(nullif(bands.label, ''), excluded.label),
       albums = coalesce(nullif(bands.albums, ''), excluded.albums)
-    returning id, lower(name) as key
+    returning id, name, city, country
   `;
+}
+
+// In-memory identity key for seed bands: name + city + country, using the
+// same normalization as the backend conflict check. Two seed rows for
+// same-name bands in different cities stay separate all the way through
+// the import (dedupe map, id map, and membership join).
+function bandSeedKey(band) {
+  return [
+    normalizeIdentityKey(band && band.name),
+    normalizeIdentityKey(band && band.city),
+    normalizeIdentityKey(band && band.country),
+  ].join('|');
 }
 
 // Fill-missing upsert for one member. `on conflict (lower(name))` targets the
@@ -314,7 +336,7 @@ export default async (req) => {
     const bandsByKey = new Map();
     const membersByKey = new Map();
     for (const entry of allEntries) {
-      const bandKey = entry.band.name.toLowerCase();
+      const bandKey = bandSeedKey(entry.band);
       const memberKey = entry.member.name.toLowerCase();
       if (bandsByKey.has(bandKey)) {
         bandsByKey.set(bandKey, mergeFillMissing(bandsByKey.get(bandKey), entry.band));
@@ -340,7 +362,7 @@ export default async (req) => {
     const bandIdByKey = new Map();
     bandResultSets.forEach(rows => {
       const row = rows[0];
-      if (row) bandIdByKey.set(row.key, row.id);
+      if (row) bandIdByKey.set(bandSeedKey(row), row.id);
     });
     const memberIdByKey = new Map();
     memberResultSets.forEach(rows => {
@@ -352,7 +374,7 @@ export default async (req) => {
     // Dedupe by (band_id, member_id) for the same reason as above.
     const membershipByKey = new Map();
     for (const entry of allEntries) {
-      const bandId = bandIdByKey.get(entry.band.name.toLowerCase());
+      const bandId = bandIdByKey.get(bandSeedKey(entry.band));
       const memberId = memberIdByKey.get(entry.member.name.toLowerCase());
       if (!bandId || !memberId) continue;
       const key = `${bandId}::${memberId}`;
