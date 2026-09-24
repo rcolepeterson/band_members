@@ -25,16 +25,74 @@
 // }
 //
 // Returns one of:
-//   { conflict: true, existingBandId }
+//   { conflict: true, existingBandId, existingName, existingCity, existingCountry }
 //   { missingMemberIds: [...] }
 //   { ok: true, band, memberIds, membershipsCreated }
+
+// ---------------------------------------------------------------------------
+// Band identity: name + city (+country).
+//
+// Two records with the same band name are the SAME band only when their
+// locations also match. Same name + different city (Skid Row in Toms River,
+// NJ vs. Skid Row in Aberdeen, WA) are different bands and must both be
+// creatable. This is the shared rule — index.html mirrors it for the
+// add-band dialog's client-side duplicate check (see the "Mirrors
+// _bands_write.mjs" comment there), so keep the two in sync.
+// ---------------------------------------------------------------------------
+
+// Lowercase, drop apostrophes, fold every other non-alphanumeric run to a
+// single space: "Tom's River, NJ" and "Toms River NJ" become "toms river nj".
+export function normalizeIdentityKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/['\u2019]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+// City is a soft attribute: users type "Seattle" where the data says
+// "Seattle, WA". Two cities match when the smaller token set is fully
+// contained in the larger one. A blank city on either side is conservative
+// (treated as a match) so missing data can never silently fork a band.
+export function citiesMatch(a, b) {
+  const ka = normalizeIdentityKey(a);
+  const kb = normalizeIdentityKey(b);
+  if (!ka || !kb) return true;
+  const ta = ka.split(' ');
+  const tb = kb.split(' ');
+  const [small, big] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  const bigSet = new Set(big);
+  return small.every((token) => bigSet.has(token));
+}
+
+// Full identity comparison for { name, city, country } shapes.
+export function sameBandIdentity(a, b) {
+  if (!a || !b) return false;
+  if (normalizeIdentityKey(a.name) !== normalizeIdentityKey(b.name)) return false;
+  const ca = normalizeIdentityKey(a.country);
+  const cb = normalizeIdentityKey(b.country);
+  if (ca && cb && ca !== cb) return false;
+  return citiesMatch(a.city, b.city);
+}
+
 export async function createBandInNeon(sql, input) {
   const { name, city, state, country, genre, years_active, label, albums, members, userId } = input;
 
-  // Conflict check: case-insensitive name match against an existing band.
-  const existing = await sql`select id from bands where lower(name) = ${name.toLowerCase()} limit 1`;
-  if (existing.length) {
-    return { conflict: true, existingBandId: existing[0].id };
+  // Conflict check: same normalized name AND same location. A name match in
+  // a different city is a different band — allowed through.
+  const candidates = await sql`select id, name, city, country from bands where lower(name) = ${name.toLowerCase()}`;
+  const clash = candidates.find((row) =>
+    sameBandIdentity({ name, city, country }, { name: row.name, city: row.city, country: row.country })
+  );
+  if (clash) {
+    return {
+      conflict: true,
+      existingBandId: clash.id,
+      existingName: clash.name,
+      existingCity: clash.city,
+      existingCountry: clash.country,
+    };
   }
 
   // Validate any member `id` references up front so we can fail cleanly

@@ -163,12 +163,17 @@ export default async (req) => {
     });
 
     if (result.conflict) {
-      // A band with this name (case-insensitive) already exists. Return its
-      // id so the client can offer "add members instead".
-      return badRequest('a band with this name already exists', {
+      // Same name AND same location already exists. Return the existing
+      // band's location so the client can name it in the duplicate message
+      // ("already exists in Seattle") instead of dead-ending the user.
+      const where = result.existingCity ? ` in ${result.existingCity}` : '';
+      return badRequest(`a band with this name already exists${where}`, {
         status: 409,
         error_code: 'band_exists',
         existing_band_id: result.existingBandId,
+        existing_band_name: result.existingName,
+        existing_band_city: result.existingCity,
+        existing_band_country: result.existingCountry,
       });
     }
     if (result.missingMemberIds) {

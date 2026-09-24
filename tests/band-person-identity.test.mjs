@@ -84,6 +84,12 @@ const factory = new Function(
     extract('nodeName'),
     extract('makeRoomForBandNamed'),
     extract('buildMasterGraph'),
+    // The city-aware band identity (see graph-merge.test.mjs): without these
+    // the extracted applyDraftToMaster throws on name lookups.
+    extract('normalizeIdentityKey'),
+    extract('citiesMatch'),
+    extract('sameBandIdentity'),
+    extract('disambiguatedBandId'),
     extract('applyDraftToMaster'),
   ].join('\n') +
   `\n; return {

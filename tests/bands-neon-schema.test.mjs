@@ -45,10 +45,34 @@ test('migrate.mjs references users(id) for bands.added_by / edited_by', () => {
   assert.match(src, /edited_by\s+uuid\s+references\s+users\(id\)/i);
 });
 
-test('migrate.mjs enforces case-insensitive uniqueness on bands.name and band_members.name', () => {
+test('migrate.mjs enforces case-insensitive uniqueness on bands (name + city + country), not name alone', () => {
   const src = readFn('migrate.mjs');
-  assert.match(src, /create unique index if not exists bands_name_lower_idx/i);
+  // New composite identity index exists ...
+  assert.match(src, /create unique index if not exists bands_name_city_country_lower_idx/i);
+  // ... and the old name-only index is dropped so same-name bands in
+  // different cities are permitted.
+  assert.match(src, /drop index if exists bands_name_lower_idx/i);
+  assert.doesNotMatch(src, /create unique index if not exists bands_name_lower_idx[^_]/i);
+  // The index expression mirrors normalizeIdentityKey() in _bands_write.mjs
+  // (lowercase, drop apostrophes, non-alnum -> space, trim) so the DB
+  // backstop enforces the same identity the app preflight checks.
+  assert.ok(
+    src.includes("regexp_replace(regexp_replace(lower(name), '[''’]', '', 'g'), '[^a-z0-9]+', ' ', 'g')"),
+    'expected the bands identity index to mirror normalizeIdentityKey()'
+  );
+});
+
+test('migrate.mjs still enforces case-insensitive uniqueness on band_members.name', () => {
+  const src = readFn('migrate.mjs');
   assert.match(src, /create unique index if not exists band_members_name_lower_idx/i);
+});
+
+test('seed_bands.mjs upserts bands against the (name, city, country) identity index', () => {
+  const src = readFn('seed_bands.mjs');
+  // The ON CONFLICT arbiter must mirror the index expression in
+  // migrate.mjs, or Postgres rejects the statement.
+  assert.match(src, /on conflict \(\s*btrim\(regexp_replace/i);
+  assert.match(src, /bands_name_city_country_lower_idx/);
 });
 
 test('migrate.mjs indexes bands.city and bands.genre', () => {

@@ -337,6 +337,8 @@
     .validation-message{font-size:var(--text-sm);color:var(--color-text-muted);padding:0.2rem 0}
     .validation-message.is-warning{color:#f5c26b}
     .validation-message.is-success{color:#8fd8a6}
+    .confirm-city-btn{font-size:var(--text-xs);font-weight:600;padding:0.3rem 0.7rem;margin:0.15rem 0;border-radius:var(--radius-full);border:1px solid var(--color-primary);background:var(--color-primary);color:var(--color-text-inverse);cursor:pointer}
+    .confirm-city-btn-secondary{background:transparent;color:inherit;border-color:currentColor;opacity:0.75}
     .field-error{border-color:#f5c26b !important;box-shadow:0 0 0 3px rgba(245,194,107,0.14) !important}
 
   
@@ -3440,7 +3442,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                 <div class="detail-stat"><span>Label</span><span id="preview-label">—</span></div>
                 <div class="detail-stat"><span>Albums</span><span id="preview-albums">—</span></div>
               </div>
-              <div id="submission-validation" class="validation-message" aria-live="polite">Bands are unique within a scene. Members can appear in multiple bands.</div>
+              <div id="submission-validation" class="validation-message" aria-live="polite">Name + city is a band's identity — the same name in a different city is a different band. Members can appear in multiple bands.</div>
               <div id="submission-mode" class="validation-message" aria-live="polite">Mode: Create a new band entry.</div>
               <div id="submission-feedback" class="validation-message submission-feedback" aria-live="polite"></div>
               <div class="footer-strip"><button class="submit-btn" type="button" id="save-draft-btn">Save draft band</button></div>
@@ -4082,6 +4084,53 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 
     function normalizeKey(value) {
       return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    /* --------------------------------------------------------------------
+       Band identity: name + city (+country).
+
+       Mirrors netlify/functions/_bands_write.mjs's identity helpers — the
+       backend enforces the same rule on writes, so keep the two in sync.
+       Two records with the same band name are the SAME band only when their
+       locations also match; same name + different city (Skid Row in Toms
+       River, NJ vs. Skid Row in Aberdeen, WA) are different bands.
+       -------------------------------------------------------------------- */
+    function normalizeIdentityKey(value) {
+      return String(value || '')
+        .toLowerCase()
+        .replace(/['\u2019]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+        .replace(/\s+/g, ' ');
+    }
+    // City is a soft attribute: "Seattle" and "Seattle, WA" are the same
+    // place. Two cities match when the smaller token set is fully contained
+    // in the larger one. A blank city on either side is conservative
+    // (treated as a match) so missing data can never silently fork a band.
+    function citiesMatch(a, b) {
+      const ka = normalizeIdentityKey(a);
+      const kb = normalizeIdentityKey(b);
+      if (!ka || !kb) return true;
+      const ta = ka.split(' ');
+      const tb = kb.split(' ');
+      const small = ta.length <= tb.length ? ta : tb;
+      const bigSet = new Set(ta.length <= tb.length ? tb : ta);
+      return small.every(token => bigSet.has(token));
+    }
+    function sameBandIdentity(a, b) {
+      if (!a || !b) return false;
+      if (normalizeIdentityKey(a.name) !== normalizeIdentityKey(b.name)) return false;
+      const ca = normalizeIdentityKey(a.country);
+      const cb = normalizeIdentityKey(b.country);
+      if (ca && cb && ca !== cb) return false;
+      return citiesMatch(a.city, b.city);
+    }
+    // Suffix for a band node id when several bands share one name:
+    // "Skid Row — Tom's River, NJ". Only used on collision; every other
+    // band keeps its plain name as its id.
+    function disambiguatedBandId(name, city, state, country) {
+      const label = locationLabel({ city, state, country }) || 'Unknown location';
+      return `${name} — ${label}`;
     }
 
     /* ----------------------------------------------------------------------
@@ -6074,7 +6123,11 @@ function downloadPngBlob(blob) {
         if (!nodeMap.has(source)) {
           // Genre lives on the band node only. If any row for this band has
           // a non-empty genre it wins over rows that leave the field blank.
-          nodeMap.set(source, { id: source, name: source, type: 'band', city, state, country, genre, yearsActive: bandYearsActive, createdAt: bandCreatedAt });
+          // nodeName is the plain band name; the node id carries the city
+          // suffix when several bands share one name (see
+          // normalizeNeonToRows), so titles stay clean while ids stay unique.
+          const bandDisplayName = (row.bandName || '').trim() || source;
+          nodeMap.set(source, { id: source, name: bandDisplayName, type: 'band', city, state, country, genre, yearsActive: bandYearsActive, createdAt: bandCreatedAt });
         } else {
           const existingBand = nodeMap.get(source);
           if (genre && !existingBand.genre) existingBand.genre = genre;
@@ -6152,13 +6205,50 @@ function downloadPngBlob(blob) {
       const bandsById = new Map((data.bands || []).map(b => [b.id, b]));
       const membersById = new Map((data.members || []).map(m => [m.id, m]));
 
+      // Same-name bands in different cities must not collapse into one graph
+      // node. Group bands by normalized name, then cluster each group by
+      // location (soft city rule + country). One cluster -> the plain band
+      // name stays the node id, exactly as before. Several clusters -> the
+      // earliest-created band keeps the plain name (existing links and
+      // anchors keep working) and the rest get suffixed ids
+      // ("Skid Row — Tom's River, NJ"). bandName always carries the plain
+      // display name so node titles never show the suffix.
+      const nodeIdByBandId = new Map();
+      const groups = new Map();
+      for (const band of bandsById.values()) {
+        const key = normalizeIdentityKey(band.name);
+        if (!key) continue;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(band);
+      }
+      const countryKey = band => normalizeIdentityKey(band.country);
+      for (const group of groups.values()) {
+        const clusters = [];
+        for (const band of group) {
+          let cluster = clusters.find(c => citiesMatch(c[0].city, band.city)
+            && (countryKey(c[0]) === countryKey(band) || !countryKey(c[0]) || !countryKey(band)));
+          if (!cluster) { cluster = []; clusters.push(cluster); }
+          cluster.push(band);
+        }
+        const ordered = group.slice().sort((a, b) =>
+          String(a.created_at || '').localeCompare(String(b.created_at || ''))
+          || String(a.id).localeCompare(String(b.id)));
+        ordered.forEach((band, index) => {
+          nodeIdByBandId.set(band.id,
+            (clusters.length < 2 || index === 0)
+              ? band.name
+              : disambiguatedBandId(band.name, band.city, band.state, band.country));
+        });
+      }
+
       return (data.memberships || []).map(membership => {
         const band = bandsById.get(membership.band_id) || {};
         const member = membersById.get(membership.member_id) || {};
         const instrument1 = member.instrument1 || '';
         const instrument2 = member.instrument2 || '';
         return {
-          source: band.name || '',
+          source: nodeIdByBandId.get(membership.band_id) || band.name || '',
+          bandName: band.name || '',
           target: member.name || '',
           source_type: 'band',
           target_type: 'person',
@@ -6220,14 +6310,14 @@ function downloadPngBlob(blob) {
     const SILVER_STAR_PATH_D = 'M12 2.5l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7-5.4-4.7 7.1-.6z';
 
     // Look up a band node's real backend uuid. Graph nodes key off display
-    // name (node.id), but verifications are keyed by the bands table's
-    // uuid primary key -- findRawBandByName bridges the two. Returns null
-    // when there's no backend record to match (CSV-fallback mode, or a
-    // band added only client-side that hasn't round-tripped through
-    // /api/bands yet).
+    // name (node.id, city-suffixed when several bands share a name), but
+    // verifications are keyed by the bands table's uuid primary key --
+    // findRawBandForNode bridges the two. Returns null when there's no
+    // backend record to match (CSV-fallback mode, or a band added only
+    // client-side that hasn't round-tripped through /api/bands yet).
     function bandUuidForNode(node) {
       if (!node || node.type !== 'band') return null;
-      const raw = findRawBandByName(nodeName(node));
+      const raw = findRawBandForNode(node);
       return raw ? raw.id : null;
     }
 
@@ -6818,14 +6908,14 @@ function downloadPngBlob(blob) {
       let changed = false;
       let membersAdded = 0;
 
-      // Band node — dedup by NAME ONLY (case-insensitive). Location is a soft
-      // attribute, not part of identity: users often type 'Seattle' when the
-      // CSV has 'Seattle, WA' (or vice versa), and treating those as different
-      // bands creates duplicate nodes on the graph. If an existing band node
-      // matches by name, we reuse it and only fill in city/state/country if
-      // it was blank.
+      // Band node — identity is NAME + CITY (+country). A same-name band in a
+      // different city is a different band and gets its own node; the node id
+      // carries a city suffix ("Skid Row — Tom's River, NJ") so the two can
+      // never merge. (The old name-only dedup made a second Skid Row
+      // impossible — exactly the rule this change retires.)
+      const draftIdentity = { name: band, city, country };
       let bandNode = master.nodes.find(node => node.type === 'band'
-        && normalizeKey(nodeName(node)) === normalizeKey(band));
+        && sameBandIdentity(draftIdentity, { name: nodeName(node), city: node.city, country: node.country }));
       if (!bandNode) {
         // The mirror case, and the one that bites in a live session: a person
         // named X is already on the graph and a BAND named X is now being
@@ -6839,7 +6929,15 @@ function downloadPngBlob(blob) {
         // bands.created_at will hold once the draft reaches Neon — so a band
         // added in this session shows up under Recently added immediately,
         // without waiting for a reload.
-        master.nodes.push({ id: band, name: band, type: 'band', city, state, country, genre, yearsActive, label: bandLabel, albums, createdAt: String(draft.savedAt || '').trim() });
+        //
+        // When another band already owns this name, the new node's id takes
+        // the city suffix (matching normalizeNeonToRows) so same-name bands
+        // stay separate nodes. The plain name goes on node.name regardless.
+        const nameTaken = master.nodes.some(node => node.type === 'band'
+          && normalizeIdentityKey(nodeName(node)) === normalizeIdentityKey(band));
+        const nodeId = nameTaken ? disambiguatedBandId(band, city, state, country) : band;
+        master.nodes.push({ id: nodeId, name: band, type: 'band', city, state, country, genre, yearsActive, label: bandLabel, albums, createdAt: String(draft.savedAt || '').trim() });
+        bandNode = master.nodes[master.nodes.length - 1];
         changed = true;
       } else {
         if (!bandNode.city && city) {
@@ -6912,10 +7010,12 @@ function downloadPngBlob(blob) {
         const linkExists = master.links.some(link => {
           const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
           const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-          return normalizeKey(sourceId) === normalizeKey(band) && normalizeKey(targetId) === normalizeKey(memberId);
+          // Compare against the band NODE id (which carries the city suffix
+          // when several bands share a name), not the plain band name.
+          return normalizeKey(sourceId) === normalizeKey(bandNode.id) && normalizeKey(targetId) === normalizeKey(memberId);
         });
         if (!linkExists) {
-          master.links.push({ source: band, target: memberId, relation: 'member', weight });
+          master.links.push({ source: bandNode.id, target: memberId, relation: 'member', weight });
           changed = true;
           membersAdded += 1;
         }
@@ -8411,9 +8511,9 @@ function downloadPngBlob(blob) {
         sheetQuery.addListener(onSheetBreakpointChange);
       }
     }
-    // ESC key closes the card. (The toolbar popovers no longer listen for
-    // Escape -- they stay open until the X -- but the node card keeps its
-    // own dismiss paths: X, Escape, empty-SVG-background click, travel,
+    // ESC key closes the card. (Only the Add-band popover is exempt from
+    // Escape -- it stays until its X -- but the node card keeps its own
+    // dismiss paths: X, Escape, empty-SVG-background click, travel,
     // and filter changes.)
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && nodeCardState.node) closeNodeCard();
@@ -9135,7 +9235,9 @@ function downloadPngBlob(blob) {
         .filter(link => {
           const sourceNode = graphState.master.nodes.find(node => node.id === link.source);
           const targetNode = graphState.master.nodes.find(node => node.id === link.target);
-          return sourceNode && targetNode && sourceNode.type === 'band' && targetNode.type === 'person' && normalizeKey(sourceNode.id) === normalizeKey(band) && normalizeKey(locationLabel(sourceNode) || '') === normalizeKey(scene);
+          // Match on the plain band name (nodeName), not the node id: when
+          // several bands share a name the id carries a city suffix.
+          return sourceNode && targetNode && sourceNode.type === 'band' && targetNode.type === 'person' && normalizeKey(nodeName(sourceNode)) === normalizeKey(band) && normalizeKey(locationLabel(sourceNode) || '') === normalizeKey(scene);
         })
         .map(link => link.target)
         .filter((value, index, array) => array.indexOf(value) === index)
@@ -9302,7 +9404,18 @@ function downloadPngBlob(blob) {
       if (!typed || !graphState || !graphState.master) return null;
       const key = normalizeKey(typed);
       const match = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(nodeName(node)) === key);
-      return match ? match.id : null;
+      // The plain display name, never the node id: when several bands share a
+      // name the id carries a city suffix, which must never leak into the
+      // band-name input via auto-fill.
+      return match ? nodeName(match) : null;
+    }
+    // Every band node whose plain name matches the typed name, with location.
+    // Backs the city-aware duplicate check: same name + same city is the same
+    // band; same name + different city is a different band.
+    function findBandsByName(typed) {
+      if (!typed || !graphState || !graphState.master) return [];
+      const key = normalizeIdentityKey(typed);
+      return graphState.master.nodes.filter(node => node.type === 'band' && normalizeIdentityKey(nodeName(node)) === key);
     }
     function findCanonicalMemberName(typed) {
       if (!typed || !graphState || !graphState.master) return null;
@@ -9355,6 +9468,49 @@ function downloadPngBlob(blob) {
       return { city, state, country, label };
     }
 
+    // "Different city?" confirmation. Remembers the user's answer per exact
+    // name+city so re-validation doesn't nag, and so changing the city
+    // re-asks. Cleared on form reset (see finishAndReport).
+    let confirmedDifferentCityKey = null;
+    function renderDifferentCityConfirm(bandNow, existingNode, location, typedKey) {
+      const validation = document.getElementById('submission-validation');
+      validation.innerHTML = '';
+      const existingLabel = locationLabel(existingNode) || 'an unknown location';
+      const typedLabel = location.label || 'an unknown location';
+      const copy = document.createElement('span');
+      copy.textContent = `${bandNow} already exists — in ${existingLabel}. You're adding ${bandNow} in ${typedLabel}. Different band? `;
+      const yes = document.createElement('button');
+      yes.type = 'button';
+      yes.className = 'confirm-city-btn';
+      yes.textContent = 'Yes — create it';
+      yes.addEventListener('click', () => {
+        confirmedDifferentCityKey = typedKey;
+        setSubmissionMode(false);
+        validateSubmissionForm();
+      });
+      const no = document.createElement('button');
+      no.type = 'button';
+      no.className = 'confirm-city-btn confirm-city-btn-secondary';
+      no.textContent = 'No — use the existing band';
+      no.addEventListener('click', () => {
+        // Adopt the existing band's location, then re-validate: the form
+        // lands in add-members mode for that band.
+        const cityField = document.getElementById('submission-city');
+        const stateField = document.getElementById('submission-state');
+        const countryField = document.getElementById('submission-country');
+        if (cityField) cityField.value = existingNode.city || '';
+        if (countryField && existingNode.country) {
+          countryField.value = existingNode.country;
+          populateStateOptions(existingNode.country);
+        }
+        if (stateField) stateField.value = existingNode.state || '';
+        confirmedDifferentCityKey = null;
+        updateSubmissionPreview();
+        validateSubmissionForm();
+      });
+      validation.append(copy, yes, document.createTextNode(' '), no);
+    }
+
     function validateSubmissionForm() {
       const bandField = document.getElementById('band-name');
       const cityField = document.getElementById('submission-city');
@@ -9402,12 +9558,18 @@ function downloadPngBlob(blob) {
         return { valid: true, duplicate: false, memberExists: false, duplicateConnection: memberBandState.duplicateConnection };
       }
 
-      // Band exists check: match by NAME ONLY (case-insensitive). Scene is a
-      // soft attribute — users type 'Seattle' when the CSV has 'Seattle, WA'
-      // and we don't want that to look like a different band.
-      const bandExists = !!canonicalBand;
+      // Band exists check: identity is NAME + CITY (+country). A name match in
+      // the same city is the same band — the form switches to add-members
+      // mode. A name match in a different city is a different band, but the
+      // user confirms explicitly before we create it, so a typo'd city never
+      // silently forks a band.
+      const nameMatches = findBandsByName(bandNow);
+      const typedIdentity = { name: bandNow, city: location.city, country: location.country };
+      const nodeIdentity = node => ({ name: nodeName(node), city: node.city, country: node.country });
+      const sameCityMatch = nameMatches.find(node => sameBandIdentity(typedIdentity, nodeIdentity(node)));
+      const otherCityMatch = nameMatches.find(node => node !== sameCityMatch);
 
-      if (bandExists) {
+      if (sameCityMatch) {
         bandField.classList.add('field-error');
         // Only flag the scene field when the user actually gave a scene that
         // conflicts — not just because a band matched.
@@ -9419,8 +9581,24 @@ function downloadPngBlob(blob) {
           validation.textContent = `${memberNow || memberField.value.trim()} is already connected to ${bandNow} in ${scene}. Add a different member or create a different connection.`;
           return { valid: false, duplicate: true, memberExists: true, duplicateConnection: true };
         }
-        validation.textContent = `A band named ${bandNow} already exists${scene ? ` in the ${scene} scene` : ''}. You can still add a member to this band or add a new connection for an existing member.`;
+        const existingLabel = locationLabel(sameCityMatch) || scene;
+        validation.textContent = `A band named ${bandNow} already exists${existingLabel ? ` in ${existingLabel}` : ''}. You can still add a member to this band or add a new connection for an existing member.`;
         return { valid: true, duplicate: true, memberExists: false, duplicateConnection: false };
+      }
+
+      if (otherCityMatch) {
+        const typedKey = [normalizeIdentityKey(bandNow), normalizeIdentityKey(location.city), normalizeIdentityKey(location.country)].join('|');
+        if (confirmedDifferentCityKey !== typedKey) {
+          // Same name, different city, not yet confirmed: ask, and block
+          // submission until the user answers.
+          validation.classList.add('is-warning');
+          setSubmissionMode(false);
+          renderDifferentCityConfirm(bandNow, otherCityMatch, location, typedKey);
+          renderExistingBandMembers(bandNow, locationLabel(otherCityMatch) || '', true);
+          return { valid: false, duplicate: true, memberExists: false, duplicateConnection: false, needsCityConfirm: true };
+        }
+        // Confirmed: this is genuinely a different band — fall through to
+        // the new-band path below.
       }
 
       if (memberBandState.duplicateConnection) {
@@ -9874,10 +10052,18 @@ function downloadPngBlob(blob) {
       }
 
       const master = graphState && graphState.master;
+      // City-aware: a member in the Seattle Skid Row is NOT already connected
+      // to the Toms River Skid Row. Resolve the link's band node and compare
+      // full identities, not just names.
       const connectionExists = (memberName) => !!master && master.links.some(link => {
         const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
         const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-        return normalizeKey(sourceId) === normalizeKey(band) && normalizeKey(targetId) === normalizeKey(memberName);
+        const sourceNode = master.nodes.find(node => node.id === sourceId);
+        if (!sourceNode || sourceNode.type !== 'band') return false;
+        return sameBandIdentity(
+          { name: band, city: location.city, country: location.country },
+          { name: nodeName(sourceNode), city: sourceNode.city, country: sourceNode.country }
+        ) && normalizeKey(targetId) === normalizeKey(memberName);
       });
 
       // Collect every member row. Fully empty rows are skipped; a row with a
@@ -9913,9 +10099,13 @@ function downloadPngBlob(blob) {
         members.push({ member: memberName, instrument, relation });
       }
 
+      // City-aware: the band "exists" only if the same name in the same city
+      // is already on the graph. A same-name band in a different city keeps
+      // the new-band-entry mode so the backend creates it as its own band.
       const bandExisted = !!master && master.nodes.some(node => node.type === 'band'
-        && normalizeKey(nodeName(node)) === normalizeKey(band)
-        && normalizeKey(locationLabel(node) || '') === normalizeKey(scene));
+        && sameBandIdentity(
+          { name: band, city: location.city, country: location.country },
+          { name: nodeName(node), city: node.city, country: node.country }));
 
       // Genre is a per-band attribute: only send it if this submission is
       // introducing a brand-new band. For an existing-band-connection
@@ -9997,6 +10187,7 @@ function downloadPngBlob(blob) {
         showSubmissionFeedback(message, !wasShared);
         document.getElementById('submission-form').reset();
         resetMemberRows();
+        confirmedDifferentCityKey = null;
         document.getElementById('submission-city').value = 'Seattle';
         document.getElementById('submission-country').value = 'USA';
         populateStateOptions('USA');
@@ -10086,6 +10277,21 @@ function downloadPngBlob(blob) {
       if (!rawBandsData || !Array.isArray(rawBandsData.bands)) return null;
       const key = normalizeKey(name);
       return rawBandsData.bands.find(b => normalizeKey(b.name) === key) || null;
+    }
+
+    // City-aware raw-band lookup for a graph node. When several bands share
+    // a name, prefers the one whose location matches the node's; falls back
+    // to the name-only first match (the previous behavior) otherwise.
+    function findRawBandForNode(node) {
+      if (!node) return null;
+      const nameMatches = rawBandsData && Array.isArray(rawBandsData.bands)
+        ? rawBandsData.bands.filter(b => normalizeKey(b.name) === normalizeKey(nodeName(node)))
+        : [];
+      if (!nameMatches.length) return null;
+      return nameMatches.find(b => sameBandIdentity(
+        { name: nodeName(node), city: node.city, country: node.country },
+        { name: b.name, city: b.city, country: b.country }
+      )) || nameMatches[0];
     }
 
     function findRawMemberByName(name) {
@@ -10269,7 +10475,7 @@ function downloadPngBlob(blob) {
     // still opens but with an inline warning and a disabled roster, since
     // there is no backend band id to PATCH against.
     function openEditBandPopover(node) {
-      const rawBand = findRawBandByName(nodeName(node));
+      const rawBand = findRawBandForNode(node);
       const feedback = document.getElementById('edit-band-feedback');
       const validation = document.getElementById('edit-band-validation');
       if (feedback) { feedback.textContent = ''; feedback.classList.remove('is-visible', 'is-warning', 'is-success'); }

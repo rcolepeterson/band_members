@@ -875,6 +875,71 @@ test('one click both travels and leaves the card open', () => {
   assert.ok(dispatchAt < highlightAt, 'travel must be announced BEFORE the highlight reopens the card');
 });
 
+test('search navigation retires the old card and opens the new one', () => {
+  // Searching for a band travelled the view but left the old band's card open
+  // and never opened the new one: exploreFor neither announced travel nor
+  // re-highlighted. Same close-then-highlight ordering as travelTo().
+  const explore = EXPLORER.slice(EXPLORER.indexOf('function exploreFor(rawQuery)'), EXPLORER.indexOf('function expand()'));
+  const dispatchAt = explore.indexOf("'rbft:sigma-travel'");
+  const highlightAt = explore.indexOf('highlightFrom(partial.id)');
+  assert.ok(dispatchAt > 0 && highlightAt > 0, 'exploreFor should announce travel and highlight the new anchor');
+  assert.ok(dispatchAt < highlightAt, 'travel must be announced BEFORE the highlight opens the new card');
+});
+
+test('reset retires the open card', () => {
+  // Reset view is navigation: the card described a view that is gone. Nothing
+  // is selected afterwards, so no new card -- just the travel announcement
+  // the page turns into closeNodeCard().
+  const goHome = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function showTip'));
+  assert.ok(goHome.indexOf("'rbft:sigma-travel'") > 0, 'goHome should announce travel so the stale card closes');
+});
+
+test('click-outside closes every popover except Add-band', () => {
+  // The Add-band form was losing in-progress input to stray clicks, so only
+  // it is exempt from the page-wide click-outside closer. Search, scene,
+  // genre, feedback and share keep the classic dismissal.
+  const findCloser = (kind) => {
+    let from = 0;
+    for (;;) {
+      const idx = INDEX_HTML.indexOf(`document.addEventListener('${kind}'`, from);
+      if (idx === -1) return -1;
+      if (INDEX_HTML.slice(idx, idx + 400).includes('closeBottomPopovers(')) return idx;
+      from = idx + 10;
+    }
+  };
+  const at = findCloser('click');
+  assert.ok(at > 0, 'the document click closer must exist');
+  const body = INDEX_HTML.slice(at, at + 400);
+  assert.match(body, /closeBottomPopovers\(document\.getElementById\('add-band-popover'\)\)/);
+  assert.match(body, /toggleSharePopover\(false\)/);
+});
+
+test('Escape closes every popover except Add-band', () => {
+  // Same exemption as click-outside: only the Add-band popover rides out
+  // Escape. The node card keeps its own Escape path.
+  const findCloser = (kind) => {
+    let from = 0;
+    for (;;) {
+      const idx = INDEX_HTML.indexOf(`document.addEventListener('${kind}'`, from);
+      if (idx === -1) return -1;
+      if (INDEX_HTML.slice(idx, idx + 400).includes('closeBottomPopovers(')) return idx;
+      from = idx + 10;
+    }
+  };
+  const at = findCloser('keydown');
+  assert.ok(at > 0, 'the document keydown closer must exist');
+  const body = INDEX_HTML.slice(at, at + 400);
+  assert.match(body, /event\.key !== 'Escape'/);
+  assert.match(body, /closeBottomPopovers\(document\.getElementById\('add-band-popover'\)\)/);
+  assert.match(INDEX_HTML, /if \(e\.key === 'Escape' && nodeCardState\.node\) closeNodeCard\(\);/);
+});
+
+test('the share popover X is wired', () => {
+  // The share popover is not in the bottomPopovers registry, so its X needs
+  // its own wiring -- the registry loop only covers the toolbar popovers.
+  assert.match(INDEX_HTML, /sharePopover\.querySelectorAll\('\[data-popover-close\]'\)/);
+});
+
 test('the docked node card counts as chrome while it is open', () => {
   // It sits over the constellation, so a label underneath it would look culled
   // for no reason -- the same fault as the hero and the footer, with a box that
