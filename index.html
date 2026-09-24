@@ -2900,7 +2900,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
  <div class="rbft-boot-shell" aria-hidden="true">
    <div class="rbft-boot-shell__inner">
      <p class="rbft-boot-shell__wordmark">Six Degrees of Rock</p>
-     <div class="rbft-boot-shell__field">Who&rsquo;s your favorite band?</div>
+     <div class="rbft-boot-shell__field">who&rsquo;s your favorite band?</div>
      <p class="rbft-boot-shell__note">Mapping the universe&hellip;</p>
    </div>
  </div>
@@ -5152,7 +5152,7 @@ function downloadPngBlob(blob) {
       ctx.textAlign = 'left';
       // The placeholder when nothing was typed, so the field never reads as an
       // empty box in a picture meant to explain the site.
-      const placeholder = (promptInput && promptInput.getAttribute('placeholder')) || 'Who\u2019s your favorite band?';
+      const placeholder = (promptInput && promptInput.getAttribute('placeholder')) || 'who\u2019s your favorite band?';
       ctx.font = query ? `500 24px Satoshi, system-ui, sans-serif` : `italic 400 24px Satoshi, system-ui, sans-serif`;
       ctx.fillStyle = query ? '#e9eef6' : 'rgba(200,214,230,0.55)';
       ctx.fillText(fitText(ctx, query || placeholder, fieldW - 60), fieldX + 30, FIELD_Y + FIELD_H / 2);
