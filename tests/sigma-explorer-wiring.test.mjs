@@ -148,7 +148,7 @@ test('camera rotation, orbit and pilot mode are absent', () => {
 // ---------------------------------------------------------------------------
 
 test('the discovery prompt and larger-universe copy are present', () => {
-  assert.match(EXPLORER, /Who&rsquo;s your favorite band\?/);
+  assert.match(EXPLORER, /who&rsquo;s your favorite band\?/);
   assert.match(EXPLORER, /larger music universe/);
   // Expand moved from a lone bottom-right button ("Expand this constellation")
   // into the shortcut row, where a one-word label carries the sentence in its
@@ -1069,7 +1069,7 @@ test('a placeholder holds the new look until the real chrome mounts', () => {
   // on IS the new look and the constellation fills in behind it.
   assert.match(INDEX_HTML, /class="rbft-boot-shell"/);
   assert.match(INDEX_HTML, /rbft-boot-shell__wordmark/);
-  assert.match(INDEX_HTML, /Who&rsquo;s your favorite band\?/);
+  assert.match(INDEX_HTML, /who&rsquo;s your favorite band\?/);
   // And it must get out of the way the moment the real chrome is up.
   assert.match(INDEX_HTML, /body\.rbft-sigma-chrome \.rbft-boot-shell \{ display: none !important; \}/);
 });
@@ -1135,10 +1135,10 @@ test('the filter panel is placed under its pill, not off the bottom of the stage
   assert.match(fn, /actionButtons\.get\('filter'\)/);
   assert.match(fn, /box\.bottom - stageBox\.top \+ 10/);
   assert.match(fn, /Math\.max\(margin, Math\.min\(left, stageBox\.width - width - margin\)\)/);
-  // Opening it places it; a resize rewraps the pill row and moves the trigger.
+  // Opening it places it; a resize moves the toggle the menu is anchored to.
   const toggle = EXPLORER.slice(EXPLORER.indexOf('function toggleFilters'), EXPLORER.indexOf('Reflects the page'));
   assert.match(toggle, /positionFilters\(\);/);
-  assert.match(EXPLORER, /applySizeScale\(\);\s*\n\s*\/\/ The pill row rewraps[\s\S]*?positionFilters\(\);/);
+  assert.match(EXPLORER, /applySizeScale\(\);\s*\n\s*\/\/ The pill rewraps[\s\S]*?positionFilters\(\);/);
 });
 
 test('an unmapped band still offers to add it', () => {
@@ -1362,14 +1362,16 @@ test('the auth corner is reachable on a phone, where it is the only way in', () 
   assert.match(css, /body\.rbft-sigma-boot #sigma-stage \.sigma-hero \{ top: 50px; \}/);
 });
 
-test('the phone action row is a hamburger menu, not a squeezed line', () => {
-  // Superseded by redesign/mobile-hamburger-nav: the six action pills used to
-  // be forced onto one nowrap line at 22px each (see git history on this
-  // test). That fit, but landed under the platform's 44px tap-target minimum.
-  // A first pass moved them into a full-width bottom sheet; compared side by
-  // side with the actual mockup, that read as big boxy bars, so they became
-  // small 44px circles anchored near the hamburger instead -- see
-  // mobile-chrome-scale.test.mjs for the circles' own dimensions.
+test('the action row is a hamburger menu at every viewport, not a squeezed line', () => {
+  // Was phone-only (redesign/mobile-hamburger-nav); the brand asks for one
+  // chrome at every scale, so the desktop pill row became the same hamburger
+  // menu. History: the six action pills used to be forced onto one nowrap
+  // line at 22px each (see git history on this test) -- under the platform's
+  // 44px tap-target minimum. A first pass moved them into a full-width
+  // bottom sheet; compared side by side with the actual mockup, that read
+  // as big boxy bars, so they became small 44px circles anchored near the
+  // hamburger instead -- see mobile-chrome-scale.test.mjs for the circles'
+  // own dimensions.
   //
   // Matched directly against EXPLORER rather than by slicing out a media
   // query: an earlier, unrelated @media (max-width:720px) block (the share
@@ -1379,15 +1381,12 @@ test('the phone action row is a hamburger menu, not a squeezed line', () => {
   assert.match(EXPLORER, /position:fixed;left:auto;bottom:auto;/);
   assert.match(EXPLORER, /\.sigma-actions\.is-open\{display:flex\}/);
   // Positioned from the toggle's rect, not a fixed corner -- see
-  // positionActionsRow()'s mobile branch.
+  // positionActionsRow().
   assert.match(EXPLORER, /const toggleBox = menuToggle\.getBoundingClientRect\(\);/);
   assert.match(EXPLORER, /\.sigma-menu-toggle\{/);
-  // The row is still the always-visible horizontal group on a desktop --
-  // moved out from under .sigma-hero (see the CSS comment on this rule: a
-  // transformed ancestor breaks position:fixed on the mobile sheet), but
-  // still flex-wrapped and centred exactly as before.
-  assert.match(EXPLORER, /\.sigma-actions\{position:absolute;left:50%;top:0;transform:translateX\(-50%\);/);
-  assert.match(EXPLORER, /display:flex;flex-wrap:wrap;justify-content:center;gap:8px\}/);
+  // No always-visible horizontal pill row any more: the menu is the circles
+  // at every viewport.
+  assert.doesNotMatch(EXPLORER, /\.sigma-actions\{position:absolute;left:50%;top:0;transform:translateX\(-50%\);/);
 });
 
 test('the page title carries no version number', () => {
