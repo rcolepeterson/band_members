@@ -1,5 +1,6 @@
-// Phone chrome: one sentence of narration, and (as of redesign/
-// mobile-hamburger-nav) a hamburger sheet instead of a squeezed control row.
+// Phone chrome: one sentence of narration, and (as of the brand-parity
+// pass) the SAME pill + hamburger + circle menu a desktop gets -- one
+// chrome at every scale, per the brand. "As above, so below."
 //
 // The stage IS the content. On a 390x664 viewport the hero and the footer were
 // between them eating a third of it, and most of what they spent that space on
@@ -13,17 +14,17 @@
 // What goes: the centred-on readout, the frontier count, and the sentence in
 // front of the group jump.
 //
-// A separate pass first shrank the six action pills to 22px and the search
-// row to 24px so both fit on screen without giving up any content. That made
-// them smaller than the platform's 44px tap-target minimum, which a header
-// redesign (mockup-driven, see the redesign/mobile-hamburger-nav branch)
-// flagged as the thing keeping the phone layout from reading as finished. The
-// pills now live behind a hamburger in a bottom sheet, which let the search
-// row and the auth corner go back to a real 44px -- the tests below in
-// section 2 and 3 assert the CURRENT (post-redesign) numbers; only the
-// footer-narration behaviour in section 1 is unchanged by that redesign.
+// History, kept because the numbers below are load-bearing: a first pass
+// shrank the six action pills to 22px and the search row to 24px so both fit
+// on screen without giving up any content. That made them smaller than the
+// platform's 44px tap-target minimum, which a header redesign (mockup-driven,
+// see the redesign/mobile-hamburger-nav branch) flagged as the thing keeping
+// the phone layout from reading as finished. The pills moved behind a
+// hamburger, which let the search row go back to a real 44px -- and the
+// brand-parity pass then made that same pill + hamburger + circle menu the
+// chrome at EVERY viewport, instead of a phone-only shape.
 //
-// Both the introduction and the generic "You are viewing one region..." copy
+// Both the introduction and the generic "You are viewing one region...\" copy
 // live in the SAME element (.sigma-hint), so the element cannot simply be
 // hidden — a class marks which of the two is currently in it.
 //
@@ -56,7 +57,10 @@ function mobileBlock() {
     const end = EXPLORER.indexOf('\n}', start);
     assert.ok(end > start, 'Expected the media query to close.');
     const block = EXPLORER.slice(start, end);
-    if (block.includes('.sigma-actions{')) return block;
+    // The phone-only footer narration trim is the marker that survives the
+    // brand-parity pass: the pill, hamburger and circle menu live in the
+    // base rules now, at every viewport.
+    if (block.includes('.sigma-footer .sigma-hint{font-size:12px}')) return block;
     from = end + 1;
   }
 }
@@ -150,60 +154,53 @@ test('a desktop keeps every line of narration', () => {
 });
 
 // -------------------------------------------------------------------------
-// 2. The search row is full-size again, and the pills moved into a sheet.
+// 2. One chrome at every scale: the pill, the hamburger and the circle menu.
 // -------------------------------------------------------------------------
 
 test('the action circles are a real tap target in the open menu', () => {
-  // Superseded 22px pills (below the platform's 44px minimum) -- first with
-  // full-width sheet rows, then (redesign/mobile-hamburger-nav, after a
-  // mockup comparison found the sheet read as big boxy bars) with small
-  // 44px circles anchored near the hamburger. Fixed height, not min-height:
-  // there is no label inside to wrap any more (icon only -- see
-  // .sigma-actions .sigma-action-label / -icon below), so the box has a
-  // definite size instead of a floor.
-  const mobileHeight = pxIn(mobileBlock(), '.sigma-actions .sigma-action{', 'height');
-  assert.ok(mobileHeight >= 44, `Expected at least a 44px tap target, got ${mobileHeight}px.`);
-  // The desktop pill is untouched by this redesign.
-  const desktopRule = desktopCss();
-  const idx = desktopRule.indexOf('.sigma-action{');
-  const clamp = desktopRule.slice(idx, desktopRule.indexOf('}', idx)).match(/height:clamp\((\d+)px,[^,]+,(\d+)px\)/);
-  assert.ok(clamp, 'Expected a clamped desktop pill height, unchanged by the mobile redesign.');
+  // The circles used to be phone-only, behind the old desktop pill row; the
+  // brand asks for one chrome at every scale, so they ARE the menu at every
+  // viewport now. Fixed 44px, not min-height: there is no label inside to
+  // wrap any more (icon only -- see .sigma-actions .sigma-action-label),
+  // so the box has a definite size instead of a floor.
+  const height = pxIn(EXPLORER, '.sigma-action{', 'height');
+  assert.ok(height >= 44, `Expected at least a 44px tap target, got ${height}px.`);
+  const width = pxIn(EXPLORER, '.sigma-action{', 'width');
+  assert.equal(width, 44, 'Expected a 44px circle.');
 });
 
-test('the search row is a real tap target again on a phone', () => {
-  // Second pass (redesign/mobile-hamburger-nav): the field, the search icon
-  // and the hamburger now share one bordered pill -- the FORM itself, not
-  // the input -- so the row's height is set there and the field/buttons
-  // fill it, rather than each control declaring its own 44px.
-  const height = pxIn(mobileBlock(), '.sigma-prompt form{', 'height');
-  // 44px, not the 24px this row briefly held: with the six pills moved out
-  // of this row entirely, it no longer has to give up its own size for
-  // their sake.
-  assert.equal(height, 44, 'Expected a 44px pill.');
-  // The desktop row is clamp(48px,5.4vw,58px) and is untouched by this redesign.
-  assert.match(EXPLORER, /height:clamp\(48px,5\.4vw,58px\)/, 'Expected the desktop row height to be unchanged.');
+test('the search row is one pill with a 44px floor at every viewport', () => {
+  // Was phone-only (a 44px pill) vs desktop (a separate field + Explore
+  // button). The brand asks for one chrome at every scale: the FORM is the
+  // pill everywhere -- a 44px floor for the tap target, vw scaling for
+  // desktop presence.
+  const start = EXPLORER.indexOf('.sigma-prompt form{');
+  assert.ok(start > 0, 'Expected a rule for .sigma-prompt form{');
+  const rule = EXPLORER.slice(start, EXPLORER.indexOf('}', start));
+  const clamp = rule.match(/height:clamp\((\d+)px,[^,]+,(\d+)px\)/);
+  assert.ok(clamp, `Expected a clamped pill height on the form, got: ${rule.trim()}`);
+  assert.equal(Number(clamp[1]), 44, 'Expected the 44px tap-target floor.');
 });
 
 test('the field fills the pill without the global min-height fighting it', () => {
   // The page's global form styling sets input{...min-height:48px} for
-  // stacked fields with a label above. Nothing else in the phone rule
+  // stacked fields with a label above. Nothing else in the field rule
   // overrides it, so without an explicit min-height:0 the field renders at
-  // 48px height:100% or not -- the floor wins regardless -- one px taller
-  // than the 44px pill it lives inside.
+  // 48px -- the floor wins regardless -- taller than the 44px pill it lives
+  // inside at the small end of the clamp.
   assert.match(INDEX_HTML, /input,select,textarea\{[^}]*min-height:48px/, 'Expected the global 48px floor to still exist.');
   assert.match(
-    mobileBlock(),
-    /\.sigma-prompt input\{\s*height:100%;min-height:0;/,
-    'Expected the phone field rule to fill the pill and zero out the global min-height floor.'
+    EXPLORER,
+    /\.sigma-prompt input\{\s*flex:1;min-width:0;height:100%;min-height:0;/,
+    'Expected the field rule to fill the pill and zero out the global min-height floor.'
   );
 });
 
 test('the field font stays at 16px so iOS does not zoom', () => {
-  // The one measurement on this row that cannot be halved: iOS Safari zooms the
+  // The one measurement on this row that cannot shrink: iOS Safari zooms the
   // whole page when a focused input's text is under 16px, which yanks the
   // constellation off screen.
-  const block = mobileBlock();
-  const inputRules = block.match(/\.sigma-prompt input\{[^}]*\}/g) || [];
+  const inputRules = EXPLORER.match(/\.sigma-prompt input\{[^}]*\}/g) || [];
   inputRules.forEach(rule => {
     const font = rule.match(/font-size:\s*(\d+(?:\.\d+)?)px/);
     if (font) {
@@ -214,15 +211,36 @@ test('the field font stays at 16px so iOS does not zoom', () => {
 });
 
 test('the open menu stacks its circles in a column, not a row', () => {
-  // Superseded: the six pills used to fight a wrap to a second row via
-  // nowrap + shrinking. They now stack vertically -- first as sheet rows,
-  // now (redesign/mobile-hamburger-nav) as small circles -- by design, so
-  // wrapping is not a failure mode any more.
+  // The circles stack vertically by design, so wrapping is not a failure
+  // mode -- at any viewport.
   assert.match(
-    mobileBlock(),
+    EXPLORER,
     /\.sigma-actions\{[^}]*flex-direction:column;gap:10px;\s*max-height:70vh;overflow-y:auto/,
     'Expected the open menu to stack its circles in a scrollable column.'
   );
+});
+
+test('the pill opens with the brand mark, per the mockup', () => {
+  // The Six Degrees constellation at the left of the pill -- the detail the
+  // mockup review called out as missing. Inline SVG (no extra request),
+  // decorative (aria-hidden; the wordmark above already names the site),
+  // sized as a 36px circle like the buttons so the four zones share one
+  // rhythm.
+  assert.match(EXPLORER, /class="sigma-brand-mark" aria-hidden="true"/);
+  assert.match(EXPLORER, /<svg width="22" height="22" viewBox="0 0 24 24"/);
+  assert.match(EXPLORER, /\.sigma-brand-mark\{[^}]*width:36px;height:36px/);
+});
+
+test('the hamburger is in the pill at every viewport', () => {
+  // Was display:none on desktop, with the actions as an always-visible pill
+  // row. The brand asks for one chrome at every scale: the toggle is a
+  // fourth pill zone everywhere, and the actions live behind it everywhere.
+  assert.doesNotMatch(
+    EXPLORER,
+    /\.sigma-prompt \.sigma-menu-toggle\{display:none\}/,
+    'The hamburger must not be hidden on desktop any more.'
+  );
+  assert.match(EXPLORER, /\.sigma-prompt \.sigma-menu-toggle\{/);
 });
 
 // -------------------------------------------------------------------------
@@ -298,4 +316,17 @@ test('a desktop keeps the larger auth target', () => {
   );
   assert.ok(desktopRule, 'Expected the base auth-button rule.');
   assert.equal(Number(desktopRule[1]), 36, 'The desktop size is unchanged by the phone density pass.');
+});
+
+test('the full placeholder fits on a phone without shrinking the field', () => {
+  // The placeholder ("who's your favorite band?") is the long pole on a
+  // 375-390px phone: the field only offers ~187px of text room there. The
+  // placeholder alone scales down fluidly on narrow screens; the input
+  // itself must stay 16px (see the iOS test above).
+  const phRule = EXPLORER.match(/\.sigma-prompt input::placeholder\{[^}]*\}/);
+  assert.ok(phRule, 'Expected the placeholder rule to exist.');
+  assert.match(phRule[0], /font-size:\s*clamp\(12px,[\d.]+vw,16px\)/,
+    'Expected a fluid placeholder size with a 12px floor and 16px cap.');
+  assert.match(EXPLORER, /font-size:clamp\(16px,1\.7vw,18px\)/,
+    'The field itself keeps its 16px floor -- only the placeholder shrinks.');
 });
