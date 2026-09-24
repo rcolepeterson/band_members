@@ -63,7 +63,10 @@ function sliceBetween(source, startRegex, endMarker) {
 }
 
 const siteHeader = () => sliceBetween(INDEX_HTML, /<header class="site-header"/, '</header>');
-const headerUserStrip = () => sliceBetween(INDEX_HTML, /<div class="header-user" id="header-user"/, '</div>');
+// The user card nests several divs inside the strip, so the end marker must
+// be the header-user close tag itself (followed by header-right's close),
+// not the first bare </div>.
+const headerUserStrip = () => sliceBetween(INDEX_HTML, /<div class="header-user" id="header-user"/, '</div>\n        </div>\n      </div>\n    </header>');
 
 // ---------------------------------------------------------------------
 // Stub DOM for the real setSignedInState().
@@ -87,8 +90,12 @@ function loadAuthState() {
     'mobile-add-band-btn': el({ childNodes: [{ nodeType: 3, textContent: ' Sign up' }] }),
     'sign-in-btn': el(),
     'mobile-sign-in-row': el(),
+    'mobile-user-row': el(),
     'header-user': el(),
     'header-user-initials': el(),
+    'mobile-user-initials': el(),
+    'user-card-popover': el(),
+    'user-card-notify-toggle': el({ checked: false }),
   };
   const popoverSections = {
     '[data-signup-only]': el(),
@@ -98,21 +105,45 @@ function loadAuthState() {
     querySelector: selector => popoverSections[selector] || null,
   });
   const userNameEls = [el(), el()];
+  const userEmailEls = [el()];
+
+  // localStorage stub: setSignedInState -> renderUserCard -> loadCurrentUser
+  // and getNotifyPref both read it. Mirrors the real key names.
+  const storage = {};
+  const localStorageStub = {
+    getItem: key => (key in storage ? storage[key] : null),
+    setItem: (key, value) => { storage[key] = String(value); },
+    removeItem: key => { delete storage[key]; },
+  };
 
   const sandbox = {
     window: {},
+    localStorage: localStorageStub,
     document: {
       getElementById: id => elements[id] || null,
       querySelectorAll: selector => (
-        selector === '[data-current-user-name]' ? userNameEls : []
+        selector === '[data-current-user-name]' ? userNameEls
+        : selector === '[data-current-user-email]' ? userEmailEls
+        : []
       ),
     },
   };
 
   vm.createContext(sandbox);
-  vm.runInContext(`${extract('deriveUserInitials')}\n${extract('setSignedInState')}\nthis.setSignedInState = setSignedInState;`, sandbox);
+  const prelude = [
+    `const BMFT_USER_KEY = 'bmft-user';`,
+    `const BMFT_NOTIFY_KEY = 'bmft-notify-enabled';`,
+    extract('loadCurrentUser'),
+    extract('getNotifyPref'),
+    extract('setNotifyPref'),
+    extract('renderUserCard'),
+    extract('deriveUserInitials'),
+    extract('setSignedInState'),
+    'this.setSignedInState = setSignedInState;',
+  ].join('\n');
+  vm.runInContext(prelude, sandbox);
 
-  return { setSignedInState: sandbox.setSignedInState, elements, popoverSections, userNameEls };
+  return { setSignedInState: sandbox.setSignedInState, elements, popoverSections, userNameEls, userEmailEls, storage };
 }
 
 const AARON = { id: 'u1', name: 'Aaron McRae', email: 'aaron@example.com', token: 't' };
@@ -241,7 +272,7 @@ test('the guard is scoped rather than a blanket [hidden] override', () => {
 });
 
 // ---------------------------------------------------------------------
-// 3. Readability of the signed-in strip.
+// 3. The signed-in strip is now an initials badge opening a user card.
 // ---------------------------------------------------------------------
 
 test('the signed-in strip no longer says "Signed in as"', () => {
@@ -251,11 +282,11 @@ test('the signed-in strip no longer says "Signed in as"', () => {
   );
 });
 
-test('the strip still identifies the account and offers Sign out', () => {
+test('the strip identifies the account and the chip opens the user card', () => {
   const strip = headerUserStrip();
-  assert.match(strip, /id="header-user-initials"/, 'Expected the initials chip to remain.');
+  assert.match(strip, /<button[^>]*id="header-user-initials"/, 'Expected the initials chip to be a button.');
+  assert.match(strip, /aria-controls="user-card-popover"/, 'Expected the chip to target the user card.');
   assert.match(strip, /<strong data-current-user-name>/, 'Expected the user name to remain.');
-  assert.match(strip, /id="header-sign-out-btn"/, 'Expected the Sign out control to remain.');
 });
 
 test('dropping the prefix does not cost the strip its accessible name', () => {
@@ -264,17 +295,58 @@ test('dropping the prefix does not cost the strip its accessible name', () => {
   assert.match(strip, /aria-label="Signed-in account"/, 'Expected an accessible name on the strip.');
 });
 
-test('name and Sign out are visually separated', () => {
-  assert.match(headerUserStrip(), /class="header-user-sep"/, 'Expected a separator between the name and Sign out.');
-  assert.match(INDEX_HTML, /\.header-user-sep\s*\{/, 'Expected the separator to be styled.');
+test('the user card ships hidden with account controls inside', () => {
+  assert.match(INDEX_HTML, /id="user-card-popover"[^>]*\shidden/, 'The user card must ship hidden.');
+  // Slice from the card's opening tag to the Sign out button: covers the
+  // title, identity block, and notify toggle without fragile div counting.
+  const card = sliceBetween(INDEX_HTML, /id="user-card-popover"/, 'id="header-sign-out-btn"');
+  assert.match(card, /role="dialog"/, 'Expected the card to be a dialog.');
+  assert.match(card, /data-current-user-email/, 'Expected the account email in the card.');
+  assert.match(card, /id="user-card-notify-toggle"/, 'Expected the notification toggle in the card.');
 });
 
-test('the separator collapses with the name below 1100px', () => {
-  // PR F hides the name text under ~1100px so it stops crowding the graph
-  // toolbar. A middot left floating beside the chip would just be noise.
+test('the user card joins the shared popover registry (classic dismissal)', () => {
+  // bottomPopovers owns click-outside / Escape / mutual-exclusivity for the
+  // header popovers — the user card must participate, not roll its own.
+  assert.match(
+    INDEX_HTML,
+    /getElementById\('header-user-initials'\), pop: document\.getElementById\('user-card-popover'\)/,
+    'Expected the chip+card pair in the bottomPopovers registry.'
+  );
+});
+
+test('the name still collapses below 1100px while the chip stays', () => {
+  // The name text crowded the graph toolbar under ~1100px; the chip alone
+  // still identifies the account and now opens the card.
   const narrow = sliceBetween(INDEX_HTML, /@media \(max-width: 1100px\) \{/, '}');
   assert.ok(narrow.includes('.header-user-name'), 'Expected the name to still collapse at 1100px.');
-  assert.ok(narrow.includes('.header-user-sep'), 'Expected the separator to collapse with it.');
+});
+
+test('the mobile sheet gets a signed-in identity row mirroring the sign-in row', () => {
+  // .header-right is display:none on mobile, so the badge lives in the
+  // hamburger sheet instead. Same signed-in-only rule as #mobile-sign-in-row.
+  assert.match(INDEX_HTML, /id="mobile-user-row"[^>]*\shidden/, '#mobile-user-row must ship hidden.');
+  const signedIn = loadAuthState();
+  signedIn.setSignedInState(AARON);
+  assert.equal(signedIn.elements['mobile-user-row'].hidden, false, 'Signed in: the mobile identity row must show.');
+  assert.equal(signedIn.elements['mobile-user-initials'].textContent, 'AM', 'Expected Aaron McRae -> AM.');
+
+  const signedOut = loadAuthState();
+  signedOut.setSignedInState(null);
+  assert.equal(signedOut.elements['mobile-user-row'].hidden, true, 'Signed out: the mobile identity row must hide.');
+});
+
+test('setSignedInState refreshes the user card email and the notify toggle', () => {
+  const env = loadAuthState();
+  // loadCurrentUser requires a plausible token (length >= 8); the shared
+  // AARON fixture's 't' is only ever passed directly, never stored.
+  env.storage['bmft-user'] = JSON.stringify({ ...AARON, token: 'valid-token-123' });
+  env.setSignedInState(AARON);
+  assert.equal(env.userEmailEls[0].textContent, 'aaron@example.com', 'Expected the card email populated.');
+  assert.equal(env.elements['user-card-notify-toggle'].checked, true, 'Notify toggle defaults ON.');
+  env.storage['bmft-notify-enabled'] = '0';
+  env.setSignedInState(AARON);
+  assert.equal(env.elements['user-card-notify-toggle'].checked, false, 'A saved OFF preference must stick.');
 });
 
 test('the add-band popover keeps its own "Signed in as" copy', () => {
