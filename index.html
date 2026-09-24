@@ -1086,11 +1086,6 @@ body.rbft-sigma-chrome .rbft-boot-shell { display: none !important; }
   font-weight: 700;
   letter-spacing: 0.04em;
 }
-.header-user-name strong { color: var(--color-text); font-weight: 600; }
-/* Discreet middot between the identity and the Sign-out control. Without a
-   separator the name and "Sign out" read as one run-on phrase, which is the
-   readability half of the tester's header complaint. */
-.header-user-sep { opacity: 0.4; }
 .header-user .link-btn { font-size: var(--text-xs); }
 /* The initials chip is a button that opens the user card. Keep the exact
    chip look; only add pointer affordances. */
@@ -1153,13 +1148,6 @@ button.header-user-chip:focus-visible {
   margin: 0 0 0.85rem;
 }
 .user-card .link-btn { font-size: var(--text-sm); padding: 0; }
-/* Below ~1100px the name text crowds the graph toolbar beneath it; the
-   initials chip alone still identifies the account. The separator goes with
-   it -- a middot floating between the chip and Sign out is just noise. */
-@media (max-width: 1100px) {
-  .header-user-name,
-  .header-user-sep { display: none; }
-}
 
 /* --------------------------------------------------------------------
    Auth-strip mutual exclusivity (tester feedback after #68-#75).
@@ -3060,7 +3048,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                 <button type="button" class="link-btn" id="header-sign-out-btn">Sign out</button>
               </div>
             </div>
-            <span class="header-user-name"><strong data-current-user-name>—</strong></span>
           </div>
         </div>
       </div>
