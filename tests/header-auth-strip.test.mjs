@@ -315,11 +315,14 @@ test('the user card joins the shared popover registry (classic dismissal)', () =
   );
 });
 
-test('the name still collapses below 1100px while the chip stays', () => {
-  // The name text crowded the graph toolbar under ~1100px; the chip alone
-  // still identifies the account and now opens the card.
-  const narrow = sliceBetween(INDEX_HTML, /@media \(max-width: 1100px\) \{/, '}');
-  assert.ok(narrow.includes('.header-user-name'), 'Expected the name to still collapse at 1100px.');
+test('the header shows the badge alone -- no name text beside it', () => {
+  // Badge-only header (like Gmail/GitHub): the account name lives in the
+  // user card, one tap away. The old .header-user-name span crowded the
+  // graph toolbar and is gone; the card's .user-card-identity still shows
+  // the name, so this only rejects the header-level span.
+  const strip = headerUserStrip();
+  assert.doesNotMatch(strip, /header-user-name/, 'Expected no name span in the header strip.');
+  assert.match(strip, /<strong data-current-user-name>/, 'Expected the user name to remain in the card.');
 });
 
 test('the mobile sheet gets a signed-in identity row mirroring the sign-in row', () => {
