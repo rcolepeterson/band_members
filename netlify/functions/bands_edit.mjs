@@ -40,6 +40,7 @@ import {
   findUserByToken,
 } from './_db.mjs';
 import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
+import { sameBandIdentity } from './_bands_write.mjs';
 
 const LIMITS = {
   name: 200,
@@ -194,19 +195,30 @@ export default async (req, context) => {
       return ok({ band: existing, changes: {} });
     }
 
-    // Name-collision check: if renaming, no OTHER band may already use the
-    // new name (case-insensitive).
-    if ('name' in changes) {
-      const collision = await sql`
-        select id from bands
-        where lower(name) = ${normalizedName.toLowerCase()} and id <> ${bandId}
-        limit 1
+    // Identity-collision check: band identity is name + city + country. A
+    // rename (or relocation) is blocked only when ANOTHER band already owns
+    // the resulting identity. Same name in a different city is a different
+    // band — allowed through. Mirrors createBandInNeon's conflict check in
+    // _bands_write.mjs; keep the two in sync.
+    if ('name' in changes || 'city' in changes || 'country' in changes) {
+      const pendingName = 'name' in changes ? (changes.name.new || '') : (existing.name || '');
+      const pendingCity = 'city' in changes ? (changes.city.new || '') : (existing.city || '');
+      const pendingCountry = 'country' in changes ? (changes.country.new || '') : (existing.country || '');
+      const candidates = await sql`
+        select id, name, city, country from bands
+        where lower(name) = ${pendingName.toLowerCase()} and id <> ${bandId}
       `;
-      if (collision.length) {
+      const clash = candidates.find((row) =>
+        sameBandIdentity(
+          { name: pendingName, city: pendingCity, country: pendingCountry },
+          { name: row.name, city: row.city, country: row.country }
+        )
+      );
+      if (clash) {
         return badRequest('another band already has this name', {
           status: 409,
           error_code: 'name_collision',
-          existing_band_id: collision[0].id,
+          existing_band_id: clash.id,
         });
       }
     }
