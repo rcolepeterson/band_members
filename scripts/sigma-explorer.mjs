@@ -735,21 +735,29 @@ function buildStage(doc, mount) {
         <!-- Brand mark: the Six Degrees constellation, drawn inline so it
              rides with the pill at every scale with no extra request.
              Decorative -- the wordmark above already names the site. -->
+        <!-- Aaron's hub-and-spoke constellation mark, from his pill artwork:
+             hollow center ring, six spokes, six satellite rings. Decorative --
+             the wordmark above already names the site. -->
         <span class="sigma-brand-mark" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-            <line x1="12" y1="11" x2="5.8" y2="6.2"/>
-            <line x1="12" y1="11" x2="18.2" y2="5.4"/>
-            <line x1="12" y1="11" x2="18.8" y2="13.2"/>
-            <line x1="12" y1="11" x2="13.8" y2="18.6"/>
-            <line x1="12" y1="11" x2="7" y2="17.2"/>
-            <line x1="5.8" y1="6.2" x2="18.2" y2="5.4"/>
-            <circle cx="12" cy="11" r="2.1" fill="currentColor" stroke="none"/>
-            <circle cx="5.8" cy="6.2" r="1.3" fill="currentColor" stroke="none"/>
-            <circle cx="18.2" cy="5.4" r="1.3" fill="currentColor" stroke="none"/>
-            <circle cx="18.8" cy="13.2" r="1.3" fill="currentColor" stroke="none"/>
-            <circle cx="13.8" cy="18.6" r="1.3" fill="currentColor" stroke="none"/>
-            <circle cx="7" cy="17.2" r="1.3" fill="currentColor" stroke="none"/>
+               stroke="currentColor" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3.5" stroke-width="1.8"/>
+            <g stroke-width="1.2">
+              <line x1="12" y1="8.5" x2="12" y2="4.85"/>
+              <line x1="15.03" y1="10.25" x2="18.19" y2="8.43"/>
+              <line x1="15.03" y1="13.75" x2="18.19" y2="15.57"/>
+              <line x1="12" y1="15.5" x2="12" y2="19.15"/>
+              <line x1="8.97" y1="13.75" x2="5.81" y2="15.57"/>
+              <line x1="8.97" y1="10.25" x2="5.81" y2="8.43"/>
+            </g>
+            <g stroke-width="1.2">
+              <circle cx="12" cy="2.6" r="2"/>
+              <circle cx="20.14" cy="7.3" r="2.4"/>
+              <circle cx="20.14" cy="16.7" r="2.2"/>
+              <circle cx="12" cy="21.4" r="2.3"/>
+              <circle cx="3.86" cy="16.7" r="2"/>
+              <circle cx="3.86" cy="7.3" r="2.1"/>
+            </g>
           </svg>
         </span>
         <input type="search" name="favorite-band" placeholder="who&rsquo;s your favorite band?"
