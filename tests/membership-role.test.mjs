@@ -347,9 +347,9 @@ test('hollow is the lightest treatment of the three', () => {
 
 test('touring satellites cluster around their hub when anchored on a band', () => {
   // A hired gun's other bands should hug him instead of spraying across the
-  // anchor band's constellation. The hub is anyone with a TOURING membership
-  // in the anchor band -- and ALL of their satellites cluster in, not just
-  // touring edges. But when anchored on a MEMBER, their connections ARE the
+  // anchor band's constellation. Hubs are detected by degree (8+ connections),
+  // not by the TOURING tag, so this works even when the membership tier isn't
+  // set in the data. But when anchored on a MEMBER, their connections ARE the
   // focus and spread normally. The band is the focus unless you nav to a
   // member specifically.
   const fn = EXPLORER.slice(
@@ -357,7 +357,7 @@ test('touring satellites cluster around their hub when anchored on a band', () =
     EXPLORER.indexOf('export function initSigmaExplorer({')
   );
   assert.match(fn, /function clusterTouringSatellites\(/, 'the clustering pass exists');
-  assert.match(fn, /touringHubs/, 'hubs are the anchor band\'s touring members');
+  assert.match(fn, /d < 8/, 'hubs are high-degree members');
   assert.match(fn, /hopOf\(satId\) <= hopOf\(hubId\)/, 'only satellites farther out than their hub move');
   assert.match(fn, /hub\.x \+ \(sat\.x - hub\.x\) \* factor/, 'satellites pull toward their hub');
   // And it only runs when the anchor is a band.
@@ -369,11 +369,11 @@ test('touring satellites cluster around their hub when anchored on a band', () =
   assert.match(call, /clusterTouringSatellites\(positions, view\.links, view\.nodes, view\.depths, anchorId\)/);
 });
 
-test('touring members shrink on band constellations', () => {
+test('hub members shrink on band constellations', () => {
   // The band is the focus, not the hired gun: on a band constellation a
-  // touring member renders at planet size instead of their kind-given hub
-  // size. Member-anchored views keep kind sizes -- there the person IS the
-  // focus.
-  assert.match(EXPLORER, /touringShrink/, 'the touring shrink exists');
-  assert.match(EXPLORER, /KIND_STYLE\[NODE_KINDS\.PLANET\]\.size/, 'touring nodes drop to planet size');
+  // sprawling member renders at planet size instead of their kind-given hub
+  // size. Detected by kind size, not the TOURING tag. Member-anchored views
+  // keep kind sizes -- there the person IS the focus.
+  assert.match(EXPLORER, /hubShrink/, 'the hub shrink exists');
+  assert.match(EXPLORER, /KIND_STYLE\[NODE_KINDS\.PLANET\]\.size/, 'hub nodes drop to planet size');
 });
