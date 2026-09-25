@@ -861,32 +861,49 @@ function buildStage(doc, mount) {
  */
 
 /**
- * Pull touring satellites toward their hub after the radial layout.
+ * Pull a touring hub's satellites toward the hub after the radial layout.
  *
- * A hired gun's other bands (Josh Freese → A Perfect Circle, etc.) would
- * otherwise spray across the anchor band's constellation and dominate it.
- * This tucks them in around the hub so the band stays the focus. Only the
- * far endpoint moves, and only when both ends are past the anchor's immediate
- * ring -- the anchor's own members stay exactly where the layout put them.
+ * When anchored on a band, a hired gun's other bands (Josh Freese → A Perfect
+ * Circle, etc.) would otherwise spray across the constellation and dominate
+ * it. This tucks them in around the hub so the band stays the focus.
+ *
+ * The hub is anyone with a TOURING membership in the anchor band -- and ALL
+ * of their satellites cluster in, not just touring edges. Josh may be a full
+ * member of A Perfect Circle, but on Weezer's constellation he's the hired
+ * gun, so APC tucks in with the rest.
+ *
+ * Only the far endpoint moves, and only when it's farther out than the hub.
+ * The anchor's own ring is never touched.
  *
  * Hop distances come from the depths map (same source radialLayout uses),
  * falling back to node.hop. `factor` is how much of the hub-to-satellite
  * distance survives: 0.45 pulls satellites 55% closer to their hub.
  */
-function clusterTouringSatellites(positions, links, nodes, depths, factor = 0.45) {
+function clusterTouringSatellites(positions, links, nodes, depths, anchorId, factor = 0.45) {
   const hopOf = id => {
     if (depths && depths.has(id)) return depths.get(id);
     const node = nodes.find(n => n.id === id);
     return node && typeof node.hop === 'number' ? node.hop : 0;
   };
+  // Touring hubs: persons holding a TOURING membership in the anchor band.
+  const touringHubs = new Set();
   links.forEach(link => {
     if (roleFromMembership(link) !== MEMBERSHIP_ROLES.TOURING) return;
     const [a, b] = linkEndpoints(link);
-    const ha = hopOf(a);
-    const hb = hopOf(b);
-    // Leave the anchor's own ring alone.
-    if (Math.min(ha, hb) < 1) return;
-    const [hubId, satId] = ha < hb ? [a, b] : [b, a];
+    if (a === anchorId) touringHubs.add(b);
+    else if (b === anchorId) touringHubs.add(a);
+  });
+  if (!touringHubs.size) return;
+  const nodeIds = new Set(nodes.map(n => n.id));
+  links.forEach(link => {
+    const [a, b] = linkEndpoints(link);
+    let hubId = null;
+    let satId = null;
+    if (touringHubs.has(a) && b !== anchorId) { hubId = a; satId = b; }
+    else if (touringHubs.has(b) && a !== anchorId) { hubId = b; satId = a; }
+    if (!hubId || !nodeIds.has(satId)) return;
+    // Only pull satellites sitting farther out than their hub.
+    if (hopOf(satId) <= hopOf(hubId)) return;
     const hub = positions.get(hubId);
     const sat = positions.get(satId);
     if (!hub || !sat) return;
@@ -1297,8 +1314,9 @@ export function initSigmaExplorer({
     // When anchored on a MEMBER, their connections ARE the focus and spread
     // normally. The band is the focus unless you nav to a member specifically.
     const anchor = masterById.get(anchorId);
-    if (anchor && anchor.type === 'band') {
-      clusterTouringSatellites(positions, view.links, view.nodes, view.depths);
+    const anchorIsBand = anchor && anchor.type === 'band';
+    if (anchorIsBand) {
+      clusterTouringSatellites(positions, view.links, view.nodes, view.depths, anchorId);
     }
 
     viewGraph.clear();
@@ -1319,6 +1337,17 @@ export function initSigmaExplorer({
         anchorId,
         links: master.links,
       });
+      // On band constellations, a touring member shrinks to a regular planet:
+      // the band is the focus, not the hired gun. Josh Freese stops rendering
+      // as a giant hub and reads as what he is on this constellation -- a
+      // player. Member-anchored views are untouched: there, the person IS the
+      // focus and keeps their kind-given size.
+      const touringShrink =
+        anchorIsBand &&
+        role === MEMBERSHIP_ROLES.TOURING &&
+        node.id !== anchorId &&
+        node.type !== 'band';
+      const nodeSize = touringShrink ? KIND_STYLE[NODE_KINDS.PLANET].size : style.size;
       viewGraph.addNode(node.id, {
         // The label is the display NAME, not the id: a musician who shares a
         // band's name carries a suffixed id and must still read as himself.
@@ -1346,7 +1375,7 @@ export function initSigmaExplorer({
         // on one node at two different radii.
         type: kind === NODE_KINDS.HOME_STAR ? NODE_TYPES.SOLID : nodeTypeForRole(role),
         entityType: node.type,
-        size: style.size,
+        size: nodeSize,
         color: style.color,
       });
     });
