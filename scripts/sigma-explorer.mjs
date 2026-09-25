@@ -596,6 +596,11 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-prompt button:focus-visible,
 #${STAGE_ID} .sigma-prompt .sigma-menu-toggle:hover,
 #${STAGE_ID} .sigma-prompt .sigma-menu-toggle:focus-visible{color:#eaf4fb;background:rgba(143,232,246,0.16)}
+/* The magnifier is the search button: it wears the constellation's blue
+   (#8fe8f6, the thread/node blue) so it reads as "go", not as chrome. */
+#${STAGE_ID} .sigma-prompt button[type="submit"]{color:#8fe8f6}
+#${STAGE_ID} .sigma-prompt button[type="submit"]:hover,
+#${STAGE_ID} .sigma-prompt button[type="submit"]:focus-visible{color:#c3f2fb;background:rgba(143,232,246,0.16)}
 /* The submit is always the magnifier icon; the "Explore" word lives in the
    button's aria-label instead of on screen, at every viewport. */
 #${STAGE_ID} .sigma-submit-label{display:none}
@@ -1892,6 +1897,21 @@ export function initSigmaExplorer({
   form.addEventListener('submit', event => {
     event.preventDefault();
     exploreFor(input.value);
+  });
+  // Picking a suggestion from the datalist only fills the field -- the browser
+  // does not submit. If the field's value is a complete suggestion, treat the
+  // pick as the search itself: go there immediately instead of making the
+  // visitor find the magnifier. Two ways to go: tap a suggestion, or tap blue.
+  input.addEventListener('input', () => {
+    const value = input.value.trim();
+    if (!value) return;
+    for (const option of datalist.options) {
+      if (option.value === value) {
+        input.blur();
+        exploreFor(value);
+        break;
+      }
+    }
   });
   // -- shortcut row ---------------------------------------------------------
 
