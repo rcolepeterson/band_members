@@ -198,15 +198,24 @@ test('role drives colour and kind drives size, on separate channels', () => {
   assert.match(reduce, /size: \(attrs\.size \|\| style\.size\)/);
 });
 
-test('threads are ONE quiet colour at rest, whatever the role', () => {
+test('threads use ONE quiet hue at rest; touring fades via opacity, not colour', () => {
   // The correction to #119. Colouring threads by role at rest gave gold two
   // meanings at once -- "founding member" and "this is what you selected" -- and
   // a colour that means two things means neither. Gold and electric blue belong
   // to selection alone.
+  //
+  // Touring threads are the deliberate exception to "one colour": a hired gun's
+  // starburst (Josh Freese and a dozen bands) whispers instead of shouting. But
+  // the fade is opacity and weight only -- thinner and more transparent -- never
+  // a role hue. No thread ever wears founder/member/touring colours at rest.
   const reduce = EXPLORER.slice(EXPLORER.indexOf('function reduceEdge('), EXPLORER.indexOf('// -- sizing'));
-  assert.match(reduce, /if \(!state\.highlightEdges\.size\) return \{ \.\.\.attrs, color: EDGE_COLOR \}/);
+  assert.match(reduce, /color: EDGE_COLOR/, 'non-touring threads keep the quiet colour');
   assert.doesNotMatch(reduce, /ROLE_EDGE_STYLE/, 'role must not colour a thread');
   assert.doesNotMatch(EXPLORER, /const ROLE_EDGE_STYLE/, 'the role edge palette must be gone, not just unused');
+  // The touring fade is transparency + thinness, not a hue.
+  assert.match(reduce, /isTouring/);
+  assert.match(reduce, /0\.28/, 'touring threads are translucent at rest');
+  assert.match(reduce, /size: 0\.6/, 'touring threads are thinner at rest');
 });
 
 test('gold is a member click and electric blue is a band click', () => {
