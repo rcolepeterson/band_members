@@ -859,6 +859,40 @@ function buildStage(doc, mount) {
  * the Sigma path owns the stage, and restored if this controller is killed —
  * the feature flag has to be reversible in a live tab.
  */
+
+/**
+ * Pull touring satellites toward their hub after the radial layout.
+ *
+ * A hired gun's other bands (Josh Freese → A Perfect Circle, etc.) would
+ * otherwise spray across the anchor band's constellation and dominate it.
+ * This tucks them in around the hub so the band stays the focus. Only the
+ * far endpoint moves, and only when both ends are past the anchor's immediate
+ * ring -- the anchor's own members stay exactly where the layout put them.
+ *
+ * `factor` is how much of the hub-to-satellite distance survives: 0.45 pulls
+ * satellites 55% closer to their hub.
+ */
+function clusterTouringSatellites(positions, links, nodes, factor = 0.45) {
+  const hopOf = new Map(nodes.map(n => [n.id, n.hop || 0]));
+  links.forEach(link => {
+    if (roleFromMembership(link) !== MEMBERSHIP_ROLES.TOURING) return;
+    const [a, b] = linkEndpoints(link);
+    const ha = hopOf.get(a) || 0;
+    const hb = hopOf.get(b) || 0;
+    // Leave the anchor's own ring alone.
+    if (Math.min(ha, hb) < 1) return;
+    const [hubId, satId] = ha < hb ? [a, b] : [b, a];
+    const hub = positions.get(hubId);
+    const sat = positions.get(satId);
+    if (!hub || !sat) return;
+    positions.set(satId, {
+      ...sat,
+      x: hub.x + (sat.x - hub.x) * factor,
+      y: hub.y + (sat.y - hub.y) * factor,
+    });
+  });
+}
+
 export function initSigmaExplorer({
   // Reassigned by setGraph() when the page applies a filter.
   master,
@@ -1083,22 +1117,9 @@ export function initSigmaExplorer({
     // One quiet colour at rest, for every thread whatever its role. Gold and
     // electric blue are reserved for selection: gold when a member is clicked,
     // electric blue when a band is clicked.
-    //
-    // Touring threads are the exception: a hired gun's starburst (Josh Freese
-    // and a dozen bands) should whisper, not shout. Thinner and more
-    // transparent at rest, sunk even further when another selection dims the
-    // graph -- but fully present when the touring member is the selection.
-    const isTouring = attrs.role === MEMBERSHIP_ROLES.TOURING;
-    if (!state.highlightEdges.size) {
-      return isTouring
-        ? { ...attrs, color: 'rgba(125,142,160,0.28)', size: 0.6 }
-        : { ...attrs, color: EDGE_COLOR };
-    }
-    if (state.highlightEdges.has(edge)) {
-      return { ...attrs, color: state.highlightColor, size: 2.2, zIndex: 1 };
-    }
-    return isTouring
-      ? { ...attrs, color: 'rgba(120,134,150,0.05)', size: 0.5 }
+    if (!state.highlightEdges.size) return { ...attrs, color: EDGE_COLOR };
+    return state.highlightEdges.has(edge)
+      ? { ...attrs, color: state.highlightColor, size: 2.2, zIndex: 1 }
       : { ...attrs, color: 'rgba(120,134,150,0.10)', size: 0.8 };
   }
 
@@ -1251,6 +1272,16 @@ export function initSigmaExplorer({
       spacing: 190,
       adjacency,
     });
+
+    // When anchored on a BAND, a hired gun's satellite bands cluster around
+    // him instead of spraying across the constellation: Josh Freese's 20
+    // other bands hug his node so Weezer's own constellation stays the focus.
+    // When anchored on a MEMBER, their connections ARE the focus and spread
+    // normally. The band is the focus unless you nav to a member specifically.
+    const anchor = masterById.get(anchorId);
+    if (anchor && anchor.type === 'band') {
+      clusterTouringSatellites(positions, view.links, view.nodes);
+    }
 
     viewGraph.clear();
     view.nodes.forEach(node => {
