@@ -883,7 +883,9 @@ function clusterTouringSatellites(positions, links, nodes, depths, anchorId, fac
   const hopOf = id => {
     if (depths && depths instanceof Map && depths.has(id)) return depths.get(id);
     const node = Array.isArray(nodes) ? nodes.find(n => n.id === id) : null;
-    return node && typeof node.hop === 'number' ? node.hop : 0;
+    // Unknown hop: treat as far out (Infinity) so the satellite still pulls
+    // in. Returning 0 would look "closer than the hub" and skip it.
+    return node && typeof node.hop === 'number' ? node.hop : Infinity;
   };
   if (!Array.isArray(links)) return;
   // Hubs: member nodes with a sprawling network in this view. A hired gun like
@@ -1577,9 +1579,14 @@ export function initSigmaExplorer({
     const suggestions = new Set([...view.frontier.slice(0, 40), ...bandNames]);
     // Frontier entries are node IDS, so a suffixed musician id would be
     // offered verbatim as a suggestion. Names are what a person types.
-    datalist.innerHTML = Array.from(new Set(Array.from(suggestions).map(displayNameForId)))
+    // The anchor is always included: with 6,245 bands and an 800-slot
+    // alphabetical slice, "Weezer" (W) would otherwise never appear.
+    const anchorName = displayNameForId(anchorId);
+    const sorted = Array.from(new Set(Array.from(suggestions).map(displayNameForId)))
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }))
-      .slice(0, MAX_SUGGESTIONS)
+      .slice(0, MAX_SUGGESTIONS);
+    if (anchorName && !sorted.includes(anchorName)) sorted.push(anchorName);
+    datalist.innerHTML = sorted
       .map(name => `<option value="${escapeHtml(name)}"></option>`)
       .join('');
   }
