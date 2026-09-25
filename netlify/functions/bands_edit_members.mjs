@@ -53,6 +53,7 @@ import {
   findUserByToken,
 } from './_db.mjs';
 import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
+import { notifyBandTouched } from './_notify.mjs';
 
 const LIMITS = {
   memberName: 120,
@@ -372,6 +373,14 @@ export default async (req, context) => {
       membershipInsertPromises.length + removePromises.length,
       membershipInsertPromises.length + removePromises.length + updatePromises.length
     ).filter(r => r && r.length).map(r => r[0]);
+
+    // Band-update notifications (Phase 2). Same contract as bands_edit.mjs:
+    // actor excluded, 24h cooldown per recipient, best-effort.
+    await notifyBandTouched(sql, {
+      bandId,
+      bandName: band.name,
+      actorUserId: user.id,
+    });
 
     return ok({
       added: addedRows,

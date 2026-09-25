@@ -2343,6 +2343,32 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 .node-card__edit svg { width: 15px; height: 15px; display: block; }
 .node-card__edit:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
 /*
+  Phase 2: follow button. Quiet text button under the header row — same
+  muted treatment as the edit pencil, sentence case, no icon. Sits below
+  the name/sub block so it doesn't fight the edit affordance for the
+  top-right corner.
+*/
+.node-card__follow {
+  display: block;
+  width: 100%;
+  margin: 10px 0 0;
+  padding: 7px 10px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+  text-align: center;
+}
+.node-card__follow:hover { color: #fff; border-color: rgba(255, 255, 255, 0.35); }
+.node-card__follow[hidden] { display: none; }
+.node-card__follow.is-following {
+  border-color: rgba(201, 169, 106, 0.55);
+  color: #c9a96a;
+}
+/*
   Signed-out hint that sits below the info rows / connections block on
   band cards, telling anonymous visitors the edit affordance exists
   behind sign-in. Non-interactive text with a single inline anchor that
@@ -3755,6 +3781,15 @@ main.layout { padding: 0 !important; gap: 0 !important; }
           <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
         </svg>
       </button>
+      <!--
+        Phase 2: "Follow this band" button. Static markup, hidden by default;
+        renderFollowAffordance() shows it for band nodes when the user is
+        signed in. Following a band adds the user to its update-email
+        audience (see _notify.mjs's "touched" definition) without requiring
+        them to edit anything first. Text-only button in the quiet register —
+        no bell icon, no badge counts.
+      -->
+      <button type="button" class="node-card__follow" id="node-card-follow" hidden></button>
       <div class="node-card__header">
         <!--
           PR 4b: node-card-name is wrapped so populateNodeCard() can append
@@ -6725,12 +6760,16 @@ function downloadPngBlob(blob) {
       return email ? email[0].toUpperCase() : '?';
     }
 
-    // Notification preference. Local-only for now (Phase 1): the toggle in
-    // the user card reads/writes localStorage. Phase 2 moves this to the
-    // server-side notification_prefs table and the email footer carries a
-    // signed one-click unsubscribe link. Default ON — the engagement loop
-    // only works if people are in it; opting out is one tap away.
+    // Notification preference. Phase 2: the toggle in the user card
+    // reads/writes the server-side notification_prefs table (GET/PATCH
+    // /api/notification-prefs) so the preference follows the user across
+    // devices and the mailer can honor it. localStorage remains as a
+    // fallback cache — the toggle renders instantly from cache, then
+    // refreshes from the server when the card opens. Default ON: the
+    // engagement loop only works if people are in it; opting out is one
+    // tap away, and every email carries a signed one-click unsubscribe.
     const BMFT_NOTIFY_KEY = 'bmft-notify-enabled';
+    const NOTIFY_PREFS_ENDPOINT = '/api/notification-prefs';
     function getNotifyPref() {
       try {
         const raw = localStorage.getItem(BMFT_NOTIFY_KEY);
@@ -6746,16 +6785,64 @@ function downloadPngBlob(blob) {
         console.warn('Could not persist notification preference.', error);
       }
     }
+    function authHeaders() {
+      const user = loadCurrentUser();
+      return user && user.token
+        ? { Authorization: 'Bearer ' + user.token }
+        : null;
+    }
+    // Server read. Returns the boolean preference, or null when the
+    // request failed (caller falls back to the localStorage cache).
+    async function fetchNotifyPref() {
+      const headers = authHeaders();
+      if (!headers) return null;
+      try {
+        const res = await fetch(NOTIFY_PREFS_ENDPOINT, { headers });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return typeof data.email_enabled === 'boolean' ? data.email_enabled : null;
+      } catch (error) {
+        return null;
+      }
+    }
+    // Server write. Returns true on success, false on failure (caller
+    // reverts the optimistic UI).
+    async function saveNotifyPref(on) {
+      const headers = authHeaders();
+      if (!headers) return false;
+      try {
+        const res = await fetch(NOTIFY_PREFS_ENDPOINT, {
+          method: 'PATCH',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email_enabled: !!on }),
+        });
+        return res.ok;
+      } catch (error) {
+        return false;
+      }
+    }
 
     // Fill the user card from the current session. Called from
     // setSignedInState (session changes) and when the card opens.
+    // The notify toggle renders instantly from the local cache, then
+    // refreshes from the server — the server is the source of truth.
     function renderUserCard() {
       const user = loadCurrentUser();
       document.querySelectorAll('[data-current-user-email]').forEach(el => {
         el.textContent = user && user.email ? user.email : '';
       });
       const toggle = document.getElementById('user-card-notify-toggle');
-      if (toggle) toggle.checked = getNotifyPref();
+      if (toggle) {
+        toggle.checked = getNotifyPref();
+        if (user) {
+          fetchNotifyPref().then((serverPref) => {
+            if (serverPref === null) return;
+            setNotifyPref(serverPref);
+            const liveToggle = document.getElementById('user-card-notify-toggle');
+            if (liveToggle) liveToggle.checked = serverPref;
+          });
+        }
+      }
     }
 
     // Fire and forget contribution log. Never throws — attribution is a
@@ -7662,6 +7749,7 @@ function downloadPngBlob(blob) {
       renderVerificationChip(node);
 
       renderEditAffordances(node);
+      renderFollowAffordance(node);
     }
 
     // Show/hide the pencil icon (signed-in band OR musician nodes) OR the
@@ -7715,6 +7803,88 @@ function downloadPngBlob(blob) {
         // welcome nudge uses so both entry points share one code path.
         nodeCardSigninLink.onclick = showSigninHint ? (ev) => { ev.stopPropagation(); openSignupPopover(); } : null;
       }
+    }
+
+    // ---------------------------------------------------------------------
+    // Phase 2: "Follow this band" affordance.
+    // ---------------------------------------------------------------------
+
+    // Follow button on band cards (signed-in users only). Following adds
+    // the user to the band's update-email audience without requiring an
+    // edit — see _notify.mjs's "touched" definition. State is fetched per
+    // card open (GET /api/bands/:id/follow); the click toggles via POST /
+    // DELETE with optimistic UI and revert-on-failure, matching the notify
+    // toggle's pattern. A 404 (band id with no DB row) hides the button —
+    // legacy graph nodes without a bands-table row simply don't offer it.
+    const nodeCardFollowBtn = document.getElementById('node-card-follow');
+    let followStateBandId = null;
+
+    function setFollowButton(following) {
+      if (!nodeCardFollowBtn) return;
+      nodeCardFollowBtn.classList.toggle('is-following', !!following);
+      nodeCardFollowBtn.textContent = following ? 'Following' : 'Follow this band';
+      nodeCardFollowBtn.setAttribute('aria-label', following ? 'Unfollow this band' : 'Follow this band');
+      nodeCardFollowBtn.dataset.following = following ? '1' : '0';
+    }
+
+    function renderFollowAffordance(node) {
+      const isBand = node && node.type === 'band';
+      const signedIn = !!loadCurrentUser();
+      followStateBandId = isBand && signedIn && node.id ? String(node.id) : null;
+      if (!nodeCardFollowBtn) return;
+      if (!followStateBandId) {
+        nodeCardFollowBtn.hidden = true;
+        nodeCardFollowBtn.onclick = null;
+        return;
+      }
+      const bandId = followStateBandId;
+      nodeCardFollowBtn.hidden = false;
+      setFollowButton(false);
+      nodeCardFollowBtn.onclick = (ev) => {
+        ev.stopPropagation();
+        const currentlyFollowing = nodeCardFollowBtn.dataset.following === '1';
+        setFollowButton(!currentlyFollowing);
+        const headers = authHeaders();
+        if (!headers) {
+          setFollowButton(currentlyFollowing);
+          return;
+        }
+        fetch(`/api/bands/${encodeURIComponent(bandId)}/follow`, {
+          method: currentlyFollowing ? 'DELETE' : 'POST',
+          headers,
+        }).then((res) => {
+          if (!res.ok) throw new Error('follow toggle failed');
+          return res.json();
+        }).then((data) => {
+          setFollowButton(!!data.following);
+        }).catch(() => {
+          // Revert the optimistic flip so the button never lies.
+          if (followStateBandId === bandId) setFollowButton(currentlyFollowing);
+        });
+      };
+      // Resolve the true state from the server (also serves as the
+      // existence check — 404 hides the button).
+      const headers = authHeaders();
+      if (!headers) {
+        nodeCardFollowBtn.hidden = true;
+        return;
+      }
+      fetch(`/api/bands/${encodeURIComponent(bandId)}/follow`, { headers })
+        .then((res) => {
+          if (res.status === 404) {
+            if (followStateBandId === bandId) nodeCardFollowBtn.hidden = true;
+            return null;
+          }
+          if (!res.ok) throw new Error('follow status failed');
+          return res.json();
+        })
+        .then((data) => {
+          if (data && followStateBandId === bandId) setFollowButton(!!data.following);
+        })
+        .catch(() => {
+          // Leave the default "Follow this band" text; the click handler
+          // will surface any real failure when used.
+        });
     }
 
     // ---------------------------------------------------------------------
@@ -10891,11 +11061,19 @@ function downloadPngBlob(blob) {
       if (userCard && !userCard.hidden) renderUserCard();
     });
 
-    // Notification toggle in the user card. Local-only in Phase 1 (see
-    // setNotifyPref); the server-side preference lands with the email
-    // backend in Phase 2.
+    // Notification toggle in the user card. Optimistic UI: flip the cache
+    // and the toggle immediately, PATCH the server, revert both on
+    // failure so the toggle never lies about the persisted state.
     document.getElementById('user-card-notify-toggle')?.addEventListener('change', (event) => {
-      setNotifyPref(event.target.checked);
+      const on = event.target.checked;
+      setNotifyPref(on);
+      saveNotifyPref(on).then((saved) => {
+        if (!saved) {
+          setNotifyPref(!on);
+          const toggle = document.getElementById('user-card-notify-toggle');
+          if (toggle) toggle.checked = !on;
+        }
+      });
     });
 
     document.getElementById('edit-band-cancel-btn')?.addEventListener('click', closeEditBandPopover);

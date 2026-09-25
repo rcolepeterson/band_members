@@ -37,6 +37,7 @@ import {
   findUserByToken,
 } from './_db.mjs';
 import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
+import { notifyBandTouched } from './_notify.mjs';
 import { createBandInNeon } from './_bands_write.mjs';
 
 const LIMITS = {
@@ -182,6 +183,16 @@ export default async (req) => {
         missing_ids: result.missingMemberIds,
       });
     }
+
+    // Band-update notifications (Phase 2). On a fresh create the actor is
+    // the only toucher, so this usually notifies nobody — but the call
+    // keeps every write path uniform and covers re-creates. Best-effort:
+    // notifyBandTouched never throws and never blocks this response.
+    await notifyBandTouched(sql, {
+      bandId: result.band.id,
+      bandName: result.band.name,
+      actorUserId: user.id,
+    });
 
     return ok({
       band: result.band,

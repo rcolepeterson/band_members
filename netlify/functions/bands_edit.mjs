@@ -41,6 +41,7 @@ import {
 } from './_db.mjs';
 import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
 import { sameBandIdentity } from './_bands_write.mjs';
+import { notifyBandTouched } from './_notify.mjs';
 
 const LIMITS = {
   name: 200,
@@ -258,6 +259,16 @@ export default async (req, context) => {
       console.error('bands_edit: dynamic SET clause failed', unsafeErr);
       throw unsafeErr;
     }
+
+    // Band-update notifications (Phase 2). The actor is excluded by
+    // notifyBandTouched; everyone else who touched this band gets at most
+    // one email per 24h. Best-effort: never throws, never blocks this
+    // response.
+    await notifyBandTouched(sql, {
+      bandId,
+      bandName: updatedRows[0].name,
+      actorUserId: user.id,
+    });
 
     return ok({ band: updatedRows[0], changes });
   } catch (err) {

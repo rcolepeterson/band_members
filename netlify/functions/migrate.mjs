@@ -408,6 +408,86 @@ export default async (req) => {
     `;
     results.push('index verifications_band_id_idx ready');
 
+    // notification_prefs table -------------------------------------------------
+    // Phase 2: server-side notification preferences, one row per user.
+    //   - email_enabled: master switch, default true. The engagement loop
+    //     only works if people are in it; opting out is one tap away (user
+    //     card toggle, one-click footer link in every email).
+    //   - unsubscribed_at: when the user opted out (null = still in). Kept
+    //     alongside email_enabled so we can distinguish "never touched the
+    //     setting" from "actively unsubscribed" for analytics.
+    //   - unsubscribe_token: per-user random secret powering the one-click
+    //     footer link (/api/unsubscribe?token=...). No login required, and
+    //     it can't be guessed. Generated lazily by ensureNotifyPrefs() in
+    //     _notify.mjs so existing users get tokens on first use — no
+    //     backfill migration needed.
+    // Rows are created lazily (not at signup), so the table starts empty
+    // and grows as users interact with notifications.
+    await sql`
+      create table if not exists notification_prefs (
+        user_id           uuid primary key references users(id) on delete cascade,
+        email_enabled     boolean not null default true,
+        unsubscribed_at   timestamptz,
+        unsubscribe_token text unique,
+        created_at        timestamptz not null default now(),
+        updated_at        timestamptz not null default now()
+      )
+    `;
+    results.push('table notification_prefs ready');
+
+    await sql`drop trigger if exists notification_prefs_set_updated_at on notification_prefs`;
+    await sql`
+      create trigger notification_prefs_set_updated_at
+      before update on notification_prefs
+      for each row execute function set_updated_at()
+    `;
+    results.push('trigger notification_prefs_set_updated_at ready');
+
+    // band_notification_log table ----------------------------------------------
+    // Phase 2: the 24-hour cooldown clock. One row per email actually sent,
+    // keyed by (band, user, sent_at). notifyBandTouched() skips any user
+    // with a row newer than 24h for the band being edited — that's the "one
+    // email per band per day, max" promise in the user card. Only
+    // successful sends are logged; a failed send retries on the next edit.
+    await sql`
+      create table if not exists band_notification_log (
+        id         bigserial primary key,
+        band_id    uuid not null references bands(id) on delete cascade,
+        user_id    uuid not null references users(id) on delete cascade,
+        sent_at    timestamptz not null default now()
+      )
+    `;
+    results.push('table band_notification_log ready');
+
+    await sql`
+      create index if not exists band_notification_log_band_user_sent_idx
+      on band_notification_log (band_id, user_id, sent_at desc)
+    `;
+    results.push('index band_notification_log_band_user_sent_idx ready');
+
+    // band_follows table ---------------------------------------------------------
+    // Phase 2: explicit "Follow this band" action. Followers get update
+    // emails for bands they care about but never edited — the "touched"
+    // definition in _notify.mjs unions follows with creators/editors.
+    // Composite PK gives us the uniqueness (one follow per user per band)
+    // with no extra index; both FKs cascade so deleting a band or user
+    // cleans up its follows.
+    await sql`
+      create table if not exists band_follows (
+        user_id    uuid not null references users(id) on delete cascade,
+        band_id    uuid not null references bands(id) on delete cascade,
+        created_at timestamptz not null default now(),
+        primary key (user_id, band_id)
+      )
+    `;
+    results.push('table band_follows ready');
+
+    await sql`
+      create index if not exists band_follows_band_id_idx
+      on band_follows (band_id)
+    `;
+    results.push('index band_follows_band_id_idx ready');
+
     return ok({ steps: results });
   } catch (err) {
     console.error('migrate failed', err);

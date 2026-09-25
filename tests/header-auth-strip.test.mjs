@@ -34,7 +34,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const INDEX_HTML = readFileSync(join(__dirname, '..', 'index.html'), 'utf8');
 
 function extract(name) {
-  const start = INDEX_HTML.indexOf('function ' + name + '(');
+  // Prefer the async declaration when one exists; a plain search for
+  // 'function name(' would match inside 'async function name(' and slice
+  // off the async keyword (breaking await in the extracted body).
+  let start = INDEX_HTML.indexOf('async function ' + name + '(');
+  if (start < 0) start = INDEX_HTML.indexOf('function ' + name + '(');
   assert.ok(start >= 0, `function ${name} not found in index.html`);
 
   let parens = 0;
@@ -133,9 +137,16 @@ function loadAuthState() {
   const prelude = [
     `const BMFT_USER_KEY = 'bmft-user';`,
     `const BMFT_NOTIFY_KEY = 'bmft-notify-enabled';`,
+    `const NOTIFY_PREFS_ENDPOINT = '/api/notification-prefs';`,
     extract('loadCurrentUser'),
+    extract('authHeaders'),
     extract('getNotifyPref'),
     extract('setNotifyPref'),
+    // Phase 2: renderUserCard refreshes the toggle from the server. The
+    // sandbox has no fetch, so fetchNotifyPref's try/catch resolves null
+    // and the toggle keeps its localStorage value — the behavior under
+    // test here.
+    extract('fetchNotifyPref'),
     extract('renderUserCard'),
     extract('deriveUserInitials'),
     extract('setSignedInState'),
