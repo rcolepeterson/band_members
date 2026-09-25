@@ -881,26 +881,39 @@ function buildStage(doc, mount) {
  */
 function clusterTouringSatellites(positions, links, nodes, depths, anchorId, factor = 0.45) {
   const hopOf = id => {
-    if (depths && depths.has(id)) return depths.get(id);
-    const node = nodes.find(n => n.id === id);
+    if (depths && depths instanceof Map && depths.has(id)) return depths.get(id);
+    const node = Array.isArray(nodes) ? nodes.find(n => n.id === id) : null;
     return node && typeof node.hop === 'number' ? node.hop : 0;
   };
-  // Touring hubs: persons holding a TOURING membership in the anchor band.
-  const touringHubs = new Set();
+  if (!Array.isArray(links)) return;
+  // Hubs: member nodes with a sprawling network in this view. A hired gun like
+  // Josh Freese connects to 20+ bands; left alone, his satellites spray across
+  // the anchor band's constellation and he renders as a giant. We detect hubs
+  // by degree, not by the TOURING tag, so this works even when the membership
+  // tier isn't set in the data.
+  const degree = new Map();
   links.forEach(link => {
-    if (roleFromMembership(link) !== MEMBERSHIP_ROLES.TOURING) return;
     const [a, b] = linkEndpoints(link);
-    if (a === anchorId) touringHubs.add(b);
-    else if (b === anchorId) touringHubs.add(a);
+    degree.set(a, (degree.get(a) || 0) + 1);
+    degree.set(b, (degree.get(b) || 0) + 1);
   });
-  if (!touringHubs.size) return;
-  const nodeIds = new Set(nodes.map(n => n.id));
+  const nodeById = new Map((Array.isArray(nodes) ? nodes : []).map(n => [n.id, n]));
+  const hubs = new Set();
+  degree.forEach((d, id) => {
+    if (id === anchorId) return;
+    if (d < 8) return;
+    const node = nodeById.get(id);
+    if (node && node.type === 'band') return; // bands are never hubs
+    hubs.add(id);
+  });
+  if (!hubs.size) return;
+  const nodeIds = new Set(nodeById.keys());
   links.forEach(link => {
     const [a, b] = linkEndpoints(link);
     let hubId = null;
     let satId = null;
-    if (touringHubs.has(a) && b !== anchorId) { hubId = a; satId = b; }
-    else if (touringHubs.has(b) && a !== anchorId) { hubId = b; satId = a; }
+    if (hubs.has(a) && b !== anchorId) { hubId = a; satId = b; }
+    else if (hubs.has(b) && a !== anchorId) { hubId = b; satId = a; }
     if (!hubId || !nodeIds.has(satId)) return;
     // Only pull satellites sitting farther out than their hub.
     if (hopOf(satId) <= hopOf(hubId)) return;
@@ -1316,7 +1329,12 @@ export function initSigmaExplorer({
     const anchor = masterById.get(anchorId);
     const anchorIsBand = anchor && anchor.type === 'band';
     if (anchorIsBand) {
-      clusterTouringSatellites(positions, view.links, view.nodes, view.depths, anchorId);
+      try {
+        clusterTouringSatellites(positions, view.links, view.nodes, view.depths, anchorId);
+      } catch (e) {
+        // Clustering is a visual enhancement -- it must never break the render.
+        console.warn('Satellite clustering skipped:', e);
+      }
     }
 
     viewGraph.clear();
@@ -1337,17 +1355,18 @@ export function initSigmaExplorer({
         anchorId,
         links: master.links,
       });
-      // On band constellations, a touring member shrinks to a regular planet:
+      // On band constellations, a sprawling member shrinks to a regular planet:
       // the band is the focus, not the hired gun. Josh Freese stops rendering
       // as a giant hub and reads as what he is on this constellation -- a
-      // player. Member-anchored views are untouched: there, the person IS the
-      // focus and keeps their kind-given size.
-      const touringShrink =
+      // player. Detected by kind size (not the TOURING tag) so it works even
+      // when the membership tier isn't set in the data. Member-anchored views
+      // are untouched: there, the person IS the focus and keeps their size.
+      const hubShrink =
         anchorIsBand &&
-        role === MEMBERSHIP_ROLES.TOURING &&
         node.id !== anchorId &&
-        node.type !== 'band';
-      const nodeSize = touringShrink ? KIND_STYLE[NODE_KINDS.PLANET].size : style.size;
+        node.type !== 'band' &&
+        style.size >= KIND_STYLE[NODE_KINDS.CONSTELLATION].size;
+      const nodeSize = hubShrink ? KIND_STYLE[NODE_KINDS.PLANET].size : style.size;
       viewGraph.addNode(node.id, {
         // The label is the display NAME, not the id: a musician who shares a
         // band's name carries a suffixed id and must still read as himself.
