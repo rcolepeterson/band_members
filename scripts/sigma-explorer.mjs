@@ -1024,6 +1024,10 @@ export function initSigmaExplorer({
   let masterById = new Map(master.nodes.map(node => [node.id, node]));
   // Computed once: updateChrome() runs on every view change, and this does not.
   let bandNames = master.nodes.filter(node => node.type === 'band').map(node => node.id);
+  // Pre-computed once: every band's display name, for filter-as-you-type search.
+  // The datalist only holds 800 options, so without this, bands N-Z would never
+  // appear as suggestions (e.g. typing "weezer" would never suggest Weezer).
+  const allBandDisplayNames = [...new Set(bandNames.map(displayNameForId))];
   // Also computed once per filter, not per view: which nodes can reach which
   // others depends on the filtered graph's shape, not on where the anchor is.
   let components = getConnectedComponents(master.nodes, master.links, adjacency);
@@ -1581,7 +1585,7 @@ export function initSigmaExplorer({
     // offered verbatim as a suggestion. Names are what a person types.
     // The anchor is always included: with 6,245 bands and an 800-slot
     // alphabetical slice, "Weezer" (W) would otherwise never appear.
-    const anchorName = displayNameForId(state.anchorId);
+    const anchorName = displayNameForId(anchorId);
     const sorted = Array.from(new Set(Array.from(suggestions).map(displayNameForId)))
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }))
       .slice(0, MAX_SUGGESTIONS);
@@ -2026,9 +2030,24 @@ export function initSigmaExplorer({
       if (option.value === value) {
         input.blur();
         exploreFor(value);
-        break;
+        return;
       }
     }
+    // Filter-as-you-type: the datalist only holds 800 of 6,245 bands, so a
+    // static alphabetical slice hides N-Z entirely. Rebuild the options from
+    // the query so "weezer" always offers Weezer, "nirv" offers Nirvana, etc.
+    const query = value.toLowerCase();
+    const matches = [];
+    for (const name of allBandDisplayNames) {
+      if (name.toLowerCase().includes(query)) {
+        matches.push(name);
+        if (matches.length >= MAX_SUGGESTIONS) break;
+      }
+    }
+    datalist.innerHTML = matches
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }))
+      .map(name => `<option value="${escapeHtml(name)}"></option>`)
+      .join('');
   });
   // -- shortcut row ---------------------------------------------------------
 
