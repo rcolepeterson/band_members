@@ -356,6 +356,7 @@ test('touring satellites cluster around their hub when anchored on a band', () =
   );
   assert.match(fn, /function clusterTouringSatellites\(/, 'the clustering pass exists');
   assert.match(fn, /roleFromMembership\(link\) !== MEMBERSHIP_ROLES\.TOURING/, 'only touring edges cluster');
+  assert.match(fn, /depths\.has\(id\)/, 'hop distances come from the depths map, like radialLayout');
   assert.match(fn, /Math\.min\(ha, hb\) < 1/, "the anchor's own ring is left alone");
   assert.match(fn, /hub\.x \+ \(sat\.x - hub\.x\) \* factor/, 'satellites pull toward their hub');
   // And it only runs when the anchor is a band.
@@ -364,5 +365,5 @@ test('touring satellites cluster around their hub when anchored on a band', () =
     EXPLORER.indexOf('viewGraph.clear();')
   );
   assert.match(call, /anchor\.type === 'band'/, 'clustering is band-anchor only');
-  assert.match(call, /clusterTouringSatellites\(positions, view\.links, view\.nodes\)/);
+  assert.match(call, /clusterTouringSatellites\(positions, view\.links, view\.nodes, view\.depths\)/);
 });
