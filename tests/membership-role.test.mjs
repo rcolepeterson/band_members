@@ -344,3 +344,25 @@ test('hollow is the lightest treatment of the three', () => {
   assert.equal((hollow.match(/attribute: 'color'/g) || []).length, 1, 'hollow paints the node colour once');
   assert.equal((ringed.match(/attribute: 'color'/g) || []).length, 2, 'ringed paints it twice: ring and centre');
 });
+
+test('touring satellites cluster around their hub when anchored on a band', () => {
+  // A hired gun's other bands should hug him instead of spraying across the
+  // anchor band's constellation. But when anchored on a MEMBER, their
+  // connections ARE the focus and spread normally. The band is the focus
+  // unless you nav to a member specifically.
+  const fn = EXPLORER.slice(
+    EXPLORER.indexOf('function clusterTouringSatellites('),
+    EXPLORER.indexOf('export function initSigmaExplorer({')
+  );
+  assert.match(fn, /function clusterTouringSatellites\(/, 'the clustering pass exists');
+  assert.match(fn, /roleFromMembership\(link\) !== MEMBERSHIP_ROLES\.TOURING/, 'only touring edges cluster');
+  assert.match(fn, /Math\.min\(ha, hb\) < 1/, "the anchor's own ring is left alone");
+  assert.match(fn, /hub\.x \+ \(sat\.x - hub\.x\) \* factor/, 'satellites pull toward their hub');
+  // And it only runs when the anchor is a band.
+  const call = EXPLORER.slice(
+    EXPLORER.indexOf('const positions = radialLayout({'),
+    EXPLORER.indexOf('viewGraph.clear();')
+  );
+  assert.match(call, /anchor\.type === 'band'/, 'clustering is band-anchor only');
+  assert.match(call, /clusterTouringSatellites\(positions, view\.links, view\.nodes\)/);
+});
