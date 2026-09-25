@@ -1581,7 +1581,7 @@ export function initSigmaExplorer({
     // offered verbatim as a suggestion. Names are what a person types.
     // The anchor is always included: with 6,245 bands and an 800-slot
     // alphabetical slice, "Weezer" (W) would otherwise never appear.
-    const anchorName = displayNameForId(anchorId);
+    const anchorName = displayNameForId(state.anchorId);
     const sorted = Array.from(new Set(Array.from(suggestions).map(displayNameForId)))
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }))
       .slice(0, MAX_SUGGESTIONS);
