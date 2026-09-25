@@ -1117,9 +1117,22 @@ export function initSigmaExplorer({
     // One quiet colour at rest, for every thread whatever its role. Gold and
     // electric blue are reserved for selection: gold when a member is clicked,
     // electric blue when a band is clicked.
-    if (!state.highlightEdges.size) return { ...attrs, color: EDGE_COLOR };
-    return state.highlightEdges.has(edge)
-      ? { ...attrs, color: state.highlightColor, size: 2.2, zIndex: 1 }
+    //
+    // Touring threads are the exception: a hired gun's starburst (Josh Freese
+    // and a dozen bands) should whisper, not shout. Thinner and more
+    // transparent at rest, sunk even further when another selection dims the
+    // graph -- but fully present when the touring member is the selection.
+    const isTouring = attrs.role === MEMBERSHIP_ROLES.TOURING;
+    if (!state.highlightEdges.size) {
+      return isTouring
+        ? { ...attrs, color: 'rgba(125,142,160,0.28)', size: 0.6 }
+        : { ...attrs, color: EDGE_COLOR };
+    }
+    if (state.highlightEdges.has(edge)) {
+      return { ...attrs, color: state.highlightColor, size: 2.2, zIndex: 1 };
+    }
+    return isTouring
+      ? { ...attrs, color: 'rgba(120,134,150,0.05)', size: 0.5 }
       : { ...attrs, color: 'rgba(120,134,150,0.10)', size: 0.8 };
   }
 
