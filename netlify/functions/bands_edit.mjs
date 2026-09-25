@@ -32,6 +32,7 @@ import {
   ok,
   badRequest,
   unauthorized,
+  forbidden,
   notFound,
   dbUnavailable,
   serverError,
@@ -42,6 +43,13 @@ import {
 import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
 import { sameBandIdentity } from './_bands_write.mjs';
 import { notifyBandTouched } from './_notify.mjs';
+import {
+  normalizeLinksInput,
+  diffBandLinks,
+  bandLinkWriteQueries,
+  canManageBandLinks,
+  requestHasAdminToken,
+} from './_links.mjs';
 
 const LIMITS = {
   name: 200,
@@ -125,8 +133,13 @@ export default async (req, context) => {
   if (req.method !== 'PATCH') return methodNotAllowed();
 
   // Auth before DB/id checks — unauthenticated callers learn nothing.
+  // Phase 3: a valid admin token (x-admin-token) substitutes for a bearer
+  // token, so admin tooling (link backfills) can PATCH links without
+  // impersonating a user. The permission gate for links still applies
+  // below; metadata edits remain any-signed-in-user as before.
   const token = extractBearerToken(req);
-  if (!token) return unauthorized('missing bearer token');
+  const adminToken = requestHasAdminToken(req);
+  if (!token && !adminToken) return unauthorized('missing bearer token');
 
   const bandId = extractBandId(req, context);
   if (!bandId) return badRequest('band id is required in the URL path', { field: 'id' });
@@ -146,19 +159,28 @@ export default async (req, context) => {
   const sql = getSql();
 
   try {
-    const user = await findUserByToken(sql, token);
-    if (!user) return unauthorized('invalid or revoked token');
+    // Bearer token resolves to a user; admin-token-only requests proceed
+    // without one (no attribution, no contribution log — see below).
+    let user = null;
+    if (token) {
+      user = await findUserByToken(sql, token);
+      if (!user) return unauthorized('invalid or revoked token');
+    }
 
     // Keyed on the user id, not the token: rotating a credential must not hand its
     // holder a fresh budget, and the counter table should never hold a live secret.
     // Placed after the token check so an invalid caller cannot spend a real user's
-    // allowance by guessing at their id.
-    const rl = await consume({ sql, bucket: `band-edit:user:${user.id}`, ...RATE_LIMITS.bandEdit });
-    if (!rl.allowed) {
-      return tooManyRequests(
-        'That is a lot of edits in one hour. Try again shortly.',
-        rl.retryAfterSeconds
-      );
+    // allowance by guessing at their id. Admin-token requests skip the user
+    // budget (the token itself is the credential; the other admin endpoints
+    // don't rate-limit either).
+    if (user) {
+      const rl = await consume({ sql, bucket: `band-edit:user:${user.id}`, ...RATE_LIMITS.bandEdit });
+      if (!rl.allowed) {
+        return tooManyRequests(
+          'That is a lot of edits in one hour. Try again shortly.',
+          rl.retryAfterSeconds
+        );
+      }
     }
 
     const existingRows = await sql`select * from bands where id = ${bandId} limit 1`;
@@ -190,7 +212,34 @@ export default async (req, context) => {
       if (field === 'name') normalizedName = normalized;
     }
 
-    if (Object.keys(changes).length === 0) {
+    // Phase 3: the admin token authorizes LINK edits only. Ordinary metadata
+    // editing keeps its original rule — a signed-in user via Bearer token —
+    // so an admin-token-only request carrying real metadata changes is
+    // rejected here, before the links block below.
+    if (!user && Object.keys(changes).length > 0) {
+      return unauthorized('metadata edits require a signed-in user');
+    }
+
+    // Phase 3: social links. Only the band's creator (bands.added_by) or an
+    // admin-token holder may touch these — everyone else gets a 403, even
+    // though plain metadata edits stay open to any signed-in user. Empty
+    // string per platform = remove that link. The diff below keeps a
+    // resubmission of identical links a true no-op.
+    let linksChanged = {};
+    if ('links' in body) {
+      const normalized = normalizeLinksInput(body.links);
+      if (!normalized.ok) {
+        return badRequest(normalized.error, { field: normalized.field });
+      }
+      if (!canManageBandLinks({ bandAddedBy: existing.added_by, userId: user ? user.id : null, req })) {
+        return forbidden('only the band creator or an admin can edit links');
+      }
+      const currentLinkRows = await sql`select platform, url from band_links where band_id = ${bandId}`;
+      linksChanged = diffBandLinks(currentLinkRows, normalized.links);
+    }
+    const linksChangedKeys = Object.keys(linksChanged);
+
+    if (Object.keys(changes).length === 0 && linksChangedKeys.length === 0) {
       // No-op: nothing actually changed. Don't log a contribution, don't
       // touch edited_by/updated_at.
       return ok({ band: existing, changes: {} });
@@ -232,26 +281,50 @@ export default async (req, context) => {
       const value = changes[field].new;
       return sql`${sql.unsafe(field)} = ${value}`;
     });
+    // Attribution: a signed-in editor becomes edited_by (which also feeds
+    // the notify audience). Admin-token-only requests carry no user, so
+    // they leave edited_by untouched rather than nulling it.
+    if (user) setFragments.push(sql`edited_by = ${user.id}`);
 
     // sql.unsafe is part of the Neon serverless driver's tagged-template API
     // for exactly this "safe because it's from a fixed allowlist" case. If
     // sql.unsafe isn't available in this driver version, fall back to an
     // explicit switch — see the try/catch below for defense in depth.
-    let updatedRows;
-    try {
-      const setClause = setFragments.reduce((acc, frag, i) => (i === 0 ? frag : sql`${acc}, ${frag}`));
-      const bandNameForLog = normalizedName || existing.name;
-      const metadata = { changes };
+    //
+    // Phase 3: link upserts/deletes join the same atomic transaction as the
+    // metadata UPDATE. A link-only edit still runs a transaction (links +
+    // attribution), just without a metadata SET clause.
+    const metaChanged = Object.keys(changes).length > 0;
+    const linkQueries = bandLinkWriteQueries(sql, bandId, linksChanged);
+    const bandNameForLog = normalizedName || existing.name;
+    const metadata = { changes };
+    if (linksChangedKeys.length) metadata.links = linksChanged;
 
-      const txResults = await sql.transaction([
-        sql`update bands set ${setClause}, edited_by = ${user.id} where id = ${bandId} returning *`,
-        sql`
+    let updatedBand = existing;
+    try {
+      const txParts = [];
+      if (metaChanged) {
+        const setClause = setFragments.reduce((acc, frag, i) => (i === 0 ? frag : sql`${acc}, ${frag}`));
+        txParts.push(sql`update bands set ${setClause} where id = ${bandId} returning *`);
+      } else if (user && linksChangedKeys.length) {
+        // Link-only edit by a signed-in user: attribute the touch without
+        // a metadata diff.
+        txParts.push(sql`update bands set edited_by = ${user.id} where id = ${bandId} returning *`);
+      }
+      const bandRowIndex = txParts.length - 1; // -1 when no band UPDATE ran
+      if (user) {
+        txParts.push(sql`
           insert into contributions (user_id, action, band_id, band_name, metadata)
           values (${user.id}, 'edit_band', ${bandId}, ${bandNameForLog}, ${JSON.stringify(metadata)}::jsonb)
-        `,
-        sql`update users set bands_edited = bands_edited + 1, updated_at = now() where id = ${user.id}`,
-      ]);
-      updatedRows = txResults[0];
+        `);
+        txParts.push(sql`update users set bands_edited = bands_edited + 1, updated_at = now() where id = ${user.id}`);
+      }
+      txParts.push(...linkQueries);
+
+      const txResults = await sql.transaction(txParts);
+      if (bandRowIndex >= 0 && txResults[bandRowIndex] && txResults[bandRowIndex][0]) {
+        updatedBand = txResults[bandRowIndex][0];
+      }
     } catch (unsafeErr) {
       // sql.unsafe is a documented feature of @neondatabase/serverless, but
       // guard anyway: if it's missing/behaves unexpectedly, surface a clear
@@ -262,15 +335,16 @@ export default async (req, context) => {
 
     // Band-update notifications (Phase 2). The actor is excluded by
     // notifyBandTouched; everyone else who touched this band gets at most
-    // one email per 24h. Best-effort: never throws, never blocks this
-    // response.
+    // one email per 24h. Link changes count as band updates, so they fire
+    // the hook too. Admin-token edits have no actor to exclude.
+    // Best-effort: never throws, never blocks this response.
     await notifyBandTouched(sql, {
       bandId,
-      bandName: updatedRows[0].name,
-      actorUserId: user.id,
+      bandName: updatedBand.name,
+      actorUserId: user ? user.id : null,
     });
 
-    return ok({ band: updatedRows[0], changes });
+    return ok({ band: updatedBand, changes, links: linksChanged });
   } catch (err) {
     console.error('bands_edit failed', err);
     return serverError('could not edit band', {

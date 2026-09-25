@@ -488,6 +488,41 @@ export default async (req) => {
     `;
     results.push('index band_follows_band_id_idx ready');
 
+    // band_links table ---------------------------------------------------------
+    // Phase 3: one row per (band, platform) holding the band's official
+    // link for that platform. The platform CHECK mirrors LINK_PLATFORMS in
+    // _links.mjs — keep the two in sync. Domain validation (spotify.com
+    // URLs only in the spotify slot, etc.) happens in _links.mjs at write
+    // time, not in the schema: hostnames are a moving target and a CHECK
+    // constraint can't parse URLs. Composite PK gives the uniqueness with
+    // no extra index; the band_id index serves the read path
+    // (bands_neon.mjs selects the whole table in one go).
+    await sql`
+      create table if not exists band_links (
+        band_id    uuid not null references bands(id) on delete cascade,
+        platform   text not null check (platform in ('spotify','apple_music','youtube','bandcamp','instagram','tiktok','facebook','x','website')),
+        url        text not null,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        primary key (band_id, platform)
+      )
+    `;
+    results.push('table band_links ready');
+
+    await sql`
+      create index if not exists band_links_band_id_idx
+      on band_links (band_id)
+    `;
+    results.push('index band_links_band_id_idx ready');
+
+    await sql`drop trigger if exists band_links_set_updated_at on band_links`;
+    await sql`
+      create trigger band_links_set_updated_at
+      before update on band_links
+      for each row execute function set_updated_at()
+    `;
+    results.push('trigger band_links_set_updated_at ready');
+
     return ok({ steps: results });
   } catch (err) {
     console.error('migrate failed', err);

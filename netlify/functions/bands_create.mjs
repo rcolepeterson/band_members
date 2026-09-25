@@ -39,6 +39,7 @@ import {
 import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
 import { notifyBandTouched } from './_notify.mjs';
 import { createBandInNeon } from './_bands_write.mjs';
+import { normalizeLinksInput } from './_links.mjs';
 
 const LIMITS = {
   name: 200,
@@ -112,9 +113,23 @@ function validateCreateBody(payload) {
     members.push({ id: id || null, name: memberName || null, instrument1, instrument2, tenure, weight, relation });
   }
 
+  // Phase 3: social/streaming links. Whoever creates the band may set its
+  // links at creation — permission is inherent (the requester IS the
+  // creator). Domain-validated per platform; the server is the enforcer
+  // (the client mirrors this for inline feedback only).
+  const normalizedLinks = normalizeLinksInput(payload.links);
+  if (!normalizedLinks.ok) {
+    return { ok: false, error: normalizedLinks.error, field: normalizedLinks.field };
+  }
+  // Drop removals (nulls): no rows exist yet on create.
+  const links = {};
+  for (const [platform, url] of Object.entries(normalizedLinks.links)) {
+    if (url) links[platform] = url;
+  }
+
   return {
     ok: true,
-    data: { name, city, state, country, genre, years_active, label, albums, members },
+    data: { name, city, state, country, genre, years_active, label, albums, members, links },
   };
 }
 
@@ -138,7 +153,7 @@ export default async (req) => {
   if (!validated.ok) {
     return badRequest(validated.error, validated.field ? { field: validated.field } : {});
   }
-  const { name, city, state, country, genre, years_active, label, albums, members } = validated.data;
+  const { name, city, state, country, genre, years_active, label, albums, members, links } = validated.data;
 
   const sql = getSql();
 
@@ -159,7 +174,7 @@ export default async (req) => {
     }
 
     const result = await createBandInNeon(sql, {
-      name, city, state, country, genre, years_active, label, albums, members,
+      name, city, state, country, genre, years_active, label, albums, members, links,
       userId: user.id,
     });
 
@@ -198,6 +213,7 @@ export default async (req) => {
       band: result.band,
       member_ids: result.memberIds,
       memberships_created: result.membershipsCreated,
+      links,
     });
   } catch (err) {
     console.error('bands_create failed', err);

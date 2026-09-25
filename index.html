@@ -355,6 +355,13 @@
     .member-add-btn{margin-top:var(--space-3);width:auto;min-height:0;padding:0.5rem 0.85rem;cursor:pointer;font-size:var(--text-sm);letter-spacing:.06em;text-transform:uppercase;color:var(--color-text-muted);background:rgba(10,12,18,0.55);border:1px dashed var(--color-border);border-radius:var(--radius-md)}
     .member-add-btn:hover{border-color:rgba(82,174,182,0.56);color:#effcff}
     @media (max-width: 720px){.member-row-fields{grid-template-columns:1fr}}
+    /* Phase 3: band link rows (add-band + edit-band forms). Same bordered
+       shell as .member-row, two columns of platform blocks on desktop,
+       one column on narrow. Each block holds one platform label + URL. */
+    .link-rows{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)}
+    .link-row{border:1px solid var(--color-border);border-radius:var(--radius-md);background:rgba(10,12,18,0.35);padding:0.7rem 0.8rem}
+    .link-row label{margin-top:0}
+    @media (max-width: 720px){.link-rows{grid-template-columns:1fr}}
 
     /*
       Edit-band mode (PR 3b) member rows: same shell as .member-row but four
@@ -740,6 +747,12 @@ body {
 :root {
   --radius-card: 12px;
   --radius-control: 8px;
+  /* Phase 3: the social-badge circle diameter. Exactly the verification
+     pill's height: the chip is font-size var(--text-xs) at line-height 1
+     plus 2px top/bottom padding plus 1px top/bottom border (border-box),
+     so its total height is var(--text-xs) + 6px. Both the chip and the
+     badges below use this one expression, so they can never drift apart. */
+  --badge-size: calc(var(--text-xs) + 6px);
 }
 
 /* -------------------------------------------------------------------------
@@ -2586,6 +2599,36 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 }
 .verification-chip svg { width: 12px; height: 12px; fill: #c0c0c0; }
 .verification-chip.pending { opacity: 0.6; font-style: italic; }
+/* Phase 3: social/streaming badges. One quiet monochrome circle per
+   platform, sized exactly like the verification pill (see --badge-size),
+   sitting on its own row directly beneath the band name. Only platforms
+   with a link render a badge; website never renders a badge (the band
+   name itself becomes the website link). Brand logos drawn as plain
+   silhouettes in the chip's silver tone — no brand colors. */
+.social-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.social-badges:empty { display: none; }
+.social-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--badge-size); height: var(--badge-size); border-radius: 50%;
+  background: rgba(192, 192, 192, 0.10); border: 1px solid rgba(192, 192, 192, 0.30);
+  color: rgba(230, 236, 243, 0.85); text-decoration: none; flex: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.social-badge:hover, .social-badge:focus-visible {
+  background: rgba(192, 192, 192, 0.22); border-color: rgba(192, 192, 192, 0.55);
+  outline: none;
+}
+.social-badge svg { width: 58%; height: 58%; fill: currentColor; }
+/* Phase 3: the band name becomes its official website link. Same visual
+   affordance as the clickable member threads: bold, blue, underlined on
+   hover. Plain text when the band has no website link. */
+.band-website-link {
+  color: var(--color-primary-hover, #4d9de0); font-weight: 700;
+  text-decoration: none; cursor: pointer;
+}
+.band-website-link:hover, .band-website-link:focus-visible {
+  text-decoration: underline; outline: none;
+}
 .node-card__verify-toggle {
   background: none; border: none; color: var(--color-primary-hover);
   cursor: pointer; padding: var(--space-2) 0; font-size: var(--text-xs);
@@ -3521,6 +3564,29 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                 <div><label for="band-label">Label</label><input id="band-label" name="band-label" type="text" placeholder="Sub Pop, Epic, SST…" /></div>
                 <div class="form-span-2"><label for="band-genre">Genre</label><input id="band-genre" name="band-genre" type="text" list="genre-suggestions" placeholder="Grunge, Alternative Rock, Punk Rock…" autocapitalize="words" /><datalist id="genre-suggestions"></datalist><div class="field-note">Optional. Free text — pick from the suggestions or type your own.</div></div>
                 <div class="form-span-2"><label for="albums-released">Albums released</label><input id="albums-released" name="albums-released" type="text" placeholder="Ten; Vs.; Vitalogy" /></div>
+                <!--
+                  Phase 3: official band links. Nine platform URL fields in
+                  the same bordered shell as the member rows. Only the band
+                  creator (or an admin) can change these after creation, so
+                  the edit form hides this block for everyone else. Collected
+                  by collectBandLinks() and validated by
+                  linkUrlValidForPlatform(); the server is the enforcer.
+                -->
+                <div class="form-span-2 members-block">
+                  <label class="members-block-label">Links (optional)</label>
+                  <div class="link-rows">
+                    <div class="link-row"><label for="link-spotify">Spotify</label><input id="link-spotify" name="link-spotify" type="url" inputmode="url" autocomplete="off" placeholder="https://open.spotify.com/artist/…" /></div>
+                    <div class="link-row"><label for="link-apple_music">Apple Music</label><input id="link-apple_music" name="link-apple_music" type="url" inputmode="url" autocomplete="off" placeholder="https://music.apple.com/…" /></div>
+                    <div class="link-row"><label for="link-youtube">YouTube</label><input id="link-youtube" name="link-youtube" type="url" inputmode="url" autocomplete="off" placeholder="https://youtube.com/@…" /></div>
+                    <div class="link-row"><label for="link-bandcamp">Bandcamp</label><input id="link-bandcamp" name="link-bandcamp" type="url" inputmode="url" autocomplete="off" placeholder="https://artist.bandcamp.com" /></div>
+                    <div class="link-row"><label for="link-instagram">Instagram</label><input id="link-instagram" name="link-instagram" type="url" inputmode="url" autocomplete="off" placeholder="https://instagram.com/…" /></div>
+                    <div class="link-row"><label for="link-tiktok">TikTok</label><input id="link-tiktok" name="link-tiktok" type="url" inputmode="url" autocomplete="off" placeholder="https://tiktok.com/@…" /></div>
+                    <div class="link-row"><label for="link-facebook">Facebook</label><input id="link-facebook" name="link-facebook" type="url" inputmode="url" autocomplete="off" placeholder="https://facebook.com/…" /></div>
+                    <div class="link-row"><label for="link-x">X</label><input id="link-x" name="link-x" type="url" inputmode="url" autocomplete="off" placeholder="https://x.com/…" /></div>
+                    <div class="link-row"><label for="link-website">Official website</label><input id="link-website" name="link-website" type="url" inputmode="url" autocomplete="off" placeholder="https://…" /></div>
+                  </div>
+                  <div class="field-note">Official pages only — each link must match its platform. Wrong links are worse than no links.</div>
+                </div>
                 <div class="form-span-2"><label for="member-bio">Bio</label><textarea id="member-bio" name="member-bio" type="text" autocapitalize="sentences" autocomplete="off" spellcheck="true" placeholder="Optional member bio, personal context, side projects, influences, or anything you want to say about this musician."></textarea><div class="field-note">Plain text only. Links and promo URLs are not allowed.</div></div>
                 <div id="existing-band-members" class="detail-card submission-preview" style="display:none">
                   <div class="detail-title">Existing members in this band</div>
@@ -3585,6 +3651,28 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                   <div><label for="edit-band-label">Label</label><input id="edit-band-label" name="edit-band-label" type="text" placeholder="Sub Pop, Epic, SST…" /></div>
                   <div class="form-span-2"><label for="edit-band-genre">Genre</label><input id="edit-band-genre" name="edit-band-genre" type="text" list="genre-suggestions" placeholder="Grunge, Alternative Rock, Punk Rock…" autocapitalize="words" /></div>
                   <div class="form-span-2"><label for="edit-band-albums">Albums released</label><input id="edit-band-albums" name="edit-band-albums" type="text" placeholder="Ten; Vs.; Vitalogy" /></div>
+                  <!--
+                    Phase 3: official band links. Hidden unless the signed-in
+                    user created this band (or is an admin) — the server
+                    rejects link edits from anyone else. Populated from the
+                    band's current links when the panel opens; emptying a
+                    field removes that link.
+                  -->
+                  <div class="form-span-2 members-block" id="edit-band-links-block" hidden>
+                    <label class="members-block-label">Links (optional)</label>
+                    <div class="link-rows">
+                      <div class="link-row"><label for="edit-link-spotify">Spotify</label><input id="edit-link-spotify" name="edit-link-spotify" type="url" inputmode="url" autocomplete="off" placeholder="https://open.spotify.com/artist/…" /></div>
+                      <div class="link-row"><label for="edit-link-apple_music">Apple Music</label><input id="edit-link-apple_music" name="edit-link-apple_music" type="url" inputmode="url" autocomplete="off" placeholder="https://music.apple.com/…" /></div>
+                      <div class="link-row"><label for="edit-link-youtube">YouTube</label><input id="edit-link-youtube" name="edit-link-youtube" type="url" inputmode="url" autocomplete="off" placeholder="https://youtube.com/@…" /></div>
+                      <div class="link-row"><label for="edit-link-bandcamp">Bandcamp</label><input id="edit-link-bandcamp" name="edit-link-bandcamp" type="url" inputmode="url" autocomplete="off" placeholder="https://artist.bandcamp.com" /></div>
+                      <div class="link-row"><label for="edit-link-instagram">Instagram</label><input id="edit-link-instagram" name="edit-link-instagram" type="url" inputmode="url" autocomplete="off" placeholder="https://instagram.com/…" /></div>
+                      <div class="link-row"><label for="edit-link-tiktok">TikTok</label><input id="edit-link-tiktok" name="edit-link-tiktok" type="url" inputmode="url" autocomplete="off" placeholder="https://tiktok.com/@…" /></div>
+                      <div class="link-row"><label for="edit-link-facebook">Facebook</label><input id="edit-link-facebook" name="edit-link-facebook" type="url" inputmode="url" autocomplete="off" placeholder="https://facebook.com/…" /></div>
+                      <div class="link-row"><label for="edit-link-x">X</label><input id="edit-link-x" name="edit-link-x" type="url" inputmode="url" autocomplete="off" placeholder="https://x.com/…" /></div>
+                      <div class="link-row"><label for="edit-link-website">Official website</label><input id="edit-link-website" name="edit-link-website" type="url" inputmode="url" autocomplete="off" placeholder="https://…" /></div>
+                    </div>
+                    <div class="field-note">Official pages only — each link must match its platform. Emptying a field removes that link.</div>
+                  </div>
                   <div class="form-span-2 members-block">
                     <label class="members-block-label">Band members</label>
                     <div id="edit-members-container"></div>
@@ -3804,6 +3892,14 @@ main.layout { padding: 0 !important; gap: 0 !important; }
           <div class="node-card__name" id="node-card-name">—</div>
           <span id="node-card-verify-chip"></span>
         </div>
+        <!--
+          Phase 3: social/streaming badge row, directly below the band name.
+          renderBandBadges() fills it with one quiet circular badge per
+          platform that has a link (website excluded — the band name itself
+          becomes the website link). Empty for person cards and for bands
+          with no links, in which case the CSS hides it entirely.
+        -->
+        <div class="social-badges" id="node-card-badges" aria-label="Official links"></div>
         <div class="node-card__sub" id="node-card-sub"></div>
       </div>
       <div class="node-card__rows" id="node-card-rows"></div>
@@ -6471,10 +6567,15 @@ function downloadPngBlob(blob) {
           throw new Error('/api/bands returned empty payload');
         }
         rawBandsData = data;
+        // Phase 3: fold the band_links array into a per-band lookup for
+        // the node card (badge row + website name link).
+        bandLinksByBandId = buildBandLinksMap(data.band_links);
         return normalizeNeonToRows(data);
       } catch (error) {
         console.warn('Falling back to CSV load; /api/bands failed:', error);
         rawBandsData = null;
+        // No backend ids on the CSV path, so no links either.
+        bandLinksByBandId = new Map();
         // The only use of d3 on the constellation path, and only when the API is
         // unreachable -- so it is fetched here rather than on every load.
         await ensureD3();
@@ -6947,6 +7048,7 @@ function downloadPngBlob(blob) {
         years_active: draft.yearsActive || '',
         label: draft.label || '',
         albums: draft.albums || '',
+        links: draft.links || {},
         members
       };
     }
@@ -7633,9 +7735,218 @@ function downloadPngBlob(blob) {
     //    zoom handler. It reads d.x/d.y (graph coords), applies the current
     //    zoom transform, and writes .graph-stage-local left/top.
     // ---------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // Phase 3: social/streaming links.
+    //
+    // Platform catalog. `website` is last on purpose: the badge row
+    // (BAND_BADGE_PLATFORMS) never includes it — the band name itself
+    // becomes the website link — while the forms iterate all nine.
+    // ------------------------------------------------------------------
+    const BAND_LINK_PLATFORMS = [
+      { id: 'spotify', label: 'Spotify' },
+      { id: 'apple_music', label: 'Apple Music' },
+      { id: 'youtube', label: 'YouTube' },
+      { id: 'bandcamp', label: 'Bandcamp' },
+      { id: 'instagram', label: 'Instagram' },
+      { id: 'tiktok', label: 'TikTok' },
+      { id: 'facebook', label: 'Facebook' },
+      { id: 'x', label: 'X' },
+      { id: 'website', label: 'Official website' },
+    ];
+    const BAND_BADGE_PLATFORMS = ['spotify', 'apple_music', 'youtube', 'bandcamp', 'instagram', 'tiktok', 'facebook', 'x'];
+
+    // Client-side mirror of _links.mjs's domain rules, for inline form
+    // validation only — the server is the enforcer. Deliberately
+    // self-contained (own host table) so tests can extract this function
+    // and run it in a bare vm; tests/phase3-links.test.mjs keeps the two
+    // copies in sync. Empty input is NOT valid here: callers skip empty
+    // fields before calling (empty = "no link", not "invalid link").
+    function linkUrlValidForPlatform(platform, rawUrl) {
+      const HOSTS = {
+        spotify: ['spotify.com', 'open.spotify.com'],
+        apple_music: ['music.apple.com'],
+        youtube: ['youtube.com', 'youtu.be'],
+        bandcamp: ['bandcamp.com'],
+        instagram: ['instagram.com'],
+        tiktok: ['tiktok.com'],
+        facebook: ['facebook.com', 'fb.com'],
+        x: ['x.com', 'twitter.com'],
+        website: null
+      };
+      if (!Object.prototype.hasOwnProperty.call(HOSTS, platform)) return false;
+      const url = String(rawUrl == null ? '' : rawUrl).trim();
+      if (!url || url.length > 500) return false;
+      let parsed;
+      try {
+        parsed = new URL(url);
+      } catch (e) {
+        return false;
+      }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+      if (parsed.username || parsed.password) return false;
+      const hosts = HOSTS[platform];
+      if (!hosts) return true; // website: any http(s) URL
+      const host = parsed.hostname.toLowerCase();
+      return hosts.some(d => host === d || host.endsWith('.' + d));
+    }
+
+    // Human label for a platform id. Self-contained for the same
+    // extract-and-test reason as linkUrlValidForPlatform.
+    function bandPlatformLabel(platform) {
+      const LABELS = {
+        spotify: 'Spotify',
+        apple_music: 'Apple Music',
+        youtube: 'YouTube',
+        bandcamp: 'Bandcamp',
+        instagram: 'Instagram',
+        tiktok: 'TikTok',
+        facebook: 'Facebook',
+        x: 'X',
+        website: 'Official website'
+      };
+      return Object.prototype.hasOwnProperty.call(LABELS, platform) ? LABELS[platform] : String(platform);
+    }
+
+    // Quiet monochrome brand-logo silhouettes (no brand colors), drawn as
+    // inline SVG at viewBox 0 0 24 24. Self-contained for extraction.
+    function bandBadgeSvgFor(platform) {
+      const ICONS = {
+        spotify: '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/>'
+          + '<path d="M8 10.4c2.6-.9 5.4-.6 7.8.9M8.5 13.1c2-.6 4-.4 5.8.7M8.9 15.6c1.5-.4 2.9-.2 4.2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+        apple_music: '<ellipse cx="8" cy="17.5" rx="3" ry="2.4" fill="currentColor"/>'
+          + '<path d="M11 17.5V6c0-.8.7-1.3 1.4-1.1l6 .9c.7.1 1.1.7 1.1 1.4v9.6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>'
+          + '<path d="M11 6.2l8.5 1.3" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>',
+        youtube: '<rect x="2.8" y="6" width="18.4" height="12" rx="3.6" fill="none" stroke="currentColor" stroke-width="2.1"/>'
+          + '<path d="M10.3 9.7v4.6l4.2-2.3z" fill="currentColor"/>',
+        bandcamp: '<path d="M7.5 4.5h8.2l1.8 15H9.3z" fill="currentColor"/>',
+        instagram: '<rect x="4" y="4" width="16" height="16" rx="4.6" fill="none" stroke="currentColor" stroke-width="2.1"/>'
+          + '<circle cx="12" cy="12" r="3.8" fill="none" stroke="currentColor" stroke-width="2.1"/>'
+          + '<circle cx="16.9" cy="7.1" r="1.5" fill="currentColor"/>',
+        tiktok: '<path d="M13.8 3.5v10.3" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>'
+          + '<ellipse cx="10.2" cy="17.2" rx="3.6" ry="2.8" fill="currentColor"/>'
+          + '<path d="M13.8 3.5c.5 2.7 2.4 4.4 5.2 4.6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>',
+        facebook: '<path d="M13.6 20.5v-6.8h2.3l.4-2.7h-2.7V9.2c0-.8.3-1.3 1.4-1.3h1.4V5.4c-.3 0-1.1-.1-2-.1-2 0-3.4 1.2-3.4 3.5v2.2H8.6v2.7H11v6.8z" fill="currentColor"/>',
+        x: '<path d="M4.5 4h3.9l4 5.4 4.6-5.4h2.1l-5.7 6.6 6 8.4h-3.9l-4.3-5.8-5 5.8H4.2l6.1-7z" fill="currentColor"/>'
+      };
+      const inner = Object.prototype.hasOwnProperty.call(ICONS, platform) ? ICONS[platform] : '';
+      if (!inner) return '';
+      return '<svg viewBox="0 0 24 24" aria-hidden="true">' + inner + '</svg>';
+    }
+
+    // Renders the band name: plain text, or — when the band has an
+    // official website link — a bold blue link opening in a new tab with
+    // the same visual affordance as the clickable member threads.
+    // Extractable/testable: takes the name element, the display name, and
+    // the website URL (falsy = plain text).
+    function renderBandNameLink(nameEl, name, websiteUrl) {
+      nameEl.textContent = '';
+      if (websiteUrl) {
+        const a = document.createElement('a');
+        a.className = 'band-website-link';
+        a.textContent = name;
+        a.href = websiteUrl;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.title = 'Official website';
+        nameEl.appendChild(a);
+      } else {
+        nameEl.textContent = name;
+      }
+    }
+
+    // Renders one circular badge per platform in `platforms` that has a
+    // URL in `links`. Platforms without a link render nothing; website
+    // never appears here (callers pass BAND_BADGE_PLATFORMS, which
+    // excludes it). Badges open in a new tab with rel="noopener".
+    function renderBandBadges(badgesEl, links, platforms) {
+      badgesEl.textContent = '';
+      const list = Array.isArray(platforms) ? platforms : [];
+      for (const platform of list) {
+        const url = links ? links[platform] : null;
+        if (!url) continue;
+        const label = bandPlatformLabel(platform);
+        const badge = document.createElement('a');
+        badge.className = 'social-badge';
+        badge.href = url;
+        badge.target = '_blank';
+        badge.rel = 'noopener';
+        badge.title = label;
+        badge.setAttribute('aria-label', label);
+        badge.innerHTML = bandBadgeSvgFor(platform);
+        badgesEl.appendChild(badge);
+      }
+    }
+
+    // Folds the /api/bands band_links array into a Map of
+    // band_id -> { platform: url }. Pure; extracted by tests.
+    function buildBandLinksMap(linkRows) {
+      const map = new Map();
+      for (const row of linkRows || []) {
+        if (!row || !row.band_id || !row.platform) continue;
+        let entry = map.get(row.band_id);
+        if (!entry) {
+          entry = {};
+          map.set(row.band_id, entry);
+        }
+        entry[row.platform] = row.url;
+      }
+      return map;
+    }
+
+    // The link map for a band node ({ platform: url }), or {} for person
+    // nodes, unknown bands, and bands with no links.
+    function bandLinksForNode(node) {
+      if (!node || node.type !== 'band') return {};
+      let bandId = null;
+      try {
+        bandId = bandUuidForNode(node);
+      } catch (e) {
+        bandId = null;
+      }
+      if (!bandId || !bandLinksByBandId) return {};
+      return bandLinksByBandId.get(bandId) || {};
+    }
+
+    // Reads the nine link inputs (idPrefix + platform id), validates each
+    // non-empty value inline, marks failures with .field-error, and
+    // returns { ok, links, error }. `links` holds only the non-empty
+    // valid entries (empty = "no link", not an error). The server
+    // re-validates; this is inline feedback only.
+    function collectBandLinks(idPrefix) {
+      const links = {};
+      let firstBad = null;
+      for (const entry of BAND_LINK_PLATFORMS) {
+        const input = document.getElementById(idPrefix + entry.id);
+        if (!input) continue;
+        input.classList.remove('field-error');
+        const value = input.value.trim();
+        if (!value) continue;
+        if (!linkUrlValidForPlatform(entry.id, value)) {
+          input.classList.add('field-error');
+          if (!firstBad) firstBad = entry;
+          continue;
+        }
+        links[entry.id] = value;
+      }
+      if (firstBad) {
+        return {
+          ok: false,
+          links,
+          error: `${firstBad.label} needs a valid ${firstBad.label} URL — the band's official page there.`
+        };
+      }
+      return { ok: true, links, error: null };
+    }
+
+    // Phase 3: per-band link lookup, built in loadGraphData() from the
+    // /api/bands band_links array. Empty when the CSV fallback served the
+    // graph (no backend ids, no links).
+    let bandLinksByBandId = new Map();
+
     const nodeCardState = {
       node: null,          // the currently anchored graph node (has .x/.y)
     };
+    const nodeCardBadges = document.getElementById('node-card-badges');
     const nodeCardEl = document.getElementById('node-card');
     const nodeCardName = document.getElementById('node-card-name');
     const nodeCardSub = document.getElementById('node-card-sub');
@@ -7688,7 +7999,15 @@ function downloadPngBlob(blob) {
       // Header: name + secondary line ("Genre · Location" for band, primary
       // instruments for musician). Genre lives here — as plain text next to /
       // under the band name — not as a pill, per design.
-      nodeCardName.textContent = nodeName(node);
+      // Phase 3: the band name becomes its official website link (bold blue,
+      // same visual affordance as the clickable member threads) when the
+      // band has one; plain text otherwise. The badge row below the name
+      // renders one quiet monochrome circle per linked platform (website
+      // excluded — the name IS the website link). Person cards and bands
+      // without links get a plain name and an empty badge row.
+      const bandLinks = bandLinksForNode(node);
+      renderBandNameLink(nodeCardName, nodeName(node), bandLinks.website);
+      renderBandBadges(nodeCardBadges, bandLinks, BAND_BADGE_PLATFORMS);
       nodeCardSub.textContent = '';
       nodeCardRows.innerHTML = '';
       nodeCardConn.innerHTML = '';
@@ -10337,6 +10656,15 @@ function downloadPngBlob(blob) {
         return;
       }
 
+      // Phase 3: official band links. Each non-empty URL must match its
+      // platform's domain; invalid URLs block the submission with the
+      // offending field highlighted. Empty fields are fine (no link).
+      const linkResult = collectBandLinks('link-');
+      if (!linkResult.ok) {
+        showSubmissionFeedback(linkResult.error, true);
+        return;
+      }
+
       const master = graphState && graphState.master;
       // City-aware: a member in the Seattle Skid Row is NOT already connected
       // to the Toms River Skid Row. Resolve the link's band node and compare
@@ -10396,6 +10724,9 @@ function downloadPngBlob(blob) {
       // Genre is a per-band attribute: only send it if this submission is
       // introducing a brand-new band. For an existing-band-connection
       // submission we don't overwrite the band's already-stored genre.
+      // Links follow the same rule: they belong to a new band entry, and
+      // existing bands get their links through the edit panel (creator or
+      // admin only).
       const genreInput = document.getElementById('band-genre');
       const genre = bandExisted ? '' : normalizeGenre(genreInput ? genreInput.value : '');
 
@@ -10409,6 +10740,7 @@ function downloadPngBlob(blob) {
         yearsActive: bandExisted ? '' : document.getElementById('years-active').value.trim(),
         label: bandExisted ? '' : document.getElementById('band-label').value.trim(),
         albums: bandExisted ? '' : document.getElementById('albums-released').value.trim(),
+        links: bandExisted ? {} : linkResult.links,
         bio,
         mode: bandExisted ? 'existing-band-connection' : 'new-band-entry',
         savedAt: new Date().toISOString()
@@ -10473,6 +10805,11 @@ function downloadPngBlob(blob) {
         showSubmissionFeedback(message, !wasShared);
         document.getElementById('submission-form').reset();
         resetMemberRows();
+        // Phase 3: native form reset clears the link inputs' values but
+        // not their .field-error highlights.
+        for (const entry of BAND_LINK_PLATFORMS) {
+          document.getElementById('link-' + entry.id)?.classList.remove('field-error');
+        }
         confirmedDifferentCityKey = null;
         document.getElementById('submission-city').value = 'Seattle';
         document.getElementById('submission-country').value = 'USA';
@@ -10795,6 +11132,26 @@ function downloadPngBlob(blob) {
       document.getElementById('edit-band-genre').value = (rawBand && rawBand.genre) || node.genre || '';
       document.getElementById('edit-band-albums').value = (rawBand && rawBand.albums) || node.albums || '';
 
+      // Phase 3: link fields. Shown only to the band's creator — the
+      // server rejects link edits from anyone else with a 403, so there
+      // is nothing for a non-creator to fill in. Populated from the
+      // band's current links (empty = no link yet).
+      const editLinksBlock = document.getElementById('edit-band-links-block');
+      const currentUser = (typeof loadCurrentUser === 'function') ? loadCurrentUser() : null;
+      const canEditLinks = !!(rawBand && rawBand.added_by && currentUser && currentUser.id
+        && String(rawBand.added_by) === String(currentUser.id));
+      if (editLinksBlock) editLinksBlock.hidden = !canEditLinks;
+      const bandLinksNow = (canEditLinks && editBandState.bandId)
+        ? (bandLinksByBandId.get(editBandState.bandId) || {})
+        : {};
+      for (const entry of BAND_LINK_PLATFORMS) {
+        const linkInput = document.getElementById('edit-link-' + entry.id);
+        if (linkInput) {
+          linkInput.value = bandLinksNow[entry.id] || '';
+          linkInput.classList.remove('field-error');
+        }
+      }
+
       rebuildExistingMembersDatalist();
 
       const container = document.getElementById('edit-members-container');
@@ -10828,6 +11185,18 @@ function downloadPngBlob(blob) {
             }
           });
           return map;
+        })(),
+        // Phase 3: the band's links as the fields were just populated, so
+        // computeEditBandDiff() can tell a real link change from a
+        // resubmission. Only meaningful when the links block is visible
+        // (creator); otherwise the diff stays empty.
+        links: (() => {
+          const snap = {};
+          for (const entry of BAND_LINK_PLATFORMS) {
+            const linkInput = document.getElementById('edit-link-' + entry.id);
+            snap[entry.id] = linkInput ? linkInput.value.trim() : '';
+          }
+          return snap;
         })()
       };
 
@@ -11176,6 +11545,44 @@ function downloadPngBlob(blob) {
       return { meta, add, remove, update, renameMember, memberInstruments };
     }
 
+    // Phase 3: diffs the edit panel's nine link inputs against the snapshot
+    // taken when the panel opened. Returns { ok, links, error } — `links`
+    // holds only CHANGED platforms ({ platform: newUrl }, with '' meaning
+    // "remove this link"). Unchanged values are never sent, so a
+    // resubmission without link edits is a true no-op. Non-empty values
+    // are validated per-platform inline; the first failure aborts with an
+    // error and its field highlighted. Returns an empty diff when the
+    // links block is hidden (non-creator): the server would 403 anyway, so
+    // nothing is sent.
+    function computeEditBandLinksDiff() {
+      const block = document.getElementById('edit-band-links-block');
+      if (!block || block.hidden) return { ok: true, links: {}, error: null };
+      const links = {};
+      let firstBad = null;
+      const original = (editBandState.original && editBandState.original.links) || {};
+      for (const entry of BAND_LINK_PLATFORMS) {
+        const input = document.getElementById('edit-link-' + entry.id);
+        if (!input) continue;
+        input.classList.remove('field-error');
+        const value = input.value.trim();
+        if (value === (original[entry.id] || '')) continue;
+        if (value && !linkUrlValidForPlatform(entry.id, value)) {
+          input.classList.add('field-error');
+          if (!firstBad) firstBad = entry;
+          continue;
+        }
+        links[entry.id] = value;
+      }
+      if (firstBad) {
+        return {
+          ok: false,
+          links: {},
+          error: `${firstBad.label} needs a valid ${firstBad.label} URL — the band's official page there.`
+        };
+      }
+      return { ok: true, links, error: null };
+    }
+
     document.getElementById('edit-band-save-btn')?.addEventListener('click', async () => {
       if (!editBandState.bandId) {
         showEditBandFeedback('Cannot save: this band has no backend id to edit against.', true);
@@ -11183,6 +11590,16 @@ function downloadPngBlob(blob) {
       }
 
       const diff = computeEditBandDiff();
+
+      // Phase 3: link changes (creator only — the block is hidden for
+      // everyone else, in which case the diff is empty). Invalid URLs
+      // abort before anything is sent.
+      const linkDiff = computeEditBandLinksDiff();
+      if (!linkDiff.ok) {
+        showEditBandFeedback(linkDiff.error, true);
+        return;
+      }
+      const linksChanged = Object.keys(linkDiff.links).length > 0;
 
       const unsupportedRemovals = diff.remove.filter(r => r._unsupported);
       const unsupportedUpdates = diff.update.filter(u => u._unsupported);
@@ -11195,7 +11612,7 @@ function downloadPngBlob(blob) {
       const memberOpsPresent = diff.add.length || supportedRemoveIds.length || supportedUpdates.length
         || diff.renameMember.length || diff.memberInstruments.length;
 
-      if (!metaChanged && !memberOpsPresent) {
+      if (!metaChanged && !memberOpsPresent && !linksChanged) {
         if (unsupportedRemovals.length || unsupportedUpdates.length) {
           showEditBandFeedback('Member removal and tenure updates on existing rows are not supported by this build yet (missing membership id from the backend). No changes were saved.', true);
         } else {
@@ -11219,11 +11636,17 @@ function downloadPngBlob(blob) {
       }
 
       const requests = [];
-      if (metaChanged) {
+      if (metaChanged || linksChanged) {
+        // Phase 3: link changes ride the same PATCH as metadata edits
+        // (only changed platforms are sent; '' per platform = remove).
+        // The server enforces the creator/admin permission on `links`
+        // and folds the link writes into the same transaction.
+        const metaBody = { ...diff.meta };
+        if (linksChanged) metaBody.links = linkDiff.links;
         requests.push(fetch('/api/bands/' + editBandState.bandId, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + user.token },
-          body: JSON.stringify(diff.meta)
+          body: JSON.stringify(metaBody)
         }));
       }
       if (memberOpsPresent) {
@@ -11256,6 +11679,14 @@ function downloadPngBlob(blob) {
           publishMasterGraph(master);
           renderGraph();
         });
+
+        // Phase 3: the card re-resolves the band (and its links) from the
+        // freshly loaded payload, so re-populating it shows new badges /
+        // the website name-link without making the user re-click the node.
+        if (nodeCardState.node && editBandState.band
+          && nodeCardState.node.id === editBandState.band.id) {
+          populateNodeCard(nodeCardState.node);
+        }
 
         let message = 'Band updated.';
         if (unsupportedRemovals.length || unsupportedUpdates.length) {

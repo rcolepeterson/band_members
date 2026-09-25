@@ -290,9 +290,11 @@ test('mobile-sheet chips are excluded from the global tool-chip handler', () => 
 
 test('/api/bands selects created_at so the client can date bands', () => {
   const src = readFileSync(join(REPO_ROOT, 'netlify', 'functions', 'bands_neon.mjs'), 'utf8');
+  // Phase 3 appends added_by after created_at; the intent here is only that
+  // created_at remains in the bands select.
   assert.match(
     src,
-    /select id, name, city, state, country, genre, years_active, label, albums, csv_origin, created_at\s*\n\s*from bands/,
+    /select id, name, city, state, country, genre, years_active, label, albums, csv_origin, created_at,[\s\S]*?from bands/,
     'Expected the bands select in bands_neon.mjs to include created_at.'
   );
 });

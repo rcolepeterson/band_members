@@ -78,6 +78,10 @@ export function sameBandIdentity(a, b) {
 
 export async function createBandInNeon(sql, input) {
   const { name, city, state, country, genre, years_active, label, albums, members, userId } = input;
+  // Phase 3: optional { platform: url } map, already validated by the
+  // caller (bands_create.mjs). Written in transaction 2 so the band and
+  // its links commit atomically. Absent for seed_bands.mjs callers.
+  const links = input.links || {};
 
   // Conflict check: same normalized name AND same location. A name match in
   // a different city is a different band — allowed through.
@@ -169,9 +173,21 @@ export async function createBandInNeon(sql, input) {
     returning bands_added
   `;
 
+  // Phase 3: link upserts join the same atomic transaction. Non-empty
+  // values upsert; a null value would delete — no rows exist yet on
+  // create, so nulls are filtered here (defensive; the caller omits them).
+  const linkPromises = Object.entries(links)
+    .filter(([, url]) => url)
+    .map(([platform, url]) => sql`
+      insert into band_links (band_id, platform, url)
+      values (${band.id}, ${platform}, ${url})
+      on conflict (band_id, platform)
+      do update set url = excluded.url, updated_at = now()
+    `);
+
   const txResults = membershipPromises.length
-    ? await sql.transaction([...membershipPromises, contributionPromise, counterPromise])
-    : await sql.transaction([contributionPromise, counterPromise]);
+    ? await sql.transaction([...membershipPromises, ...linkPromises, contributionPromise, counterPromise])
+    : await sql.transaction([...linkPromises, contributionPromise, counterPromise]);
 
   const membershipResultSets = membershipPromises.length ? txResults.slice(0, membershipPromises.length) : [];
   const membershipsCreated = membershipResultSets.filter(rows => rows && rows.length).length;
