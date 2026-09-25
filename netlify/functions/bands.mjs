@@ -1,6 +1,7 @@
 import { getStore } from '@netlify/blobs';
 import { getSql, isDbConfigured, extractBearerToken, findUserByToken } from './_db.mjs';
 import { createBandInNeon } from './_bands_write.mjs';
+import { notifyBandTouched } from './_notify.mjs';
 
 // Shared backend for "Add your band" submissions.
 //
@@ -601,6 +602,15 @@ export default async function handler(req) {
         if (user) {
           const neonResult = await tryNeonWrite(result.draft, user);
           landedInNeon = neonResult.landedInNeon;
+          if (neonResult.landedInNeon && neonResult.band) {
+            // Phase 2 band-update notifications. Same contract as the other
+            // write paths: best-effort, never throws, never blocks.
+            await notifyBandTouched(sql, {
+              bandId: neonResult.band.id,
+              bandName: neonResult.band.name,
+              actorUserId: user.id,
+            });
+          }
         }
         // Invalid/revoked token: fall through to the anonymous/blob path
         // rather than 401ing — this endpoint has never required auth, and a
