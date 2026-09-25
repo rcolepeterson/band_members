@@ -869,16 +869,21 @@ function buildStage(doc, mount) {
  * far endpoint moves, and only when both ends are past the anchor's immediate
  * ring -- the anchor's own members stay exactly where the layout put them.
  *
- * `factor` is how much of the hub-to-satellite distance survives: 0.45 pulls
- * satellites 55% closer to their hub.
+ * Hop distances come from the depths map (same source radialLayout uses),
+ * falling back to node.hop. `factor` is how much of the hub-to-satellite
+ * distance survives: 0.45 pulls satellites 55% closer to their hub.
  */
-function clusterTouringSatellites(positions, links, nodes, factor = 0.45) {
-  const hopOf = new Map(nodes.map(n => [n.id, n.hop || 0]));
+function clusterTouringSatellites(positions, links, nodes, depths, factor = 0.45) {
+  const hopOf = id => {
+    if (depths && depths.has(id)) return depths.get(id);
+    const node = nodes.find(n => n.id === id);
+    return node && typeof node.hop === 'number' ? node.hop : 0;
+  };
   links.forEach(link => {
     if (roleFromMembership(link) !== MEMBERSHIP_ROLES.TOURING) return;
     const [a, b] = linkEndpoints(link);
-    const ha = hopOf.get(a) || 0;
-    const hb = hopOf.get(b) || 0;
+    const ha = hopOf(a);
+    const hb = hopOf(b);
     // Leave the anchor's own ring alone.
     if (Math.min(ha, hb) < 1) return;
     const [hubId, satId] = ha < hb ? [a, b] : [b, a];
@@ -1117,9 +1122,22 @@ export function initSigmaExplorer({
     // One quiet colour at rest, for every thread whatever its role. Gold and
     // electric blue are reserved for selection: gold when a member is clicked,
     // electric blue when a band is clicked.
-    if (!state.highlightEdges.size) return { ...attrs, color: EDGE_COLOR };
-    return state.highlightEdges.has(edge)
-      ? { ...attrs, color: state.highlightColor, size: 2.2, zIndex: 1 }
+    //
+    // Touring threads are the exception: a hired gun's starburst (Josh Freese
+    // and a dozen bands) should whisper, not shout. Thinner and more
+    // transparent at rest, sunk even further when another selection dims the
+    // graph -- but fully present when the touring member is the selection.
+    const isTouring = attrs.role === MEMBERSHIP_ROLES.TOURING;
+    if (!state.highlightEdges.size) {
+      return isTouring
+        ? { ...attrs, color: 'rgba(125,142,160,0.28)', size: 0.6 }
+        : { ...attrs, color: EDGE_COLOR };
+    }
+    if (state.highlightEdges.has(edge)) {
+      return { ...attrs, color: state.highlightColor, size: 2.2, zIndex: 1 };
+    }
+    return isTouring
+      ? { ...attrs, color: 'rgba(120,134,150,0.05)', size: 0.5 }
       : { ...attrs, color: 'rgba(120,134,150,0.10)', size: 0.8 };
   }
 
@@ -1280,7 +1298,7 @@ export function initSigmaExplorer({
     // normally. The band is the focus unless you nav to a member specifically.
     const anchor = masterById.get(anchorId);
     if (anchor && anchor.type === 'band') {
-      clusterTouringSatellites(positions, view.links, view.nodes);
+      clusterTouringSatellites(positions, view.links, view.nodes, view.depths);
     }
 
     viewGraph.clear();
