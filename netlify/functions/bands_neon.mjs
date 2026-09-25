@@ -51,14 +51,17 @@ export default async (req) => {
     // anyway (see normalizeNeonToRows() in index.html), and keeping them
     // separate avoids repeating every band/member column once per
     // membership row over the wire.
-    const [bands, members, memberships] = await Promise.all([
+    const [bands, members, memberships, band_links] = await Promise.all([
       // created_at powers the client's Recently-added filter. Selected for
       // every band rather than pushed down as a `where created_at > ...`
       // clause: the client already holds the whole graph in memory and
       // filters scene/genre/search there, so a server-side window would give
       // it a graph it couldn't un-filter without a second round trip.
       sql`
-        select id, name, city, state, country, genre, years_active, label, albums, csv_origin, created_at
+        select id, name, city, state, country, genre, years_active, label, albums, csv_origin, created_at,
+               -- Phase 3: creator id, so the edit panel can show the link
+               -- fields only to the band's creator (server still enforces).
+               added_by
         from bands
         order by name
       `,
@@ -70,6 +73,14 @@ export default async (req) => {
       sql`
         select id, band_id, member_id, tenure, weight, relation
         from memberships
+      `,
+      // Phase 3: one row per (band, platform) holding the band's official
+      // social/streaming links. A separate array rather than a join: the
+      // client folds it into a per-band lookup in loadGraphData() instead
+      // of repeating link columns once per membership row over the wire.
+      sql`
+        select band_id, platform, url
+        from band_links
       `,
     ]);
 
@@ -90,7 +101,7 @@ export default async (req) => {
     // compression and caching are independent concerns at the edge. If
     // Netlify's platform behavior ever changes, revisit this; until then,
     // adding manual gzip here would just duplicate what the platform does.
-    return ok({ bands, members, memberships });
+    return ok({ bands, members, memberships, band_links });
   } catch (err) {
     console.error('bands_neon GET failed', err);
     return serverError('could not load bands', {
