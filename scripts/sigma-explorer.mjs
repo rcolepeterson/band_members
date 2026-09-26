@@ -1386,6 +1386,7 @@ export function initSigmaExplorer({
       maxHops: state.maxHops,
       maxNodes,
       adjacency,
+      maxSatellites: NEIGHBORHOOD_BUDGET.SATELLITE_CAP,
     });
     if (!view.nodes.length) return false;
 
@@ -1443,7 +1444,14 @@ export function initSigmaExplorer({
         node.id !== anchorId &&
         node.type !== 'band' &&
         style.size >= KIND_STYLE[NODE_KINDS.CONSTELLATION].size;
-      const nodeSize = hubShrink ? KIND_STYLE[NODE_KINDS.PLANET].size : style.size;
+      // Capped super-connectors grow to signal "there's more" — like a band
+      // node, they visually promise expansion.
+      const cappedGrow = node.hasMoreSatellites && !hubShrink;
+      const nodeSize = hubShrink
+        ? KIND_STYLE[NODE_KINDS.PLANET].size
+        : cappedGrow
+          ? KIND_STYLE[NODE_KINDS.CONSTELLATION].size
+          : style.size;
       viewGraph.addNode(node.id, {
         // The label is the display NAME, not the id: a musician who shares a
         // band's name carries a suffixed id and must still read as himself.
