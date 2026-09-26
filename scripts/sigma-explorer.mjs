@@ -885,9 +885,9 @@ function buildStage(doc, mount) {
  * they land; manual drags aren't fought. The anchor never moves.
  */
 function resolveCollisions(positions, anchorId, links) {
-  const MIN_SEPARATION = 100; // px between centers (accounts for labels)
-  const ITERATIONS = 80;
-  const DAMPING = 0.4;
+  const MIN_SEPARATION = 140; // px between centers (generous for labels)
+  const ITERATIONS = 120;
+  const DAMPING = 0.6; // stronger push per iteration
 
   const ids = Array.from(positions.keys()).filter(id => id !== anchorId);
 
