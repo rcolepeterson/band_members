@@ -879,6 +879,56 @@ function buildStage(doc, mount) {
  * falling back to node.hop. `factor` is how much of the hub-to-satellite
  * distance survives: 0.45 pulls satellites 55% closer to their hub.
  */
+/**
+ * Single-pass collision resolution. Iteratively pushes apart nodes that
+ * overlap, so threads don't stack on top of each other. Runs synchronously
+ * during layout (not per-frame), then stops -- nodes stay where they land.
+ */
+function resolveCollisions(positions, anchorId) {
+  const MIN_SEPARATION = 60; // minimum px between node centers
+  const ITERATIONS = 50;
+  const DAMPING = 0.5; // how much of the push to apply per iteration
+
+  const ids = Array.from(positions.keys()).filter(id => id !== anchorId);
+
+  for (let iter = 0; iter < ITERATIONS; iter++) {
+    let moved = false;
+
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = positions.get(ids[i]);
+        const b = positions.get(ids[j]);
+        if (!a || !b) continue;
+
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < MIN_SEPARATION && dist > 0.01) {
+          // Push apart along the line connecting them.
+          const push = (MIN_SEPARATION - dist) / 2 * DAMPING;
+          const ux = dx / dist;
+          const uy = dy / dist;
+
+          a.x -= ux * push;
+          a.y -= uy * push;
+          b.x += ux * push;
+          b.y += uy * push;
+          moved = true;
+        } else if (dist <= 0.01) {
+          // Exactly overlapping: nudge in a deterministic direction.
+          const angle = (i * 2.399963) % (Math.PI * 2); // golden angle
+          b.x += Math.cos(angle) * MIN_SEPARATION * DAMPING;
+          b.y += Math.sin(angle) * MIN_SEPARATION * DAMPING;
+          moved = true;
+        }
+      }
+    }
+
+    if (!moved) break; // converged early
+  }
+}
+
 function clusterTouringSatellites(positions, links, nodes, depths, anchorId, factor = 0.45) {
   const hopOf = id => {
     if (depths && depths instanceof Map && depths.has(id)) return depths.get(id);
@@ -1341,6 +1391,16 @@ export function initSigmaExplorer({
         // Clustering is a visual enhancement -- it must never break the render.
         console.warn('Satellite clustering skipped:', e);
       }
+    }
+
+    // Auto thread-collision: single cleanup pass after layout. Pushes apart
+    // overlapping nodes so threads don't stack. Runs once synchronously --
+    // not a per-frame simulation -- so nodes stay where they land and manual
+    // drags aren't fought. The anchor never moves.
+    try {
+      resolveCollisions(positions, anchorId);
+    } catch (e) {
+      console.warn('Collision cleanup skipped:', e);
     }
 
     viewGraph.clear();
