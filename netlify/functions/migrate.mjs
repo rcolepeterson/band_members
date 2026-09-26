@@ -435,6 +435,24 @@ export default async (req) => {
     `;
     results.push('table notification_prefs ready');
 
+    // Granular event-type toggles (PR 2): let users opt out of specific
+    // notification types without killing all emails. All default true —
+    // the engagement loop only works if people are in it.
+    //   - notify_band_member_joined: new member joined a followed/touched band
+    //   - notify_band_badge_added: new social badge on a followed/touched band
+    //   - notify_band_edited: followed/touched band's card details edited
+    //   - notify_member_band_changed: followed member joined/left a band
+    //   - notify_member_edited: followed member's card edited
+    await sql`
+      alter table notification_prefs
+      add column if not exists notify_band_member_joined boolean not null default true,
+      add column if not exists notify_band_badge_added boolean not null default true,
+      add column if not exists notify_band_edited boolean not null default true,
+      add column if not exists notify_member_band_changed boolean not null default true,
+      add column if not exists notify_member_edited boolean not null default true
+    `;
+    results.push('notification_prefs event-type columns ready');
+
     await sql`drop trigger if exists notification_prefs_set_updated_at on notification_prefs`;
     await sql`
       create trigger notification_prefs_set_updated_at
@@ -458,6 +476,18 @@ export default async (req) => {
       )
     `;
     results.push('table band_notification_log ready');
+
+    // member_notification_log table ------------------------------------------
+    // Mirrors band_notification_log: 24-hour cooldown per (member, user).
+    await sql`
+      create table if not exists member_notification_log (
+        id         bigserial primary key,
+        member_id  uuid not null references band_members(id) on delete cascade,
+        user_id    uuid not null references users(id) on delete cascade,
+        sent_at    timestamptz not null default now()
+      )
+    `;
+    results.push('table member_notification_log ready');
 
     await sql`
       create index if not exists band_notification_log_band_user_sent_idx
