@@ -1976,8 +1976,8 @@ export function initSigmaExplorer({
     if (moved) highlightFrom(node);
   }
 
-  // Draggable nodes v2: press-drag moves a node plus its direct neighbors.
-  // Custom hit detection with a forgiving 25px grab radius (easier on mobile).
+  // Draggable nodes v3: press-drag moves a single node. Neighbors stay put,
+  // edges stretch. Custom hit detection with forgiving grab radius.
   // <10px movement = tap (navigates); >=10px = drag (moves, suppresses nav).
   // Positions are session-only: navigating resets the layout.
   const DRAG_THRESHOLD_PX = 10;
@@ -2023,27 +2023,15 @@ export function initSigmaExplorer({
     return closest;
   }
 
-  function getGroup(nodeId) {
-    // The node plus its direct (1-hop) neighbors.
-    const group = [nodeId];
-    try {
-      const neighbors = viewGraph.neighbors(nodeId);
-      for (const n of neighbors) {
-        if (n !== nodeId && !group.includes(n)) group.push(n);
-      }
-    } catch (err) { /* isolated node: just itself */ }
-    return group;
-  }
+  // Single-node drag: only the grabbed node moves. Neighbors stay put,
+  // edges stretch to show the connections are still there.
 
   function startDrag(nodeId, clientX, clientY) {
     const graphPos = pointerToGraph(clientX, clientY);
     if (!graphPos) return false;
 
-    const group = getGroup(nodeId);
-
     dragState = {
       nodeId,
-      group,
       startClient: { x: clientX, y: clientY },
       lastGraph: graphPos,
       dragged: false,
@@ -2069,10 +2057,10 @@ export function initSigmaExplorer({
     dragState.lastGraph = graphPos;
 
     try {
-      for (const id of dragState.group) {
-        const curX = viewGraph.getNodeAttribute(id, 'x');
-        const curY = viewGraph.getNodeAttribute(id, 'y');
-        if (curX == null || curY == null) continue;
+      const id = dragState.nodeId;
+      const curX = viewGraph.getNodeAttribute(id, 'x');
+      const curY = viewGraph.getNodeAttribute(id, 'y');
+      if (curX != null && curY != null) {
         viewGraph.setNodeAttribute(id, 'x', curX + deltaX);
         viewGraph.setNodeAttribute(id, 'y', curY + deltaY);
       }
