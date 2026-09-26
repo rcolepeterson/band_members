@@ -98,6 +98,10 @@ export const NEIGHBORHOOD_BUDGET = Object.freeze({
   // never degenerates into rendering the whole corpus.
   EXPAND_MAX_HOPS: 6,
   EXPAND_MAX_NODES: 400,
+  // Satellite cap: max connections shown per node in the initial view.
+  // Super-connectors (Josh Freese: 30+ bands) would otherwise flood the
+  // view. 5-7 keeps it readable; expand reveals more.
+  SATELLITE_CAP: 7,
 });
 
 // ---------------------------------------------------------------------------
@@ -192,6 +196,7 @@ export function getNeighborhood({
   maxNodes = NEIGHBORHOOD_BUDGET.MAX_NODES,
   maxEdges = NEIGHBORHOOD_BUDGET.MAX_EDGES,
   adjacency = null,
+  maxSatellites = Infinity,
 } = {}) {
   const byId = new Map(nodes.map(node => [node.id, node]));
   const empty = { nodes: [], links: [], depths: new Map(), frontier: [], truncated: false };
@@ -206,22 +211,29 @@ export function getNeighborhood({
   let truncated = false;
 
   let currentLayer = [anchorId];
+  const cappedNodes = new Set();
   for (let hop = 1; hop <= maxHops && currentLayer.length; hop += 1) {
     // Candidates for this hop, de-duplicated, ordered by degree desc then
     // name asc (a stable, reproducible order — same anchor, same view).
     const candidates = [];
     const seenThisLayer = new Set();
     currentLayer.forEach(id => {
-      (adj.get(id) || new Set()).forEach(neighbor => {
-        if (visible.has(neighbor) || seenThisLayer.has(neighbor)) return;
+      // Satellite cap: limit how many neighbors each node contributes.
+      // Without this, a super-connector (30+ bands) floods the view.
+      const neighbors = Array.from(adj.get(id) || new Set())
+        .filter(neighbor => !visible.has(neighbor) && !seenThisLayer.has(neighbor))
+        .sort((a, b) => degree(b) - degree(a) || String(a).localeCompare(String(b)))
+        .slice(0, maxSatellites);
+      neighbors.forEach(neighbor => {
         seenThisLayer.add(neighbor);
-        candidates.push(neighbor);
+        candidates.push({ id: neighbor, from: id });
       });
     });
-    candidates.sort((a, b) => degree(b) - degree(a) || String(a).localeCompare(String(b)));
+    // Candidates are already per-node capped and sorted; sort globally by degree
+    candidates.sort((a, b) => degree(b.id) - degree(a.id) || String(a.id).localeCompare(String(b.id)));
 
     const admitted = [];
-    candidates.forEach(id => {
+    candidates.forEach(({ id, from }) => {
       if (visible.size >= maxNodes) {
         truncated = true;
         frontierCandidates.add(id);
@@ -230,6 +242,9 @@ export function getNeighborhood({
       visible.add(id);
       depths.set(id, hop);
       admitted.push(id);
+      // Track which nodes had their satellites capped
+      const totalNeighbors = (adj.get(from) || new Set()).size;
+      if (totalNeighbors > maxSatellites) cappedNodes.add(from);
     });
 
     currentLayer = admitted;
@@ -256,7 +271,11 @@ export function getNeighborhood({
   // the UI must still say "there is more graph beyond this view".
   if (visible.size >= maxNodes && frontierCandidates.size > 0) truncated = true;
 
-  const resultNodes = Array.from(visible).map(id => ({ ...byId.get(id), hop: depths.get(id) }));
+  const resultNodes = Array.from(visible).map(id => ({
+    ...byId.get(id),
+    hop: depths.get(id),
+    hasMoreSatellites: cappedNodes.has(id),
+  }));
 
   return {
     nodes: resultNodes,
