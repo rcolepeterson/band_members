@@ -488,6 +488,26 @@ export default async (req) => {
     `;
     results.push('index band_follows_band_id_idx ready');
 
+    // member_follows table ----------------------------------------------------
+    // Mirrors band_follows: lets users follow individual members to track
+    // their career moves across bands. Composite PK = one follow per user
+    // per member; FKs cascade so deleting a member or user cleans up.
+    await sql`
+      create table if not exists member_follows (
+        user_id    uuid not null references users(id) on delete cascade,
+        member_id  uuid not null references band_members(id) on delete cascade,
+        created_at timestamptz not null default now(),
+        primary key (user_id, member_id)
+      )
+    `;
+    results.push('table member_follows ready');
+
+    await sql`
+      create index if not exists member_follows_member_id_idx
+      on member_follows (member_id)
+    `;
+    results.push('index member_follows_member_id_idx ready');
+
     // band_links table ---------------------------------------------------------
     // Phase 3: one row per (band, platform) holding the band's official
     // link for that platform. The platform CHECK mirrors LINK_PLATFORMS in
