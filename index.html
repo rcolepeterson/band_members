@@ -2361,19 +2361,26 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   the name/sub block so it doesn't fight the edit affordance for the
   top-right corner.
 */
+.social-badges-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .node-card__follow {
-  display: block;
-  width: 100%;
-  margin: 10px 0 0;
-  padding: 7px 10px;
+  display: inline-block;
+  width: auto;
+  margin: 0;
+  padding: 4px 12px;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
+  border-radius: 999px;
   color: rgba(255, 255, 255, 0.75);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.4;
   cursor: pointer;
   text-align: center;
+  white-space: nowrap;
 }
 .node-card__follow:hover { color: #fff; border-color: rgba(255, 255, 255, 0.35); }
 .node-card__follow[hidden] { display: none; }
@@ -3869,15 +3876,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
           <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
         </svg>
       </button>
-      <!--
-        Phase 2: "Follow this band" button. Static markup, hidden by default;
-        renderFollowAffordance() shows it for band nodes when the user is
-        signed in. Following a band adds the user to its update-email
-        audience (see _notify.mjs's "touched" definition) without requiring
-        them to edit anything first. Text-only button in the quiet register —
-        no bell icon, no badge counts.
-      -->
-      <button type="button" class="node-card__follow" id="node-card-follow" hidden></button>
       <div class="node-card__header">
         <!--
           PR 4b: node-card-name is wrapped so populateNodeCard() can append
@@ -3899,7 +3897,14 @@ main.layout { padding: 0 !important; gap: 0 !important; }
           becomes the website link). Empty for person cards and for bands
           with no links, in which case the CSS hides it entirely.
         -->
-        <div class="social-badges" id="node-card-badges" aria-label="Official links"></div>
+        <div class="social-badges-row">
+          <div class="social-badges" id="node-card-badges" aria-label="Official links"></div>
+          <!--
+            Follow pill: sits next to the social badges. renderFollowAffordance()
+            shows it for band/member nodes when the user is signed in.
+          -->
+          <button type="button" class="node-card__follow" id="node-card-follow" hidden></button>
+        </div>
         <div class="node-card__sub" id="node-card-sub"></div>
       </div>
       <div class="node-card__rows" id="node-card-rows"></div>
@@ -8154,7 +8159,25 @@ function downloadPngBlob(blob) {
       const isBand = node && node.type === 'band';
       const isMember = node && node.type === 'person';
       const signedIn = !!loadCurrentUser();
-      const followId = (isBand || isMember) && signedIn && node.id ? String(node.id) : null;
+      // Graph node ids are NAMES, not DB UUIDs. Resolve the real database id
+      // via rawBandsData before hitting the follow endpoint — otherwise every
+      // lookup 404s and the button hides itself.
+      let dbId = null;
+      if ((isBand || isMember) && signedIn && node.id && typeof rawBandsData !== 'undefined' && rawBandsData) {
+        const nodeName = String(node.id);
+        if (isBand) {
+          const band = (rawBandsData.bands || []).find(b => b.name === nodeName);
+          // Handle disambiguated ids ("Skid Row — Tom's River, NJ"): fall back
+          // to matching by the plain name stored in node.bandName.
+          const plainName = node.bandName || nodeName.split(' — ')[0];
+          const bandByPlain = (rawBandsData.bands || []).find(b => b.name === plainName);
+          dbId = band ? band.id : (bandByPlain ? bandByPlain.id : null);
+        } else {
+          const member = (rawBandsData.members || []).find(m => m.name === nodeName);
+          dbId = member ? member.id : null;
+        }
+      }
+      const followId = dbId ? String(dbId) : null;
       // Track both id and kind so the toggle hits the right endpoint.
       followStateBandId = followId;
       const followKind = isMember ? 'member' : 'band';
