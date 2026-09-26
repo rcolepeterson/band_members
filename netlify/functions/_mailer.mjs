@@ -80,6 +80,26 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
+export function buildMemberUpdateEmail({ memberName, unsubscribeUrl, eventLabel }) {
+  const safeName = String(memberName || 'A musician').slice(0, 200);
+  const action = eventLabel || 'was recently updated';
+  const subject = `${safeName} ${action}`;
+  const text =
+    `${safeName} ${action}.\n\n` +
+    `See what's new: ${SITE_URL}\n\n` +
+    `You're receiving this because you follow this musician on Six Degrees of Rawk.\n` +
+    `Unsubscribe: ${unsubscribeUrl}\n`;
+  const html =
+    `<div style="font-family: Georgia, serif; color: #e8e4da; background: #14120e; padding: 32px; max-width: 560px;">` +
+    `<p style="font-size: 18px; line-height: 1.6;">${escapeHtml(safeName)} ${escapeHtml(action)}.</p>` +
+    `<p><a href="${SITE_URL}" style="color: #c9a96a;">See what's new on Six Degrees of Rawk</a></p>` +
+    `<hr style="border: none; border-top: 1px solid #3a352c; margin: 24px 0;" />` +
+    `<p style="font-size: 12px; color: #8a8478;">You're receiving this because you follow this musician. ` +
+    `<a href="${escapeHtml(unsubscribeUrl)}" style="color: #8a8478;">Unsubscribe</a> with one click — no login needed.</p>` +
+    `</div>`;
+  return { subject, html, text };
+}
+
 // Send one email via Resend. `to` is a single address string.
 // Never throws — see the module header for the failure contract.
 export async function sendEmail({ to, subject, html, text }) {
