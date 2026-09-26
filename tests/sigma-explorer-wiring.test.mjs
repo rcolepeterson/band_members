@@ -648,7 +648,7 @@ test('clicking a node travels to it, keeping it lit on arrival', () => {
   // The point of the whole explorer: Mike McCready is 6 degrees from Aaron and
   // Pearl Jam is 7, so reaching Pearl Jam by expanding would pull in hundreds of
   // nodes to show one band. Travelling to Mike puts it one hop away.
-  assert.match(EXPLORER, /renderer\.on\('clickNode', \(\{ node \}\) => travelTo\(node\)\)/);
+  assert.match(EXPLORER, /renderer\.on\('clickNode', \(\{\ node \}\) => \{[\s\S]*?travelTo\(node\)/);
   const travel = EXPLORER.slice(EXPLORER.indexOf('function travelTo(node)'), EXPLORER.indexOf("renderer.on('clickNode'"));
   // Clicking the current centre must not re-render the same view.
   assert.match(travel, /if \(node === state\.anchorId\)/);
