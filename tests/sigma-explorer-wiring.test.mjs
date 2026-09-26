@@ -623,7 +623,7 @@ test('Reset returns to the opening view, not just the opening camera', () => {
   const goHome = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function showTip'));
   // Budgets have to be reset too: after two expands, recentring the camera alone
   // would leave 220 nodes on screen.
-  assert.match(goHome, /state\.maxHops = NEIGHBORHOOD_BUDGET\.MAX_HOPS/);
+  assert.match(goHome, /state\.maxHops = (NEIGHBORHOOD_BUDGET\.MAX_HOPS|initialHopsForAnchor\()/);
   assert.match(goHome, /maxNodes: NEIGHBORHOOD_BUDGET\.OPENING_MAX_NODES/);
   assert.match(goHome, /clearHighlight\(\)/);
 });
