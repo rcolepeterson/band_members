@@ -657,7 +657,9 @@ test('clicking a node travels to it, keeping it lit on arrival', () => {
   assert.match(travel, /maxNodes: NEIGHBORHOOD_BUDGET\.MAX_NODES/);
   // renderNeighborhood clears the highlight while drawing, so it is re-applied
   // afterwards -- otherwise you arrive somewhere with nothing lit.
-  assert.match(travel, /if \(moved\) highlightFrom\(node\)/);
+  // renderNeighborhood returns undefined on success (not true), so the check
+  // is !== false rather than truthy.
+  assert.match(travel, /if \(moved !== false\) highlightFrom\(node\)/);
   assert.match(travel, /rbft:sigma-travel/);
 });
 
@@ -870,7 +872,7 @@ test('one click both travels and leaves the card open', () => {
   // stick. Stale card closes first, new card opens second.
   const travel = EXPLORER.slice(EXPLORER.indexOf('function travelTo(node)'), EXPLORER.indexOf("renderer.on('clickNode'"));
   const dispatchAt = travel.indexOf("'rbft:sigma-travel'");
-  const highlightAt = travel.indexOf('if (moved) highlightFrom(node)');
+  const highlightAt = travel.indexOf('if (moved !== false) highlightFrom(node)');
   assert.ok(dispatchAt > 0 && highlightAt > 0, 'travelTo should both announce travel and re-highlight');
   assert.ok(dispatchAt < highlightAt, 'travel must be announced BEFORE the highlight reopens the card');
 });
