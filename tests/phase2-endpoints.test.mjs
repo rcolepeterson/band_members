@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 import { DB_URL_ENV } from '../netlify/functions/_db.mjs';
 import notificationPrefs from '../netlify/functions/notification_prefs.mjs';
 import follows from '../netlify/functions/follows.mjs';
+import memberFollows from '../netlify/functions/member-follows.mjs';
 import unsubscribe from '../netlify/functions/unsubscribe.mjs';
 import resendWebhook from '../netlify/functions/resend_webhook.mjs';
 
@@ -185,3 +186,52 @@ test('resend-webhook: bad signature -> 401', async () => {
     else process.env.RESEND_WEBHOOK_SECRET = before;
   }
 });
+
+// --- member follows -----------------------------------------------------
+
+test('member-follows: GET without token -> 401 (auth before DB)', withoutDb(async () => {
+  const res = await memberFollows(req('GET', '/api/members/abc/follow'), ctx('abc'));
+  assert.equal(res.status, 401);
+}));
+
+test('member-follows: POST without token -> 401 (auth before DB)', withoutDb(async () => {
+  const res = await memberFollows(req('POST', '/api/members/abc/follow'), ctx('abc'));
+  assert.equal(res.status, 401);
+}));
+
+test('member-follows: DELETE without token -> 401 (auth before DB)', withoutDb(async () => {
+  const res = await memberFollows(req('DELETE', '/api/members/abc/follow'), ctx('abc'));
+  assert.equal(res.status, 401);
+}));
+
+test('member-follows: PUT -> 405', withoutDb(async () => {
+  const res = await memberFollows(
+    req('PUT', '/api/members/abc/follow', { authorization: 'Bearer tok' }),
+    ctx('abc')
+  );
+  assert.equal(res.status, 405);
+}));
+
+test('member-follows: GET with token but no DB -> 503', withoutDb(async () => {
+  const res = await memberFollows(
+    req('GET', '/api/members/abc/follow', { authorization: 'Bearer tok' }),
+    ctx('abc')
+  );
+  assert.equal(res.status, 503);
+}));
+
+test('member-follows: missing member id -> 400', withoutDb(async () => {
+  const res = await memberFollows(
+    req('GET', '/api/members//follow', { authorization: 'Bearer tok' }),
+    { params: {} }
+  );
+  assert.equal(res.status, 400);
+}));
+
+test('member-follows: member id extracted from URL when context.params is absent', withoutDb(async () => {
+  const res = await memberFollows(
+    req('GET', '/api/members/some-uuid/follow', { authorization: 'Bearer tok' }),
+    {}
+  );
+  assert.equal(res.status, 503);
+}));
