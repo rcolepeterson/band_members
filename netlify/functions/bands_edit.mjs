@@ -42,7 +42,7 @@ import {
 } from './_db.mjs';
 import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
 import { sameBandIdentity } from './_bands_write.mjs';
-import { notifyBandTouched } from './_notify.mjs';
+import { notifyBandTouched, EVENT_BAND_BADGE_ADDED, EVENT_BAND_EDITED } from './_notify.mjs';
 import {
   normalizeLinksInput,
   diffBandLinks,
@@ -335,13 +335,17 @@ export default async (req, context) => {
 
     // Band-update notifications (Phase 2). The actor is excluded by
     // notifyBandTouched; everyone else who touched this band gets at most
-    // one email per 24h. Link changes count as band updates, so they fire
-    // the hook too. Admin-token edits have no actor to exclude.
+    // one email per 24h. Link/badge changes get their own event type so
+    // users can opt out of badge noise while keeping edit alerts.
+    // Admin-token edits have no actor to exclude.
     // Best-effort: never throws, never blocks this response.
     await notifyBandTouched(sql, {
       bandId,
       bandName: updatedBand.name,
       actorUserId: user ? user.id : null,
+      eventType: linksChangedKeys.length > 0 && Object.keys(changes).length === 0
+        ? EVENT_BAND_BADGE_ADDED
+        : EVENT_BAND_EDITED,
     });
 
     return ok({ band: updatedBand, changes, links: linksChanged });
