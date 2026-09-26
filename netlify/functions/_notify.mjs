@@ -30,12 +30,30 @@
 import { generateToken } from './_db.mjs';
 import {
   buildBandUpdateEmail,
+  buildMemberUpdateEmail,
   isMailerConfigured,
   sendEmail as defaultSendEmail,
   SITE_URL,
 } from './_mailer.mjs';
 
 export const NOTIFY_COOLDOWN_HOURS = 24;
+
+// Event types for granular preferences. Band events notify band followers;
+// member events notify member followers.
+export const EVENT_BAND_MEMBER_JOINED = 'band_member_joined';
+export const EVENT_BAND_BADGE_ADDED = 'band_badge_added';
+export const EVENT_BAND_EDITED = 'band_edited';
+export const EVENT_MEMBER_BAND_CHANGED = 'member_band_changed';
+export const EVENT_MEMBER_EDITED = 'member_edited';
+
+// Maps event types to notification_prefs columns.
+const EVENT_PREF_COLUMN = {
+  [EVENT_BAND_MEMBER_JOINED]: 'notify_band_member_joined',
+  [EVENT_BAND_BADGE_ADDED]: 'notify_band_badge_added',
+  [EVENT_BAND_EDITED]: 'notify_band_edited',
+  [EVENT_MEMBER_BAND_CHANGED]: 'notify_member_band_changed',
+  [EVENT_MEMBER_EDITED]: 'notify_member_edited',
+};
 
 // Backstop under Resend's 100/day free tier. The per-band cooldown is the
 // real throttle; this just keeps a bug from eating the whole quota.
@@ -53,7 +71,9 @@ export function unsubscribeUrlFor(token) {
 // lazy creation here covers everyone — no backfill migration needed.
 export async function ensureNotifyPrefs(sql, userId) {
   const rows = await sql`
-    select user_id, email_enabled, unsubscribed_at, unsubscribe_token
+    select user_id, email_enabled, unsubscribed_at, unsubscribe_token,
+      notify_band_member_joined, notify_band_badge_added, notify_band_edited,
+      notify_member_band_changed, notify_member_edited
     from notification_prefs
     where user_id = ${userId}
     limit 1
@@ -65,7 +85,9 @@ export async function ensureNotifyPrefs(sql, userId) {
         update notification_prefs
         set unsubscribe_token = ${token}, updated_at = now()
         where user_id = ${userId}
-        returning user_id, email_enabled, unsubscribed_at, unsubscribe_token
+        returning user_id, email_enabled, unsubscribed_at, unsubscribe_token,
+          notify_band_member_joined, notify_band_badge_added, notify_band_edited,
+          notify_member_band_changed, notify_member_edited
       `;
       return updated[0];
     }
@@ -75,7 +97,9 @@ export async function ensureNotifyPrefs(sql, userId) {
   const inserted = await sql`
     insert into notification_prefs (user_id, email_enabled, unsubscribe_token)
     values (${userId}, true, ${token})
-    returning user_id, email_enabled, unsubscribed_at, unsubscribe_token
+    returning user_id, email_enabled, unsubscribed_at, unsubscribe_token,
+      notify_band_member_joined, notify_band_badge_added, notify_band_edited,
+      notify_member_band_changed, notify_member_edited
   `;
   return inserted[0];
 }
@@ -108,10 +132,17 @@ export async function getTouchedRecipients(sql, bandId, actorUserId) {
   return rows;
 }
 
-async function notifyOneRecipient(sql, bandId, bandName, recipient, mailer) {
+async function notifyOneRecipient(sql, bandId, bandName, recipient, mailer, eventType) {
   const prefs = await ensureNotifyPrefs(sql, recipient.id);
   if (!prefs.email_enabled || prefs.unsubscribed_at) {
     return { sent: false, reason: 'opted out' };
+  }
+  // Granular event-type opt-out: skip if the user disabled this event type.
+  if (eventType && EVENT_PREF_COLUMN[eventType]) {
+    const col = EVENT_PREF_COLUMN[eventType];
+    if (prefs[col] === false) {
+      return { sent: false, reason: 'event type opted out' };
+    }
   }
   const cooled = await sql`
     select 1 from band_notification_log
@@ -141,7 +172,7 @@ async function notifyOneRecipient(sql, bandId, bandName, recipient, mailer) {
 
 export async function notifyBandTouched(
   sql,
-  { bandId, bandName, actorUserId, mailer = { sendEmail: defaultSendEmail } }
+  { bandId, bandName, actorUserId, mailer = { sendEmail: defaultSendEmail }, eventType = EVENT_BAND_EDITED }
 ) {
   try {
     if (!isMailerConfigured()) {
@@ -161,7 +192,7 @@ export async function notifyBandTouched(
     // per-recipient so one bad address can't sink the rest.
     const outcomes = await Promise.allSettled(
       recipients.map((r) =>
-        notifyOneRecipient(sql, bandId, bandName, r, mailer).catch((err) => {
+        notifyOneRecipient(sql, bandId, bandName, r, mailer, eventType).catch((err) => {
           console.warn('notify: recipient failed', r.id, err && err.message);
           return { sent: false, reason: 'error' };
         })
@@ -173,6 +204,97 @@ export async function notifyBandTouched(
     return { ok: true, sent };
   } catch (err) {
     console.warn('notifyBandTouched failed (non-fatal)', err && err.message);
+    return { ok: false, sent: 0 };
+  }
+}
+
+// --- Member notifications -------------------------------------------------
+// Mirrors the band flow: users who follow a member get emailed when that
+// member's bands change (career tracking) or their card is edited.
+
+export async function getMemberFollowRecipients(sql, memberId, actorUserId) {
+  const rows = await sql`
+    select distinct u.id, u.email, u.name
+    from users u
+    where u.id <> ${actorUserId}
+      and u.id in (select user_id from member_follows where member_id = ${memberId})
+  `;
+  return rows;
+}
+
+async function notifyOneMemberRecipient(sql, memberId, memberName, recipient, mailer, eventType) {
+  const prefs = await ensureNotifyPrefs(sql, recipient.id);
+  if (!prefs.email_enabled || prefs.unsubscribed_at) {
+    return { sent: false, reason: 'opted out' };
+  }
+  if (eventType && EVENT_PREF_COLUMN[eventType]) {
+    const col = EVENT_PREF_COLUMN[eventType];
+    if (prefs[col] === false) {
+      return { sent: false, reason: 'event type opted out' };
+    }
+  }
+  const cooled = await sql`
+    select 1 from member_notification_log
+    where member_id = ${memberId}
+      and user_id = ${recipient.id}
+      and sent_at > now() - (${NOTIFY_COOLDOWN_HOURS} * interval '1 hour')
+    limit 1
+  `;
+  if (cooled.length) {
+    return { sent: false, reason: 'cooldown' };
+  }
+  const eventLabels = {
+    [EVENT_MEMBER_BAND_CHANGED]: 'joined a new band',
+    [EVENT_MEMBER_EDITED]: 'was recently updated',
+  };
+  const email = buildMemberUpdateEmail({
+    memberName,
+    unsubscribeUrl: unsubscribeUrlFor(prefs.unsubscribe_token),
+    eventLabel: eventLabels[eventType] || 'was recently updated',
+  });
+  const result = await mailer.sendEmail({ to: recipient.email, ...email });
+  if (!result.ok) {
+    console.warn('notify member: send failed for user', recipient.id, result.error);
+    return { sent: false, reason: 'send failed' };
+  }
+  await sql`
+    insert into member_notification_log (member_id, user_id)
+    values (${memberId}, ${recipient.id})
+  `;
+  return { sent: true };
+}
+
+export async function notifyMemberTouched(
+  sql,
+  { memberId, memberName, actorUserId, mailer = { sendEmail: defaultSendEmail }, eventType = EVENT_MEMBER_EDITED }
+) {
+  try {
+    if (!isMailerConfigured()) {
+      return { ok: true, sent: 0, skipped: 'mailer not configured' };
+    }
+    const counted = await sql`
+      select count(*)::int as n from member_notification_log
+      where sent_at > now() - interval '24 hours'
+    `;
+    if (counted[0] && counted[0].n >= DAILY_SEND_CAP) {
+      console.warn('notify member: daily send cap reached, skipping');
+      return { ok: true, sent: 0, skipped: 'daily cap' };
+    }
+    const recipients = await getMemberFollowRecipients(sql, memberId, actorUserId);
+    const outcomes = await Promise.allSettled(
+      recipients.map((r) =>
+        notifyOneMemberRecipient(sql, memberId, memberName, r, mailer, eventType).catch((err) => {
+          console.warn('notify member: recipient failed', r.id, err && err.message);
+          return { sent: false, reason: 'error' };
+        })
+      )
+    );
+    const sent = outcomes.filter(
+      (o) => o.status === 'fulfilled' && o.value && o.value.sent
+    ).length;
+    return { ok: true, sent };
+  } catch (err) {
+    console.warn('notifyMemberTouched failed (non-fatal)', err && err.message);
     return { ok: false, sent: 0 };
   }
 }
