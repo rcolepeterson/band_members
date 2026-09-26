@@ -29,8 +29,22 @@ function toResponseBody(prefs) {
     // Exposed so the client can show "unsubscribed on <date>" copy if it
     // wants to; null when the user never opted out.
     unsubscribed_at: prefs.unsubscribed_at || null,
+    // Granular event-type toggles (PR 2). All default true.
+    notify_band_member_joined: prefs.notify_band_member_joined !== false,
+    notify_band_badge_added: prefs.notify_band_badge_added !== false,
+    notify_band_edited: prefs.notify_band_edited !== false,
+    notify_member_band_changed: prefs.notify_member_band_changed !== false,
+    notify_member_edited: prefs.notify_member_edited !== false,
   };
 }
+
+const EVENT_TOGGLE_FIELDS = [
+  'notify_band_member_joined',
+  'notify_band_badge_added',
+  'notify_band_edited',
+  'notify_member_band_changed',
+  'notify_member_edited',
+];
 
 export default async (req) => {
   if (req.method !== 'GET' && req.method !== 'PATCH') return methodNotAllowed();
@@ -58,21 +72,39 @@ export default async (req) => {
     } catch {
       return badRequest('request body must be JSON');
     }
-    if (!body || typeof body !== 'object' || typeof body.email_enabled !== 'boolean') {
-      return badRequest('body must be { email_enabled: boolean }', { field: 'email_enabled' });
+    // PATCH accepts { email_enabled: boolean } and/or any of the granular
+    // event-type toggles. At least one must be present.
+    const patch = {};
+    if (typeof body.email_enabled === 'boolean') patch.email_enabled = body.email_enabled;
+    for (const field of EVENT_TOGGLE_FIELDS) {
+      if (typeof body[field] === 'boolean') patch[field] = body[field];
+    }
+    if (Object.keys(patch).length === 0) {
+      return badRequest('body must include email_enabled or an event-type toggle', { field: 'email_enabled' });
     }
 
     // ensureNotifyPrefs first so the row (and its unsubscribe token)
-    // exists; then flip the switch. unsubscribed_at tracks the opt-out
-    // moment: set when disabling, cleared when re-enabling.
+    // exists; then apply the patch. unsubscribed_at tracks the master
+    // opt-out moment: set when disabling email, cleared when re-enabling.
     await ensureNotifyPrefs(sql, user.id);
     const updated = await sql`
       update notification_prefs
-      set email_enabled = ${body.email_enabled},
-          unsubscribed_at = case when ${body.email_enabled} then null else now() end,
+      set email_enabled = coalesce(${patch.email_enabled ?? null}, email_enabled),
+          notify_band_member_joined = coalesce(${patch.notify_band_member_joined ?? null}, notify_band_member_joined),
+          notify_band_badge_added = coalesce(${patch.notify_band_badge_added ?? null}, notify_band_badge_added),
+          notify_band_edited = coalesce(${patch.notify_band_edited ?? null}, notify_band_edited),
+          notify_member_band_changed = coalesce(${patch.notify_member_band_changed ?? null}, notify_member_band_changed),
+          notify_member_edited = coalesce(${patch.notify_member_edited ?? null}, notify_member_edited),
+          unsubscribed_at = case
+            when ${patch.email_enabled ?? null} is null then unsubscribed_at
+            when ${patch.email_enabled ?? null} then null
+            else now()
+          end,
           updated_at = now()
       where user_id = ${user.id}
-      returning user_id, email_enabled, unsubscribed_at, unsubscribe_token
+      returning user_id, email_enabled, unsubscribed_at, unsubscribe_token,
+        notify_band_member_joined, notify_band_badge_added, notify_band_edited,
+        notify_member_band_changed, notify_member_edited
     `;
     return ok(toResponseBody(updated[0]));
   } catch (err) {
