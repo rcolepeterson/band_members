@@ -2180,7 +2180,9 @@ export function initSigmaExplorer({
     if (!nodeId) return; // pressed empty space: let it pan normally
 
     if (startDrag(nodeId, e.clientX, e.clientY)) {
-      e.preventDefault();
+      // No preventDefault() here: it would block the compatibility mouse events
+      // Sigma uses for clickNode detection, breaking tap-to-travel. Drag
+      // prevention happens in pointermove once movement exceeds the threshold.
       try { canvasHost.setPointerCapture(e.pointerId); } catch (err) {}
     }
   });
