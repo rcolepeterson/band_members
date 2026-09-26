@@ -1976,129 +1976,152 @@ export function initSigmaExplorer({
     if (moved) highlightFrom(node);
   }
 
-  // Draggable nodes: click-drag moves a node plus its direct neighbors as a
-  // group (D3-style). A press that moves less than 10px is a click (navigates);
-  // 10px or more is a drag (moves nodes, suppresses navigation). Positions are
-  // session-only: navigating to a new view resets the layout.
+  // Draggable nodes v2: press-drag moves a node plus its direct neighbors.
+  // Custom hit detection with a forgiving 25px grab radius (easier on mobile).
+  // <10px movement = tap (navigates); >=10px = drag (moves, suppresses nav).
+  // Positions are session-only: navigating resets the layout.
   const DRAG_THRESHOLD_PX = 10;
+  const GRAB_RADIUS_TOUCH_PX = 25; // fat fingers need forgiveness
+  const GRAB_RADIUS_MOUSE_PX = 10; // hover already expands nodes on desktop
   let dragState = null;
   let suppressNextClick = false;
 
-  function getPointerPos(e) {
-    // Sigma normalizes mouse/touch into e.event; fall back to raw event.
-    const evt = e.event || e;
-    if (evt.touches && evt.touches.length > 0) {
-      return { x: evt.touches[0].clientX, y: evt.touches[0].clientY };
-    }
-    return { x: evt.clientX ?? evt.x, y: evt.clientY ?? evt.y };
-  }
-
-  renderer.on('downNode', (e) => {
-    const nodeId = e.node;
-    const pointer = getPointerPos(e);
-    if (pointer.x == null || pointer.y == null) return;
-
-    // Group: the node plus its direct (1-hop) neighbors.
-    const group = new Set([nodeId]);
-    try {
-      viewGraph.forEachNeighbor(nodeId, (neighbor) => group.add(neighbor));
-    } catch (err) { /* isolated node: group is just itself */ }
-
-    const startPositions = new Map();
-    for (const id of group) {
-      try {
-        startPositions.set(id, {
-          x: viewGraph.getNodeAttribute(id, 'x'),
-          y: viewGraph.getNodeAttribute(id, 'y'),
-        });
-      } catch (err) { /* skip nodes without positions */ }
-    }
-
-    // Graph coords of the pointer at drag start, for delta computation.
-    let startGraph = null;
+  function pointerToGraph(clientX, clientY) {
     try {
       const rect = canvasHost.getBoundingClientRect();
-      startGraph = renderer.viewportToGraph({
-        x: pointer.x - rect.left,
-        y: pointer.y - rect.top,
+      return renderer.viewportToGraph({
+        x: clientX - rect.left,
+        y: clientY - rect.top,
       });
-    } catch (err) { return; }
+    } catch (err) { return null; }
+  }
+
+  function findNodeNear(graphX, graphY, pointerType) {
+    // Nearest node within grab radius (screen space converted to graph).
+    // Touch gets a forgiving radius; mouse is precise (hover expands nodes).
+    const grabPx = pointerType === 'touch' ? GRAB_RADIUS_TOUCH_PX : GRAB_RADIUS_MOUSE_PX;
+    let ratio = 1;
+    try { ratio = renderer.getCamera().ratio || 1; } catch (err) {}
+    const threshold = grabPx * ratio;
+    let closest = null;
+    let closestDist = threshold;
+    try {
+      viewGraph.forEachNode((nodeId) => {
+        let x, y;
+        try {
+          x = viewGraph.getNodeAttribute(nodeId, 'x');
+          y = viewGraph.getNodeAttribute(nodeId, 'y');
+        } catch (err) { return; }
+        if (x == null || y == null) return;
+        const dist = Math.hypot(x - graphX, y - graphY);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = nodeId;
+        }
+      });
+    } catch (err) {}
+    return closest;
+  }
+
+  function getGroup(nodeId) {
+    // The node plus its direct (1-hop) neighbors.
+    const group = [nodeId];
+    try {
+      const neighbors = viewGraph.neighbors(nodeId);
+      for (const n of neighbors) {
+        if (n !== nodeId && !group.includes(n)) group.push(n);
+      }
+    } catch (err) { /* isolated node: just itself */ }
+    return group;
+  }
+
+  function startDrag(nodeId, clientX, clientY) {
+    const graphPos = pointerToGraph(clientX, clientY);
+    if (!graphPos) return false;
+
+    const group = getGroup(nodeId);
 
     dragState = {
       nodeId,
       group,
-      startPositions,
-      startPointer: pointer,
-      lastGraph: startGraph,
+      startClient: { x: clientX, y: clientY },
+      lastGraph: graphPos,
       dragged: false,
     };
 
-    // Disable camera so dragging a node doesn't pan the stage.
     try { renderer.getCamera().disable(); } catch (err) {}
+    return true;
+  }
 
-    const onMove = (moveEvent) => {
-      if (!dragState) return;
-      const p = {
-        x: moveEvent.touches && moveEvent.touches.length > 0
-          ? moveEvent.touches[0].clientX : moveEvent.clientX,
-        y: moveEvent.touches && moveEvent.touches.length > 0
-          ? moveEvent.touches[0].clientY : moveEvent.clientY,
-      };
-      if (p.x == null || p.y == null) return;
+  function moveDrag(clientX, clientY) {
+    if (!dragState) return;
 
-      // Threshold: 10px distinguishes a click from a drag.
-      const dx = p.x - dragState.startPointer.x;
-      const dy = p.y - dragState.startPointer.y;
-      if (!dragState.dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
-      dragState.dragged = true;
+    const dx = clientX - dragState.startClient.x;
+    const dy = clientY - dragState.startClient.y;
+    if (!dragState.dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+    dragState.dragged = true;
 
-      // Convert to graph coords and apply the delta to the whole group.
-      try {
-        const rect = canvasHost.getBoundingClientRect();
-        const graphPos = renderer.viewportToGraph({
-          x: p.x - rect.left,
-          y: p.y - rect.top,
-        });
-        const deltaX = graphPos.x - dragState.lastGraph.x;
-        const deltaY = graphPos.y - dragState.lastGraph.y;
-        dragState.lastGraph = graphPos;
+    const graphPos = pointerToGraph(clientX, clientY);
+    if (!graphPos) return;
 
-        for (const id of dragState.group) {
-          const start = dragState.startPositions.get(id);
-          if (!start) continue;
-          // Move relative to drag start + accumulated delta, so the group
-          // stays rigid even if the pointer jumps.
-          const curX = viewGraph.getNodeAttribute(id, 'x');
-          const curY = viewGraph.getNodeAttribute(id, 'y');
-          viewGraph.setNodeAttribute(id, 'x', curX + deltaX);
-          viewGraph.setNodeAttribute(id, 'y', curY + deltaY);
-        }
-        renderer.refresh();
-      } catch (err) { /* ignore transient coord errors during drag */ }
+    const deltaX = graphPos.x - dragState.lastGraph.x;
+    const deltaY = graphPos.y - dragState.lastGraph.y;
+    dragState.lastGraph = graphPos;
 
-      if (moveEvent.cancelable) moveEvent.preventDefault();
-    };
-
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onUp);
-      window.removeEventListener('touchcancel', onUp);
-      try { renderer.getCamera().enable(); } catch (err) {}
-      if (dragState && dragState.dragged) {
-        // Suppress the clickNode that Sigma fires after a drag.
-        suppressNextClick = true;
-        setTimeout(() => { suppressNextClick = false; }, 50);
+    try {
+      for (const id of dragState.group) {
+        const curX = viewGraph.getNodeAttribute(id, 'x');
+        const curY = viewGraph.getNodeAttribute(id, 'y');
+        if (curX == null || curY == null) continue;
+        viewGraph.setNodeAttribute(id, 'x', curX + deltaX);
+        viewGraph.setNodeAttribute(id, 'y', curY + deltaY);
       }
-      dragState = null;
-    };
+      renderer.refresh();
+    } catch (err) { /* ignore transient errors during drag */ }
+  }
 
-    window.addEventListener('mousemove', onMove, { passive: false });
-    window.addEventListener('mouseup', onUp);
-    window.addEventListener('touchmove', onMove, { passive: false });
-    window.addEventListener('touchend', onUp);
-    window.addEventListener('touchcancel', onUp);
+  function endDrag() {
+    if (!dragState) return;
+    try { renderer.getCamera().enable(); } catch (err) {}
+    if (dragState.dragged) {
+      suppressNextClick = true;
+      setTimeout(() => { suppressNextClick = false; }, 100);
+    }
+    dragState = null;
+  }
+
+  // Pointer events on the canvas host: unified mouse/touch handling.
+  canvasHost.addEventListener('pointerdown', (e) => {
+    if (dragState) return; // already dragging
+    // Only left button / touch contact.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+    const graphPos = pointerToGraph(e.clientX, e.clientY);
+    if (!graphPos) return;
+
+    const nodeId = findNodeNear(graphPos.x, graphPos.y, e.pointerType);
+    if (!nodeId) return; // pressed empty space: let it pan normally
+
+    if (startDrag(nodeId, e.clientX, e.clientY)) {
+      e.preventDefault();
+      try { canvasHost.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+  });
+
+  canvasHost.addEventListener('pointermove', (e) => {
+    if (!dragState) return;
+    e.preventDefault();
+    moveDrag(e.clientX, e.clientY);
+  });
+
+  canvasHost.addEventListener('pointerup', (e) => {
+    if (!dragState) return;
+    try { canvasHost.releasePointerCapture(e.pointerId); } catch (err) {}
+    endDrag();
+  });
+
+  canvasHost.addEventListener('pointercancel', () => {
+    endDrag();
   });
 
   renderer.on('clickNode', ({ node }) => {
