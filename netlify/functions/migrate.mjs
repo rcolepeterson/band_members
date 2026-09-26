@@ -573,6 +573,28 @@ export default async (req) => {
     `;
     results.push('trigger band_links_set_updated_at ready');
 
+    // daily_snapshots table ---------------------------------------------------
+    // Growth dashboard: one row per day capturing graph + social metrics.
+    // Backfilled from Aaron's manual spreadsheet (Aug 31 2026 →), then
+    // appended by the daily snapshot job. Never updated, only inserted —
+    // the history IS the product (time-travel charts on the ops board).
+    await sql`
+      create table if not exists daily_snapshots (
+        snapshot_date       date primary key,
+        node_count          integer,
+        user_count          integer,
+        follows_count       integer,
+        bands_added         integer not null default 0,
+        ig_sixdegrees       integer,
+        ig_vimana17         integer,
+        fb_sixdegrees       integer,
+        fb_aaron            integer,
+        notes               text,
+        created_at          timestamptz not null default now()
+      )
+    `;
+    results.push('table daily_snapshots ready');
+
     return ok({ steps: results });
   } catch (err) {
     console.error('migrate failed', err);
