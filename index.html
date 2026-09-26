@@ -1154,6 +1154,22 @@ button.header-user-chip:focus-visible {
   height: 1rem;
   accent-color: #8fe8f6;
 }
+.user-card-notify-details {
+  margin: 0.25rem 0 0.55rem;
+}
+.user-card-notify-details summary {
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+.user-card-notify-details summary:hover { color: rgba(255, 255, 255, 0.85); }
+.user-card-toggle--sub {
+  margin-left: 1.25rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.85em;
+  color: rgba(255, 255, 255, 0.75);
+}
 .user-card-note {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
@@ -3120,6 +3136,29 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                   <input type="checkbox" id="user-card-notify-toggle" />
                   <span>Email me when a band I've touched is updated</span>
                 </label>
+                <details class="user-card-notify-details">
+                  <summary>Choose which updates you get</summary>
+                  <label class="user-card-toggle user-card-toggle--sub">
+                    <input type="checkbox" data-notify-event="notify_band_member_joined" />
+                    <span>New member joins a band I follow</span>
+                  </label>
+                  <label class="user-card-toggle user-card-toggle--sub">
+                    <input type="checkbox" data-notify-event="notify_band_badge_added" />
+                    <span>New social badge on a band I follow</span>
+                  </label>
+                  <label class="user-card-toggle user-card-toggle--sub">
+                    <input type="checkbox" data-notify-event="notify_band_edited" />
+                    <span>Band card details edited</span>
+                  </label>
+                  <label class="user-card-toggle user-card-toggle--sub">
+                    <input type="checkbox" data-notify-event="notify_member_band_changed" />
+                    <span>Musician I follow joins or leaves a band</span>
+                  </label>
+                  <label class="user-card-toggle user-card-toggle--sub">
+                    <input type="checkbox" data-notify-event="notify_member_edited" />
+                    <span>Musician card details edited</span>
+                  </label>
+                </details>
                 <p class="user-card-note">One email per band per day, max. Unsubscribe anytime with one click from any email.</p>
                 <button type="button" class="link-btn" id="header-sign-out-btn">Sign out</button>
               </div>
@@ -6897,7 +6936,7 @@ function downloadPngBlob(blob) {
         ? { Authorization: 'Bearer ' + user.token }
         : null;
     }
-    // Server read. Returns the boolean preference, or null when the
+    // Server read. Returns the full prefs object, or null when the
     // request failed (caller falls back to the localStorage cache).
     async function fetchNotifyPref() {
       const headers = authHeaders();
@@ -6906,26 +6945,31 @@ function downloadPngBlob(blob) {
         const res = await fetch(NOTIFY_PREFS_ENDPOINT, { headers });
         if (!res.ok) return null;
         const data = await res.json();
-        return typeof data.email_enabled === 'boolean' ? data.email_enabled : null;
+        return data && typeof data.email_enabled === 'boolean' ? data : null;
       } catch (error) {
         return null;
       }
     }
-    // Server write. Returns true on success, false on failure (caller
-    // reverts the optimistic UI).
-    async function saveNotifyPref(on) {
+    // Server write. Accepts a patch object with email_enabled and/or
+    // event-type toggles. Returns true on success, false on failure
+    // (caller reverts the optimistic UI).
+    async function saveNotifyPref(patch) {
       const headers = authHeaders();
       if (!headers) return false;
       try {
         const res = await fetch(NOTIFY_PREFS_ENDPOINT, {
           method: 'PATCH',
           headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email_enabled: !!on }),
+          body: JSON.stringify(patch),
         });
         return res.ok;
       } catch (error) {
         return false;
       }
+    }
+    // Backwards-compatible wrapper for the master toggle.
+    async function saveNotifyMaster(on) {
+      return saveNotifyPref({ email_enabled: !!on });
     }
 
     // Fill the user card from the current session. Called from
@@ -6941,13 +6985,46 @@ function downloadPngBlob(blob) {
       if (toggle) {
         toggle.checked = getNotifyPref();
         if (user) {
-          fetchNotifyPref().then((serverPref) => {
-            if (serverPref === null) return;
-            setNotifyPref(serverPref);
+          fetchNotifyPref().then((prefs) => {
+            if (prefs === null) return;
+            setNotifyPref(prefs.email_enabled);
             const liveToggle = document.getElementById('user-card-notify-toggle');
-            if (liveToggle) liveToggle.checked = serverPref;
+            if (liveToggle) liveToggle.checked = prefs.email_enabled;
+            // Granular event toggles.
+            document.querySelectorAll('[data-notify-event]').forEach((el) => {
+              const field = el.getAttribute('data-notify-event');
+              if (field && typeof prefs[field] === 'boolean') {
+                el.checked = prefs[field];
+              }
+            });
           });
         }
+      }
+    }
+
+    // Wire up the granular event toggles (once at init).
+    function initNotifyEventToggles() {
+      document.querySelectorAll('[data-notify-event]').forEach((el) => {
+        el.addEventListener('change', async () => {
+          const field = el.getAttribute('data-notify-event');
+          if (!field) return;
+          const on = el.checked;
+          const ok = await saveNotifyPref({ [field]: on });
+          if (!ok) el.checked = !on; // revert on failure
+        });
+      });
+      const masterToggle = document.getElementById('user-card-notify-toggle');
+      if (masterToggle && !masterToggle.dataset.wired) {
+        masterToggle.dataset.wired = '1';
+        masterToggle.addEventListener('change', async () => {
+          const on = masterToggle.checked;
+          setNotifyPref(on);
+          const ok = await saveNotifyMaster(on);
+          if (!ok) {
+            masterToggle.checked = !on;
+            setNotifyPref(!on);
+          }
+        });
       }
     }
 
@@ -11462,20 +11539,10 @@ function downloadPngBlob(blob) {
       if (userCard && !userCard.hidden) renderUserCard();
     });
 
-    // Notification toggle in the user card. Optimistic UI: flip the cache
-    // and the toggle immediately, PATCH the server, revert both on
-    // failure so the toggle never lies about the persisted state.
-    document.getElementById('user-card-notify-toggle')?.addEventListener('change', (event) => {
-      const on = event.target.checked;
-      setNotifyPref(on);
-      saveNotifyPref(on).then((saved) => {
-        if (!saved) {
-          setNotifyPref(!on);
-          const toggle = document.getElementById('user-card-notify-toggle');
-          if (toggle) toggle.checked = !on;
-        }
-      });
-    });
+    // Notification toggles in the user card (master + granular event types).
+    // Wired once via initNotifyEventToggles: optimistic UI, PATCH the
+    // server, revert on failure so toggles never lie about persisted state.
+    initNotifyEventToggles();
 
     document.getElementById('edit-band-cancel-btn')?.addEventListener('click', closeEditBandPopover);
 
