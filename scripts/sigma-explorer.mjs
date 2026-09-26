@@ -2197,8 +2197,11 @@ export function initSigmaExplorer({
 
   canvasHost.addEventListener('pointermove', (e) => {
     if (!dragState) return;
-    e.preventDefault();
+    // Only preventDefault once it's a real drag (threshold exceeded). Calling
+    // it on sub-threshold moves would cancel the browser's pending click,
+    // breaking tap-to-travel.
     moveDrag(e.clientX, e.clientY);
+    if (dragState && dragState.dragged) e.preventDefault();
   });
 
   canvasHost.addEventListener('pointerup', (e) => {
