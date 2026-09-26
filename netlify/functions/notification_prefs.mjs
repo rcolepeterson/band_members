@@ -86,25 +86,43 @@ export default async (req) => {
     // ensureNotifyPrefs first so the row (and its unsubscribe token)
     // exists; then apply the patch. unsubscribed_at tracks the master
     // opt-out moment: set when disabling email, cleared when re-enabling.
+    // Each field gets its own explicit UPDATE — verbose but avoids any
+    // dynamic-SQL or null-parameter edge cases.
     await ensureNotifyPrefs(sql, user.id);
+    if ('email_enabled' in patch) {
+      if (patch.email_enabled) {
+        await sql`update notification_prefs set email_enabled = true, unsubscribed_at = null, updated_at = now() where user_id = ${user.id}`;
+      } else {
+        await sql`update notification_prefs set email_enabled = false, unsubscribed_at = now(), updated_at = now() where user_id = ${user.id}`;
+      }
+    }
+    if ('notify_band_member_joined' in patch) {
+      const v = patch.notify_band_member_joined;
+      await sql`update notification_prefs set notify_band_member_joined = ${v}, updated_at = now() where user_id = ${user.id}`;
+    }
+    if ('notify_band_badge_added' in patch) {
+      const v = patch.notify_band_badge_added;
+      await sql`update notification_prefs set notify_band_badge_added = ${v}, updated_at = now() where user_id = ${user.id}`;
+    }
+    if ('notify_band_edited' in patch) {
+      const v = patch.notify_band_edited;
+      await sql`update notification_prefs set notify_band_edited = ${v}, updated_at = now() where user_id = ${user.id}`;
+    }
+    if ('notify_member_band_changed' in patch) {
+      const v = patch.notify_member_band_changed;
+      await sql`update notification_prefs set notify_member_band_changed = ${v}, updated_at = now() where user_id = ${user.id}`;
+    }
+    if ('notify_member_edited' in patch) {
+      const v = patch.notify_member_edited;
+      await sql`update notification_prefs set notify_member_edited = ${v}, updated_at = now() where user_id = ${user.id}`;
+    }
     const updated = await sql`
-      update notification_prefs
-      set email_enabled = coalesce(${patch.email_enabled ?? null}, email_enabled),
-          notify_band_member_joined = coalesce(${patch.notify_band_member_joined ?? null}, notify_band_member_joined),
-          notify_band_badge_added = coalesce(${patch.notify_band_badge_added ?? null}, notify_band_badge_added),
-          notify_band_edited = coalesce(${patch.notify_band_edited ?? null}, notify_band_edited),
-          notify_member_band_changed = coalesce(${patch.notify_member_band_changed ?? null}, notify_member_band_changed),
-          notify_member_edited = coalesce(${patch.notify_member_edited ?? null}, notify_member_edited),
-          unsubscribed_at = case
-            when ${patch.email_enabled ?? null} is null then unsubscribed_at
-            when ${patch.email_enabled ?? null} then null
-            else now()
-          end,
-          updated_at = now()
-      where user_id = ${user.id}
-      returning user_id, email_enabled, unsubscribed_at, unsubscribe_token,
+      select user_id, email_enabled, unsubscribed_at, unsubscribe_token,
         notify_band_member_joined, notify_band_badge_added, notify_band_edited,
         notify_member_band_changed, notify_member_edited
+      from notification_prefs
+      where user_id = ${user.id}
+      limit 1
     `;
     return ok(toResponseBody(updated[0]));
   } catch (err) {
