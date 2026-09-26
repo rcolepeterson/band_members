@@ -225,3 +225,94 @@ test('notifyBandTouched: DB explosion still resolves (never throws)', withApiKey
   assert.equal(result.ok, false);
   assert.equal(result.sent, 0);
 }));
+
+test('getMemberFollowRecipients excludes the actor', async () => {
+  const { getMemberFollowRecipients } = await import('../netlify/functions/_notify.mjs');
+  const sql = fakeSql([
+    ['from users', (values) => [
+      { id: 'user-2', email: 'b@example.com', name: 'B' },
+    ]],
+  ]);
+  const recipients = await getMemberFollowRecipients(sql, 'member-1', 'user-1');
+  assert.equal(recipients.length, 1);
+  assert.equal(recipients[0].id, 'user-2');
+});
+
+test('notifyMemberTouched honors event-type opt-out', withApiKey(async () => {
+  const { notifyMemberTouched, EVENT_MEMBER_BAND_CHANGED } = await import('../netlify/functions/_notify.mjs');
+  const mailer = silentMailer();
+  const sql = fakeSql([
+    ['from notification_prefs', [{
+      user_id: 'user-2', email_enabled: true, unsubscribed_at: null,
+      unsubscribe_token: 'tok', notify_member_band_changed: false,
+      notify_band_member_joined: true, notify_band_badge_added: true,
+      notify_band_edited: true, notify_member_edited: true,
+    }]],
+    ['from member_notification_log', []],
+    ['from users', [{ id: 'user-2', email: 'b@example.com', name: 'B' }]],
+  ]);
+  const result = await notifyMemberTouched(sql, {
+    memberId: 'member-1',
+    memberName: 'Test Musician',
+    actorUserId: 'user-1',
+    mailer,
+    eventType: EVENT_MEMBER_BAND_CHANGED,
+  });
+  assert.equal(result.sent, 0);
+  assert.equal(mailer.sent.length, 0);
+}));
+
+test('notifyMemberTouched sends when event type is enabled', withApiKey(async () => {
+  const { notifyMemberTouched, EVENT_MEMBER_BAND_CHANGED } = await import('../netlify/functions/_notify.mjs');
+  const mailer = silentMailer();
+  const sql = fakeSql([
+    ['from notification_prefs', [{
+      user_id: 'user-2', email_enabled: true, unsubscribed_at: null,
+      unsubscribe_token: 'tok', notify_member_band_changed: true,
+      notify_band_member_joined: true, notify_band_badge_added: true,
+      notify_band_edited: true, notify_member_edited: true,
+    }]],
+    ['from member_notification_log', []],
+    ['from users', [{ id: 'user-2', email: 'b@example.com', name: 'B' }]],
+    ['insert into member_notification_log', []],
+  ]);
+  const result = await notifyMemberTouched(sql, {
+    memberId: 'member-1',
+    memberName: 'Test Musician',
+    actorUserId: 'user-1',
+    mailer,
+    eventType: EVENT_MEMBER_BAND_CHANGED,
+  });
+  assert.equal(result.sent, 1);
+  assert.equal(mailer.sent.length, 1);
+  assert.ok(mailer.sent[0].subject.includes('Test Musician'));
+}));
+
+test('notifyBandTouched honors band event-type opt-out', withApiKey(async () => {
+  const { EVENT_BAND_BADGE_ADDED } = await import('../netlify/functions/_notify.mjs');
+  const mailer = silentMailer();
+  const sql = fakeSql([
+    ['from notification_prefs', [{
+      user_id: 'user-2', email_enabled: true, unsubscribed_at: null,
+      unsubscribe_token: 'tok', notify_band_badge_added: false,
+      notify_band_member_joined: true, notify_band_edited: true,
+      notify_member_band_changed: true, notify_member_edited: true,
+    }]],
+    ['from band_notification_log', (values, calls) => {
+      // Cooldown check (select) vs daily cap (count) vs recipient log insert
+      const lastCall = calls[calls.length - 1].text;
+      if (lastCall.includes('count(*)')) return [{ n: 0 }];
+      return [];
+    }],
+    ['select distinct u.id', [{ id: 'user-2', email: 'b@example.com', name: 'B' }]],
+  ]);
+  const result = await notifyBandTouched(sql, {
+    bandId: 'band-1',
+    bandName: 'Test Band',
+    actorUserId: 'user-1',
+    mailer,
+    eventType: EVENT_BAND_BADGE_ADDED,
+  });
+  assert.equal(result.sent, 0);
+  assert.equal(mailer.sent.length, 0);
+}));
