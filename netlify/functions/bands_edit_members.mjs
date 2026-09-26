@@ -53,7 +53,7 @@ import {
   findUserByToken,
 } from './_db.mjs';
 import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
-import { notifyBandTouched } from './_notify.mjs';
+import { notifyBandTouched, notifyMemberTouched, EVENT_BAND_MEMBER_JOINED, EVENT_MEMBER_BAND_CHANGED } from './_notify.mjs';
 
 const LIMITS = {
   memberName: 120,
@@ -376,11 +376,35 @@ export default async (req, context) => {
 
     // Band-update notifications (Phase 2). Same contract as bands_edit.mjs:
     // actor excluded, 24h cooldown per recipient, best-effort.
+    // Member changes get the dedicated event type so followers can opt out
+    // of lineup noise while keeping other alerts.
     await notifyBandTouched(sql, {
       bandId,
       bandName: band.name,
       actorUserId: user.id,
+      eventType: EVENT_BAND_MEMBER_JOINED,
     });
+    // Notify each added/removed member's followers (career tracking).
+    // Member nodes are never deleted — this just tells followers about
+    // the lineup change.
+    const affectedMemberIds = [
+      ...addedRows.map(r => r.member_id).filter(Boolean),
+      ...removedIds.filter(Boolean),
+    ];
+    for (const memberId of [...new Set(affectedMemberIds)]) {
+      try {
+        const memberRows = await sql`select name from band_members where id = ${memberId} limit 1`;
+        const memberName = memberRows.length ? memberRows[0].name : 'A musician';
+        await notifyMemberTouched(sql, {
+          memberId,
+          memberName,
+          actorUserId: user.id,
+          eventType: EVENT_MEMBER_BAND_CHANGED,
+        });
+      } catch (err) {
+        console.warn('member notify failed for', memberId, err && err.message);
+      }
+    }
 
     return ok({
       added: addedRows,
