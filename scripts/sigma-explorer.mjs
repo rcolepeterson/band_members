@@ -512,7 +512,7 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-actions .sigma-action-label{display:none}
 /* One popover element, moved to whichever pill is being hovered, focused or
    tapped. A title attribute would have been invisible on touch. */
-#${STAGE_ID} .sigma-tip{position:absolute;z-index:6;
+#${STAGE_ID} .sigma-tip{position:absolute;z-index:17;
   /* max-content so the sentence sets its own width up to the cap; without it the
      popover shrank to the space left of wherever it was previously placed. */
   width:max-content;max-width:min(280px,80vw);
@@ -1367,6 +1367,17 @@ export function initSigmaExplorer({
 
   // -- view assembly --------------------------------------------------------
 
+
+  // Bands open at 1 hop (band + members only) for a clean first view.
+  // Members open at 2 hops. Expand adds more from there.
+  function initialHopsForAnchor(anchorId) {
+    try {
+      const node = masterById.get(anchorId);
+      if (node && node.type === 'band') return 1;
+    } catch (e) {}
+    return NEIGHBORHOOD_BUDGET.MAX_HOPS;
+  }
+
   function renderNeighborhood({ anchorId, maxNodes = state.maxNodes, animate = true }) {
     const view = getNeighborhood({
       nodes: master.nodes,
@@ -1975,7 +1986,7 @@ export function initSigmaExplorer({
     state.anchorSource = 'requested';
     // A new anchor starts from the standard horizon: expansions belong to the
     // view they were performed in, not to every later destination.
-    state.maxHops = NEIGHBORHOOD_BUDGET.MAX_HOPS;
+    state.maxHops = initialHopsForAnchor(partial.id);
     renderNeighborhood({ anchorId: partial.id, maxNodes: NEIGHBORHOOD_BUDGET.MAX_NODES });
     // Searching is navigation: the open card described the view we just left,
     // so close it first, then open the card for the new anchor -- the same
@@ -2025,7 +2036,7 @@ export function initSigmaExplorer({
       return;
     }
     state.anchorSource = 'requested';
-    state.maxHops = NEIGHBORHOOD_BUDGET.MAX_HOPS;
+    state.maxHops = initialHopsForAnchor(node);
     const moved = renderNeighborhood({
       anchorId: node,
       maxNodes: NEIGHBORHOOD_BUDGET.MAX_NODES,
@@ -2269,7 +2280,7 @@ export function initSigmaExplorer({
    * which is exactly why the pill carries a sentence.
    */
   function goHome() {
-    state.maxHops = NEIGHBORHOOD_BUDGET.MAX_HOPS;
+    state.maxHops = initialHopsForAnchor(homeStarId);
     state.anchorSource = 'default';
     clearHighlight();
     // The view they OPENED with, which is not necessarily the default anchor.
@@ -2586,7 +2597,7 @@ export function initSigmaExplorer({
     if (!anchorId) anchorId = highestDegreeNode(master.nodes.map(node => node.id));
     if (!anchorId) return false;
 
-    state.maxHops = NEIGHBORHOOD_BUDGET.MAX_HOPS;
+    state.maxHops = initialHopsForAnchor(anchorId);
     clearHighlight();
     return renderNeighborhood({
       anchorId,
