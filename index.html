@@ -8139,47 +8139,55 @@ function downloadPngBlob(blob) {
     const nodeCardFollowBtn = document.getElementById('node-card-follow');
     let followStateBandId = null;
 
-    function setFollowButton(following) {
+    function setFollowButton(following, isMember) {
       if (!nodeCardFollowBtn) return;
       nodeCardFollowBtn.classList.toggle('is-following', !!following);
-      nodeCardFollowBtn.textContent = following ? 'Following' : 'Follow this band';
-      nodeCardFollowBtn.setAttribute('aria-label', following ? 'Unfollow this band' : 'Follow this band');
+      const followText = isMember ? 'Follow' : 'Follow this band';
+      const followingText = 'Following';
+      const unfollowLabel = isMember ? 'Unfollow' : 'Unfollow this band';
+      nodeCardFollowBtn.textContent = following ? followingText : followText;
+      nodeCardFollowBtn.setAttribute('aria-label', following ? unfollowLabel : followText);
       nodeCardFollowBtn.dataset.following = following ? '1' : '0';
     }
 
     function renderFollowAffordance(node) {
       const isBand = node && node.type === 'band';
+      const isMember = node && node.type === 'person';
       const signedIn = !!loadCurrentUser();
-      followStateBandId = isBand && signedIn && node.id ? String(node.id) : null;
+      const followId = (isBand || isMember) && signedIn && node.id ? String(node.id) : null;
+      // Track both id and kind so the toggle hits the right endpoint.
+      followStateBandId = followId;
+      const followKind = isMember ? 'member' : 'band';
       if (!nodeCardFollowBtn) return;
-      if (!followStateBandId) {
+      if (!followId) {
         nodeCardFollowBtn.hidden = true;
         nodeCardFollowBtn.onclick = null;
         return;
       }
-      const bandId = followStateBandId;
+      const entityId = followId;
+      const apiBase = isMember ? '/api/members' : '/api/bands';
       nodeCardFollowBtn.hidden = false;
-      setFollowButton(false);
+      setFollowButton(false, isMember);
       nodeCardFollowBtn.onclick = (ev) => {
         ev.stopPropagation();
         const currentlyFollowing = nodeCardFollowBtn.dataset.following === '1';
-        setFollowButton(!currentlyFollowing);
+        setFollowButton(!currentlyFollowing, isMember);
         const headers = authHeaders();
         if (!headers) {
-          setFollowButton(currentlyFollowing);
+          setFollowButton(currentlyFollowing, isMember);
           return;
         }
-        fetch(`/api/bands/${encodeURIComponent(bandId)}/follow`, {
+        fetch(`${apiBase}/${encodeURIComponent(entityId)}/follow`, {
           method: currentlyFollowing ? 'DELETE' : 'POST',
           headers,
         }).then((res) => {
           if (!res.ok) throw new Error('follow toggle failed');
           return res.json();
         }).then((data) => {
-          setFollowButton(!!data.following);
+          setFollowButton(!!data.following, isMember);
         }).catch(() => {
           // Revert the optimistic flip so the button never lies.
-          if (followStateBandId === bandId) setFollowButton(currentlyFollowing);
+          if (followStateBandId === entityId) setFollowButton(currentlyFollowing, isMember);
         });
       };
       // Resolve the true state from the server (also serves as the
@@ -8189,20 +8197,20 @@ function downloadPngBlob(blob) {
         nodeCardFollowBtn.hidden = true;
         return;
       }
-      fetch(`/api/bands/${encodeURIComponent(bandId)}/follow`, { headers })
+      fetch(`${apiBase}/${encodeURIComponent(entityId)}/follow`, { headers })
         .then((res) => {
           if (res.status === 404) {
-            if (followStateBandId === bandId) nodeCardFollowBtn.hidden = true;
+            if (followStateBandId === entityId) nodeCardFollowBtn.hidden = true;
             return null;
           }
           if (!res.ok) throw new Error('follow status failed');
           return res.json();
         })
         .then((data) => {
-          if (data && followStateBandId === bandId) setFollowButton(!!data.following);
+          if (data && followStateBandId === entityId) setFollowButton(!!data.following, isMember);
         })
         .catch(() => {
-          // Leave the default "Follow this band" text; the click handler
+          // Leave the default follow text; the click handler
           // will surface any real failure when used.
         });
     }
