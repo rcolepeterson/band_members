@@ -2171,6 +2171,14 @@ export function initSigmaExplorer({
     if (dragState.dragged) {
       suppressNextClick = true;
       setTimeout(() => { suppressNextClick = false; }, 100);
+    } else {
+      // Tap (not a drag): travel to the tapped node directly. This bypasses
+      // Sigma's clickNode event, which was unreliable with the custom pointer
+      // handling. findNodeNear already did the hit detection on pointerdown.
+      const tappedId = dragState.nodeId;
+      dragState = null;
+      if (tappedId) travelTo(tappedId);
+      return;
     }
     dragState = null;
   }
