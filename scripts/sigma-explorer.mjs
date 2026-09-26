@@ -880,120 +880,62 @@ function buildStage(doc, mount) {
  * distance survives: 0.45 pulls satellites 55% closer to their hub.
  */
 /**
- * Collision resolution v2: node separation + edge-crossing reduction.
- * Single synchronous pass during layout -- not per-frame. Nodes stay where
- * they land; manual drags aren't fought. The anchor never moves.
+ * Graph-based collision resolution: operates directly on viewGraph node
+ * positions after rendering. Pushes apart overlapping nodes.
  */
-function resolveCollisions(positions, anchorId, links) {
-  const MIN_SEPARATION = 140; // px between centers (generous for labels)
+function resolveGraphCollisions(graph, anchorId) {
+  const MIN_SEPARATION = 140;
   const ITERATIONS = 120;
-  const DAMPING = 0.6; // stronger push per iteration
+  const DAMPING = 0.6;
 
-  const ids = Array.from(positions.keys()).filter(id => id !== anchorId);
+  const ids = [];
+  try {
+    graph.forEachNode((nodeId) => {
+      if (nodeId !== anchorId) ids.push(nodeId);
+    });
+  } catch (e) { return; }
 
-  // Phase 1: push apart overlapping nodes.
   for (let iter = 0; iter < ITERATIONS; iter++) {
     let moved = false;
 
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
-        const a = positions.get(ids[i]);
-        const b = positions.get(ids[j]);
-        if (!a || !b) continue;
+        let ax, ay, bx, by;
+        try {
+          ax = graph.getNodeAttribute(ids[i], 'x');
+          ay = graph.getNodeAttribute(ids[i], 'y');
+          bx = graph.getNodeAttribute(ids[j], 'x');
+          by = graph.getNodeAttribute(ids[j], 'y');
+        } catch (e) { continue; }
 
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
+        if (ax == null || ay == null || bx == null || by == null) continue;
+
+        const dx = bx - ax;
+        const dy = by - ay;
         const dist = Math.hypot(dx, dy);
 
         if (dist < MIN_SEPARATION && dist > 0.01) {
           const push = (MIN_SEPARATION - dist) / 2 * DAMPING;
           const ux = dx / dist;
           const uy = dy / dist;
-          a.x -= ux * push;
-          a.y -= uy * push;
-          b.x += ux * push;
-          b.y += uy * push;
+          try {
+            graph.setNodeAttribute(ids[i], 'x', ax - ux * push);
+            graph.setNodeAttribute(ids[i], 'y', ay - uy * push);
+            graph.setNodeAttribute(ids[j], 'x', bx + ux * push);
+            graph.setNodeAttribute(ids[j], 'y', by + uy * push);
+          } catch (e) { continue; }
           moved = true;
         } else if (dist <= 0.01) {
           const angle = (i * 2.399963) % (Math.PI * 2);
-          b.x += Math.cos(angle) * MIN_SEPARATION * DAMPING;
-          b.y += Math.sin(angle) * MIN_SEPARATION * DAMPING;
+          try {
+            graph.setNodeAttribute(ids[j], 'x', bx + Math.cos(angle) * MIN_SEPARATION * DAMPING);
+            graph.setNodeAttribute(ids[j], 'y', by + Math.sin(angle) * MIN_SEPARATION * DAMPING);
+          } catch (e) { continue; }
           moved = true;
         }
       }
     }
     if (!moved) break;
-  }
-
-  // Phase 2: reduce edge crossings by repositioning.
-  // For each crossing pair, try moving one endpoint to reduce crossings.
-  if (links && links.length) {
-    reduceEdgeCrossings(positions, links, anchorId);
-  }
-}
-
-/**
- * Heuristic edge-crossing reduction: for nodes with multiple edges,
- * sort their neighbors angularly and reposition to minimize crossings.
- */
-function reduceEdgeCrossings(positions, links, anchorId) {
-  // Build adjacency from links
-  const adj = new Map();
-  const edgeList = [];
-
-  for (const link of links) {
-    const s = link.source || link[0];
-    const t = link.target || link[1];
-    if (!s || !t || s === t) continue;
-    if (!positions.has(s) || !positions.has(t)) continue;
-
-    edgeList.push([s, t]);
-    if (!adj.has(s)) adj.set(s, []);
-    if (!adj.has(t)) adj.set(t, []);
-    adj.get(s).push(t);
-    adj.get(t).push(s);
-  }
-
-  // For each node (except anchor), sort neighbors by angle and
-  // spread them evenly to reduce crossings.
-  for (const [nodeId, neighbors] of adj) {
-    if (nodeId === anchorId || neighbors.length < 3) continue;
-
-    const pos = positions.get(nodeId);
-    if (!pos) continue;
-
-    // Get current angles of neighbors
-    const angled = neighbors.map(nid => {
-      const np = positions.get(nid);
-      if (!np) return null;
-      return {
-        id: nid,
-        angle: Math.atan2(np.y - pos.y, np.x - pos.x),
-        dist: Math.hypot(np.x - pos.x, np.y - pos.y),
-      };
-    }).filter(Boolean);
-
-    if (angled.length < 3) continue;
-
-    // Sort by angle
-    angled.sort((a, b) => a.angle - b.angle);
-
-    // Spread evenly around the node, preserving average distance
-    const avgDist = angled.reduce((sum, n) => sum + n.dist, 0) / angled.length;
-    const startAngle = angled[0].angle;
-
-    angled.forEach((n, idx) => {
-      const targetAngle = startAngle + (idx / angled.length) * Math.PI * 2;
-      const np = positions.get(n.id);
-      if (!np || n.id === anchorId) return;
-      // Only move if it reduces angular crowding (gentle nudge)
-      const angleDiff = Math.abs(targetAngle - n.angle);
-      if (angleDiff > 0.3) { // more than ~17 degrees off
-        const newDist = Math.max(n.dist, 80);
-        np.x = pos.x + Math.cos(targetAngle) * newDist * 0.3 + np.x * 0.7;
-        np.y = pos.y + Math.sin(targetAngle) * newDist * 0.3 + np.y * 0.7;
-      }
-    });
   }
 }
 
@@ -1461,16 +1403,6 @@ export function initSigmaExplorer({
       }
     }
 
-    // Auto thread-collision: single cleanup pass after layout. Pushes apart
-    // overlapping nodes so threads don't stack. Runs once synchronously --
-    // not a per-frame simulation -- so nodes stay where they land and manual
-    // drags aren't fought. The anchor never moves.
-    try {
-      resolveCollisions(positions, anchorId, view.links);
-    } catch (e) {
-      console.warn('Collision cleanup skipped:', e);
-    }
-
     viewGraph.clear();
     view.nodes.forEach(node => {
       const point = positions.get(node.id) || { x: 0, y: 0, hop: node.hop || 0 };
@@ -1552,6 +1484,16 @@ export function initSigmaExplorer({
         role: roleFromMembership(link),
       });
     });
+
+    // Auto thread-collision v4: push apart overlapping nodes directly on
+    // the rendered graph. Runs once synchronously -- not per-frame -- so
+    // nodes stay where they land and manual drags aren't fought.
+    // The anchor never moves.
+    try {
+      resolveGraphCollisions(viewGraph, anchorId);
+    } catch (e) {
+      console.warn('Graph collision cleanup skipped:', e);
+    }
 
     state.layoutExtent = layoutExtent(positions);
     applySizeScale(view.nodes.length);
