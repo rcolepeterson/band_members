@@ -2062,7 +2062,7 @@ export function initSigmaExplorer({
     stage.dispatchEvent(
       new CustomEvent('rbft:sigma-travel', { bubbles: true, detail: { anchorId: node } })
     );
-    if (moved) highlightFrom(node);
+    if (moved !== false) highlightFrom(node);
   }
 
   // Draggable nodes v3: press-drag moves a single node. Neighbors stay put,
