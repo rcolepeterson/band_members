@@ -2115,7 +2115,7 @@ export function initSigmaExplorer({
   // Single-node drag: only the grabbed node moves. Neighbors stay put,
   // edges stretch to show the connections are still there.
 
-  function startDrag(nodeId, clientX, clientY) {
+  function startDrag(nodeId, clientX, clientY, pointerId) {
     const graphPos = pointerToGraph(clientX, clientY);
     if (!graphPos) return false;
 
@@ -2124,6 +2124,7 @@ export function initSigmaExplorer({
       startClient: { x: clientX, y: clientY },
       lastGraph: graphPos,
       dragged: false,
+      pointerId,
     };
 
     try { renderer.getCamera().disable(); } catch (err) {}
@@ -2136,7 +2137,14 @@ export function initSigmaExplorer({
     const dx = clientX - dragState.startClient.x;
     const dy = clientY - dragState.startClient.y;
     if (!dragState.dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
-    dragState.dragged = true;
+    if (!dragState.dragged) {
+      // First movement past the threshold: this is a real drag, not a tap.
+      // Capture the pointer now so move/up keep flowing even if the pointer
+      // leaves the canvas. Doing it on pointerdown would retarget the
+      // pointerup/click Sigma needs for clickNode detection, breaking taps.
+      dragState.dragged = true;
+      try { canvasHost.setPointerCapture(dragState.pointerId); } catch (err) {}
+    }
 
     const graphPos = pointerToGraph(clientX, clientY);
     if (!graphPos) return;
@@ -2179,11 +2187,11 @@ export function initSigmaExplorer({
     const nodeId = findNodeNear(graphPos.x, graphPos.y, e.pointerType);
     if (!nodeId) return; // pressed empty space: let it pan normally
 
-    if (startDrag(nodeId, e.clientX, e.clientY)) {
-      // No preventDefault() here: it would block the compatibility mouse events
-      // Sigma uses for clickNode detection, breaking tap-to-travel. Drag
-      // prevention happens in pointermove once movement exceeds the threshold.
-      try { canvasHost.setPointerCapture(e.pointerId); } catch (err) {}
+    if (startDrag(nodeId, e.clientX, e.clientY, e.pointerId)) {
+      // No preventDefault() and no setPointerCapture() here: both would
+      // interfere with the pointerup/click Sigma needs for clickNode
+      // detection, breaking tap-to-travel. Capture happens in moveDrag once
+      // movement exceeds the drag threshold (i.e. it's a real drag, not a tap).
     }
   });
 
