@@ -178,6 +178,13 @@ function initGameUI() {
     if (e.key === 'Escape' && !modal.hidden) closeModal();
   });
 
+  // Deep link: ?game=1 (the QR on share cards) or ?game=<id> (a shared chain)
+  // opens the game straight away. The lure only works if there is no friction
+  // between tapping the link and playing.
+  try {
+    if (new URLSearchParams(window.location.search).has('game')) openModal();
+  } catch (_) {}
+
   function currentMode() {
     return (modeInputs.find((i) => i.checked) || {}).value || 'head-to-head';
   }
@@ -292,13 +299,32 @@ function initGameUI() {
       chip.classList.add(node.kind === 'band' ? 'game-node-band' : 'game-node-member');
       lane.appendChild(chip);
     });
-    card.querySelector('[data-share]').addEventListener('click', () => {
+    card.querySelector('[data-share]').addEventListener('click', async () => {
       const text = path.map((n) => n.name).join(' → ');
       const shareText = `Six Degrees of Rock: ${text} — think you can stump me?`;
+      // The chain gets its own share card (banner-style, QR included). The link
+      // unfurls the card on socials; if saving fails, fall back to the plain
+      // origin link rather than failing the share.
+      statusLine.textContent = 'Making your share card…';
+      let shareUrl = location.origin;
+      try {
+        const res = await fetch('/api/game-share', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            chain: path.map((n) => ({ name: n.name, kind: n.kind === 'band' ? 'band' : 'member' })),
+            mode: currentMode(),
+            hops,
+          }),
+        });
+        const data = await res.json();
+        if (data && data.ok && data.shareUrl) shareUrl = data.shareUrl;
+      } catch (_) { /* plain link fallback below */ }
+      statusLine.textContent = '';
       if (navigator.share) {
-        navigator.share({ title: 'Six Degrees of Rock', text: shareText, url: location.origin }).catch(() => {});
+        navigator.share({ title: 'Six Degrees of Rock', text: shareText, url: shareUrl }).catch(() => {});
       } else if (navigator.clipboard) {
-        navigator.clipboard.writeText(shareText + ' ' + location.origin).then(() => {
+        navigator.clipboard.writeText(`${shareText} ${shareUrl}`).then(() => {
           statusLine.textContent = 'Copied — paste it anywhere to brag.';
         });
       }
