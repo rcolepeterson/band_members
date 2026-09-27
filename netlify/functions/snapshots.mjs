@@ -3,7 +3,7 @@
 // GET /api/snapshots — serve the daily_snapshots time series for the
 // growth dashboard on the ops board. Public read (numbers only, no PII).
 // Optional ?since=YYYY-MM-DD to limit the range.
-import { neon } from '@netlify/neon';
+import { neon } from '@neondatabase/serverless';
 
 export default async (req) => {
   if (req.method !== 'GET') {
