@@ -248,6 +248,18 @@ function initGameUI() {
     }
   }
 
+  // Last-resort path for the sponsor placeholder: the feedback form could
+  // not be opened, so say so inline in the ribbon instead of navigating
+  // anywhere. The game modal stays open.
+  function showSponsorContactNote() {
+    if (!sponsorRibbon) return;
+    const icons = sponsorRibbon.querySelector('.game-sponsor-icons');
+    if (!icons || icons.querySelector('.game-sponsor-contact-note')) return;
+    const note = el('<span class="game-sponsor-contact-note"></span>');
+    note.textContent = "Couldn't open the contact form — email us via Send feedback in the menu.";
+    icons.appendChild(note);
+  }
+
   function renderSponsorRibbon(sponsors) {
     if (sponsorRibbon) sponsorRibbon.remove();
     const card = modal.querySelector('.game-modal-card');
@@ -275,14 +287,28 @@ function initGameUI() {
     } else {
       const ph = el('<button type="button" class="game-sponsor-placeholder"></button>');
       ph.textContent = SPONSOR_PLACEHOLDER;
-      ph.addEventListener('click', () => {
-        closeModal();
-        // The site's contact path is the feedback popover; fall back to the
-        // site root if its trigger isn't on the page.
-        const fb = document.getElementById('send-feedback-btn')
-          || document.getElementById('mobile-send-feedback-btn');
-        if (fb) fb.click();
-        else window.location.href = '/';
+      ph.addEventListener('click', (event) => {
+        // Defensive: keep this click from reaching the document-level
+        // handler that dismisses open popovers — the Send feedback trigger
+        // itself does the same in its own handler.
+        event.stopPropagation();
+        // Open the feedback form directly through the page's own routine,
+        // never by proxy-clicking the toolbar button (that handoff missed
+        // on a real device). If the form truly can't open, the game stays
+        // open and the ribbon says so inline — the contact intent must not
+        // fall through the cracks, and nothing here ever navigates away.
+        const openIt = window.openFeedbackPopover;
+        const opened = typeof openIt === 'function' && openIt();
+        if (opened) {
+          closeModal();
+          // Route the inquiry: the visitor writes their own message and
+          // email; only the type is preselected so it lands in the right
+          // pile on arrival.
+          const typeSel = document.getElementById('feedback-type');
+          if (typeSel) typeSel.value = 'Game sponsorship';
+        } else {
+          showSponsorContactNote();
+        }
       });
       icons.appendChild(ph);
     }
