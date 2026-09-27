@@ -194,6 +194,12 @@ const HOVER_GLOW = 'rgba(143,232,246,0.30)';
  */
 const STAGE_ACTIONS = [
   {
+    key: 'game',
+    label: 'Game',
+    detail: 'Play the Six Degrees game: connect two bands through shared members.',
+    target: '#mobile-game-open-btn',
+  },
+  {
     key: 'expand',
     label: 'Expand',
     detail: 'Push the horizon out one degree and pull in the bands just beyond this view.',
@@ -255,6 +261,12 @@ const ACTION_ICON_PATHS = {
 };
 
 function actionIconSvg(key) {
+  // The game icon is text (6*), not a stroke path, so it gets its own SVG
+  // with a filled text element instead of the stroked path treatment.
+  if (key === 'game') {
+    return `<svg class="sigma-action-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" `
+      + `aria-hidden="true"><text x="12" y="17" text-anchor="middle" font-size="12" font-weight="800">6*</text></svg>`;
+  }
   const path = ACTION_ICON_PATHS[key];
   if (!path) return '';
   return `<svg class="sigma-action-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" `
