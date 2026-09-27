@@ -595,6 +595,22 @@ export default async (req) => {
     `;
     results.push('table daily_snapshots ready');
 
+    // shared_chains table ----------------------------------------------------
+    // Game share cards: one row per "Share the chain" tap. The row is the
+    // permanent record behind a share link (?game=<id>) — the edge function
+    // reads it for the og:title, and the card renderer draws the chain from
+    // it. Rows are never updated or deleted; a shared link must keep working.
+    await sql`
+      create table if not exists shared_chains (
+        id         text primary key,
+        chain      jsonb not null,
+        mode       text not null,
+        hops       integer not null,
+        created_at timestamptz not null default now()
+      )
+    `;
+    results.push('table shared_chains ready');
+
     return ok({ steps: results });
   } catch (err) {
     console.error('migrate failed', err);
