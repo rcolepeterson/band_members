@@ -25,6 +25,25 @@ import { dirname, join } from 'node:path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const INDEX_HTML = readFileSync(join(__dirname, '..', 'index.html'), 'utf8');
 
+// Handlers increasingly live in external ES modules (e.g. the Six Degrees
+// game wires its chips from scripts/six-degrees-game.mjs), which an
+// inline-only scan cannot see. Concatenate locally-referenced module
+// scripts so module-wired chips count as handled.
+function extractModuleScripts() {
+  let out = '';
+  for (const m of INDEX_HTML.matchAll(/<script[^>]*type="module"[^>]*src="([^"]+)"[^>]*>/g)) {
+    const src = m[1];
+    if (/^(https?:)?\/\//.test(src)) continue; // remote — skip
+    try {
+      out += '\n' + readFileSync(join(__dirname, '..', src.replace(/^\//, '')), 'utf8');
+    } catch {
+      // Missing file: the inline scan still applies, so just skip it.
+    }
+  }
+  return out;
+}
+const MODULE_SCRIPTS = extractModuleScripts();
+
 // Extract the substring between a start marker (matched by regex) and
 // the first occurrence of a plain end marker after it.
 function sliceBetween(source, startRegex, endMarker) {
@@ -245,7 +264,7 @@ test('every non-filter tool-chip with an id has a dedicated click handler', () =
   // data-filter/data-action. Regex is intentionally simple; we're
   // grepping index.INDEX_HTML, not parsing HTML.
   const chipTagPattern = /<[^>]*class="[^"]*\btool-chip\b[^"]*"[^>]*>/g;
-  const scriptSource = stripJsComments(INDEX_HTML);
+  const scriptSource = stripJsComments(INDEX_HTML + MODULE_SCRIPTS);
   const missingHandlers = [];
   for (const match of INDEX_HTML.matchAll(chipTagPattern)) {
     const tag = match[0];
