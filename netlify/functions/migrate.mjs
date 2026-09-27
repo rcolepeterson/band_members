@@ -611,6 +611,32 @@ export default async (req) => {
     `;
     results.push('table shared_chains ready');
 
+    // game_sponsors table ----------------------------------------------------
+    // Sponsor ribbon on the game card ("This week's game is brought to you
+    // by"). One row per sponsor: an icon shown in the ribbon, an optional
+    // link the icon taps through to, and a sort_order for the left-to-right
+    // display order (ties break by creation time). Rows are only ever
+    // written through /api/game-sponsors with the admin token; the game card
+    // reads them with a plain GET. Empty table = the card shows its tasteful
+    // "your brand here" placeholder instead.
+    await sql`
+      create table if not exists game_sponsors (
+        id         uuid primary key default gen_random_uuid(),
+        name       text not null,
+        icon_url   text not null,
+        link_url   text,
+        sort_order integer not null default 0,
+        created_at timestamptz not null default now()
+      )
+    `;
+    results.push('table game_sponsors ready');
+
+    await sql`
+      create index if not exists game_sponsors_sort_order_idx
+      on game_sponsors (sort_order, created_at)
+    `;
+    results.push('index game_sponsors_sort_order_idx ready');
+
     return ok({ steps: results });
   } catch (err) {
     console.error('migrate failed', err);
