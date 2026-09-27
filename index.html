@@ -3076,6 +3076,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     .game-sponsor-icons img{max-height:26px;max-width:100%;object-fit:contain;display:block}
     .game-sponsor-placeholder{background:none;border:0;padding:0;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-text-muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
     .game-sponsor-placeholder:hover{color:var(--color-text)}
+    .game-sponsor-contact-note{font-size:12px;color:var(--color-text-muted);font-style:italic}
     /* After-3-chains signup nudge: a calm card, not a popup. Muted, confident,
        no hype — it appears once, under the result, and never nags. */
     .game-nudge{position:relative;margin-top:var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-4);background:rgba(255,255,255,.02)}
@@ -3919,6 +3920,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                     <option value="Suggestion">Suggestion</option>
                     <option value="Feature request">Feature request</option>
                     <option value="Bug report">Bug report</option>
+                    <option value="Game sponsorship">Game sponsorship</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
@@ -4967,6 +4969,29 @@ function downloadPngBlob(blob) {
     window.addEventListener('resize', () => {
       bottomPopovers.forEach(({ pop }) => clampPopover(pop));
     });
+
+    // Opens the feedback popover directly — the same code path the Send
+    // feedback trigger's click handler runs, minus the toggle. The game
+    // card's sponsor placeholder ("your brand here") calls this instead of
+    // proxy-clicking the toolbar button: that handoff missed on a real
+    // device and fell back to navigating away. Setting popover.hidden =
+    // false directly is sufficient on both platforms (see openSignInFlow):
+    // hookPopoverForMobile observes the `hidden` attribute via
+    // MutationObserver, so the bottom-sheet rescue still runs on mobile.
+    // Returns true when the popover opened, false when it isn't on the page.
+    function openFeedbackPopover() {
+      const popover = document.getElementById('feedback-popover');
+      if (!popover) return false;
+      closeBottomPopovers(popover);
+      if (typeof toggleSharePopover === 'function') toggleSharePopover(false);
+      popover.hidden = false;
+      document.getElementById('send-feedback-btn')?.setAttribute('aria-expanded', 'true');
+      clampPopover(popover);
+      return true;
+    }
+    // Exposed so the game card's sponsor placeholder can open the contact
+    // form without depending on the toolbar button being clickable.
+    window.openFeedbackPopover = openFeedbackPopover;
 
     if (sharePopover) {
       sharePopover.addEventListener('click', (event) => event.stopPropagation());
