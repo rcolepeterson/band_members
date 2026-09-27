@@ -6,8 +6,10 @@
 //
 // Browser UI (guarded by typeof document): wires the 6° entries in the
 // burger sheet + desktop header to the game modal — two band fields with
-// autocomplete, three play modes, path banner or "No rawk found." results,
-// dead-end drink rule + add-the-connector funnel, native share on wins.
+// autocomplete, three play modes, matchup-first flow (both bands shown with
+// a Connect button; the chain only renders on reveal), path banner or
+// "No rawk found." results, dead-end drink rule + add-the-connector funnel,
+// native share on wins.
 
 // ---------------------------------------------------------------------------
 // Engine
@@ -144,7 +146,7 @@ function initGameUI() {
       fieldA.value = g.bands.get(pair.a).name;
       fieldB.value = g.bands.get(pair.b).name;
       statusLine.textContent = '';
-      runGame(g, pair.a, pair.b);
+      renderMatchup(g, pair.a, pair.b);
     } catch {
       statusLine.textContent = 'Could not load the tree. Check your connection and try again.';
     }
@@ -196,7 +198,7 @@ function initGameUI() {
     document.getElementById('game-field-a-wrap').style.display = mode === 'chaos' ? 'none' : '';
     wrapB.style.display = mode === 'head-to-head' ? '' : 'none';
     randomizeBtn.style.display = mode === 'chaos' ? '' : 'none';
-    runBtn.textContent = mode === 'head-to-head' ? 'Run the chain' : mode === 'solo' ? 'Challenge me' : 'Deal me a pair';
+    runBtn.textContent = mode === 'head-to-head' ? 'Set the matchup' : mode === 'solo' ? 'Challenge me' : 'Deal me a pair';
     result.innerHTML = '';
     statusLine.textContent = '';
   }
@@ -212,6 +214,10 @@ function initGameUI() {
     let items = [];
     input.addEventListener('input', async () => {
       selected[key] = null;
+      // A new pick invalidates whatever matchup/chain is showing — clear it
+      // so no stale result lingers under the fresh typing.
+      result.innerHTML = '';
+      statusLine.textContent = '';
       const q = input.value.trim().toLowerCase();
       if (q.length < 2) { list.hidden = true; return; }
       try {
@@ -268,11 +274,40 @@ function initGameUI() {
       if (!a || !b) { statusLine.textContent = 'Pick both bands first.'; return; }
       if (a === b) { statusLine.textContent = 'Pick two different bands.'; return; }
       statusLine.textContent = '';
-      runGame(g, a, b);
+      // Matchup first: show both bands and let the player sit with it.
+      // The chain only runs when they hit Connect.
+      renderMatchup(g, a, b);
     } catch {
       statusLine.textContent = 'Could not load the tree. Check your connection and try again.';
     }
   });
+
+  // Matchup view: band A vs band B with a Connect button. No BFS runs here —
+  // the chain (or "No rawk found.") only renders after Connect is hit, so
+  // the player gets the anticipation beat first.
+  function renderMatchup(g, a, b) {
+    const nameA = g.bands.get(a)?.name || 'Band A';
+    const nameB = g.bands.get(b)?.name || 'Band B';
+    const card = el(`<div class="game-result-card">
+      <div class="game-result-meta"><span class="game-hops">The matchup</span></div>
+      <div class="game-path" role="list">
+        <span class="game-node-chip game-node-band" role="listitem"></span>
+        <span class="game-path-link">VS</span>
+        <span class="game-node-chip game-node-band" role="listitem"></span>
+      </div>
+      <div class="game-result-actions">
+        <button type="button" class="game-run-btn" data-connect>Connect</button>
+      </div>
+    </div>`);
+    const chips = card.querySelectorAll('.game-node-chip');
+    chips[0].textContent = nameA;
+    chips[1].textContent = nameB;
+    card.querySelector('[data-connect]').addEventListener('click', () => {
+      runGame(g, a, b);
+    });
+    result.innerHTML = '';
+    result.appendChild(card);
+  }
 
   function runGame(g, a, b) {
     const path = shortestPath(g, a, b);
