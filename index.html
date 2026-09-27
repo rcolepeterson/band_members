@@ -3020,11 +3020,12 @@ main.layout { padding: 0 !important; gap: 0 !important; }
        The game lives in the burger menu only (featured 6° entry at the top
        of the mobile sheet) so the header stays clean. */
     .game-degree-mark{font-weight:800;letter-spacing:.02em}
-    /* Burger-menu featured entry: full-width row at the top of the sheet so
-       the 6° game is one tap away without cluttering the header. */
-    .mobile-game-open-btn{width:100%;justify-content:flex-start;font-size:var(--text-base);padding:var(--space-3) var(--space-4);border-color:rgba(82,174,182,0.35)}
-    .mobile-game-open-btn .game-degree-mark{font-size:1.3em}
-    .mobile-game-open-btn:hover{border-color:rgba(82,174,182,0.6)}
+    /* Burger-menu 6* icon: circular, matches the sheet's chip aesthetic. */
+    .mobile-sheet-title-row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3)}
+    .mobile-sheet-title-row .mobile-sheet-title{margin:0}
+    .game-icon-btn{width:44px;height:44px;min-height:44px;padding:0;flex:none;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;border-color:rgba(82,174,182,0.35)}
+    .game-icon-btn .game-degree-mark{font-size:1.05em}
+    .game-icon-btn:hover{border-color:rgba(82,174,182,0.6)}
     #game-modal{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:var(--space-4)}
     #game-modal[hidden]{display:none}
     .game-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(6px)}
@@ -3244,15 +3245,15 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     <aside class="mobile-sheet" id="mobile-menu-sheet" role="dialog" aria-label="Filters and search" aria-modal="false" hidden>
       <div class="mobile-sheet-handle" aria-hidden="true"></div>
       <button class="mobile-sheet-close" type="button" id="mobile-menu-close" aria-label="Close menu">&times;</button>
-      <h3 class="mobile-sheet-title">Explore the tree</h3>
       <!--
-        Six Degrees game entry (scripts/six-degrees-game.mjs). Featured 6°
-        row at the top of the burger sheet; the header stays clean.
+        Six Degrees game entry (scripts/six-degrees-game.mjs). A 6* icon in
+        the burger sheet title row, matching the sheet's chip aesthetic; the
+        header stays clean.
       -->
-      <div class="mobile-sheet-game">
-        <button class="tool-chip mobile-game-open-btn" type="button" id="mobile-game-open-btn" aria-haspopup="dialog">
-          <span class="game-degree-mark" aria-hidden="true">6°</span>
-          Six Degrees game
+      <div class="mobile-sheet-title-row">
+        <h3 class="mobile-sheet-title">Explore the tree</h3>
+        <button class="tool-chip mobile-game-open-btn game-icon-btn" type="button" id="mobile-game-open-btn" aria-haspopup="dialog" aria-label="Play the Six Degrees game">
+          <span class="game-degree-mark" aria-hidden="true">6*</span>
         </button>
       </div>
       <div class="mobile-scene-segments" id="mobile-scene-segments" role="tablist" aria-label="Quick scene switch">
