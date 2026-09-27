@@ -3018,6 +3018,11 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     /* Six Degrees game (scripts/six-degrees-game.mjs). Quiet, dark, premium:
        the modal borrows the node-card surface so it feels native. */
     .game-open-btn .game-degree-mark{font-weight:800;letter-spacing:.02em}
+    /* Desktop header entry. Mirrors .header-btn so it sits natively in the
+       header-right row (kept as its own class: the wiring tests assert the
+       header carries exactly one .header-btn auth control). */
+    .game-open-btn{min-height:44px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);display:inline-flex;align-items:center;gap:var(--space-2);background:rgba(255,255,255,0.02);color:var(--color-text);font-size:var(--text-sm);cursor:pointer}
+    .game-open-btn:hover{border-color:rgba(82,174,182,0.45);color:var(--color-primary-hover)}
     #game-modal{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:var(--space-4)}
     #game-modal[hidden]{display:none}
     .game-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(6px)}
@@ -3147,7 +3152,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             Six Degrees game entry (scripts/six-degrees-game.mjs). Sits ahead
             of the identity controls: the game is the headline action.
           -->
-          <button class="header-btn game-open-btn" type="button" id="game-open-btn" aria-haspopup="dialog">
+          <button class="game-open-btn" type="button" id="game-open-btn" aria-haspopup="dialog">
             <span class="game-degree-mark" aria-hidden="true">6°</span>
             Six Degrees game
           </button>
