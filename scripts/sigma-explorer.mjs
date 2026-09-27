@@ -265,7 +265,7 @@ function actionIconSvg(key) {
   // with a filled text element instead of the stroked path treatment.
   if (key === 'game') {
     return `<svg class="sigma-action-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" `
-      + `aria-hidden="true"><text x="12" y="17" text-anchor="middle" font-size="12" font-weight="800">6*</text></svg>`;
+      + `aria-hidden="true"><text x="12" y="18.5" text-anchor="middle" font-size="19" font-weight="800">6*</text></svg>`;
   }
   const path = ACTION_ICON_PATHS[key];
   if (!path) return '';
