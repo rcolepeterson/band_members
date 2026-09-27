@@ -183,7 +183,7 @@ test('every shortcut pill has a one-word label and a sentence explaining it', ()
     actions.map(item => item.key),
     // No Sign-in pill: the page's account strip in the site header is kept as
     // the single entry point, top-right where a search homepage puts the avatar.
-    ['expand', 'reset', 'filter', 'add', 'share', 'feedback'],
+    ['game', 'expand', 'reset', 'filter', 'add', 'share', 'feedback'],
   );
   actions.forEach(({ key, label, detail }) => {
     // A pill only fits a short label; two words at most ("Sign in").
