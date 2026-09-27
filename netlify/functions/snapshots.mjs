@@ -6,12 +6,21 @@
 import { getSql, isDbConfigured } from './_db.mjs';
 
 export default async (req) => {
+  // CORS: allow the ops board (and any origin) to read this public data.
+  const cors = {
+    'access-control-allow-origin': '*',
+    'access-control-allow-methods': 'GET, OPTIONS',
+    'access-control-allow-headers': 'content-type',
+  };
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: cors });
+  }
   if (req.method !== 'GET') {
-    return new Response('Method Not Allowed', { status: 405 });
+    return new Response('Method Not Allowed', { status: 405, headers: cors });
   }
   try {
     if (!isDbConfigured()) {
-      return Response.json({ ok: false, error: 'database not configured' }, { status: 503 });
+      return Response.json({ ok: false, error: 'database not configured' }, { status: 503, headers: cors });
     }
     const sql = getSql();
     const url = new URL(req.url);
@@ -34,12 +43,12 @@ export default async (req) => {
         order by snapshot_date asc
       `;
     }
-    return Response.json({ ok: true, snapshots: rows });
+    return Response.json({ ok: true, snapshots: rows }, { headers: cors });
   } catch (err) {
     console.error('snapshots failed', err);
     return Response.json(
       { ok: false, error: 'could not load snapshots' },
-      { status: 500 }
+      { status: 500, headers: cors }
     );
   }
 };
