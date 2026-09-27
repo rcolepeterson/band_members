@@ -50,7 +50,8 @@ export default async (req) => {
     }
     const sql = getSql();
 
-    // Live graph counts from Neon.
+    // Live graph counts from Neon — used unless the body provides
+    // explicit values (backfill from the manual spreadsheet).
     const [{ count: bandCount }] = await sql`select count(*)::int as count from bands`;
     const [{ count: memberCount }] = await sql`select count(*)::int as count from band_members`;
     const [{ count: userCount }] = await sql`select count(*)::int as count from users`;
@@ -70,6 +71,12 @@ export default async (req) => {
       bandsAdded = count;
     } catch { /* created_at may not exist */ }
 
+    // Backfill override: explicit body values win over live counts.
+    const nodeCount = num(body.node_count) ?? (bandCount + memberCount);
+    const finalUserCount = num(body.user_count) ?? userCount;
+    const finalFollowsCount = num(body.follows_count) ?? followsCount;
+    const finalBandsAdded = num(body.bands_added) ?? bandsAdded;
+
     const today = typeof body.snapshot_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.snapshot_date)
       ? body.snapshot_date
       : new Date().toISOString().slice(0, 10);
@@ -80,10 +87,10 @@ export default async (req) => {
          ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, notes)
       values (
         ${today}::date,
-        ${bandCount + memberCount},
-        ${userCount},
-        ${followsCount},
-        ${bandsAdded},
+        ${nodeCount},
+        ${finalUserCount},
+        ${finalFollowsCount},
+        ${finalBandsAdded},
         ${num(body.ig_sixdegrees)},
         ${num(body.ig_vimana17)},
         ${num(body.fb_sixdegrees)},
@@ -104,12 +111,12 @@ export default async (req) => {
 
     return ok({
       snapshot_date: today,
-      node_count: bandCount + memberCount,
+      node_count: nodeCount,
       bands: bandCount,
       members: memberCount,
-      users: userCount,
-      follows: followsCount,
-      bands_added: bandsAdded,
+      users: finalUserCount,
+      follows: finalFollowsCount,
+      bands_added: finalBandsAdded,
     });
   } catch (err) {
     console.error('snapshot failed', err);
