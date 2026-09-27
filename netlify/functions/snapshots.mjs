@@ -3,14 +3,17 @@
 // GET /api/snapshots — serve the daily_snapshots time series for the
 // growth dashboard on the ops board. Public read (numbers only, no PII).
 // Optional ?since=YYYY-MM-DD to limit the range.
-import { neon } from '@netlify/neon';
+import { getSql, isDbConfigured } from './_db.mjs';
 
 export default async (req) => {
   if (req.method !== 'GET') {
     return new Response('Method Not Allowed', { status: 405 });
   }
   try {
-    const sql = neon();
+    if (!isDbConfigured()) {
+      return Response.json({ ok: false, error: 'database not configured' }, { status: 503 });
+    }
+    const sql = getSql();
     const url = new URL(req.url);
     const since = url.searchParams.get('since');
 

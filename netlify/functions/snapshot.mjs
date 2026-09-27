@@ -9,7 +9,7 @@
 //
 // The daily cron on Nova's VM fetches Meta counts via CLI and POSTs them here.
 // Without Meta numbers, the row still captures graph/user growth.
-import { neon } from '@netlify/neon';
+import { getSql, isDbConfigured } from './_db.mjs';
 
 const ADMIN_TOKEN_HEADER = 'x-admin-token';
 
@@ -45,7 +45,10 @@ export default async (req) => {
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null);
 
   try {
-    const sql = neon();
+    if (!isDbConfigured()) {
+      return serverError('database not configured');
+    }
+    const sql = getSql();
 
     // Live graph counts from Neon.
     const [{ count: bandCount }] = await sql`select count(*)::int as count from bands`;
@@ -67,7 +70,9 @@ export default async (req) => {
       bandsAdded = count;
     } catch { /* created_at may not exist */ }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = typeof body.snapshot_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.snapshot_date)
+      ? body.snapshot_date
+      : new Date().toISOString().slice(0, 10);
 
     await sql`
       insert into daily_snapshots
