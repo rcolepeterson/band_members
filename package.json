@@ -17,7 +17,8 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "@netlify/blobs": "^8.1.0",
-    "pureimage": "^0.4.20"
+    "pureimage": "^0.4.20",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.5",
