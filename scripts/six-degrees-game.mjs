@@ -120,9 +120,10 @@ function initGameUI() {
   const modal = document.getElementById('game-modal');
   if (!modal) return;
 
-  const openBtns = ['game-open-btn', 'mobile-game-open-btn']
-    .map((id) => document.getElementById(id))
-    .filter(Boolean);
+  const openBtns = [
+    document.getElementById('game-open-btn'),
+    document.getElementById('mobile-game-open-btn'),
+  ].filter(Boolean);
   const closeBtn = modal.querySelector('[data-game-close]');
   const backdrop = modal.querySelector('.game-modal-backdrop');
   const modeInputs = [...modal.querySelectorAll('input[name="game-mode"]')];
@@ -130,6 +131,23 @@ function initGameUI() {
   const fieldB = document.getElementById('game-band-b');
   const wrapB = document.getElementById('game-field-b-wrap');
   const randomizeBtn = document.getElementById('game-randomize');
+  randomizeBtn.addEventListener('click', async () => {
+    statusLine.textContent = 'Dealing…';
+    result.innerHTML = '';
+    try {
+      const g = await loadGraph();
+      const pair = pickFairPair(g);
+      if (!pair) { statusLine.textContent = 'No rawk found.'; return; }
+      selected.a = pair.a;
+      selected.b = pair.b;
+      fieldA.value = g.bands.get(pair.a).name;
+      fieldB.value = g.bands.get(pair.b).name;
+      statusLine.textContent = '';
+      runGame(g, pair.a, pair.b);
+    } catch {
+      statusLine.textContent = 'Could not load the tree. Check your connection and try again.';
+    }
+  });
   const runBtn = document.getElementById('game-run');
   const result = document.getElementById('game-result');
   const statusLine = document.getElementById('game-status');
@@ -215,23 +233,6 @@ function initGameUI() {
   wireAutocomplete(fieldA, 'a');
   wireAutocomplete(fieldB, 'b');
 
-  randomizeBtn.addEventListener('click', async () => {
-    statusLine.textContent = 'Dealing…';
-    result.innerHTML = '';
-    try {
-      const g = await loadGraph();
-      const pair = pickFairPair(g);
-      if (!pair) { statusLine.textContent = 'No rawk found.'; return; }
-      selected.a = pair.a;
-      selected.b = pair.b;
-      fieldA.value = g.bands.get(pair.a).name;
-      fieldB.value = g.bands.get(pair.b).name;
-      statusLine.textContent = '';
-      runGame(g, pair.a, pair.b);
-    } catch {
-      statusLine.textContent = 'Could not load the tree. Check your connection and try again.';
-    }
-  });
 
   runBtn.addEventListener('click', async () => {
     const mode = currentMode();
