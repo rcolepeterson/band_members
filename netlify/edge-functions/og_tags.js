@@ -52,8 +52,11 @@ export default async (request, context) => {
     const found = url.searchParams.get(key);
     if (found && found.trim()) { raw = found.trim(); break; }
   }
-  // No anchor means an ordinary visit. Hand it back without touching the body.
-  if (!raw) return;
+  // Game share links (?game=1 is the QR deep link, ?game=<id> is a shared chain).
+  const gameParam = (url.searchParams.get('game') || '').trim();
+  // No anchor and no game param means an ordinary visit. Hand it back without
+  // touching the body.
+  if (!raw && !gameParam) return;
 
   const response = await context.next();
 
@@ -62,11 +65,59 @@ export default async (request, context) => {
   const type = response.headers.get('content-type') || '';
   if (!type.includes('text/html')) return response;
 
+  const origin = `${url.protocol}//${url.host}`;
+
+  // --- game share links ---------------------------------------------------------
+  // A shared chain unfurls the rendered card: the title names the matchup, the
+  // image is the card for that exact chain, and the URL is the share link itself
+  // so the post stays clickable. The QR deep link (?game=1) gets invitation tags
+  // instead — there is no chain to name, just the game to play.
+  if (gameParam && !raw) {
+    let html = await response.text();
+    if (gameParam === '1') {
+      const title = 'Play the Six Degrees game &mdash; Six Degrees of Rock';
+      const description = 'Connect two bands through the musicians between them. How many hops?';
+      html = replaceMeta(html, 'property', 'og:url', escapeAttr(`${origin}/?game=1`));
+      html = replaceMeta(html, 'property', 'og:title', title);
+      html = replaceMeta(html, 'name', 'twitter:title', title);
+      html = replaceMeta(html, 'property', 'og:description', description);
+      html = replaceMeta(html, 'name', 'twitter:description', description);
+    } else {
+      const safeId = gameParam.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32);
+      // The chain lives in the database; the function is the single reader of it.
+      // A missing or broken lookup falls through to the generic tags — a share
+      // link with a wrong id still unfurls into something, never into nothing.
+      let meta = null;
+      try {
+        const metaRes = await fetch(`${origin}/api/game-share?id=${encodeURIComponent(safeId)}&meta=1`);
+        if (metaRes.ok) meta = await metaRes.json();
+      } catch (_) { /* generic tags below */ }
+      const imageUrl = escapeAttr(`${origin}/api/game-share?id=${encodeURIComponent(safeId)}`);
+      html = replaceMeta(html, 'property', 'og:image', imageUrl);
+      html = replaceMeta(html, 'name', 'twitter:image', imageUrl);
+      html = replaceMeta(html, 'property', 'og:url', escapeAttr(`${origin}/?game=${encodeURIComponent(safeId)}`));
+      html = replaceMeta(html, 'property', 'og:image:alt', 'A Six Degrees of Rock game chain');
+      if (meta && meta.ok && meta.first && meta.last) {
+        const hops = Number(meta.hops) || '?';
+        const title = `${escapeAttr(meta.first)} &rarr; ${escapeAttr(meta.last)} in ${hops} hop${hops === 1 ? '' : 's'} &mdash; Six Degrees of Rock`;
+        const description = 'Think you can stump the graph? Play the Six Degrees game.';
+        html = replaceMeta(html, 'property', 'og:title', title);
+        html = replaceMeta(html, 'name', 'twitter:title', title);
+        html = replaceMeta(html, 'property', 'og:description', description);
+        html = replaceMeta(html, 'name', 'twitter:description', description);
+      }
+    }
+    const headers = new Headers(response.headers);
+    headers.set('cache-control', 'public, max-age=0, must-revalidate');
+    headers.delete('content-length');
+    headers.delete('etag');
+    return new Response(html, { status: response.status, headers });
+  }
+
   const name = raw.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, MAX_NAME);
   if (!name) return response;
 
   const safeName = escapeAttr(name);
-  const origin = `${url.protocol}//${url.host}`;
   const shareUrl = escapeAttr(`${origin}/?anchor=${encodeURIComponent(name)}`);
   const imageUrl = escapeAttr(`${origin}/api/og?anchor=${encodeURIComponent(name)}`);
   const title = `${safeName} &mdash; Six Degrees of Rock`;
