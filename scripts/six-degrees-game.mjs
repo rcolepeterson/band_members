@@ -120,8 +120,9 @@ function initGameUI() {
   const modal = document.getElementById('game-modal');
   if (!modal) return;
 
+  // The game lives in the burger menu only (featured 6° entry at the top of
+  // the mobile sheet) so the header stays clean.
   const openBtns = [
-    document.getElementById('game-open-btn'),
     document.getElementById('mobile-game-open-btn'),
   ].filter(Boolean);
   const closeBtn = modal.querySelector('[data-game-close]');
