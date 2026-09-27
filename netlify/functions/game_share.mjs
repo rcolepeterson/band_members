@@ -43,6 +43,9 @@ import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
 
 const WIDTH = 1200;
 const HEIGHT = 630;
+// Supersample factor: the card is drawn at 2400x1260 and box-filtered down to
+// exactly 1200x630 before encoding. Output dimensions never change.
+const SUPER = 2;
 
 const COLORS = {
   background: '#070b10',
@@ -166,14 +169,46 @@ function drawQr(ctx, text, x, y, px) {
   return total;
 }
 
+// 2x2 box-filter downscale: average each 2x2 block of the supersampled image
+// into one output pixel. The ratio is exactly 2:1, so there is no fractional
+// sampling and no ringing — just smoother glyph and line edges than a 1x
+// raster, which is what was reading as "fuzzy" after platform recompression.
+function downscale2x(src) {
+  const dw = src.width / 2;
+  const dh = src.height / 2;
+  const dst = PImage.make(dw, dh);
+  const s = src.data;
+  const d = dst.data;
+  const sw = src.width;
+  for (let y = 0; y < dh; y++) {
+    for (let x = 0; x < dw; x++) {
+      const di = (y * dw + x) * 4;
+      const s00 = ((y * 2) * sw + x * 2) * 4;
+      const s10 = s00 + 4;
+      const s01 = s00 + sw * 4;
+      const s11 = s01 + 4;
+      d[di] = (s[s00] + s[s10] + s[s01] + s[s11]) >> 2;
+      d[di + 1] = (s[s00 + 1] + s[s10 + 1] + s[s01 + 1] + s[s11 + 1]) >> 2;
+      d[di + 2] = (s[s00 + 2] + s[s10 + 2] + s[s01 + 2] + s[s11 + 2]) >> 2;
+      d[di + 3] = (s[s00 + 3] + s[s10 + 3] + s[s01 + 3] + s[s11 + 3]) >> 2;
+    }
+  }
+  return dst;
+}
+
 export async function renderGameCard({ chain, hops, host = 'sixdegreesofrock.com' } = {}) {
   if (!ensureFont()) return null;
   const nodes = validChain(chain);
   if (!nodes) return null;
   const hopCount = Number.isFinite(Number(hops)) ? Math.max(1, Math.min(10, Math.round(Number(hops)))) : nodes.length - 1;
 
-  const img = PImage.make(WIDTH, HEIGHT);
+  const img = PImage.make(WIDTH * SUPER, HEIGHT * SUPER);
   const ctx = img.getContext('2d');
+  // Draw everything in the familiar 1200x630 logical space; the transform
+  // rasterizes it at 2400x1260. pureimage's glyph edges are rough at 1x and
+  // the roughness survives into the PNG — the 2x pass is what makes the
+  // node names read crisp after a social platform recompresses the card.
+  ctx.scale(SUPER, SUPER);
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
@@ -227,7 +262,10 @@ export async function renderGameCard({ chain, hops, host = 'sixdegreesofrock.com
     ctx.arc(p.x, p.y, isBand ? 10 : 8, 0, Math.PI * 2);
     ctx.fill();
 
-    const size = 15;
+    // Node labels run a notch larger than the original 15pt: they are the text
+    // Aaron reads first in a feed, and the extra pixels survive the downscale.
+    // The ellipsize lane below keeps long names inside their own lane.
+    const size = 19;
     const label = ellipsize(ctx, p.node.name, size, Math.max(spacing * 1.7, 120));
     const w = measure(ctx, label, size);
     ctx.fillStyle = COLORS.label;
@@ -246,10 +284,11 @@ export async function renderGameCard({ chain, hops, host = 'sixdegreesofrock.com
   ctx.font = `16pt ${FONT_FAMILY}`;
   ctx.fillText(host, 90, stripTop + 39);
 
+  const card = downscale2x(img);
   const chunks = [];
   const sink = new PassThrough();
   sink.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-  await PImage.encodePNGToStream(img, sink);
+  await PImage.encodePNGToStream(card, sink);
   const png = Buffer.concat(chunks);
   if (!png.length) return null;
   return png;
