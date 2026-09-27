@@ -73,9 +73,30 @@ test('game module fetches sponsors and degrades to the placeholder', () => {
   assert.ok(GAME_SRC.includes("fetch('/api/game-sponsors'"), 'ribbon loads from the endpoint');
   assert.ok(GAME_SRC.includes('game-sponsor-ribbon'), 'ribbon element exists');
   assert.ok(GAME_SRC.includes('game-sponsor-placeholder'), 'placeholder path exists');
-  // Placeholder taps through to the site's contact path (feedback popover),
-  // falling back to the site root — never a dead button.
-  assert.ok(GAME_SRC.includes('send-feedback-btn'), 'placeholder opens the feedback/contact path');
+  // Placeholder opens the feedback form directly through the page's own
+  // openFeedbackPopover routine — never by proxy-clicking the toolbar
+  // button (that handoff missed on a real device).
+  assert.ok(GAME_SRC.includes('window.openFeedbackPopover'), 'placeholder uses the page open routine');
+  assert.ok(!GAME_SRC.includes('send-feedback-btn'), 'no toolbar-button proxy-click remains');
+  // The '/' fallback is gone: nothing in the game module navigates away.
+  assert.ok(!/location\.href\s*=/.test(GAME_SRC), 'no navigation fallback anywhere in the module');
+  assert.ok(!/location\s*=\s*['"]\//.test(GAME_SRC), 'no bare location assignment to a path');
+  // The inquiry is routed: the feedback type is preselected to the new
+  // "Game sponsorship" option; the visitor still writes their own message.
+  assert.ok(GAME_SRC.includes("typeSel.value = 'Game sponsorship'"), 'type preset targets Game sponsorship');
+  assert.ok(!/feedback-message['"]?\)?\.value\s*=/.test(GAME_SRC), 'message textarea is never prefilled');
+  // Last resort keeps the game open and says so inline in the ribbon.
+  assert.ok(GAME_SRC.includes('game-sponsor-contact-note'), 'inline fallback note exists');
+  assert.ok(GAME_SRC.includes("Couldn't open the contact form"), 'fallback note copy is exact');
+});
+
+test('feedback form offers a Game sponsorship type', () => {
+  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+  assert.ok(
+    html.includes('<option value="Game sponsorship">Game sponsorship</option>'),
+    'Game sponsorship option exists in #feedback-type'
+  );
+  assert.ok(html.includes('window.openFeedbackPopover = openFeedbackPopover'), 'open routine is exposed');
 });
 
 // --- sponsor payload validation ----------------------------------------------
