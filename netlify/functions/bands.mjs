@@ -367,6 +367,15 @@ function validateSubmission(payload) {
     return { ok: false, error: 'Bio must be plain text only — no links, URLs, or promo sites.' };
   }
 
+  // Band bio (band-level "where from / what they did", distinct from the
+  // member bio above). Same plain-text rules; validated here so the legacy
+  // bridge can't smuggle links into Neon via draftToNeonCreateInput below.
+  const bandBio = asTrimmedString(payload.bandBio);
+  if (bandBio.length > LIMITS.bio) return { ok: false, error: 'Band bio is too long.' };
+  if (bandBio && BLOCKED_LINK_RE.test(bandBio)) {
+    return { ok: false, error: 'Band bio must be plain text only — no links, URLs, or promo sites.' };
+  }
+
   // Accept the multi-member shape ({ members: [...] }) and the legacy
   // single-member shape ({ member, instrument, relation }).
   let rawMembers = Array.isArray(payload.members) ? payload.members : [];
@@ -410,6 +419,7 @@ function validateSubmission(payload) {
     label: clampMeta(payload.label),
     albums: clampMeta(payload.albums),
     bio,
+    bandBio,
     mode: payload.mode === 'existing-band-connection' ? 'existing-band-connection' : 'new-band-entry',
     savedAt: new Date().toISOString()
   };
@@ -484,6 +494,7 @@ function draftToNeonCreateInput(draft, userId) {
     years_active: draft.yearsActive,
     label: draft.label,
     albums: draft.albums,
+    bio: draft.bandBio,
     members: (draft.members || []).map(m => {
       const relationNum = Number(m.relation);
       return {

@@ -58,7 +58,7 @@ export default async (req) => {
       // filters scene/genre/search there, so a server-side window would give
       // it a graph it couldn't un-filter without a second round trip.
       sql`
-        select id, name, city, state, country, genre, years_active, label, albums, csv_origin, created_at,
+        select id, name, city, state, country, genre, years_active, label, albums, bio, csv_origin, created_at,
                -- Phase 3: creator id, so the edit panel can show the link
                -- fields only to the band's creator (server still enforces).
                added_by
