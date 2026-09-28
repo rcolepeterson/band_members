@@ -19,7 +19,7 @@
 
 // Input shape expected by createBandInNeon():
 // {
-//   name, city, state, country, genre, years_active, label, albums,
+//   name, city, state, country, genre, years_active, label, albums, bio,
 //   members: [ { id?, name?, instrument1, instrument2, tenure, weight, relation } ],
 //   userId,
 // }
@@ -77,7 +77,7 @@ export function sameBandIdentity(a, b) {
 }
 
 export async function createBandInNeon(sql, input) {
-  const { name, city, state, country, genre, years_active, label, albums, members, userId } = input;
+  const { name, city, state, country, genre, years_active, label, albums, bio, members, userId } = input;
   // Phase 3: optional { platform: url } map, already validated by the
   // caller (bands_create.mjs). Written in transaction 2 so the band and
   // its links commit atomically. Absent for seed_bands.mjs callers.
@@ -113,10 +113,10 @@ export async function createBandInNeon(sql, input) {
 
   // --- Transaction 1: insert the band + upsert any new-by-name members ---
   const bandInsertPromise = sql`
-    insert into bands (name, city, state, country, genre, years_active, label, albums, csv_origin, added_by, edited_by)
+    insert into bands (name, city, state, country, genre, years_active, label, albums, bio, csv_origin, added_by, edited_by)
     values (${name}, ${city || null}, ${state || null}, ${country || null}, ${genre || null},
-            ${years_active || null}, ${label || null}, ${albums || null}, false, ${userId}, ${userId})
-    returning id, name, city, state, country, genre, years_active, label, albums, csv_origin, added_by, edited_by, created_at, updated_at
+            ${years_active || null}, ${label || null}, ${albums || null}, ${bio || null}, false, ${userId}, ${userId})
+    returning id, name, city, state, country, genre, years_active, label, albums, bio, csv_origin, added_by, edited_by, created_at, updated_at
   `;
 
   const newByNameEntries = members.filter(m => !m.id && m.name);

@@ -48,10 +48,15 @@ const LIMITS = {
   country: 3,
   genre: 80,
   meta: 200, // years_active / label / albums
+  bio: 2000, // band bio — same cap as the member bio
   memberName: 120,
   instrument: 120,
   maxMembers: 50,
 };
+
+// Mirror of edit-person.mjs's BLOCKED_LINK_RE so band bios enforce the
+// exact same "no links" rule the client's bio field note promises.
+const BLOCKED_LINK_RE = /(?:https?:\/\/|www\.|[a-z0-9-]+\.(?:com|net|org|io|co|fm|tv|gg|ly|me|info|biz|xyz|site|link|app|dev|music|band|rocks|live))/i;
 
 function asTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -89,6 +94,12 @@ function validateCreateBody(payload) {
   const years_active = asTrimmedString(payload.years_active).slice(0, LIMITS.meta);
   const label = asTrimmedString(payload.label).slice(0, LIMITS.meta);
   const albums = asTrimmedString(payload.albums).slice(0, LIMITS.meta);
+
+  const bio = asTrimmedString(payload.bio);
+  if (bio.length > LIMITS.bio) return { ok: false, error: 'band bio is too long', field: 'bio' };
+  if (bio && BLOCKED_LINK_RE.test(bio)) {
+    return { ok: false, error: 'Band bio must be plain text only — no links, URLs, or promo sites.', field: 'bio' };
+  }
 
   const rawMembers = Array.isArray(payload.members) ? payload.members : [];
   if (rawMembers.length > LIMITS.maxMembers) {
@@ -129,7 +140,7 @@ function validateCreateBody(payload) {
 
   return {
     ok: true,
-    data: { name, city, state, country, genre, years_active, label, albums, members, links },
+    data: { name, city, state, country, genre, years_active, label, albums, bio, members, links },
   };
 }
 
@@ -153,7 +164,7 @@ export default async (req) => {
   if (!validated.ok) {
     return badRequest(validated.error, validated.field ? { field: validated.field } : {});
   }
-  const { name, city, state, country, genre, years_active, label, albums, members, links } = validated.data;
+  const { name, city, state, country, genre, years_active, label, albums, bio, members, links } = validated.data;
 
   const sql = getSql();
 
@@ -174,7 +185,7 @@ export default async (req) => {
     }
 
     const result = await createBandInNeon(sql, {
-      name, city, state, country, genre, years_active, label, albums, members, links,
+      name, city, state, country, genre, years_active, label, albums, bio, members, links,
       userId: user.id,
     });
 
