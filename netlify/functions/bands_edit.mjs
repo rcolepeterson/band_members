@@ -58,12 +58,17 @@ const LIMITS = {
   country: 3,
   genre: 80,
   meta: 200, // years_active / label / albums
+  bio: 2000, // band bio — same cap as the member bio in edit-person.mjs
 };
+
+// Mirror of edit-person.mjs's BLOCKED_LINK_RE so band bios enforce the
+// exact same "no links" rule the client's bio field note promises.
+const BLOCKED_LINK_RE = /(?:https?:\/\/|www\.|[a-z0-9-]+\.(?:com|net|org|io|co|fm|tv|gg|ly|me|info|biz|xyz|site|link|app|dev|music|band|rocks|live))/i;
 
 // Fields the client may PATCH, and how to normalize each. Sparse body: only
 // keys present in the request are considered — this drives both the diff
 // computation and the UPDATE's SET clause.
-const EDITABLE_FIELDS = ['name', 'city', 'state', 'country', 'genre', 'years_active', 'label', 'albums'];
+const EDITABLE_FIELDS = ['name', 'city', 'state', 'country', 'genre', 'years_active', 'label', 'albums', 'bio'];
 
 function asTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -124,6 +129,14 @@ function normalizeField(field, rawValue, pendingCountry) {
     case 'label':
     case 'albums':
       return asTrimmedString(rawValue).slice(0, LIMITS.meta);
+    case 'bio': {
+      const v = asTrimmedString(rawValue);
+      if (v.length > LIMITS.bio) throw { error: 'band bio is too long', field: 'bio' };
+      if (v && BLOCKED_LINK_RE.test(v)) {
+        throw { error: 'Band bio must be plain text only — no links, URLs, or promo sites.', field: 'bio' };
+      }
+      return v;
+    }
     default:
       return asTrimmedString(rawValue);
   }

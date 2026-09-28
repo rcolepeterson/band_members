@@ -280,6 +280,12 @@ export default async (req) => {
     `;
     results.push('trigger bands_set_updated_at ready');
 
+    // Band bios: free-text "where the band is from / what they did" shown
+    // on the band card. Same plain-text, no-links rules as member bios —
+    // enforced at write time (bands_edit.mjs / bands_create.mjs), not here.
+    await sql`alter table bands add column if not exists bio text`;
+    results.push('column bands.bio ready');
+
     // band_members table ------------------------------------------------------
     // One row per person. Instrument fields are limited to two (instrument1/
     // instrument2) matching the two most-used columns in the CSV
