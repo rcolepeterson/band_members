@@ -595,17 +595,18 @@ test('typeahead waits for three characters and caps the dropdown', () => {
   // matches first, then substring matches.
   assert.match(EXPLORER, /const MAX_TYPEAHEAD_SUGGESTIONS = 8;/);
   assert.match(handler, /\.slice\(0, MAX_TYPEAHEAD_SUGGESTIONS\)/, 'typed results are capped');
-  assert.match(handler, /starts\.push\(name\)/, 'prefix matches are collected first');
+  assert.match(handler, /starts\.push\(allBandDisplayNames\[i\]\)/, 'prefix matches are collected first');
 });
 
 test('typeahead suggestions come from bands only, never the member roster', () => {
-  // The filter-as-you-type loop walks allBandDisplayNames, built once from
+  // The filter-as-you-type loop walks the band display names (with a
+  // pre-folded diacritic-insensitive copy alongside), built once from
   // the band nodes: musicians would outnumber bands roughly six to one and
   // bury them. Typing a musician's name still resolves through
   // resolveAnchor -- they are findable, just not offered.
   assert.match(EXPLORER, /bandNames = master\.nodes\.filter\(node => node\.type === 'band'\)/);
   assert.match(EXPLORER, /const allBandDisplayNames = \[\.\.\.new Set\(bandNames\.map\(displayNameForId\)\)\];/);
-  assert.match(EXPLORER, /for \(const name of allBandDisplayNames\)/);
+  assert.match(EXPLORER, /for \(let i = 0; i < allBandDisplayNames\.length; i\+\+\)/);
 });
 
 test('the page panels the pills open are moved out of the retired toolbar', () => {
@@ -909,6 +910,17 @@ test('search navigation retires the old card and opens the new one', () => {
   const highlightAt = explore.indexOf('highlightFrom(partial.id)');
   assert.ok(dispatchAt > 0 && highlightAt > 0, 'exploreFor should announce travel and highlight the new anchor');
   assert.ok(dispatchAt < highlightAt, 'travel must be announced BEFORE the highlight opens the new card');
+});
+
+test('searching a missing band never redirects to a substring match', () => {
+  // Paul typed "sugar" for Bob Mould's band Sugar, which is not in the tree,
+  // and the view jumped to Siggy Sugarcube instead. exploreFor used to fall
+  // back to the first node whose id contained the query; now only an exact
+  // match navigates, and anything else takes the miss path that opens the
+  // add-band card.
+  const explore = EXPLORER.slice(EXPLORER.indexOf('function exploreFor(rawQuery)'), EXPLORER.indexOf('function expand()'));
+  assert.ok(!explore.includes('.includes(query)'), 'exploreFor must not fall back to a substring match');
+  assert.match(explore, /foldDiacritics\(normalizeAnchorKey\(node\.id\)\) === foldedQuery/, 'the exact match folds diacritics so "husker du" still finds "Hüsker Dü"');
 });
 
 test('reset retires the open card', () => {
