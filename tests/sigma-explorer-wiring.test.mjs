@@ -163,7 +163,7 @@ test('the discovery prompt and larger-universe copy are present', () => {
 function STAGE_ACTIONS() {
   const block = EXPLORER.slice(
     EXPLORER.indexOf('const STAGE_ACTIONS = ['),
-    EXPLORER.indexOf('// Upper bound on datalist options'),
+    EXPLORER.indexOf('// Upper bound on suggestion options'),
   );
   // Tolerates comment lines between the fields: the copy carries reasoning, and
   // an entry is allowed to explain itself without breaking this parser.
@@ -573,7 +573,7 @@ test('only bands are suggested, never the 2,700 musicians', () => {
   // findable, just not offered.
   const block = EXPLORER.slice(
     EXPLORER.indexOf('// Search suggestions'),
-    EXPLORER.indexOf('datalist.innerHTML') + 400,
+    EXPLORER.indexOf('defaultSuggestions = sorted;') + 400,
   );
   assert.ok(block.includes('bandNames'), 'suggestions come from the band list');
   assert.ok(
@@ -668,7 +668,7 @@ test('pill copy does not name the default anchor', () => {
   // read as somebody's personal page, and it goes stale if the default changes.
   const actions = EXPLORER.slice(
     EXPLORER.indexOf('const STAGE_ACTIONS = ['),
-    EXPLORER.indexOf('// Upper bound on datalist options'),
+    EXPLORER.indexOf('// Upper bound on suggestion options'),
   );
   const details = [...actions.matchAll(/detail:\s*'([^']+)'/g)].map(m => m[1]);
   assert.ok(details.length >= 5, `expected every pill to have copy, found ${details.length}`);
@@ -1717,5 +1717,26 @@ test('the shared guard rejects the self-loop that caused the outage', () => {
     guard.slice(0, 400),
     /if \(source === target\) return false;/,
     'The self-loop check is the whole point of the shared guard.'
+  );
+});
+
+test('search suggestions are a custom dropdown, not a native datalist', () => {
+  // The native datalist popup is drawn by the browser; on Android Chrome it
+  // lands on top of the keyboard and blocks typing. The custom dropdown is
+  // capped at 38vh and scrolls internally instead.
+  assert.doesNotMatch(EXPLORER, /<datalist/, 'no native datalist in the template');
+  assert.doesNotMatch(EXPLORER, /list="sigma-search-options"/, 'input must not reference the datalist');
+  assert.match(EXPLORER, /id="sigma-search-suggest"/, 'custom suggestion dropdown exists');
+  assert.match(EXPLORER, /max-height:min\(38vh,340px\)/, 'dropdown is capped above the keyboard');
+});
+
+test('"Show next group" jumps to a random unvisited group', () => {
+  // Was largest-first: every tap marched through groups biggest to smallest.
+  // Now each tap is a surprise jump; the visited-component tour still visits
+  // every group exactly once per loop.
+  assert.match(
+    EXPLORER,
+    /unvisited\[Math\.floor\(Math\.random\(\) \* unvisited\.length\)\]/,
+    'next group is picked at random',
   );
 });
