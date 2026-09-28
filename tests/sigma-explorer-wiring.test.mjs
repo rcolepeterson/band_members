@@ -1728,6 +1728,14 @@ test('search suggestions are a custom dropdown, not a native datalist', () => {
   assert.doesNotMatch(EXPLORER, /list="sigma-search-options"/, 'input must not reference the datalist');
   assert.match(EXPLORER, /id="sigma-search-suggest"/, 'custom suggestion dropdown exists');
   assert.match(EXPLORER, /max-height:min\(38vh,340px\)/, 'dropdown is capped above the keyboard');
+  // The rows must outrank `#stage .sigma-prompt button`, which turns every
+  // button in the prompt into a 36px icon circle -- a single class loses, and
+  // the names render as overlapping 36px boxes (seen on Android 2026-09-27).
+  assert.match(
+    EXPLORER,
+    /\.sigma-suggest \.sigma-suggest__item\{[^}]*display:block/,
+    'suggestion rows beat the prompt icon-button rule',
+  );
 });
 
 test('"Show next group" jumps to a random unvisited group', () => {
