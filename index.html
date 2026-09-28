@@ -622,7 +622,7 @@ body {
    awkward, so it's fixed + centered instead, reusing .share-popover's
    glass background/border/blur but overriding position. z-index sits
    above .node-card (12) and the mobile bottom-sheet popovers (up to 75)
-   so it's always reachable once opened, but below #password-gate (9999). */
+   so it's always reachable once opened. */
 .edit-person-panel {
   /* Self-contained fixed-center overlay. Do NOT rely on .share-popover's
      positioning (which is `position: absolute` anchored to a toolbar
@@ -3137,14 +3137,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
    <input type="email" name="feedback-email" />
    <input type="text" name="bot-field" />
  </form>
- <div id="password-gate" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background-color:#04070b;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
-  <div style="color:#ffffff;font-family:Arial,sans-serif;font-size:18px;">Enter password</div>
-  <form id="gate-form" style="display:flex;flex-direction:column;align-items:center;gap:16px;">
-    <input type="password" id="gate-input" name="password" style="width:220px;padding:12px;font-size:16px;color:#000000;background-color:#ffffff;border:2px solid #999999;border-radius:6px;" />
-    <button type="submit" style="padding:12px 40px;font-size:16px;font-weight:bold;color:#000000;background-color:#8fe8f6;border:2px solid #68bfd2;border-radius:6px;cursor:pointer;">Submit</button>
-  </form>
-  <div id="gate-error" style="color:#ff8080;font-family:Arial,sans-serif;font-size:14px;display:none;">Incorrect password</div>
-</div>
   <a class="skip-link" href="#main-content">Skip to content</a>
   <div class="page-shell">
     <div class="grid-lines" aria-hidden="true"></div>
@@ -4175,36 +4167,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   </div>
 
   <script>
-   (function() {
-      const gate = document.getElementById('password-gate');
-      const form = document.getElementById('gate-form');
-      const input = document.getElementById('gate-input');
-      const error = document.getElementById('gate-error');
-
-      // Gate disabled at the site owner's request (2026-08-26). Flip to true to
-      // bring it back -- the markup and unlock logic below are untouched.
-      const GATE_ENABLED = false;
-      if (!GATE_ENABLED) {
-        gate.style.display = 'none';
-        return;
-      }
-
-      if (sessionStorage.getItem('rbft-unlocked') === 'yes') {
-        gate.style.display = 'none';
-        return;
-      }
-
-      form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        if (input.value === 'rawk') {
-          sessionStorage.setItem('rbft-unlocked', 'yes');
-          gate.style.display = 'none';
-        } else {
-          error.style.display = 'block';
-          input.value = '';
-        }
-      });
-    })();
     const selectedName = document.getElementById('selected-node-name');
     const selectedCopy = document.getElementById('selected-node-copy');
     const selectedType = document.getElementById('selected-node-type');
@@ -12134,28 +12096,17 @@ function downloadPngBlob(blob) {
 
 
     (function () {
-      // Theme handling. Neither desktop nor mobile surface a manual
-      // theme toggle anymore — both platforms follow the OS setting via
-      // prefers-color-scheme (mobile previously had a manual 'Light mode'
-      // chip inside the hamburger sheet; that was replaced by the Share
-      // button in PR 12). The [data-theme-toggle] selector is kept in
-      // case we resurrect a manual override later; today it matches
-      // nothing and applyTheme() only updates the <html data-theme>
-      // attribute.
-      const toggles = document.querySelectorAll('[data-theme-toggle]');
+      // Theme handling. Neither desktop nor mobile surfaces a manual
+      // theme toggle -- both platforms follow the OS setting via
+      // prefers-color-scheme (mobile's old 'Light mode' chip was replaced
+      // by the Share button in PR 12).
       const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)');
       const initialTheme = document.documentElement.getAttribute('data-theme')
         || (prefersLight && prefersLight.matches ? 'light' : 'dark');
-      let currentTheme = initialTheme;
-      const applyTheme = theme => {
-        currentTheme = theme;
-        document.documentElement.setAttribute('data-theme', theme);
-        toggles.forEach(btn => { btn.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode'; });
-      };
-      applyTheme(currentTheme);
-      toggles.forEach(btn => btn.addEventListener('click', () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark')));
-      // Follow OS preference until the user overrides with the manual toggle.
-      if (prefersLight && !document.documentElement.hasAttribute('data-theme-user-override')) {
+      const applyTheme = theme => document.documentElement.setAttribute('data-theme', theme);
+      applyTheme(initialTheme);
+      // Follow OS preference live.
+      if (prefersLight) {
         try {
           prefersLight.addEventListener('change', ev => applyTheme(ev.matches ? 'light' : 'dark'));
         } catch (_) { /* older Safari uses addListener */
