@@ -566,6 +566,24 @@ test('search suggestions are alphabetical, and cover every band', () => {
   assert.match(EXPLORER, /const MAX_SUGGESTIONS = \d+;/);
 });
 
+test('typeahead waits for three characters and caps the dropdown', () => {
+  // One or two characters match too much of the corpus to be useful -- a lone
+  // "h" used to fan hundreds of rows across the constellation. The list stays
+  // hidden until the visitor has typed enough to mean it.
+  assert.match(EXPLORER, /const MIN_SUGGEST_CHARS = 3;/);
+  const handler = EXPLORER.slice(
+    EXPLORER.indexOf("input.addEventListener('input'"),
+    EXPLORER.indexOf('// Arrow keys walk the rows'),
+  );
+  assert.match(handler, /if \(value\.length < MIN_SUGGEST_CHARS\)/, 'short queries hide the list');
+  // Even at three characters some queries ("the") match a huge slice of the
+  // universe, so the typed dropdown is a capped, ranked handful: prefix
+  // matches first, then substring matches.
+  assert.match(EXPLORER, /const MAX_TYPEAHEAD_SUGGESTIONS = 8;/);
+  assert.match(handler, /\.slice\(0, MAX_TYPEAHEAD_SUGGESTIONS\)/, 'typed results are capped');
+  assert.match(handler, /starts\.push\(name\)/, 'prefix matches are collected first');
+});
+
 test('only bands are suggested, never the 2,700 musicians', () => {
   // A deliberate product decision, not an accident of the corpus slice this
   // replaced: musicians would outnumber bands roughly six to one and bury them.
