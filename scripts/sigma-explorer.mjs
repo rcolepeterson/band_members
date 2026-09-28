@@ -274,10 +274,6 @@ function actionIconSvg(key) {
     + `aria-hidden="true">${path}</svg>`;
 }
 
-// Upper bound on suggestion options. Comfortably above the band count, low
-// enough that a pathological graph cannot stall the browser building the list.
-const MAX_SUGGESTIONS = 800;
-
 // Filter-as-you-type only kicks in at three characters: one or two match far
 // too much of the corpus to be useful (a lone "h" once fanned hundreds of
 // rows across the constellation).
@@ -1122,9 +1118,6 @@ export function initSigmaExplorer({
   // row the arrow keys have highlighted (-1 = none).
   let suggestNames = [];
   let suggestActive = -1;
-  // The default alphabetical offering, rebuilt whenever the view changes;
-  // shown when the field is focused empty and restored when the query clears.
-  let defaultSuggestions = [];
 
   const svg = doc.getElementById('graph-svg');
   const svgDisplayBefore = svg ? svg.style.display : null;
@@ -1713,32 +1706,6 @@ export function initSigmaExplorer({
     // only the DOM chrome moved, so waiting for afterRender left a label sitting
     // across the footer with nothing to correct it.
     updateLabelBlocking();
-
-    // Search suggestions, in alphabetical order.
-    //
-    // The list used to be ordered by relevance -- the frontier first, then an
-    // arbitrary slice of the corpus -- which reads as random the moment someone
-    // clicks the empty field and just looks at what is on offer. Our own
-    // dropdown substring-filters as you type, so relevance ordering buys
-    // nothing once there is a query, and alphabetical is what a person scanning
-    // a list expects. Every band is offered (not a 200-node slice), plus the
-    // current frontier, so the natural next steps are always present.
-    //
-    // Musicians are deliberately not listed: 2,700 names would bury the bands,
-    // and typing any musician's name still resolves through resolveAnchor.
-    const suggestions = new Set([...view.frontier.slice(0, 40), ...bandNames]);
-    // Frontier entries are node IDS, so a suffixed musician id would be
-    // offered verbatim as a suggestion. Names are what a person types.
-    // The anchor is always included: with 6,245 bands and an 800-slot
-    // alphabetical slice, "Weezer" (W) would otherwise never appear.
-    const anchorName = displayNameForId(state.anchorId);
-    const sorted = Array.from(new Set(Array.from(suggestions).map(displayNameForId)))
-      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }))
-      .slice(0, MAX_SUGGESTIONS);
-    if (anchorName && !sorted.includes(anchorName)) sorted.push(anchorName);
-    // The default offering, shown when the field is focused empty. Stored so
-    // the input handler can restore it when the query is cleared.
-    defaultSuggestions = sorted;
   }
 
   /**
@@ -2383,13 +2350,17 @@ export function initSigmaExplorer({
   // submitted. If the field's value is a complete suggestion, treat the pick
   // as the search itself: go there immediately instead of making the visitor
   // find the magnifier. Two ways to go: tap a suggestion, or tap blue.
+  // Tapping the search field no longer opens the browse list: the dropdown
+  // appears only once the visitor types (3+ characters, ranked and capped).
+  // The empty-field list fanned hundreds of rows across the constellation
+  // on every tap.
   input.addEventListener('focus', () => {
-    if (!input.value.trim()) renderSuggestions(defaultSuggestions);
+    hideSuggestions();
   });
   input.addEventListener('input', () => {
     const value = input.value.trim();
     if (!value) {
-      renderSuggestions(defaultSuggestions);
+      hideSuggestions();
       return;
     }
     if (suggestNames.includes(value)) {
