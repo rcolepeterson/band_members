@@ -3739,6 +3739,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                 <div><label for="band-label">Label</label><input id="band-label" name="band-label" type="text" placeholder="Sub Pop, Epic, SST…" /></div>
                 <div class="form-span-2"><label for="band-genre">Genre</label><input id="band-genre" name="band-genre" type="text" list="genre-suggestions" placeholder="Grunge, Alternative Rock, Punk Rock…" autocapitalize="words" /><datalist id="genre-suggestions"></datalist><div class="field-note">Optional. Free text — pick from the suggestions or type your own.</div></div>
                 <div class="form-span-2"><label for="albums-released">Albums released</label><input id="albums-released" name="albums-released" type="text" placeholder="Ten; Vs.; Vitalogy" /></div>
+                <div class="form-span-2"><label for="band-bio">Band bio</label><textarea id="band-bio" name="band-bio" autocapitalize="sentences" autocomplete="off" spellcheck="true" placeholder="Where the band is from, what they did, why they matter."></textarea><div class="field-note">Plain text only. Links and promo URLs are not allowed.</div></div>
                 <!--
                   Phase 3: official band links. Nine platform URL fields in
                   the same bordered shell as the member rows. Only the band
@@ -3826,6 +3827,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                   <div><label for="edit-band-label">Label</label><input id="edit-band-label" name="edit-band-label" type="text" placeholder="Sub Pop, Epic, SST…" /></div>
                   <div class="form-span-2"><label for="edit-band-genre">Genre</label><input id="edit-band-genre" name="edit-band-genre" type="text" list="genre-suggestions" placeholder="Grunge, Alternative Rock, Punk Rock…" autocapitalize="words" /></div>
                   <div class="form-span-2"><label for="edit-band-albums">Albums released</label><input id="edit-band-albums" name="edit-band-albums" type="text" placeholder="Ten; Vs.; Vitalogy" /></div>
+                  <div class="form-span-2"><label for="edit-band-bio">Band bio</label><textarea id="edit-band-bio" name="edit-band-bio" autocapitalize="sentences" autocomplete="off" spellcheck="true" placeholder="Where the band is from, what they did, why they matter."></textarea><div class="field-note">Plain text only. Links and promo URLs are not allowed.</div></div>
                   <!--
                     Phase 3: official band links. Hidden unless the signed-in
                     user created this band (or is an admin) — the server
@@ -6521,6 +6523,9 @@ function downloadPngBlob(blob) {
         // (see normalizeNeonToRows); CSV rows leave it blank, which the
         // Recently-added filter treats as "not datable".
         const bandCreatedAt = String(row.bandCreatedAt || row.created_at || '').trim();
+        // Band bio (band-level "where from / what they did"). Neon supplies
+        // it via normalizeNeonToRows; CSV rows leave it blank.
+        const bandBio = String(row.bio || '').trim();
 
         // The band always keeps the plain name; only a colliding person is
         // given a distinct id.
@@ -6533,12 +6538,14 @@ function downloadPngBlob(blob) {
           // suffix when several bands share one name (see
           // normalizeNeonToRows), so titles stay clean while ids stay unique.
           const bandDisplayName = (row.bandName || '').trim() || source;
-          nodeMap.set(source, { id: source, name: bandDisplayName, type: 'band', city, state, country, genre, yearsActive: bandYearsActive, createdAt: bandCreatedAt });
+          nodeMap.set(source, { id: source, name: bandDisplayName, type: 'band', city, state, country, genre, yearsActive: bandYearsActive, bio: bandBio, createdAt: bandCreatedAt });
         } else {
           const existingBand = nodeMap.get(source);
           if (genre && !existingBand.genre) existingBand.genre = genre;
           // First non-empty band yearsActive wins; later rows don't overwrite.
           if (bandYearsActive && !existingBand.yearsActive) existingBand.yearsActive = bandYearsActive;
+          // First non-empty band bio wins; later rows don't overwrite.
+          if (bandBio && !existingBand.bio) existingBand.bio = bandBio;
           if (bandCreatedAt && !existingBand.createdAt) existingBand.createdAt = bandCreatedAt;
         }
         if (!nodeMap.has(personId)) {
@@ -6669,6 +6676,7 @@ function downloadPngBlob(blob) {
           'Intrument 1': instrument1,
           'Intrument 2': instrument2,
           yearsActive: band.years_active || '',
+          bio: band.bio || '',
           personYearsActive: member.years_active || '',
           memberYearsActive: membership.tenure || '',
           bandCreatedAt: band.created_at || ''
@@ -7283,6 +7291,7 @@ function downloadPngBlob(blob) {
         years_active: draft.yearsActive || '',
         label: draft.label || '',
         albums: draft.albums || '',
+        bio: draft.bandBio || '',
         links: draft.links || {},
         members
       };
@@ -7476,7 +7485,7 @@ function downloadPngBlob(blob) {
         const nameTaken = master.nodes.some(node => node.type === 'band'
           && normalizeIdentityKey(nodeName(node)) === normalizeIdentityKey(band));
         const nodeId = nameTaken ? disambiguatedBandId(band, city, state, country) : band;
-        master.nodes.push({ id: nodeId, name: band, type: 'band', city, state, country, genre, yearsActive, label: bandLabel, albums, createdAt: String(draft.savedAt || '').trim() });
+        master.nodes.push({ id: nodeId, name: band, type: 'band', city, state, country, genre, yearsActive, label: bandLabel, albums, bio: String(draft.bandBio || '').trim(), createdAt: String(draft.savedAt || '').trim() });
         bandNode = master.nodes[master.nodes.length - 1];
         changed = true;
       } else {
@@ -10383,6 +10392,7 @@ function downloadPngBlob(blob) {
       const cityField = document.getElementById('submission-city');
       const memberField = document.getElementById('member-name');
       const bioField = document.getElementById('member-bio');
+      const bandBioField = document.getElementById('band-bio');
       const validation = document.getElementById('submission-validation');
       const band = bandField.value.trim();
       const location = readSubmissionLocation();
@@ -10393,6 +10403,7 @@ function downloadPngBlob(blob) {
       cityField.classList.remove('field-error');
       memberField.classList.remove('field-error');
       bioField.classList.remove('field-error');
+      if (bandBioField) bandBioField.classList.remove('field-error');
       validation.classList.remove('is-warning', 'is-success');
 
       // Canonical-match hints + silent auto-fill. Runs before the rest of the
@@ -10917,6 +10928,12 @@ function downloadPngBlob(blob) {
         showSubmissionFeedback('Bio must be plain text only — no links, URLs, or promo sites.', true);
         return;
       }
+      const bandBio = document.getElementById('band-bio').value.trim();
+      if (bandBio && bioContainsBlockedLink(bandBio)) {
+        document.getElementById('band-bio').classList.add('field-error');
+        showSubmissionFeedback('Band bio must be plain text only — no links, URLs, or promo sites.', true);
+        return;
+      }
 
       // Phase 3: official band links. Each non-empty URL must match its
       // platform's domain; invalid URLs block the submission with the
@@ -11002,6 +11019,7 @@ function downloadPngBlob(blob) {
         yearsActive: bandExisted ? '' : document.getElementById('years-active').value.trim(),
         label: bandExisted ? '' : document.getElementById('band-label').value.trim(),
         albums: bandExisted ? '' : document.getElementById('albums-released').value.trim(),
+        bandBio: bandExisted ? '' : document.getElementById('band-bio').value.trim(),
         links: bandExisted ? {} : linkResult.links,
         bio,
         mode: bandExisted ? 'existing-band-connection' : 'new-band-entry',
@@ -11393,6 +11411,7 @@ function downloadPngBlob(blob) {
       document.getElementById('edit-band-label').value = (rawBand && rawBand.label) || node.label || '';
       document.getElementById('edit-band-genre').value = (rawBand && rawBand.genre) || node.genre || '';
       document.getElementById('edit-band-albums').value = (rawBand && rawBand.albums) || node.albums || '';
+      document.getElementById('edit-band-bio').value = (rawBand && rawBand.bio) || node.bio || '';
 
       // Phase 3: link fields. Shown only to the band's creator — the
       // server rejects link edits from anyone else with a 403, so there
@@ -11431,7 +11450,8 @@ function downloadPngBlob(blob) {
           years_active: document.getElementById('edit-band-years-active').value,
           label: document.getElementById('edit-band-label').value,
           genre: document.getElementById('edit-band-genre').value,
-          albums: document.getElementById('edit-band-albums').value
+          albums: document.getElementById('edit-band-albums').value,
+          bio: document.getElementById('edit-band-bio').value
         },
         memberIds: membershipRows.map(r => r.member.id),
         // Map member_id -> membership_id so a row removal (which knows the
@@ -11725,7 +11745,8 @@ function downloadPngBlob(blob) {
         years_active: 'edit-band-years-active',
         label: 'edit-band-label',
         genre: 'edit-band-genre',
-        albums: 'edit-band-albums'
+        albums: 'edit-band-albums',
+        bio: 'edit-band-bio'
       };
       Object.entries(fieldMap).forEach(([key, id]) => {
         const el = document.getElementById(id);
