@@ -565,12 +565,16 @@ const STAGE_CSS = `
   background:rgba(10,14,20,0.97);border:1px solid rgba(143,232,246,0.38);
   border-radius:14px;box-shadow:0 12px 32px rgba(4,7,12,0.6)}
 #${STAGE_ID} .sigma-suggest[hidden]{display:none}
-#${STAGE_ID} .sigma-suggest__item{
+/* The doubled class below is load-bearing: #stage .sigma-prompt button turns
+   EVERY button in the prompt into a 36px icon circle, and it outranks a single
+   class -- without this, the rows render as 36px boxes with the names
+   overflowing into each other (seen on Android 2026-09-27). */
+#${STAGE_ID} .sigma-suggest .sigma-suggest__item{
   display:block;width:100%;box-sizing:border-box;text-align:left;
-  padding:10px 14px;border:0;border-radius:8px;background:none;cursor:pointer;
+  margin:0;padding:10px 14px;border:0;border-radius:8px;background:none;cursor:pointer;
   color:#e8eef6;font:inherit;font-size:15px;line-height:1.3}
-#${STAGE_ID} .sigma-suggest__item:hover{background:rgba(143,232,246,0.10)}
-#${STAGE_ID} .sigma-suggest__item[aria-selected="true"]{background:rgba(143,232,246,0.16)}
+#${STAGE_ID} .sigma-suggest .sigma-suggest__item:hover{background:rgba(143,232,246,0.10)}
+#${STAGE_ID} .sigma-suggest .sigma-suggest__item[aria-selected="true"]{background:rgba(143,232,246,0.16)}
 /* The brand mark: a fixed 36px circle like the buttons, so the four zones
    share one rhythm. Decorative (aria-hidden in the template). */
 #${STAGE_ID} .sigma-brand-mark{display:inline-flex;align-items:center;justify-content:center;
