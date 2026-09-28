@@ -282,6 +282,12 @@ const MIN_SUGGEST_CHARS = 3;
 // universe, so the typed dropdown shows a capped, ranked handful: prefix
 // matches first, then substring matches, each alphabetical.
 const MAX_TYPEAHEAD_SUGGESTIONS = 8;
+// Diacritic-insensitive search: "husker du" must find "Hüsker Dü".
+// NFD decomposes accented characters into base letter + combining marks;
+// stripping the U+0300–U+036F mark range folds ü→u, é→e, ñ→n, etc.
+function foldDiacritics(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
 
 const SMALLEST_NODE_SIZE = Math.min(...Object.values(KIND_STYLE).map(style => style.size));
 const LARGEST_NODE_SIZE = Math.max(...Object.values(KIND_STYLE).map(style => style.size));
@@ -1135,6 +1141,10 @@ export function initSigmaExplorer({
   // would never appear as suggestions (e.g. typing "weezer" would never
   // suggest Weezer).
   const allBandDisplayNames = [...new Set(bandNames.map(displayNameForId))];
+  // Diacritic-folded twin of the list above: per-keystroke matching compares
+  // folded strings so "husker du" matches "Hüsker Dü". Folded once here, not
+  // per keystroke, because NFD over 6,000 names on every input event is waste.
+  const foldedBandDisplayNames = allBandDisplayNames.map(name => foldDiacritics(name).toLowerCase());
   // Also computed once per filter, not per view: which nodes can reach which
   // others depends on the filtered graph's shape, not on where the anchor is.
   let components = getConnectedComponents(master.nodes, master.links, adjacency);
@@ -2003,8 +2013,13 @@ export function initSigmaExplorer({
   function exploreFor(rawQuery) {
     const query = normalizeAnchorKey(rawQuery);
     if (!query) return { ok: false, reason: 'empty' };
-    const exact = master.nodes.find(node => normalizeAnchorKey(node.id) === query);
-    const partial = exact || master.nodes.find(node => normalizeAnchorKey(node.id).includes(query));
+    // Exact match only, diacritic-insensitive: "husker du" finds "Hüsker Dü".
+    // No substring fallback — typing a band name that isn't in the tree (e.g.
+    // "sugar") must not redirect to an unrelated node that merely contains the
+    // text (e.g. Siggy Sugarcube). The miss path below fires
+    // rbft:sigma-search-miss, which opens the add-band card instead.
+    const foldedQuery = foldDiacritics(query);
+    const partial = master.nodes.find(node => foldDiacritics(normalizeAnchorKey(node.id)) === foldedQuery);
     if (!partial) {
       // Terse on purpose: the "No Rawk Found" panel makes the offer to add the
       // band, and two copies of the same sentence on one screen read as a fault.
@@ -2380,13 +2395,13 @@ export function initSigmaExplorer({
     // Ranked, not just alphabetical: prefix matches read as the answer, and
     // the list is capped because even a three-letter query like "the" matches
     // a huge slice of the universe.
-    const query = value.toLowerCase();
+    const query = foldDiacritics(value).toLowerCase();
     const starts = [];
     const contains = [];
-    for (const name of allBandDisplayNames) {
-      const lower = name.toLowerCase();
-      if (lower.startsWith(query)) starts.push(name);
-      else if (lower.includes(query)) contains.push(name);
+    for (let i = 0; i < allBandDisplayNames.length; i++) {
+      const folded = foldedBandDisplayNames[i];
+      if (folded.startsWith(query)) starts.push(allBandDisplayNames[i]);
+      else if (folded.includes(query)) contains.push(allBandDisplayNames[i]);
     }
     const alpha = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
     renderSuggestions([...starts.sort(alpha), ...contains.sort(alpha)]
