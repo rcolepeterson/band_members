@@ -4432,6 +4432,13 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
     }
 
+    // Diacritic folding for search: typing "husker du" must find "Hüsker Dü".
+    // NFD decomposes accented characters into base letter + combining marks;
+    // stripping the U+0300–U+036F mark range folds ü→u, é→e, ñ→n, etc.
+    function foldDiacritics(value) {
+      return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+
     /* --------------------------------------------------------------------
        Band identity: name + city (+country).
 
@@ -7698,10 +7705,10 @@ function downloadPngBlob(blob) {
       }
 
       if (currentSearch) {
-        const term = currentSearch.toLowerCase();
+        const term = foldDiacritics(currentSearch).toLowerCase();
         const matchedNodes = nodes.filter(node => {
-          const instruments = [node.instrument1, node.instrument2].filter(Boolean).join(' ').toLowerCase();
-          return nodeName(node).toLowerCase().includes(term) || instruments.includes(term) || locationLabel(node).toLowerCase().includes(term);
+          const instruments = [node.instrument1, node.instrument2].filter(Boolean).join(' ');
+          return foldDiacritics(nodeName(node)).toLowerCase().includes(term) || foldDiacritics(instruments).toLowerCase().includes(term) || foldDiacritics(locationLabel(node)).toLowerCase().includes(term);
         });
         const matchedIds = new Set(matchedNodes.map(node => node.id));
         const keepIds = new Set(matchedIds);
