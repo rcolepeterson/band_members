@@ -294,7 +294,7 @@ test('/api/bands selects created_at so the client can date bands', () => {
   // created_at remains in the bands select.
   assert.match(
     src,
-    /select id, name, city, state, country, genre, years_active, label, albums, csv_origin, created_at,[\s\S]*?from bands/,
+    /select id, name, city, state, country, genre, years_active, label, albums, bio, csv_origin, created_at,[\s\S]*?from bands/,
     'Expected the bands select in bands_neon.mjs to include created_at.'
   );
 });
