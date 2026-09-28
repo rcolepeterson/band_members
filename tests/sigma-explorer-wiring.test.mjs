@@ -555,15 +555,29 @@ test('the star label is gold, larger than a node label, and not shouted', () => 
   assert.doesNotMatch(rule[0], /text-transform:\s*uppercase/);
 });
 
-test('search suggestions are alphabetical, and cover every band', () => {
-  // Clicking the empty field shows the list as-is, so DOM order IS the order the
-  // visitor reads. Relevance ordering (frontier first, then an arbitrary corpus
-  // slice) looked random in that moment.
-  assert.match(EXPLORER, /\.sort\(\(a, b\) => a\.localeCompare\(b, undefined, \{ sensitivity: 'base', numeric: true \}\)\)/);
-  // Every band, not a slice of the node list.
-  assert.match(EXPLORER, /bandNames = master\.nodes\.filter\(node => node\.type === 'band'\)/);
-  assert.doesNotMatch(EXPLORER, /master\.nodes\.slice\(0, 200\)/);
-  assert.match(EXPLORER, /const MAX_SUGGESTIONS = \d+;/);
+test('tapping the empty search field opens no suggestion list', () => {
+  // Paul's ask, Aaron's call: the tap-empty browse list (frontier plus the
+  // full alphabetical corpus -- hundreds of rows fanned across the
+  // constellation on every tap) is retired. The dropdown appears only from
+  // typing: 3+ characters, ranked and capped.
+  assert.doesNotMatch(EXPLORER, /defaultSuggestions/);
+  const focusHandler = EXPLORER.slice(
+    EXPLORER.indexOf("input.addEventListener('focus'"),
+    EXPLORER.indexOf("input.addEventListener('input'"),
+  );
+  assert.ok(focusHandler.includes('focus'), 'expected a focus listener on the search input');
+  assert.match(focusHandler, /hideSuggestions\(\)/, 'focus hides the dropdown');
+  assert.doesNotMatch(focusHandler, /renderSuggestions/, 'focus never renders the list');
+});
+
+test('clearing the search query hides the suggestion list', () => {
+  // With the browse list retired, deleting the query leaves an empty field
+  // and no dropdown -- not the old full-corpus restore.
+  const handler = EXPLORER.slice(
+    EXPLORER.indexOf("input.addEventListener('input'"),
+    EXPLORER.indexOf('// Arrow keys walk the rows'),
+  );
+  assert.match(handler, /if \(!value\) \{\s+hideSuggestions\(\);\s+return;\s+\}/, 'empty query hides the list');
 });
 
 test('typeahead waits for three characters and caps the dropdown', () => {
@@ -584,23 +598,14 @@ test('typeahead waits for three characters and caps the dropdown', () => {
   assert.match(handler, /starts\.push\(name\)/, 'prefix matches are collected first');
 });
 
-test('only bands are suggested, never the 2,700 musicians', () => {
-  // A deliberate product decision, not an accident of the corpus slice this
-  // replaced: musicians would outnumber bands roughly six to one and bury them.
-  // Typing a musician's name still resolves through resolveAnchor -- they are
-  // findable, just not offered.
-  const block = EXPLORER.slice(
-    EXPLORER.indexOf('// Search suggestions'),
-    EXPLORER.indexOf('defaultSuggestions = sorted;') + 400,
-  );
-  assert.ok(block.includes('bandNames'), 'suggestions come from the band list');
-  assert.ok(
-    !/type === 'person'/.test(block) && !/master\.nodes\.map/.test(block),
-    'suggestions must not be drawn from the full node list',
-  );
-  // The one non-band source is the frontier, which is what expanding would
-  // reach next; it is bounded so it cannot flood the list either.
-  assert.match(block, /view\.frontier\.slice\(0, \d+\)/);
+test('typeahead suggestions come from bands only, never the member roster', () => {
+  // The filter-as-you-type loop walks allBandDisplayNames, built once from
+  // the band nodes: musicians would outnumber bands roughly six to one and
+  // bury them. Typing a musician's name still resolves through
+  // resolveAnchor -- they are findable, just not offered.
+  assert.match(EXPLORER, /bandNames = master\.nodes\.filter\(node => node\.type === 'band'\)/);
+  assert.match(EXPLORER, /const allBandDisplayNames = \[\.\.\.new Set\(bandNames\.map\(displayNameForId\)\)\];/);
+  assert.match(EXPLORER, /for \(const name of allBandDisplayNames\)/);
 });
 
 test('the page panels the pills open are moved out of the retired toolbar', () => {
