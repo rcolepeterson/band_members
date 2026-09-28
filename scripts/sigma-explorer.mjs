@@ -274,7 +274,7 @@ function actionIconSvg(key) {
     + `aria-hidden="true">${path}</svg>`;
 }
 
-// Upper bound on datalist options. Comfortably above the band count, low
+// Upper bound on suggestion options. Comfortably above the band count, low
 // enough that a pathological graph cannot stall the browser building the list.
 const MAX_SUGGESTIONS = 800;
 
@@ -544,6 +544,7 @@ const STAGE_CSS = `
    scale, per the brand. */
 #${STAGE_ID} .sigma-prompt form{
   display:flex;gap:6px;align-items:center;
+  position:relative;
   height:clamp(44px,5.4vw,58px);box-sizing:border-box;
   margin:0;padding:0 4px;
   border-radius:999px;border:1px solid rgba(143,232,246,0.38);
@@ -552,6 +553,24 @@ const STAGE_CSS = `
   transition:border-color 140ms ease, box-shadow 140ms ease}
 #${STAGE_ID} .sigma-prompt form:focus-within{outline:none;border-color:rgba(143,232,246,0.75);
   box-shadow:0 8px 28px rgba(4,7,12,0.55),0 0 0 3px rgba(143,232,246,0.18)}
+/* Custom suggestion dropdown. The native datalist popup is drawn by the
+   browser and on Android Chrome it lands on top of the keyboard, blocking
+   typing. Ours is capped at 38vh and scrolls internally, so it always parks
+   above the keys. Absolutely positioned against the form (the pill), which
+   is position:relative above. */
+#${STAGE_ID} .sigma-suggest{
+  position:absolute;top:calc(100% + 8px);left:8px;right:8px;z-index:30;
+  max-height:min(38vh,340px);overflow-y:auto;overscroll-behavior:contain;
+  margin:0;padding:6px;box-sizing:border-box;
+  background:rgba(10,14,20,0.97);border:1px solid rgba(143,232,246,0.38);
+  border-radius:14px;box-shadow:0 12px 32px rgba(4,7,12,0.6)}
+#${STAGE_ID} .sigma-suggest[hidden]{display:none}
+#${STAGE_ID} .sigma-suggest__item{
+  display:block;width:100%;box-sizing:border-box;text-align:left;
+  padding:10px 14px;border:0;border-radius:8px;background:none;cursor:pointer;
+  color:#e8eef6;font:inherit;font-size:15px;line-height:1.3}
+#${STAGE_ID} .sigma-suggest__item:hover{background:rgba(143,232,246,0.10)}
+#${STAGE_ID} .sigma-suggest__item[aria-selected="true"]{background:rgba(143,232,246,0.16)}
 /* The brand mark: a fixed 36px circle like the buttons, so the four zones
    share one rhythm. Decorative (aria-hidden in the template). */
 #${STAGE_ID} .sigma-brand-mark{display:inline-flex;align-items:center;justify-content:center;
@@ -562,16 +581,13 @@ const STAGE_CSS = `
    overrides it -- without this, the field renders at 48px inside a 44px
    pill regardless of height:100%, since min-height wins as a floor.
 
-   padding-right leaves the native search-clear "x" and datalist dropdown
-   arrow room to sit without crowding the search icon beside them. Both
-   are drawn by Chrome/Safari themselves (the "x" for any type="search"
-   field with text, the arrow for the list="..." attribute) and neither
-   is fully stylable: the "x" at least responds to being REPOSITIONED via
-   padding, and the arrow's own boundary is what gap:6px above is for --
-   tried hiding both outright first (-webkit-search-cancel-button,
-   -webkit-calendar-picker-indicator, -webkit-list-button, appearance:none,
-   -webkit-textfield-decoration-container); only the "x" ever responded,
-   and hiding just that one lost the tap-to-clear a phone keyboard doesn't
+   padding-right leaves the native search-clear "x" room to sit without
+   crowding the search icon beside it. It is drawn by Chrome/Safari itself
+   (for any type="search" field with text) and is not fully stylable: it at
+   least responds to being REPOSITIONED via padding -- tried hiding it
+   outright first (-webkit-search-cancel-button, appearance:none,
+   -webkit-textfield-decoration-container) and only the "x" ever responded,
+   and hiding it lost the tap-to-clear a phone keyboard doesn't
    otherwise offer. */
 #${STAGE_ID} .sigma-prompt input{
   flex:1;min-width:0;height:100%;min-height:0;margin:0;
@@ -779,7 +795,8 @@ function buildStage(doc, mount) {
         </span>
         <input type="search" name="favorite-band" placeholder="who&rsquo;s your favorite band?"
                aria-label="Search any band or artist to open their corner of the music universe"
-               list="sigma-search-options" />
+               role="combobox" aria-expanded="false" aria-controls="sigma-search-suggest"
+               aria-autocomplete="list" />
         <!-- aria-label carries the accessible name unconditionally: the button
              is icon-only at every viewport (see the CSS), so the name can't
              depend on the visible content. -->
@@ -801,8 +818,12 @@ function buildStage(doc, mount) {
                 aria-label="Open graph actions" aria-expanded="false" aria-controls="sigma-actions-panel">
           <span class="sigma-menu-toggle-icon" aria-hidden="true"></span>
         </button>
+        <!-- Custom suggestion dropdown, positioned against the pill (the form
+             is position:relative). Replaces the native datalist, whose popup
+             the browser draws over the phone keyboard. -->
+        <div class="sigma-suggest" id="sigma-search-suggest" role="listbox"
+             aria-label="Band suggestions" hidden></div>
       </form>
-      <datalist id="sigma-search-options"></datalist>
     </div>
     </div>
     <!--
@@ -1083,7 +1104,14 @@ export function initSigmaExplorer({
   const expandBtn = actionButtons.get('expand');
   const form = stage.querySelector('.sigma-prompt form');
   const input = stage.querySelector('.sigma-prompt input');
-  const datalist = stage.querySelector('#sigma-search-options');
+  const suggestBox = stage.querySelector('#sigma-search-suggest');
+  // The names currently offered in the custom suggestion dropdown, and which
+  // row the arrow keys have highlighted (-1 = none).
+  let suggestNames = [];
+  let suggestActive = -1;
+  // The default alphabetical offering, rebuilt whenever the view changes;
+  // shown when the field is focused empty and restored when the query clears.
+  let defaultSuggestions = [];
 
   const svg = doc.getElementById('graph-svg');
   const svgDisplayBefore = svg ? svg.style.display : null;
@@ -1097,8 +1125,9 @@ export function initSigmaExplorer({
   // Computed once: updateChrome() runs on every view change, and this does not.
   let bandNames = master.nodes.filter(node => node.type === 'band').map(node => node.id);
   // Pre-computed once: every band's display name, for filter-as-you-type search.
-  // The datalist only holds 800 options, so without this, bands N-Z would never
-  // appear as suggestions (e.g. typing "weezer" would never suggest Weezer).
+  // The suggestion list only holds 800 options, so without this, bands N-Z
+  // would never appear as suggestions (e.g. typing "weezer" would never
+  // suggest Weezer).
   const allBandDisplayNames = [...new Set(bandNames.map(displayNameForId))];
   // Also computed once per filter, not per view: which nodes can reach which
   // others depends on the filtered graph's shape, not on where the anchor is.
@@ -1616,8 +1645,11 @@ export function initSigmaExplorer({
         state.visitedComponentKeys = new Set([currentKey]);
         unvisited = otherComponents;
       }
-      unvisited = unvisited.slice().sort((a, b) => b.length - a.length);
-      const nextGroup = unvisited[0];
+      // Randomized, not largest-first: every tap is a surprise jump to another
+      // corner of the universe. The visited-component tracking above still
+      // tours each group exactly once per loop, so nothing repeats until the
+      // full tour is done.
+      const nextGroup = unvisited[Math.floor(Math.random() * unvisited.length)];
       state.nextGroupAnchor = highestDegreeNode(nextGroup);
 
       const otherNodeCount = otherComponents.reduce((sum, ids) => sum + ids.length, 0);
@@ -1673,8 +1705,8 @@ export function initSigmaExplorer({
     //
     // The list used to be ordered by relevance -- the frontier first, then an
     // arbitrary slice of the corpus -- which reads as random the moment someone
-    // clicks the empty field and just looks at what is on offer. A browser
-    // datalist substring-filters as you type, so relevance ordering buys
+    // clicks the empty field and just looks at what is on offer. Our own
+    // dropdown substring-filters as you type, so relevance ordering buys
     // nothing once there is a query, and alphabetical is what a person scanning
     // a list expects. Every band is offered (not a 200-node slice), plus the
     // current frontier, so the natural next steps are always present.
@@ -1691,9 +1723,9 @@ export function initSigmaExplorer({
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }))
       .slice(0, MAX_SUGGESTIONS);
     if (anchorName && !sorted.includes(anchorName)) sorted.push(anchorName);
-    datalist.innerHTML = sorted
-      .map(name => `<option value="${escapeHtml(name)}"></option>`)
-      .join('');
+    // The default offering, shown when the field is focused empty. Stored so
+    // the input handler can restore it when the query is cleared.
+    defaultSuggestions = sorted;
   }
 
   /**
@@ -2270,25 +2302,90 @@ export function initSigmaExplorer({
 
   form.addEventListener('submit', event => {
     event.preventDefault();
+    hideSuggestions();
     exploreFor(input.value);
   });
-  // Picking a suggestion from the datalist only fills the field -- the browser
-  // does not submit. If the field's value is a complete suggestion, treat the
-  // pick as the search itself: go there immediately instead of making the
-  // visitor find the magnifier. Two ways to go: tap a suggestion, or tap blue.
+
+  /**
+   * Renders the custom suggestion dropdown. It replaces the native datalist,
+   * whose popup the browser draws over the phone keyboard -- this one is
+   * capped at 38vh and scrolls internally (see the .sigma-suggest CSS).
+   */
+  function renderSuggestions(names) {
+    suggestNames = names;
+    suggestActive = -1;
+    input.removeAttribute('aria-activedescendant');
+    if (!names.length) {
+      hideSuggestions();
+      return;
+    }
+    suggestBox.innerHTML = names
+      .map((name, i) =>
+        `<button type="button" role="option" id="sigma-suggest-${i}" ` +
+        `aria-selected="false" class="sigma-suggest__item" data-idx="${i}">` +
+        `${escapeHtml(name)}</button>`)
+      .join('');
+    suggestBox.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+  }
+
+  function hideSuggestions() {
+    suggestBox.hidden = true;
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+    suggestActive = -1;
+  }
+
+  function syncSuggestActive() {
+    const rows = suggestBox.querySelectorAll('.sigma-suggest__item');
+    rows.forEach((row, i) => {
+      const on = i === suggestActive;
+      row.setAttribute('aria-selected', String(on));
+      if (on) {
+        input.setAttribute('aria-activedescendant', row.id);
+        row.scrollIntoView({ block: 'nearest' });
+      }
+    });
+    if (suggestActive < 0) input.removeAttribute('aria-activedescendant');
+  }
+
+  function pickSuggestion(name) {
+    if (!name) return;
+    input.value = name;
+    hideSuggestions();
+    input.blur();
+    exploreFor(name);
+  }
+
+  // A tap on a row picks it. mousedown + preventDefault keeps focus in the
+  // field so the blur handler below cannot hide the box before the tap lands.
+  suggestBox.addEventListener('mousedown', event => {
+    const btn = event.target.closest('[data-idx]');
+    if (!btn) return;
+    event.preventDefault();
+    pickSuggestion(suggestNames[Number(btn.dataset.idx)]);
+  });
+
+  // Tapping a suggestion used to only fill the field -- the browser never
+  // submitted. If the field's value is a complete suggestion, treat the pick
+  // as the search itself: go there immediately instead of making the visitor
+  // find the magnifier. Two ways to go: tap a suggestion, or tap blue.
+  input.addEventListener('focus', () => {
+    if (!input.value.trim()) renderSuggestions(defaultSuggestions);
+  });
   input.addEventListener('input', () => {
     const value = input.value.trim();
-    if (!value) return;
-    for (const option of datalist.options) {
-      if (option.value === value) {
-        input.blur();
-        exploreFor(value);
-        return;
-      }
+    if (!value) {
+      renderSuggestions(defaultSuggestions);
+      return;
     }
-    // Filter-as-you-type: the datalist only holds 800 of 6,245 bands, so a
-    // static alphabetical slice hides N-Z entirely. Rebuild the options from
-    // the query so "weezer" always offers Weezer, "nirv" offers Nirvana, etc.
+    if (suggestNames.includes(value)) {
+      pickSuggestion(value);
+      return;
+    }
+    // Filter-as-you-type: the suggestion list only holds 800 of 6,245 bands,
+    // so a static alphabetical slice hides N-Z entirely. Rebuild the options
+    // from the query so "weezer" always offers Weezer, "nirv" offers Nirvana.
     const query = value.toLowerCase();
     const matches = [];
     for (const name of allBandDisplayNames) {
@@ -2297,10 +2394,32 @@ export function initSigmaExplorer({
         if (matches.length >= MAX_SUGGESTIONS) break;
       }
     }
-    datalist.innerHTML = matches
-      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }))
-      .map(name => `<option value="${escapeHtml(name)}"></option>`)
-      .join('');
+    renderSuggestions(matches
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })));
+  });
+  // Arrow keys walk the rows, Enter picks the highlighted one (a plain Enter
+  // with nothing highlighted still submits the form), Escape dismisses.
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      hideSuggestions();
+      return;
+    }
+    if (suggestBox.hidden || !suggestNames.length) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const dir = event.key === 'ArrowDown' ? 1 : -1;
+      suggestActive = (suggestActive + dir + suggestNames.length) % suggestNames.length;
+      syncSuggestActive();
+    } else if (event.key === 'Enter' && suggestActive >= 0) {
+      event.preventDefault();
+      pickSuggestion(suggestNames[suggestActive]);
+    }
+  });
+  // Tapping anywhere else dismisses. The small delay is belt-and-braces: row
+  // taps are already handled on mousedown above, but a slow tap should never
+  // strand an open box over the constellation.
+  input.addEventListener('blur', () => {
+    setTimeout(hideSuggestions, 120);
   });
   // -- shortcut row ---------------------------------------------------------
 
