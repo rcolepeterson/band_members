@@ -1,1742 +1,2929 @@
-// Structural tests for the Sigma renderer's page wiring (issue #80).
+// ---------------------------------------------------------------------------
+// Sigma.js neighborhood explorer — browser renderer (issue #80).
 //
-// The explorer itself (scripts/sigma-explorer.mjs) imports sigma and
-// graphology from the CDN, so node --test cannot execute it -- same constraint
-// the repo already lives with for d3. These are static assertions in the style
-// of mobile-toolbar-parity.test.mjs and search-empty-state.test.mjs, and they
-// exist to catch the regressions that would actually hurt:
+// This is the Sigma/WebGL rendering path for the band tree. It is OFF by
+// default: the page keeps shipping the SVG renderer until this one reaches
+// interaction and performance parity. Opt in with ?renderer=sigma
+// (see rendererFromSearch / DEFAULT_RENDERER in neighborhood-helpers.mjs).
 //
-//   1. The flag really is opt-in. index.html must not activate Sigma for
-//      normal visitors, and the SVG renderer must stay in place.
-//   2. The data bridge exists. index.html publishes its master graph and
-//      announces it; the module listens for exactly that event name. A
-//      renamed event on one side and not the other is a silent blank stage.
-//   3. The interaction contract survives: electric blue on band click, gold
-//      on member click, using the same hex values as the SVG renderer's CSS.
-//   4. The 2.5D promise: no camera rotation, no orbit, no pilot mode.
-//   5. The exploration affordances promised in the issue are present: the
-//      "Who's your favorite band?" prompt, the expand action, the
-//      larger-universe copy, and the silver ringed home star.
-//   6. Mobile parity: the new stage chrome is not desktop-only.
-
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { RENDERERS, DEFAULT_RENDERER } from '../scripts/neighborhood-helpers.mjs';
-
-// Assertions about what the page LOADS must not be satisfiable by deleting the
-// comments that explain why -- and the comments explaining which hosts are gone
-// necessarily name those hosts.
+// What it renders: a capped local neighborhood, not the whole tree.
+//   - Home/direct visits anchor on Aaron McRae, drawn as a silver ringed
+//     star ("you are here").
+//   - A shared/deep link (?band=, ?member=, ?node=) overrides that anchor.
+//   - Breadth-first traversal outward until the visible-node budget is hit
+//     (~60 opening, 100 expanded), with the unrendered frontier surfaced as
+//     an explicit "Expand this constellation" action so nobody mistakes the
+//     opening view for the entire universe.
+//   - Layout is the deterministic radial layout from neighborhood-helpers:
+//     no force simulation on load, identical coordinates for everybody who
+//     opens the same link.
 //
-// Strips HTML comments and JS line comments. The (?<!:) guard is the whole trick:
-// without it, `//` in `https://d3js.org` would itself look like the start of a
-// comment, so a REAL script tag would be stripped too and the assertion below could
-// never fail. Verified by reinstating the tag.
-const stripComments = html =>
-  String(html)
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/(?<!:)\/\/[^\n]*/g, '');
-import { dirname, join } from 'node:path';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, '..');
-const INDEX_HTML = readFileSync(join(ROOT, 'index.html'), 'utf8');
-const EXPLORER = readFileSync(join(ROOT, 'scripts', 'sigma-explorer.mjs'), 'utf8');
-const HELPERS = readFileSync(join(ROOT, 'scripts', 'neighborhood-helpers.mjs'), 'utf8');
-const PACKAGE = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-
-// ---------------------------------------------------------------------------
-// 1. Opt-in only
+// Edges are drawn STRAIGHT, like the lines between stars in a constellation.
+// Curved edges were tried and rejected: bowed threads pile up and fight each
+// other wherever several cross. That puts the whole burden of keeping threads
+// off unrelated nodes on the layout solver (see relaxLayout), which is where it
+// belongs anyway.
+//
+// Interaction contract carried over from the SVG renderer (do not regress):
+//   - Click a band   -> electric blue (#27b8ff) glow on its members + edges.
+//   - Click a member -> amber/gold (#ffb454) glow on their bands + edges.
+//   - Click empty space -> clear the selection.
+//   - Pan (drag), zoom (wheel/pinch), tap to select. 2.5D only: NO camera
+//     rotation, NO orbit, NO CAD-style pilot mode. Depth comes from scale,
+//     glow, halo and fog, not from a third axis.
+//
+// Deps come from the CDN as ES modules via the import map in index.html,
+// mirroring how the page already loads d3 from a CDN script tag; package.json
+// pins the same versions so the test suite and the browser agree.
 // ---------------------------------------------------------------------------
 
-test('index.html loads the explorer as a module and nothing else changes renderer', () => {
-  assert.match(
-    INDEX_HTML,
-    /<script type="module" src="scripts\/sigma-explorer\.mjs"><\/script>/,
-    'the explorer must be loaded as an ES module from index.html'
-  );
-  assert.match(INDEX_HTML, /<svg id="graph-svg"/);
-  // d3 used to be a render-blocking <script> from d3js.org here. It is now vendored
-  // and fetched on demand, so what has to exist is the loader, not the tag.
-  assert.match(INDEX_HTML, /function ensureD3\(\)/);
-  assert.doesNotMatch(stripComments(INDEX_HTML), /<script src="https:\/\/d3js\.org/);
+import Graph from 'graphology';
+import Sigma, { createNodeBorderProgram } from 'sigma';
+
+import {
+  rendererFromSearch,
+  resolveAnchor,
+  getNeighborhood,
+  getConnectedComponents,
+  buildAdjacency,
+  radialLayout,
+  classifyNode,
+  toGraphologyGraph,
+  canRenderEdge,
+  nodeLabel,
+  displayNameForId,
+  NEIGHBORHOOD_BUDGET,
+  NODE_KINDS,
+  NODE_TYPES,
+  nodeTypeForRole,
+  MEMBERSHIP_ROLES,
+  roleForNode,
+  roleFromMembership,
+  HOME_STAR_STYLE,
+  linkEndpoints,
+  normalizeAnchorKey,
+  nodeSizeScale,
+  layoutExtent,
+  labelSettings,
+  framingRatio,
+} from './neighborhood-helpers.mjs';
+
+// ---------------------------------------------------------------------------
+// Visual language
+// ---------------------------------------------------------------------------
+
+// Highlight hues are copied from the SVG renderer's CSS (.band-highlight /
+// .member-highlight in index.html) so the two renderers cannot drift apart.
+export const BAND_HIGHLIGHT_COLOR = '#27b8ff';   // electric blue
+export const MEMBER_HIGHLIGHT_COLOR = '#ffb454'; // amber / gold
+
+const KIND_STYLE = {
+  [NODE_KINDS.HOME_STAR]: { color: HOME_STAR_STYLE.color, size: 22 },
+  [NODE_KINDS.SOLAR_SYSTEM]: { color: '#8fe8f6', size: 13 },
+  [NODE_KINDS.CONSTELLATION]: { color: '#c9b6ff', size: 10 },
+  [NODE_KINDS.PLANET]: { color: '#9fb8cc', size: 7 },
+  [NODE_KINDS.MOON]: { color: '#7d8ea0', size: 5 },
+  [NODE_KINDS.ASTEROID]: { color: '#5c6472', size: 4 },
+};
+
+// Role colours. Hue carries the role because brightness does not: a founder and
+// a plain member drawn in the same hue at different lightness are
+// indistinguishable once they are intermixed around a band, which is how they
+// actually appear. The reference point is the one distinction that already works
+// in this app -- gold strings for members, blue strings for bands -- where the
+// hue changes, not the weight.
+//
+// Nothing here is invented. Gold is the existing MEMBER_HIGHLIGHT_COLOR family,
+// lavender is the existing constellation colour, slate is the existing moon
+// colour, and bands keep their cyan so a person can never be mistaken for one.
+//
+// Size is deliberately NOT set here. `kind` owns size (how connected) and `role`
+// owns colour (what they were); keeping the two axes on separate channels is the
+// entire point, since a founder of one band and a founder of six should differ.
+const ROLE_STYLE = {
+  [MEMBERSHIP_ROLES.FOUNDER]: { color: '#ffc65c' },
+  [MEMBERSHIP_ROLES.MEMBER]: { color: '#c9b6ff' },
+  [MEMBERSHIP_ROLES.TOURING]: { color: '#7d8ea0' },
+};
+
+// Threads are NOT coloured by role.
+//
+// #119 coloured them per membership at rest, and that broke the one distinction
+// the app already had: a thread glows gold when a MEMBER is clicked and electric
+// blue when a BAND is clicked. Painting founder threads gold at rest gave gold
+// two meanings at once -- "founding member" and "this is what you selected" --
+// and a colour that means two things means neither.
+//
+// So every thread stays one quiet blue-grey until a click, and gold and blue
+// belong to selection alone. Role lives on the NODES, where it has three hues of
+// its own and competes with nothing.
+//
+// The role attribute is still carried on every edge. It costs nothing to keep, it
+// is what a legend or a "show only founders" filter would read, and deriving it
+// at render time later would mean plumbing weight through the view builder a
+// second time.
+
+// Node treatments: solid, ringed, hollow.
+//
+// The three shapes from the original design legend --
+//
+//   Founding band member   solid filled circle
+//   Long time band member  ringed circle, dot in the centre
+//   Short term / touring   hollow outline
+//
+// -- which were never built, because a border needs a WebGL node program and the
+// vendored Sigma bundle exported none. @sigma/node-border is the official one and
+// now rides inside that bundle (see scripts/vendor-libs.mjs).
+//
+// This is a SECOND channel on top of hue, not a replacement for it, and it earns
+// its keep in exactly the case hue cannot cover: a click sets every highlighted
+// node to one colour, so gold-means-founder disappears the moment gold also means
+// selected. Shape survives that, because the border programs read the `color`
+// attribute the highlight overwrites and keep their geometry regardless.
+//
+// Ring gaps are painted in the stage background (#04070b, the dark theme's
+// --color-bg) rather than left transparent: these are opaque WebGL discs, and a
+// "transparent" band would show the node's own fill through it and read as solid.
+const STAGE_BG = '#04070b';
+
+// Sizes are fractions of the node radius, drawn outside in.
+const RINGED_PROGRAM = createNodeBorderProgram({
+  borders: [
+    // Outer ring in the node's colour.
+    { color: { attribute: 'color' }, size: { value: 0.28 } },
+    // Gap, so the ring reads as a ring and not a thick edge.
+    { color: { value: STAGE_BG }, size: { value: 0.26 } },
+    // Centre dot, the rest of the way in.
+    { color: { attribute: 'color' }, size: { fill: true } },
+  ],
 });
 
-test('the module self-boots unless the SVG renderer was asked for', () => {
-  assert.match(EXPLORER, /rendererFromSearch\(win\.location\.search\) !== 'sigma'\) return;/);
-  assert.match(HELPERS, /export const DEFAULT_RENDERER = 'sigma';/);
+const HOLLOW_PROGRAM = createNodeBorderProgram({
+  borders: [
+    // A thin outline and nothing else. Deliberately the lightest visual mass of
+    // the three: a touring stint should recede next to a founder.
+    { color: { attribute: 'color' }, size: { value: 0.3 } },
+    { color: { value: STAGE_BG }, size: { fill: true } },
+  ],
 });
 
-test('the node card is bound to Sigma selection before the flip', () => {
-  // Without this the constellation cannot be the default: the card is where a
-  // band's city, years, line-up, albums and verification live, and it carries
-  // the edit pencil, so a visitor could look but neither read nor contribute.
-  assert.match(INDEX_HTML, /window\.addEventListener\('rbft:sigma-select'/);
-  assert.match(INDEX_HTML, /selectBandNode\(detail\.id, \{ source: 'sigma' \}\)/);
-  assert.match(INDEX_HTML, /selectMemberNode\(detail\.id, \{ source: 'sigma' \}\)/);
-  // Travelling invalidates the open card: the view it described is gone.
-  assert.match(INDEX_HTML, /window\.addEventListener\('rbft:sigma-travel', \(\) => closeNodeCard\(\)\)/);
-  // Bound once, when the graph first becomes available.
-  assert.match(INDEX_HTML, /if \(!sigmaSelectionBound\) \{/);
-});
+// Hover styling. Sigma's default hover draws a WHITE rounded plate behind the
+// node and its label, which is jarring on a dark starfield and washes the label
+// out. This is the same idea done in the theme's own colours: a dark plate so
+// threads passing behind the text do not run through the letters, a thin cyan
+// edge, and a soft glow on the node itself.
+// Nearly opaque on purpose: the node's ordinary label is drawn UNDER this plate,
+// and at 0.88 it ghosted through as a second set of letters.
+const HOVER_PLATE_FILL = 'rgba(9,12,18,0.985)';
+const HOVER_PLATE_EDGE = 'rgba(143,232,246,0.45)';
+const HOVER_LABEL_COLOR = '#e8f6fa';
+const HOVER_GLOW = 'rgba(143,232,246,0.30)';
 
-// ---------------------------------------------------------------------------
-// 2. Data bridge
-// ---------------------------------------------------------------------------
+/**
+ * The secondary actions, as one quiet row of pills under the search field --
+ * the shape of a fresh browser home page: wordmark, search, a row of shortcuts.
+ *
+ * Each carries a one-word label and a sentence explaining it, shown in a
+ * popover on hover, on keyboard focus, and on tap. One word alone is not
+ * self-explanatory ("Reset" resets WHAT?), and a title attribute is invisible
+ * to touch, so the sentence is part of the control rather than a nicety.
+ *
+ * `target` names an existing control in index.html: these pills drive the
+ * page's real buttons rather than reimplementing their behaviour, so the two
+ * paths cannot drift apart. `action` names a Sigma-side function instead.
+ */
+const STAGE_ACTIONS = [
+  {
+    key: 'game',
+    label: 'Game',
+    detail: 'Play the Six Degrees game: connect two bands through shared members.',
+    target: '#mobile-game-open-btn',
+  },
+  {
+    key: 'expand',
+    label: 'Expand',
+    detail: 'Push the horizon out one degree and pull in the bands just beyond this view.',
+    action: 'expand',
+  },
+  {
+    key: 'reset',
+    label: 'Reset',
+    // Deliberately does not name the default anchor. Every visitor sees this
+    // copy, and naming one person makes a shared tool read as somebody's
+    // personal page.
+    detail: 'Start over from the beginning, back to the view you opened with.',
+    action: 'home',
+  },
+  {
+    key: 'filter',
+    label: 'Filter',
+    detail: 'Narrow the tree to one scene, one genre, or the most recently added bands.',
+    action: 'filters',
+  },
+  {
+    key: 'add',
+    label: 'Add',
+    detail: 'Add a band and its line-up to the tree. Requires signing in.',
+    target: '#add-band-btn',
+  },
+  {
+    key: 'share',
+    label: 'Share',
+    detail: 'Copy a link to this exact view, or post it.',
+    target: '#share-graph-btn',
+  },
+  {
+    key: 'feedback',
+    label: 'Feedback',
+    detail: 'Tell us what is broken, missing or wrong. It reaches a person.',
+    target: '#send-feedback-btn',
+  },
+];
 
-test('index.html publishes the master graph exactly where graphState is set', () => {
-  assert.match(INDEX_HTML, /function publishMasterGraph\(master\)/);
-  assert.match(INDEX_HTML, /window\.RBFT_MASTER_GRAPH = master;/);
-  const assignments = INDEX_HTML.match(/graphState = \{ master \};/g) || [];
-  const publishes = INDEX_HTML.match(/publishMasterGraph\(master\);/g) || [];
-  assert.ok(assignments.length > 0, 'expected graphState assignments to exist');
-  assert.equal(
-    publishes.length,
-    assignments.length,
-    'every graphState = { master } must be followed by publishMasterGraph(master)'
-  );
-});
+// One icon per action, for the hamburger menu (redesign/mobile-
+// hamburger-nav, now at every viewport): a stack of small circles has no
+// room for a printed word, so the icon has to carry the meaning the label
+// used to carry on the old desktop pill row. Each button still keeps the
+// word too -- see ICON_LABEL_MARKUP below -- just visually hidden, so
+// nothing about accessibility changes.
+//
+// Same stroke language as the sign-in/add-band icons already in index.html's
+// (retired) hamburger sheet: 1.8px stroke, round caps/joins, 24x24 viewBox.
+// "add" reuses that exact path for the same reason those two already shared
+// one: it is the same plus-sign action wherever it appears.
+const ACTION_ICON_PATHS = {
+  expand: '<path d="M4 14v4a2 2 0 0 0 2 2h4M20 10V6a2 2 0 0 0-2-2h-4M4 10V6a2 2 0 0 1 2-2h4M20 14v4a2 2 0 0 1-2 2h-4"/>',
+  reset: '<path d="M3 11a9 9 0 1 1 2.6 6.4"/><path d="M3 4v7h7"/>',
+  filter: '<path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8Z"/>',
+  add: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  share: '<path d="M4 12v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><polyline points="16 7 12 3 8 7"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  feedback: '<path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2Z"/>',
+};
 
-test('both sides of the bridge agree on the event and global names', () => {
-  assert.match(INDEX_HTML, /'rbft:graph-ready'/);
-  assert.match(EXPLORER, /'rbft:graph-ready'/);
-  assert.match(EXPLORER, /win\.RBFT_MASTER_GRAPH/);
-});
-
-// ---------------------------------------------------------------------------
-// 3. Interaction contract (blue / gold)
-// ---------------------------------------------------------------------------
-
-test('highlight hues match the SVG renderer CSS exactly', () => {
-  assert.match(EXPLORER, /BAND_HIGHLIGHT_COLOR = '#27b8ff'/);
-  assert.match(EXPLORER, /MEMBER_HIGHLIGHT_COLOR = '#ffb454'/);
-  // The values the SVG renderer already ships.
-  assert.match(INDEX_HTML, /\.node\.band-highlight \.node-core,[\s\S]{0,120}stroke: #27b8ff;/);
-  assert.match(INDEX_HTML, /\.node\.member-highlight \.node-core,[\s\S]{0,120}stroke: #ffb454;/);
-});
-
-test('band click highlights members, member click highlights bands', () => {
-  assert.match(
-    EXPLORER,
-    /entityType === 'band' \? BAND_HIGHLIGHT_COLOR : MEMBER_HIGHLIGHT_COLOR/,
-    'selection colour must be chosen by the clicked entity type'
-  );
-  assert.match(EXPLORER, /renderer\.on\('clickNode'/);
-  assert.match(EXPLORER, /renderer\.on\('clickStage', \(\) => clearHighlight\(\)\)/);
-});
-
-// ---------------------------------------------------------------------------
-// 4. 2.5D only
-// ---------------------------------------------------------------------------
-
-test('camera rotation, orbit and pilot mode are absent', () => {
-  assert.match(EXPLORER, /enableCameraRotation: false/);
-  assert.doesNotMatch(EXPLORER, /enableCameraRotation:\s*true/);
-  // Comments stripped first: the file's header comment names the very
-  // features these assertions check are not implemented.
-  const code = EXPLORER.replace(/^\s*\/\/.*$/gm, '');
-  assert.doesNotMatch(code, /pilot/i, 'no pilot mode');
-  assert.doesNotMatch(code, /orbit/i, 'no orbit controls');
-  // No middle-click orbit handlers.
-  assert.doesNotMatch(code, /auxclick|button === 1/);
-});
-
-// ---------------------------------------------------------------------------
-// 5. Exploration affordances + home star
-// ---------------------------------------------------------------------------
-
-test('the discovery prompt and larger-universe copy are present', () => {
-  assert.match(EXPLORER, /who&rsquo;s your favorite band\?/);
-  assert.match(EXPLORER, /larger music universe/);
-  // Expand moved from a lone bottom-right button ("Expand this constellation")
-  // into the shortcut row, where a one-word label carries the sentence in its
-  // popover instead of in the label itself.
-  const expand = STAGE_ACTIONS().find(item => item.key === 'expand');
-  assert.ok(expand, 'the shortcut row must include an expand action');
-  assert.equal(expand.label, 'Expand');
-  assert.match(expand.detail, /horizon|beyond/i);
-});
-
-/** Parses the STAGE_ACTIONS table out of the module source. */
-function STAGE_ACTIONS() {
-  const block = EXPLORER.slice(
-    EXPLORER.indexOf('const STAGE_ACTIONS = ['),
-    EXPLORER.indexOf('// Upper bound on suggestion options'),
-  );
-  // Tolerates comment lines between the fields: the copy carries reasoning, and
-  // an entry is allowed to explain itself without breaking this parser.
-  return [...block.matchAll(/key: '([a-z]+)',([\s\S]*?)\n\s*(?:target|action):/g)].map(
-    ([, key, body]) => ({
-      key,
-      label: (body.match(/label: '([^']+)'/) || [])[1] || '',
-      detail: (body.match(/detail:\s*'([^']+)'/) || [])[1] || '',
-    }),
-  );
+function actionIconSvg(key) {
+  // The game icon is text (6*), not a stroke path, so it gets its own SVG
+  // with a filled text element instead of the stroked path treatment.
+  if (key === 'game') {
+    return `<svg class="sigma-action-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" `
+      + `aria-hidden="true"><text x="12" y="18.5" text-anchor="middle" font-size="19" font-weight="800">6*</text></svg>`;
+  }
+  const path = ACTION_ICON_PATHS[key];
+  if (!path) return '';
+  return `<svg class="sigma-action-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" `
+    + `stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" `
+    + `aria-hidden="true">${path}</svg>`;
 }
 
-test('every shortcut pill has a one-word label and a sentence explaining it', () => {
-  const actions = STAGE_ACTIONS();
-  // The whole row, per the agreed design: nothing else competes with the hero.
-  assert.deepEqual(
-    actions.map(item => item.key),
-    // No Sign-in pill: the page's account strip in the site header is kept as
-    // the single entry point, top-right where a search homepage puts the avatar.
-    ['game', 'expand', 'reset', 'filter', 'add', 'share', 'feedback'],
-  );
-  actions.forEach(({ key, label, detail }) => {
-    // A pill only fits a short label; two words at most ("Sign in").
-    assert.ok(label.length <= 9, `${key}: label "${label}" is too long for a pill`);
-    assert.ok(label.split(' ').length <= 2, `${key}: label "${label}" is more than two words`);
-    // One word cannot explain itself -- "Reset" resets WHAT? -- so the sentence
-    // is required, and it has to be a sentence.
-    assert.ok(detail.length > 25, `${key}: detail is too terse to explain the button`);
-    assert.match(detail, /\.$/, `${key}: detail should read as a sentence`);
-  });
-});
+// Upper bound on suggestion options. Comfortably above the band count, low
+// enough that a pathological graph cannot stall the browser building the list.
+const MAX_SUGGESTIONS = 800;
 
-test('the shortcut popover works for hover, keyboard and touch', () => {
-  // A title attribute is invisible on touch and to keyboard users, so the
-  // popover is a real element driven by all three input paths.
-  assert.match(EXPLORER, /addEventListener\('pointerenter'/);
-  assert.match(EXPLORER, /addEventListener\('focus'/);
-  assert.match(EXPLORER, /addEventListener\('blur'/);
-  assert.match(EXPLORER, /aria-describedby="\$\{TIP_ID\}"/);
-  assert.match(EXPLORER, /role="tooltip"/);
-  // And it must be dismissable, or a tap-opened popover traps a phone user.
-  assert.match(EXPLORER, /if \(event\.key !== 'Escape'\) return;/);
-  assert.match(EXPLORER, /addEventListener\('pointerdown'/);
-  // Clamped so the end pills of a centred row cannot push it off screen.
-  assert.match(EXPLORER, /Math\.max\(margin, Math\.min\(left, stageBox\.width - width - margin\)\)/);
-});
+// Filter-as-you-type only kicks in at three characters: one or two match far
+// too much of the corpus to be useful (a lone "h" once fanned hundreds of
+// rows across the constellation).
+const MIN_SUGGEST_CHARS = 3;
+// Even at three characters some queries ("the") match a huge slice of the
+// universe, so the typed dropdown shows a capped, ranked handful: prefix
+// matches first, then substring matches, each alphabetical.
+const MAX_TYPEAHEAD_SUGGESTIONS = 8;
 
-test('the page\'s own duplicate chrome stands down while Sigma renders', () => {
-  // Both renderers share index.html. Without this the visitor saw two toolbars
-  // for one graph.
-  assert.match(EXPLORER, /const BODY_ACTIVE_CLASS = 'rbft-sigma-chrome';/);
-  assert.match(EXPLORER, /doc\.body\.classList\.add\(BODY_ACTIVE_CLASS\)/);
-  // And it must be given back, since the flag is switchable at runtime.
-  assert.match(EXPLORER, /doc\.body\.classList\.remove\(BODY_ACTIVE_CLASS\)/);
-  ['.hero', '.graph-overlay-top', '.graph-stats-badge'].forEach(selector => {
-    assert.ok(
-      EXPLORER.includes(`body.\${BODY_ACTIVE_CLASS} ${selector}`),
-      `${selector} should stand down while Sigma renders`,
-    );
-  });
-});
+const SMALLEST_NODE_SIZE = Math.min(...Object.values(KIND_STYLE).map(style => style.size));
+const LARGEST_NODE_SIZE = Math.max(...Object.values(KIND_STYLE).map(style => style.size));
 
-test('the wordmark stays on screen above the search field', () => {
-  assert.match(EXPLORER, /class="sigma-wordmark">Six Degrees of Rock<\/h1>/);
-  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
-  const hero = css.match(/\.sigma-hero\{[^}]*\}/s);
-  assert.ok(hero, 'the hero needs a style rule');
-  // Anchored to the top of the stage, like a search homepage.
-  assert.match(hero[0], /top:clamp\(/);
-});
+const EDGE_COLOR = 'rgba(150,170,190,0.22)';
+const DIM_LABEL_COLOR = 'rgba(150,163,178,0.75)';
+// How much a selected node grows. Used both when drawing and when framing.
+const HIGHLIGHT_GROWTH = 1.25;
+// Dimmed nodes must be OPAQUE. A translucent fill let highlighted edges show
+// straight through them, which read as two nodes overlapping (reported from
+// the first preview) rather than as one dimmed node behind a gold thread.
+const DIM_NODE_COLOR = '#4e5865';
+const STAGE_ID = 'sigma-stage';
+const TIP_ID = 'sigma-action-tip';
+// Set on <body> while the Sigma renderer owns the screen, so the page's own
+// toolbar, hero and stats badge can step aside for the minimal chrome. Removed
+// again by destroy(), which matters because the flag is switchable at runtime.
+const BODY_ACTIVE_CLASS = 'rbft-sigma-chrome';
 
-test('a search miss invites the visitor to add the band', () => {
-  // The footer line is deliberately terse now: the "No Rawk Found" panel carries
-  // the offer to add the band, and two copies of that sentence on one screen
-  // read as a fault. The invitation itself is asserted in the empty-state test.
-  assert.match(EXPLORER, /No match for/);
-  assert.match(EXPLORER, /rbft:sigma-search-miss/);
-});
+const EXPLORE_COPY = 'You are viewing one region of a much larger music universe.';
+// Shown while the view is centred on the home star, which is where every visitor
+// who has not followed a shared link begins.
+//
+// Landing a stranger on one specific musician is only charming if they are told
+// why -- the Tom-from-Myspace trick works because Tom introduced himself. Without
+// this, the opening view reads as "here is a person you have never heard of".
+// First person, because it is his site and his node. The name comes from the
+// home star rather than being written in, so changing the default anchor cannot
+// leave the copy claiming to be someone else.
+//
+// The last sentence names Travel. Travel is the primary way to move through this
+// graph -- clicking a node re-centres the view on it -- and until now no copy
+// anywhere said so. The opening story pointed only at the search field, which
+// teaches a visitor exactly one way in and leaves the other 3,000 nodes looking
+// like decoration. "Click any band or musician" matches the phrasing the legacy
+// selection panel already uses, so the site says it one way.
+const introCopy = (name) => {
+  const first = String(name || '').trim().split(/\s+/)[0] || 'I';
+  return `<strong class="sigma-intro__hello">Hey, I&rsquo;m ${escapeHtml(first)}.</strong> `
+    + `I built this site &mdash; you&rsquo;re starting on my node. `
+    + `Search for a band or artist above to find your place in the band universe. `
+    + `Click any band or musician to travel there.`;
+};
 
-test('the anchor renders as a silver ringed star with a you-are-here label', () => {
-  assert.match(HELPERS, /nodeType: 'ringed-star'/);
-  assert.match(HELPERS, /label: 'You are here'/);
-  assert.match(EXPLORER, /sigma-home-star/);
-  assert.match(EXPLORER, /you are here/);
-  // The ring and the silver core are both drawn.
-  assert.match(EXPLORER, /\.sigma-home-star \.ring\{/);
-  assert.match(EXPLORER, /\.sigma-home-star \.core\{/);
-});
-
-test('the opening view is capped and the frontier is surfaced', () => {
-  assert.match(EXPLORER, /NEIGHBORHOOD_BUDGET\.OPENING_MAX_NODES/);
-  assert.match(EXPLORER, /just beyond this view/);
-  assert.match(HELPERS, /OPENING_MAX_NODES: 60/);
-  assert.match(HELPERS, /MAX_NODES: 100/);
-});
-
-test('a disconnected group in the filtered graph is disclosed, not silently dropped', () => {
-  // "Expand" only ever grows the anchor's own component -- a scene filter can
-  // leave other bands with no shared members at all, invisible forever no
-  // matter how far that expands. This is the honesty fix: say so, and offer
-  // a one-click way to actually see them, reusing the same render path a
-  // node click already uses rather than rendering every group at once.
-  assert.match(HELPERS, /export function getConnectedComponents\(/);
-  assert.match(EXPLORER, /getConnectedComponents,?\s*\n/, 'must import the helper');
-  assert.match(EXPLORER, /no shared members with what's on screen/);
-  assert.match(EXPLORER, /Show next group/);
-  assert.match(EXPLORER, /Show that group/, 'singular phrasing for exactly one other group');
-  // Recomputed whenever the filtered graph changes, not just once at boot.
-  assert.match(EXPLORER, /components = getConnectedComponents\(master\.nodes, master\.links, adjacency\)/);
-  // The click handler reuses renderNeighborhood -- no separate multi-group
-  // rendering path, which is the deferred, bigger version of this feature.
-  const clickHandler = EXPLORER.slice(EXPLORER.indexOf('otherGroupsBtn.addEventListener'));
-  assert.match(clickHandler.slice(0, 400), /renderNeighborhood\(\{/);
-  assert.match(clickHandler.slice(0, 400), /state\.nextGroupAnchor/);
-});
+// Base camera ratio for a freshly framed view. Comfortably above 1 because Sigma
+// frames NODES, and a node's label extends well past it -- at 1.0 every name
+// near the edge was cut off, and at 1.22 the longest ones still were.
+// framingRatio() reduces this (zooms in) when fitting the whole view would push
+// nodes into each other.
+const FRAMED_RATIO = 1.5;
 
 // ---------------------------------------------------------------------------
-// 6. Mobile parity + dependency pinning
+// Stage chrome
 // ---------------------------------------------------------------------------
 
-test('stage chrome is not hidden on small screens with no way back', () => {
-  // The prompt and shortcut pills get repositioned under 720px, never
-  // display:none with no recourse -- the PR #42/#44/#45/#63 trap.
-  //
-  // Checks rules rather than a slice of text: the module now also contains
-  // legitimate display:none rules for the PAGE's duplicate toolbar, and a
-  // blunt "no display:none after this point" search flagged those.
-  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
-  const mediaBlocks = [...css.matchAll(/@media[^{]*\{([\s\S]*?)\n\}/g)].map(m => m[1]);
-  assert.ok(mediaBlocks.length, 'expected at least one responsive block');
-  assert.ok(css.includes('#stage .sigma-prompt'), 'the prompt must be tuned for mobile');
-  // Narration a phone deliberately drops, with the reason each one is allowed.
-  //
-  // The ban exists to protect the CONTROLS -- prompt, pills, hero -- because
-  // hiding those is the PR #42/#44/#45/#63 trap. It never meant "a phone must
-  // print every sentence a desktop prints": the centred-on readout, the
-  // frontier count and the sentence in front of "Show next group" described a
-  // view the visitor could already see, and on a 664px-tall screen they cost a
-  // third of the stage. The group-jump BUTTON is not in this list and must
-  // stay.
-  const NARRATION_A_PHONE_MAY_DROP = [
-    '.sigma-context',
-    '.sigma-frontier',
-    '.sigma-other-groups__text',
-    '.sigma-hint:not(.sigma-hint--intro)',
-  ];
-  // Controls that default to display:none on a phone but are NOT the trap:
-  // each one has an always-visible trigger that reveals it (a toggle button,
-  // not a vanished control with no way back). The original PR #42/#44/#45/#63
-  // bug hid a control with nothing left on screen to bring it back; a
-  // hamburger sheet is the opposite of that by construction.
-  const CONTROLS_BEHIND_AN_ALWAYS_VISIBLE_TOGGLE = {
-    '.sigma-actions': '.sigma-menu-toggle',
-  };
-  // Printed labels hidden on a phone in favour of an icon (redesign/mobile-
-  // hamburger-nav): not the trap either, since the CONTROL is still on
-  // screen and still works -- only which of its two representations is
-  // drawn changes. Verified by checking the icon it swaps to is NOT itself
-  // display:none in the same block, so a genuine "both are gone" regression
-  // still fails loudly.
-  const LABELS_SWAPPED_FOR_AN_ICON = {
-    '.sigma-actions .sigma-action-label': '.sigma-actions .sigma-action-icon',
-    '.sigma-prompt .sigma-submit-label': '.sigma-prompt .sigma-submit-icon',
-  };
-  mediaBlocks.forEach(block => {
-    [...block.matchAll(/([^{}\n]*#stage[^{]*)\{([^}]*)\}/g)].forEach(([, selector, body]) => {
-      const trimmed = selector.trim();
-      if (NARRATION_A_PHONE_MAY_DROP.some(allowed => trimmed.includes(allowed))) return;
-      const toggle = Object.entries(CONTROLS_BEHIND_AN_ALWAYS_VISIBLE_TOGGLE)
-        .find(([selectorPrefix]) => trimmed === `#stage ${selectorPrefix}` || trimmed.startsWith(`#stage ${selectorPrefix}.`));
-      if (toggle) {
-        const [, triggerSelector] = toggle;
-        // Not anchored to "#stage <trigger>{" exactly: the toggle is scoped
-        // through an ancestor class (.sigma-prompt .sigma-menu-toggle) to
-        // out-specificity a generic "#stage .sigma-prompt button" rule that
-        // would otherwise also match it -- so only the trigger class itself,
-        // as its own rule with a display, is required to exist.
-        assert.ok(
-          new RegExp(`#stage [^{]*\\${triggerSelector}\\{[^}]*display:`).test(css),
-          `${trimmed} is hidden on a phone; expected its trigger ${triggerSelector} to exist and stay visible`,
-        );
-        return;
+const STAGE_CSS = `
+#${STAGE_ID}{position:absolute;inset:0;overflow:hidden}
+#${STAGE_ID}[hidden]{display:none}
+#${STAGE_ID} .sigma-canvas-host{position:absolute;inset:0}
+/* Parallax starfield: the 2.5D depth cue that replaces literal 3D. Two
+   static radial-gradient layers at different scales read as near and far
+   stars; the camera-driven translate in updateParallax() separates them. */
+#${STAGE_ID} .sigma-starfield{position:absolute;inset:-15%;pointer-events:none;
+  background-image:
+    radial-gradient(1.5px 1.5px at 20% 30%, rgba(255,255,255,0.55) 50%, transparent 51%),
+    radial-gradient(1px 1px at 70% 20%, rgba(255,255,255,0.4) 50%, transparent 51%),
+    radial-gradient(1px 1px at 45% 75%, rgba(255,255,255,0.35) 50%, transparent 51%),
+    radial-gradient(2px 2px at 85% 60%, rgba(255,255,255,0.3) 50%, transparent 51%);
+  background-size:340px 340px,220px 220px,180px 180px,420px 420px;
+  will-change:transform}
+/* Fog: fades the edge of the rendered region so the graph looks like it
+   continues past the viewport instead of stopping at a hard boundary. */
+#${STAGE_ID} .sigma-fog{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(circle at center, transparent 52%, rgba(8,11,17,0.72) 100%)}
+/* The silver ringed home star. Drawn as a DOM overlay tracking the anchor's
+   viewport position rather than a custom WebGL program: one node, no shader
+   maintenance, and it can carry a text label. */
+#${STAGE_ID} .sigma-home-star{position:absolute;pointer-events:none;transform:translate(-50%,-50%);
+  width:76px;height:76px;display:flex;align-items:center;justify-content:center}
+/* The hidden attribute must win over the display rules above and below.
+   Without this, a view that Aaron is not part of still painted his star over
+   whatever sat at the centre of the screen -- a phantom "you are here". */
+#${STAGE_ID} .sigma-home-star[hidden],
+#${STAGE_ID} .sigma-focus-ring[hidden]{display:none}
+#${STAGE_ID} .sigma-home-star::before{content:'';position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle, ${HOME_STAR_STYLE.haloColor} 0%, transparent 68%)}
+#${STAGE_ID} .sigma-home-star .ring{position:absolute;left:0;right:0;top:50%;height:26px;
+  margin-top:-13px;border:1.6px solid ${HOME_STAR_STYLE.ringColor};border-radius:50%;
+  transform:rotate(${HOME_STAR_STYLE.ringTiltDeg}deg);box-shadow:0 0 10px rgba(159,176,196,0.45)}
+#${STAGE_ID} .sigma-home-star .core{position:relative;width:16px;height:16px;border-radius:50%;
+  background:${HOME_STAR_STYLE.color};box-shadow:0 0 18px 4px rgba(223,230,239,0.65)}
+#${STAGE_ID} .sigma-star-label{position:absolute;z-index:3;pointer-events:none;
+  transform:translateX(-50%);white-space:nowrap;letter-spacing:0.02em;
+  /* A halo rather than a plate, so a thread passing behind the name reads as
+     behind it without putting a box on the starfield. */
+  text-shadow:0 0 7px rgba(8,11,17,0.97),0 0 14px rgba(8,11,17,0.9),0 0 22px rgba(8,11,17,0.7)}
+#${STAGE_ID} .sigma-star-label[hidden]{display:none}
+/* Gold, and bigger than a node label: this is the one fixed point in the
+   galaxy, and it should read as a different kind of thing from the band and
+   musician names around it. */
+#${STAGE_ID} .sigma-home-label{font-size:14px;color:#ffc978;font-weight:500}
+#${STAGE_ID} .sigma-focus-ring{position:absolute;pointer-events:none;transform:translate(-50%,-50%);
+  width:58px;height:58px}
+#${STAGE_ID} .sigma-focus-ring .ring{position:absolute;inset:0;border-radius:50%;
+  border:1.4px solid rgba(143,232,246,0.75);box-shadow:0 0 14px rgba(143,232,246,0.35)}
+/* When the home star and the current focus are near each other, Aaron's name
+   would print across the focus ring; positionOverlays() flips it above his star. */
+/* A relocated panel has lost the button it used to hang below, so it is centred
+   on screen as a dialog instead. clampPopover() sets an inline left offset to
+   keep a bottom-anchored popover on screen; that offset is meaningless here, so
+   the centring has to win over it. */
+#${STAGE_ID} > .share-popover{position:fixed;left:50% !important;top:50%;
+  transform:translate(-50%,-50%);z-index:12;max-height:86vh;overflow-y:auto;
+  margin:0;width:min(560px,92vw)}
+@media (max-width:720px){
+  #${STAGE_ID} > .share-popover{width:94vw;max-height:82vh}
+}
+
+/* left/top are set by positionFilters() from the Filter pill's own rect, the
+   same way the shortcut popover is placed. They used to be
+   left:50%;top:calc(100% + 10px), which reads like "hang below my trigger" but
+   this panel is a child of the STAGE, not of the pill row -- so 100% meant the
+   full height of a 100dvh stage and the panel opened just below the bottom of
+   the window. It was doing everything else correctly, entirely off screen. */
+#${STAGE_ID} .sigma-filters{position:absolute;width:min(420px,92vw);z-index:8;padding:16px 18px 18px;
+  border-radius:var(--radius-card,12px);border:1px solid rgba(143,232,246,0.3);background:rgba(9,12,18,0.97);
+  box-shadow:0 18px 44px rgba(3,6,10,0.7);display:flex;flex-direction:column;gap:12px;
+  text-align:left}
+/* On a phone, centred as a fixed modal instead -- same treatment as
+   .share-popover above, and for the same reason. positionFilters() anchors
+   this panel to the Filter control's own rect; on a phone that control lives
+   inside the hamburger sheet (redesign/mobile-hamburger-nav), which CLOSES
+   the instant Filter is tapped, so the rect it was positioned from describes
+   a trigger that is about to vanish. The computed top routinely landed the
+   panel mostly below the visible screen, unreachable. !important because
+   positionFilters() always writes an inline style regardless of viewport
+   width; only outranking that unconditionally keeps it from winning back. */
+@media (max-width:720px){
+  #${STAGE_ID} .sigma-filters{position:fixed !important;left:50% !important;
+    top:50% !important;transform:translate(-50%,-50%) !important;
+    width:94vw;max-height:82vh;overflow-y:auto}
+}
+#${STAGE_ID} .sigma-filters[hidden]{display:none}
+#${STAGE_ID} .sigma-filters__title{margin:0;font-size:14px;color:#e6f1f8;letter-spacing:0.01em}
+#${STAGE_ID} .sigma-filters__close{position:absolute;top:8px;right:10px;width:28px;height:28px;
+  border:0;background:none;color:#93a1b2;font-size:20px;line-height:1;cursor:pointer;padding:0}
+#${STAGE_ID} .sigma-filters__close:hover{color:#e6f1f8}
+#${STAGE_ID} .sigma-filters__slot label{display:block;margin-bottom:5px;font-size:12px;color:#93a1b2}
+#${STAGE_ID} .sigma-filters__slot select{width:100%;min-height:42px;margin:0;
+  border-radius:var(--radius-control,8px);border:1px solid rgba(190,206,224,0.24);background:rgba(14,19,26,0.92);
+  color:#e2ecf5;font-size:14px;padding:0 10px}
+#${STAGE_ID} .sigma-filters__row{display:flex;gap:8px;flex-wrap:wrap}
+#${STAGE_ID} .sigma-filters__row button{flex:1;min-width:130px;min-height:42px;margin:0;
+  border-radius:999px;border:1px solid rgba(190,206,224,0.24);background:rgba(14,19,26,0.9);
+  color:#c3d0de;font-size:13px;cursor:pointer}
+#${STAGE_ID} .sigma-filters__row button:hover{color:#eaf4fb;border-color:rgba(143,232,246,0.6)}
+#${STAGE_ID} .sigma-filters__row button[aria-pressed="true"]{color:#0b1016;
+  background:rgba(143,232,246,0.9);border-color:rgba(143,232,246,0.9)}
+/* A dot on the Filter circle when anything is filtering, so a narrowed tree
+   is never a mystery -- the count in the footer tells you how many nodes,
+   but not why. A small badge on the circle's corner: there is no trailing
+   edge of a pill row to hug any more. */
+#${STAGE_ID} .sigma-action[data-active="true"]::after{content:'';width:6px;height:6px;
+  position:absolute;top:1px;right:1px;border-radius:50%;background:#8fe8f6}
+
+/* Threads and nodes pass under the chrome, since the starfield is the whole
+   page. These gradients sink the graph slightly behind the hero and the footer
+   so text never has a node label sitting in the middle of it. Deliberately soft
+   and short: a hard band would rebuild the seam that full-bleed removes. */
+#${STAGE_ID} .sigma-scrim{position:absolute;left:0;right:0;z-index:3;pointer-events:none}
+#${STAGE_ID} .sigma-scrim--top{top:0;height:clamp(140px,22vh,210px);
+  background:linear-gradient(180deg,rgba(6,9,14,0.92) 0%,rgba(6,9,14,0.72) 45%,rgba(6,9,14,0) 100%)}
+#${STAGE_ID} .sigma-scrim--bottom{bottom:0;height:clamp(90px,14vh,140px);
+  background:linear-gradient(0deg,rgba(6,9,14,0.9) 0%,rgba(6,9,14,0.6) 50%,rgba(6,9,14,0) 100%)}
+
+/* The hero: wordmark, search, and one quiet row of shortcut pills, stacked at
+   the top of the starfield. This is the shape of a fresh browser home page, and
+   the reason the graph itself gets the whole rest of the screen. */
+#${STAGE_ID} .sigma-hero{position:absolute;left:50%;top:clamp(16px,3.4vh,40px);
+  transform:translateX(-50%);width:min(620px,92vw);display:flex;flex-direction:column;
+  align-items:center;gap:clamp(10px,1.6vh,16px);z-index:4}
+#${STAGE_ID} .sigma-wordmark{margin:0;font-size:clamp(15px,2.2vw,26px);font-weight:400;
+  letter-spacing:0.18em;text-transform:uppercase;color:#dbe6f2;text-align:center;
+  text-shadow:0 0 10px rgba(8,11,17,0.95),0 0 20px rgba(8,11,17,0.8)}
+/* The shortcut row stays deliberately quiet -- hairline border, no fill -- so
+   the constellation is the only bright thing until someone reaches for a
+   control.
+
+   A sibling of .sigma-hero in the markup, not a child -- see the long comment
+   at the template literal for why (short version: .sigma-hero has a
+   transform, which breaks position:fixed on any descendant, which the mobile
+   sheet below needs). Centred the same way the hero centres itself (left:50%
+   + translateX(-50%)) so it still reads as attached to it visually. top is
+   set from JS (positionActionsRow(), called whenever the hero's own size
+   changes) rather than guessed here, because the hero's height is not a
+   fixed number -- it is type set in clamp()/vw units. */
+/* One chrome at every scale: the actions live behind the hamburger in a
+   stack of icon circles anchored near it -- on a phone AND a desktop.
+   (As above, so below: the same control at every viewport, per the brand.)
+
+   A sibling of .sigma-hero, NOT a child of it -- deliberately. .sigma-hero
+   carries transform:translateX(-50%) to centre itself, and a transform on
+   an ancestor makes any position:fixed descendant fix itself against THAT
+   box instead of the real viewport (CSS containing-block rules). */
+#${STAGE_ID} .sigma-actions{
+  display:none;
+  position:fixed;left:auto;bottom:auto;
+  transform:none;width:auto;z-index:16;
+  flex-direction:column;gap:10px;
+  max-height:70vh;overflow-y:auto;
+  margin:0;padding:2px;background:none;border:0;box-shadow:none;border-radius:0;
+  backdrop-filter:none}
+#${STAGE_ID} .sigma-actions.is-open{display:flex}
+/* The hamburger's three bars, and the morph into a close X while the menu
+   is open -- so the affordance reads as a toggle, not a one-way door. */
+#${STAGE_ID} .sigma-menu-toggle-icon{
+  position:relative;display:block;width:18px;height:2px;
+  background:currentColor;border-radius:999px;
+  transition:background 120ms ease}
+#${STAGE_ID} .sigma-menu-toggle-icon::before,
+#${STAGE_ID} .sigma-menu-toggle-icon::after{
+  content:'';position:absolute;left:0;width:18px;height:2px;
+  background:currentColor;border-radius:999px;
+  transition:transform 160ms ease,top 160ms ease}
+#${STAGE_ID} .sigma-menu-toggle-icon::before{top:-6px}
+#${STAGE_ID} .sigma-menu-toggle-icon::after{top:6px}
+#${STAGE_ID} .sigma-menu-toggle[aria-expanded="true"] .sigma-menu-toggle-icon{background:transparent}
+#${STAGE_ID} .sigma-menu-toggle[aria-expanded="true"] .sigma-menu-toggle-icon::before{top:0;transform:rotate(45deg)}
+#${STAGE_ID} .sigma-menu-toggle[aria-expanded="true"] .sigma-menu-toggle-icon::after{top:0;transform:rotate(-45deg)}
+/* Icon markup exists in every button (see actionIconSvg()) so the menu is
+   icon-first without a second template; the printed word stays available
+   to assistive tech through each button's aria-label. */
+#${STAGE_ID} .sigma-action-icon{display:block}
+#${STAGE_ID} .sigma-action{position:relative;width:44px;height:44px;min-height:0;flex:none;
+  margin:0;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  border:1px solid rgba(190,206,224,0.22);background:rgba(10,14,20,0.55);
+  color:#c3d0de;cursor:pointer;backdrop-filter:blur(6px);
+  transition:color 140ms ease,border-color 140ms ease,background 140ms ease}
+#${STAGE_ID} .sigma-action:hover{color:#eaf4fb;border-color:rgba(143,232,246,0.6);
+  background:rgba(143,232,246,0.14)}
+#${STAGE_ID} .sigma-action:focus-visible{outline:2px solid rgba(143,232,246,0.8);outline-offset:2px}
+#${STAGE_ID} .sigma-action[aria-expanded="true"]{color:#eaf4fb;border-color:rgba(143,232,246,0.6)}
+/* The word is never shown visually -- the menu is icon circles -- so it is
+   hidden here rather than per-breakpoint. */
+#${STAGE_ID} .sigma-actions .sigma-action-label{display:none}
+/* One popover element, moved to whichever pill is being hovered, focused or
+   tapped. A title attribute would have been invisible on touch. */
+#${STAGE_ID} .sigma-tip{position:absolute;z-index:17;
+  /* max-content so the sentence sets its own width up to the cap; without it the
+     popover shrank to the space left of wherever it was previously placed. */
+  width:max-content;max-width:min(280px,80vw);
+  padding:9px 12px;border-radius:var(--radius-card,12px);border:1px solid rgba(143,232,246,0.34);
+  background:rgba(9,12,18,0.97);color:#dce9f3;font-size:13px;line-height:1.4;
+  box-shadow:0 10px 30px rgba(3,6,10,0.7);pointer-events:none}
+#${STAGE_ID} .sigma-tip[hidden]{display:none}
+/* The running commentary sits at the bottom, out of the hero's way. */
+#${STAGE_ID} .sigma-footer{position:absolute;left:50%;bottom:clamp(14px,2.4vh,26px);
+  transform:translateX(-50%);width:min(620px,92vw);display:flex;flex-direction:column;
+  align-items:center;gap:4px;text-align:center;z-index:4}
+#${STAGE_ID} .sigma-prompt{width:100%;display:flex;flex-direction:column;gap:10px}
+/* The form IS the pill at every viewport: one bordered control with four
+   zones (logo, field, search, menu), not separate pills in a row.
+   height:clamp(44px,5.4vw,58px): the 44px floor keeps the phone tap target,
+   the vw scaling keeps the desktop presence -- the same rule at every
+   scale, per the brand. */
+#${STAGE_ID} .sigma-prompt form{
+  display:flex;gap:6px;align-items:center;
+  position:relative;
+  height:clamp(44px,5.4vw,58px);box-sizing:border-box;
+  margin:0;padding:0 4px;
+  border-radius:999px;border:1px solid rgba(143,232,246,0.38);
+  background:rgba(10,14,20,0.86);box-shadow:0 8px 28px rgba(4,7,12,0.55);
+  backdrop-filter:blur(6px);
+  transition:border-color 140ms ease, box-shadow 140ms ease}
+#${STAGE_ID} .sigma-prompt form:focus-within{outline:none;border-color:rgba(143,232,246,0.75);
+  box-shadow:0 8px 28px rgba(4,7,12,0.55),0 0 0 3px rgba(143,232,246,0.18)}
+/* Custom suggestion dropdown. The native datalist popup is drawn by the
+   browser and on Android Chrome it lands on top of the keyboard, blocking
+   typing. Ours is capped at 38vh and scrolls internally, so it always parks
+   above the keys. Absolutely positioned against the form (the pill), which
+   is position:relative above. */
+#${STAGE_ID} .sigma-suggest{
+  position:absolute;top:calc(100% + 8px);left:8px;right:8px;z-index:30;
+  max-height:min(38vh,340px);overflow-y:auto;overscroll-behavior:contain;
+  margin:0;padding:6px;box-sizing:border-box;
+  background:rgba(10,14,20,0.97);border:1px solid rgba(143,232,246,0.38);
+  border-radius:14px;box-shadow:0 12px 32px rgba(4,7,12,0.6)}
+#${STAGE_ID} .sigma-suggest[hidden]{display:none}
+/* The doubled class below is load-bearing: #stage .sigma-prompt button turns
+   EVERY button in the prompt into a 36px icon circle, and it outranks a single
+   class -- without this, the rows render as 36px boxes with the names
+   overflowing into each other (seen on Android 2026-09-27). */
+#${STAGE_ID} .sigma-suggest .sigma-suggest__item{
+  display:block;width:100%;box-sizing:border-box;text-align:left;
+  margin:0;padding:10px 14px;border:0;border-radius:8px;background:none;cursor:pointer;
+  color:#e8eef6;font:inherit;font-size:15px;line-height:1.3}
+#${STAGE_ID} .sigma-suggest .sigma-suggest__item:hover{background:rgba(143,232,246,0.10)}
+#${STAGE_ID} .sigma-suggest .sigma-suggest__item[aria-selected="true"]{background:rgba(143,232,246,0.16)}
+/* The brand mark: a fixed 36px circle like the buttons, so the four zones
+   share one rhythm. Decorative (aria-hidden in the template). */
+#${STAGE_ID} .sigma-brand-mark{display:inline-flex;align-items:center;justify-content:center;
+  flex:none;width:36px;height:36px;margin:0 0 0 4px;color:#e8eef6}
+/* min-height:0 is load-bearing, not decorative: the page's global form
+   styling (input,select,textarea{...min-height:48px}) is written for
+   stacked fields with a label above, and nothing else in this rule
+   overrides it -- without this, the field renders at 48px inside a 44px
+   pill regardless of height:100%, since min-height wins as a floor.
+
+   padding-right leaves the native search-clear "x" room to sit without
+   crowding the search icon beside it. It is drawn by Chrome/Safari itself
+   (for any type="search" field with text) and is not fully stylable: it at
+   least responds to being REPOSITIONED via padding -- tried hiding it
+   outright first (-webkit-search-cancel-button, appearance:none,
+   -webkit-textfield-decoration-container) and only the "x" ever responded,
+   and hiding it lost the tap-to-clear a phone keyboard doesn't
+   otherwise offer. */
+#${STAGE_ID} .sigma-prompt input{
+  flex:1;min-width:0;height:100%;min-height:0;margin:0;
+  padding:0 28px 0 4px;border:0;background:none;box-shadow:none;
+  color:#e8eef6;
+  /* Never below 16px: iOS Safari zooms the whole page when a focused input's
+     text is smaller than that, which yanks the constellation off screen. */
+  font-size:clamp(16px,1.7vw,18px);line-height:1.2}
+#${STAGE_ID} .sigma-prompt input::placeholder{color:#93a1b2;
+  /* The full "who's your favorite band?" has to fit on a 3-generations-old
+     iPhone (390px) -- and even the 375px holdouts: the field only offers
+     ~187px of text room there, so the placeholder alone eases down a touch
+     on narrow screens -- one rule at every scale, per the brand. The input
+     itself stays 16px: iOS Safari zooms the whole page when a focused
+     input's text is smaller than that. Placeholder and typed value never
+     show together, so the difference is invisible in practice. */
+  font-size:clamp(12px,3.15vw,16px)}
+#${STAGE_ID} .sigma-prompt input:focus{outline:none}
+/* Both buttons share this: a borderless 36px circle centred in the pill
+   (a few px of breathing room top/bottom, rather than the circle's own
+   edge touching the pill's border), icon-only.
+
+   The toggle is listed explicitly, not just via "button": the generic
+   "#stage .sigma-prompt button" shape also matches it (it IS a <button>
+   in .sigma-prompt), and an explicit class keeps this rule winning
+   regardless of source order. */
+#${STAGE_ID} .sigma-prompt button,
+#${STAGE_ID} .sigma-prompt .sigma-menu-toggle{
+  display:inline-flex;align-items:center;justify-content:center;
+  height:36px;width:36px;padding:0;margin:0 4px 0 0;flex:none;
+  border:0;background:none;border-radius:50%;color:#c3d0de;cursor:pointer;
+  transition:color 140ms ease,background 140ms ease}
+#${STAGE_ID} .sigma-prompt button:hover,
+#${STAGE_ID} .sigma-prompt button:focus-visible,
+#${STAGE_ID} .sigma-prompt .sigma-menu-toggle:hover,
+#${STAGE_ID} .sigma-prompt .sigma-menu-toggle:focus-visible{color:#eaf4fb;background:rgba(143,232,246,0.16)}
+/* The magnifier is the search button: it wears the constellation's blue
+   (#8fe8f6, the thread/node blue) so it reads as "go", not as chrome. */
+#${STAGE_ID} .sigma-prompt button[type="submit"]{color:#8fe8f6}
+#${STAGE_ID} .sigma-prompt button[type="submit"]:hover,
+#${STAGE_ID} .sigma-prompt button[type="submit"]:focus-visible{color:#c3f2fb;background:rgba(143,232,246,0.16)}
+/* The submit is always the magnifier icon; the "Explore" word lives in the
+   button's aria-label instead of on screen, at every viewport. */
+#${STAGE_ID} .sigma-submit-label{display:none}
+#${STAGE_ID} .sigma-prompt .sigma-submit-icon{display:block}
+#${STAGE_ID} .sigma-prompt button:focus-visible{outline:2px solid rgba(143,232,246,0.8);
+  outline-offset:2px}
+#${STAGE_ID} .sigma-footer .sigma-hint{margin:0;font-size:13px;color:#93a1b2}
+/* The greeting is in the gold of his star label, so the voice and the node the
+   visitor is looking at are visibly the same thing. */
+#${STAGE_ID} .sigma-intro__hello{color:#ffc978;font-weight:500}
+#${STAGE_ID} .sigma-footer .sigma-frontier{font-size:12px;color:#8b98a8}
+#${STAGE_ID} .sigma-context{margin:0;font-size:12px;color:#9aa7b6;line-height:1.45}
+#${STAGE_ID} .sigma-context strong{color:#dfe6ef;font-weight:500}
+/* Disconnected-scene disclosure: a filtered scene can leave a handful of
+   bands with no shared members with what's on screen, and no "Expand" will
+   ever reach them. This says so and offers a one-click jump, rather than
+   quietly implying the view is complete. */
+#${STAGE_ID} .sigma-other-groups{margin:0;font-size:12px;color:#8b98a8;display:flex;
+  flex-wrap:wrap;justify-content:center;align-items:baseline;gap:6px}
+#${STAGE_ID} .sigma-other-groups[hidden]{display:none}
+#${STAGE_ID} .sigma-other-groups__btn{border:0;background:none;padding:0;margin:0;
+  font:inherit;color:#8fe8f6;text-decoration:underline;text-underline-offset:2px;
+  cursor:pointer}
+#${STAGE_ID} .sigma-other-groups__btn:hover{color:#c3f2fb}
+#${STAGE_ID} .sigma-other-groups__btn:focus-visible{outline:2px solid rgba(143,232,246,0.8);
+  outline-offset:2px}
+/* --------------------------------------------------------------------------
+   The page's own chrome, stood down while Sigma is rendering.
+
+   Both renderers share index.html, and its toolbar, hero and stats badge were
+   built for the SVG path: with the Sigma stage on top, the visitor saw two sets
+   of controls for one graph. These rules retire the duplicates for as long as
+   the Sigma flag is on; destroy() removes the body class, so switching back
+   restores everything.
+   -------------------------------------------------------------------------- */
+body.${BODY_ACTIVE_CLASS} .hero,
+body.${BODY_ACTIVE_CLASS} .graph-overlay-top,
+body.${BODY_ACTIVE_CLASS} .graph-stats-badge,
+body.${BODY_ACTIVE_CLASS} .graph-panel-head,
+body.${BODY_ACTIVE_CLASS} .graph-version-pill,
+/* Anchored to the page's Sign-up button, which is now hidden, so it floated
+   over the hero pointing at nothing. */
+body.${BODY_ACTIVE_CLASS} .welcome-nudge{display:none !important}
+/* The account strip in the site header STAYS: it is the one place that shows who
+   you are signed in as and how to sign out, and it sits top-right exactly where
+   a search homepage puts the avatar. It is why there is no Sign-in pill in the
+   shortcut row -- two entry points for one action is worse than none. */
+body.${BODY_ACTIVE_CLASS} .site-header{position:fixed;top:0;right:0;left:auto;width:auto;
+  z-index:6;background:none;border:none;box-shadow:none;padding:10px 14px}
+body.${BODY_ACTIVE_CLASS} .site-header .header-inner{padding:0;max-width:none}
+/* The stage is fixed to the viewport, so the page behind it must not scroll a
+   dark panel out from under the constellation. */
+body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
+
+/* The node card, docked. Clicking a band or musician now flies the camera AND
+   opens its card in one action, so the card cannot be anchored to the node any
+   more: it would ride along with the flight and land under the hero or the
+   footer. Docked bottom-right it is always in the same place, clear of the
+   centred constellation and clear of the footer's commentary. Fixed rather than
+   absolute because the starfield is the whole page.
+   The mobile bottom-sheet rules below 700px still win -- they are !important and
+   a corner card on a phone would cover the graph it describes. */
+@media (min-width:701px){
+  body.${BODY_ACTIVE_CLASS} .node-card{position:fixed;z-index:13;
+    right:clamp(16px,2vw,28px);bottom:clamp(16px,2.4vh,28px);left:auto;top:auto;
+    transform:none;width:min(330px,32vw);min-width:0;max-width:none;
+    max-height:min(56vh,520px)}
+  /* The tail is a pointer at a node this card no longer sits beside. */
+  body.${BODY_ACTIVE_CLASS} .node-card__tail{display:none}
+  body.${BODY_ACTIVE_CLASS} .node-card.node-card--below{transform:none}
+}
+
+@media (max-width:720px){
+  #${STAGE_ID} .sigma-hero{width:min(94vw,620px);gap:8px}
+  #${STAGE_ID} .sigma-prompt{gap:8px}
+  /*
+    Phone chrome: the pill, the hamburger and the circle menu are the SAME
+    as a desktop's now (see the base rules above -- one chrome at every
+    scale, per the brand). What stays phone-specific here is only sizing
+    and the footer narration: a phone has room for one sentence, and the
+    introduction is the one that earns it.
+  */
+  #${STAGE_ID} .sigma-expand{right:12px;bottom:20px}
+  /*
+    The footer keeps the introduction and the group jump. Nothing else.
+
+    A phone has room for one sentence of narration, and the introduction is the
+    one that earns it: it explains why a stranger is standing on Aaron's node.
+    The rest is desktop commentary -- the centred-on readout, the frontier
+    count, and the sentence in front of "Show next group" -- which described the
+    view to someone who could already see all of it.
+
+    The BUTTON survives without its sentence, because jumping to a
+    disconnected group is an action, not a description.
+  */
+  #${STAGE_ID} .sigma-footer .sigma-hint{font-size:12px}
+  #${STAGE_ID} .sigma-footer .sigma-hint:not(.sigma-hint--intro){display:none}
+  #${STAGE_ID} .sigma-footer .sigma-context,
+  #${STAGE_ID} .sigma-footer .sigma-frontier,
+  #${STAGE_ID} .sigma-other-groups__text{display:none}
+}
+`;
+
+function injectStyles(doc) {
+  if (doc.getElementById('sigma-explorer-styles')) return;
+  const style = doc.createElement('style');
+  style.id = 'sigma-explorer-styles';
+  style.textContent = STAGE_CSS;
+  doc.head.appendChild(style);
+}
+
+function buildStage(doc, mount) {
+  let stage = doc.getElementById(STAGE_ID);
+  if (!stage) {
+    stage = doc.createElement('div');
+    stage.id = STAGE_ID;
+    mount.appendChild(stage);
+  }
+  stage.innerHTML = `
+    <div class="sigma-starfield" aria-hidden="true"></div>
+    <div class="sigma-canvas-host"></div>
+    <div class="sigma-fog" aria-hidden="true"></div>
+    <div class="sigma-scrim sigma-scrim--top" aria-hidden="true"></div>
+    <div class="sigma-scrim sigma-scrim--bottom" aria-hidden="true"></div>
+    <div class="sigma-home-star" hidden><span class="ring"></span><span class="core"></span></div>
+    <div class="sigma-focus-ring" hidden><span class="ring"></span></div>
+    <!-- The labels are siblings of the overlays they name, not children. Inside,
+         they inherited the star's zoom scaling: the text grew with the zoom, and
+         its distance from the star grew with it too, so the name drifted away
+         from the thing it labels. Positioned independently they hold one size
+         and one gap at every zoom level. -->
+    <span class="sigma-star-label sigma-home-label" hidden></span>
+    <div class="sigma-hero">
+      <h1 class="sigma-wordmark">Six Degrees of Rock</h1>
+    <div class="sigma-prompt">
+      <form autocomplete="off">
+        <!-- Brand mark: the Six Degrees constellation, drawn inline so it
+             rides with the pill at every scale with no extra request.
+             Decorative -- the wordmark above already names the site. -->
+        <!-- Aaron's hub-and-spoke constellation mark, from his pill artwork:
+             hollow center ring, six spokes, six satellite rings. Decorative --
+             the wordmark above already names the site. -->
+        <span class="sigma-brand-mark" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3.5" stroke-width="1.8"/>
+            <g stroke-width="1.2">
+              <line x1="12" y1="8.5" x2="12" y2="4.85"/>
+              <line x1="15.03" y1="10.25" x2="18.19" y2="8.43"/>
+              <line x1="15.03" y1="13.75" x2="18.19" y2="15.57"/>
+              <line x1="12" y1="15.5" x2="12" y2="19.15"/>
+              <line x1="8.97" y1="13.75" x2="5.81" y2="15.57"/>
+              <line x1="8.97" y1="10.25" x2="5.81" y2="8.43"/>
+            </g>
+            <g stroke-width="1.2">
+              <circle cx="12" cy="2.6" r="2"/>
+              <circle cx="20.14" cy="7.3" r="2.4"/>
+              <circle cx="20.14" cy="16.7" r="2.2"/>
+              <circle cx="12" cy="21.4" r="2.3"/>
+              <circle cx="3.86" cy="16.7" r="2"/>
+              <circle cx="3.86" cy="7.3" r="2.1"/>
+            </g>
+          </svg>
+        </span>
+        <input type="search" name="favorite-band" placeholder="who&rsquo;s your favorite band?"
+               aria-label="Search any band or artist to open their corner of the music universe"
+               role="combobox" aria-expanded="false" aria-controls="sigma-search-suggest"
+               aria-autocomplete="list" />
+        <!-- aria-label carries the accessible name unconditionally: the button
+             is icon-only at every viewport (see the CSS), so the name can't
+             depend on the visible content. -->
+        <button type="submit" aria-label="Explore">
+          <svg class="sigma-submit-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span class="sigma-submit-label">Explore</span>
+        </button>
+        <!-- Collapses .sigma-actions into a menu -- at every viewport, per
+             the brand: the same pill on a phone and a desktop.
+             type="button", not "submit" -- it must never trigger the form's
+             own submit just for living inside it. Placed inside the form
+             (rather than beside it, absolutely positioned over a reserved
+             gap, which is how this used to work) so it can share the same
+             bordered pill as the field and the search icon, per the mockup:
+             one continuous control, not three separate circles in a row. -->
+        <button type="button" class="sigma-menu-toggle" id="sigma-menu-toggle"
+                aria-label="Open graph actions" aria-expanded="false" aria-controls="sigma-actions-panel">
+          <span class="sigma-menu-toggle-icon" aria-hidden="true"></span>
+        </button>
+        <!-- Custom suggestion dropdown, positioned against the pill (the form
+             is position:relative). Replaces the native datalist, whose popup
+             the browser draws over the phone keyboard. -->
+        <div class="sigma-suggest" id="sigma-search-suggest" role="listbox"
+             aria-label="Band suggestions" hidden></div>
+      </form>
+    </div>
+    </div>
+    <!--
+      A sibling of .sigma-hero, NOT a child of it -- deliberately. .sigma-hero
+      carries transform:translateX(-50%) to centre itself, and a transform on
+      an ancestor makes any position:fixed descendant fix itself against THAT
+      box instead of the real viewport (CSS containing-block rules) -- this
+      stack of circles IS position:fixed, anchored near the hamburger via
+      positionActionsRow(). Caught visually in the
+      redesign/mobile-hamburger-nav pass, not by any of the structural tests,
+      which is why this comment exists: nothing else currently guards against
+      it moving back in.
+
+      Each button carries BOTH an icon and the printed word, but only the
+      icon is ever shown: the menu is icon circles at every viewport (see
+      the CSS). aria-label is set explicitly rather than left to infer from
+      content, since the visible content is not the words.
+    -->
+    <div class="sigma-actions" id="sigma-actions-panel" role="group" aria-label="Graph actions">
+      ${STAGE_ACTIONS.map(item => `
+        <button type="button" class="sigma-action" data-key="${item.key}"
+                aria-label="${escapeHtml(item.label)}" aria-describedby="${TIP_ID}">${actionIconSvg(item.key)}<span class="sigma-action-label">${escapeHtml(item.label)}</span></button>`).join('')}
+    </div>
+    <div class="sigma-tip" id="${TIP_ID}" role="tooltip" hidden></div>
+    <!-- The page's own scene and genre <select> elements are MOVED in here at
+         boot (see RELOCATED_FILTERS). They keep their existing change handlers,
+         so there is one filtering implementation rather than a second one that
+         drifts. Recently-added and Clear press the page's chips for the same
+         reason. -->
+    <div class="sigma-filters" role="dialog" aria-label="Filter the tree" hidden>
+      <button type="button" class="sigma-filters__close" data-filter-action="close"
+              aria-label="Close filters">&times;</button>
+      <p class="sigma-filters__title">Filter the tree</p>
+      <div class="sigma-filters__slot" data-slot="scene"></div>
+      <div class="sigma-filters__slot" data-slot="genre"></div>
+      <div class="sigma-filters__row">
+        <button type="button" data-filter-action="recent" aria-pressed="false">Recently added</button>
+        <button type="button" data-filter-action="clear">Clear all</button>
+      </div>
+    </div>
+    <div class="sigma-footer">
+      <!-- The introduction reads BEFORE the numbers. A visitor who has just been
+           dropped on a stranger's node needs to know why before being told how
+           many degrees out it is. -->
+      <p class="sigma-hint">${EXPLORE_COPY}</p>
+      <p class="sigma-context" aria-live="polite"></p>
+      <span class="sigma-frontier"></span>
+      <p class="sigma-other-groups" hidden>
+        <span class="sigma-other-groups__text"></span>
+        <button type="button" class="sigma-other-groups__btn"></button>
+      </p>
+    </div>
+  `;
+  stage.hidden = false;
+  return stage;
+}
+
+// ---------------------------------------------------------------------------
+// Controller
+// ---------------------------------------------------------------------------
+
+/**
+ * Boots the Sigma explorer over a master graph ({ nodes, links }).
+ *
+ * `mount` defaults to .graph-stage. The SVG renderer's <svg> is hidden while
+ * the Sigma path owns the stage, and restored if this controller is killed —
+ * the feature flag has to be reversible in a live tab.
+ */
+
+/**
+ * Pull a touring hub's satellites toward the hub after the radial layout.
+ *
+ * When anchored on a band, a hired gun's other bands (Josh Freese → A Perfect
+ * Circle, etc.) would otherwise spray across the constellation and dominate
+ * it. This tucks them in around the hub so the band stays the focus.
+ *
+ * The hub is anyone with a TOURING membership in the anchor band -- and ALL
+ * of their satellites cluster in, not just touring edges. Josh may be a full
+ * member of A Perfect Circle, but on Weezer's constellation he's the hired
+ * gun, so APC tucks in with the rest.
+ *
+ * Only the far endpoint moves, and only when it's farther out than the hub.
+ * The anchor's own ring is never touched.
+ *
+ * Hop distances come from the depths map (same source radialLayout uses),
+ * falling back to node.hop. `factor` is how much of the hub-to-satellite
+ * distance survives: 0.45 pulls satellites 55% closer to their hub.
+ */
+/**
+ * Graph-based collision resolution: operates directly on viewGraph node
+ * positions after rendering. Pushes apart overlapping nodes.
+ */
+function resolveGraphCollisions(graph, anchorId) {
+  const MIN_SEPARATION = 140;
+  const ITERATIONS = 120;
+  const DAMPING = 0.6;
+
+  const ids = [];
+  try {
+    graph.forEachNode((nodeId) => {
+      if (nodeId !== anchorId) ids.push(nodeId);
+    });
+  } catch (e) { return; }
+
+  for (let iter = 0; iter < ITERATIONS; iter++) {
+    let moved = false;
+
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        let ax, ay, bx, by;
+        try {
+          ax = graph.getNodeAttribute(ids[i], 'x');
+          ay = graph.getNodeAttribute(ids[i], 'y');
+          bx = graph.getNodeAttribute(ids[j], 'x');
+          by = graph.getNodeAttribute(ids[j], 'y');
+        } catch (e) { continue; }
+
+        if (ax == null || ay == null || bx == null || by == null) continue;
+
+        const dx = bx - ax;
+        const dy = by - ay;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < MIN_SEPARATION && dist > 0.01) {
+          const push = (MIN_SEPARATION - dist) / 2 * DAMPING;
+          const ux = dx / dist;
+          const uy = dy / dist;
+          try {
+            graph.setNodeAttribute(ids[i], 'x', ax - ux * push);
+            graph.setNodeAttribute(ids[i], 'y', ay - uy * push);
+            graph.setNodeAttribute(ids[j], 'x', bx + ux * push);
+            graph.setNodeAttribute(ids[j], 'y', by + uy * push);
+          } catch (e) { continue; }
+          moved = true;
+        } else if (dist <= 0.01) {
+          const angle = (i * 2.399963) % (Math.PI * 2);
+          try {
+            graph.setNodeAttribute(ids[j], 'x', bx + Math.cos(angle) * MIN_SEPARATION * DAMPING);
+            graph.setNodeAttribute(ids[j], 'y', by + Math.sin(angle) * MIN_SEPARATION * DAMPING);
+          } catch (e) { continue; }
+          moved = true;
+        }
       }
-      const swap = LABELS_SWAPPED_FOR_AN_ICON[trimmed.replace(/^#stage /, '')];
-      if (swap) {
-        const escapedSwap = swap.replace(/\./g, '\\.');
-        assert.doesNotMatch(
-          block,
-          new RegExp(`#stage ${escapedSwap}\\{[^}]*display:\\s*none`),
-          `${trimmed} swaps to ${swap} on a phone, but that is ALSO display:none there -- the control would vanish entirely`,
-        );
-        return;
-      }
-      assert.doesNotMatch(
-        body,
-        /display:\s*none/,
-        `a responsive rule hides stage chrome with no visible way to reveal it again: ${trimmed}`,
-      );
+    }
+    if (!moved) break;
+  }
+}
+
+function clusterTouringSatellites(positions, links, nodes, depths, anchorId, factor = 0.45) {
+  const hopOf = id => {
+    if (depths && depths instanceof Map && depths.has(id)) return depths.get(id);
+    const node = Array.isArray(nodes) ? nodes.find(n => n.id === id) : null;
+    // Unknown hop: treat as far out (Infinity) so the satellite still pulls
+    // in. Returning 0 would look "closer than the hub" and skip it.
+    return node && typeof node.hop === 'number' ? node.hop : Infinity;
+  };
+  if (!Array.isArray(links)) return;
+  // Hubs: member nodes with a sprawling network in this view. A hired gun like
+  // Josh Freese connects to 20+ bands; left alone, his satellites spray across
+  // the anchor band's constellation and he renders as a giant. We detect hubs
+  // by degree, not by the TOURING tag, so this works even when the membership
+  // tier isn't set in the data.
+  const degree = new Map();
+  links.forEach(link => {
+    const [a, b] = linkEndpoints(link);
+    degree.set(a, (degree.get(a) || 0) + 1);
+    degree.set(b, (degree.get(b) || 0) + 1);
+  });
+  const nodeById = new Map((Array.isArray(nodes) ? nodes : []).map(n => [n.id, n]));
+  const hubs = new Set();
+  degree.forEach((d, id) => {
+    if (id === anchorId) return;
+    if (d < 8) return;
+    const node = nodeById.get(id);
+    if (node && node.type === 'band') return; // bands are never hubs
+    hubs.add(id);
+  });
+  if (!hubs.size) return;
+  const nodeIds = new Set(nodeById.keys());
+  links.forEach(link => {
+    const [a, b] = linkEndpoints(link);
+    let hubId = null;
+    let satId = null;
+    if (hubs.has(a) && b !== anchorId) { hubId = a; satId = b; }
+    else if (hubs.has(b) && a !== anchorId) { hubId = b; satId = a; }
+    if (!hubId || !nodeIds.has(satId)) return;
+    // Only pull satellites sitting farther out than their hub.
+    if (hopOf(satId) <= hopOf(hubId)) return;
+    const hub = positions.get(hubId);
+    const sat = positions.get(satId);
+    if (!hub || !sat) return;
+    positions.set(satId, {
+      ...sat,
+      x: hub.x + (sat.x - hub.x) * factor,
+      y: hub.y + (sat.y - hub.y) * factor,
     });
   });
-});
+}
 
-test('CDN versions are pinned in the import map, matching package.json', () => {
-  // The explorer imports bare specifiers now; index.html's import map is the
-  // single place the versions live, so that is what has to agree with
-  // package.json (and what makes one shared Sigma instance possible).
-  const graphology = PACKAGE.devDependencies.graphology;
-  const sigma = PACKAGE.devDependencies.sigma;
-  assert.ok(graphology, 'graphology must be a devDependency for the test suite');
-  assert.ok(sigma, 'sigma must be a devDependency so the CDN pin is reviewable');
-  const version = range => String(range).replace(/^[^0-9]*/, '');
-  assert.match(INDEX_HTML, /<script type="importmap">/);
-  // The map now points at this origin, so the version it resolves to is recorded in
-  // the vendored file's banner rather than in a URL. Same requirement -- the shipped
-  // version must be reviewable and must agree with package.json -- different place.
-  const sigmaBundle = readFileSync(new URL('../vendor/sigma.mjs', import.meta.url), 'utf8').slice(0, 400);
-  const graphologyBundle = readFileSync(new URL('../vendor/graphology.mjs', import.meta.url), 'utf8').slice(0, 400);
-  assert.ok(
-    sigmaBundle.includes(`sigma@${version(sigma)}`),
-    `vendor/sigma.mjs must record sigma@${version(sigma)} to match package.json`
-  );
-  assert.ok(
-    graphologyBundle.includes(`graphology@${version(graphology)}`),
-    `vendor/graphology.mjs must record graphology@${version(graphology)} to match package.json`
-  );
-  // @sigma/edge-curve was removed when the constellation went to straight
-  // lines: curved threads crossed each other and read as tangled tension. Its
-  // absence is the invariant now -- if it comes back, so do the curves.
-  assert.doesNotMatch(INDEX_HTML, /@sigma\/edge-curve/);
-  assert.ok(
-    !PACKAGE.devDependencies['@sigma/edge-curve'],
-    'edge-curve must stay out of package.json: the constellation uses straight lines',
-  );
-  // The invariant is ONE shared Sigma via a bare specifier, not the exact shape of
-  // the import statement. createNodeBorderProgram is imported from that same
-  // specifier on purpose: @sigma/node-border needs sigma's own program base
-  // classes, and giving it a second bundle would put a second copy of the WebGL
-  // node-program machinery in the same GL context.
-  assert.match(EXPLORER, /^import Sigma(?:, \{ [^}]+ \})? from 'sigma';$/m);
-  const nodeBorder = PACKAGE.devDependencies['@sigma/node-border'];
-  assert.ok(nodeBorder, '@sigma/node-border must be a devDependency so the pin is reviewable');
-  assert.ok(
-    sigmaBundle.includes(`@sigma/node-border@${version(nodeBorder)}`),
-    `vendor/sigma.mjs must record @sigma/node-border@${version(nodeBorder)} to match package.json`,
-  );
-  // And it must ride in the shared bundle rather than getting an import-map entry
-  // of its own, which would have to stay version-locked to sigma's by hand.
-  assert.doesNotMatch(INDEX_HTML, /@sigma\/node-border/);
-  assert.match(EXPLORER, /^import Graph from 'graphology';$/m);
-});
+export function initSigmaExplorer({
+  // Reassigned by setGraph() when the page applies a filter.
+  master,
+  mount = null,
+  doc = typeof document !== 'undefined' ? document : null,
+  search = typeof window !== 'undefined' ? window.location.search : '',
+  // Injectable so the address-bar sync is testable, and so a document without a
+  // window (jsdom fragments, tests) simply skips it.
+  win = typeof window !== 'undefined' ? window : null,
+  SigmaConstructor = Sigma,
+  GraphConstructor = Graph,
+} = {}) {
+  if (!doc || !master || !Array.isArray(master.nodes) || !master.nodes.length) return null;
 
-test('the explorer keeps its logic in the tested helper module', () => {
-  // Anything worth asserting about traversal, budgets, anchors, layout or
-  // classification belongs in neighborhood-helpers.mjs, which has real unit
-  // tests. The renderer should import it, not reimplement it.
-  ['getNeighborhood', 'resolveAnchor', 'radialLayout', 'classifyNode', 'buildAdjacency'].forEach(
-    name => assert.match(EXPLORER, new RegExp(`\\b${name}\\b`), `${name} must come from the helpers`)
-  );
-  assert.doesNotMatch(EXPLORER, /forceSimulation/, 'no force layout on the Sigma path');
-});
+  const host = mount || doc.querySelector('.graph-stage');
+  if (!host) return null;
 
-test('Aaron\'s name moves aside when the focus ring is close', () => {
-  // Aaron is often one hop from whatever a visitor searched for, so his name
-  // would print across the focus ring. Only his star carries a label now -- the
-  // focus ring's own label repeated the node label Sigma already draws -- so
-  // this is about moving one label, not separating two.
-  assert.match(EXPLORER, /Math\.hypot\(homePoint\.x - focusPoint\.x, homePoint\.y - focusPoint\.y\) < 120/);
-  assert.match(EXPLORER, /placeLabel\(homeLabelEl, homePoint, homeStarEl, homeScale, crowded\)/);
-  assert.doesNotMatch(EXPLORER, /sigma-focus-label/);
-});
+  injectStyles(doc);
+  const stage = buildStage(doc, host);
+  const canvasHost = stage.querySelector('.sigma-canvas-host');
+  const starfield = stage.querySelector('.sigma-starfield');
+  const homeStarEl = stage.querySelector('.sigma-home-star');
+  const focusRingEl = stage.querySelector('.sigma-focus-ring');
+  const contextEl = stage.querySelector('.sigma-context');
+  const hintEl = stage.querySelector('.sigma-hint');
+  const frontierEl = stage.querySelector('.sigma-frontier');
+  const otherGroupsEl = stage.querySelector('.sigma-other-groups');
+  const otherGroupsTextEl = stage.querySelector('.sigma-other-groups__text');
+  const otherGroupsBtn = stage.querySelector('.sigma-other-groups__btn');
+  // The page's Add / Share / Feedback panels live INSIDE the toolbar that stands
+  // down for the Sigma chrome, so hiding the toolbar hid the panels too and the
+  // new pills opened nothing. They are moved onto the stage for the duration and
+  // put back by destroy(), which keeps their existing handlers intact -- listeners
+  // are bound to the elements, not to where they sit in the tree.
+  const RELOCATED_PANELS = ['#add-band-popover', '#share-popover', '#feedback-popover'];
+  // The page's real filter widgets, moved into the stage's filter panel. Moving
+  // them rather than rebuilding them keeps their existing change handlers -- and
+  // therefore one filtering implementation instead of two that drift apart.
+  const RELOCATED_FILTERS = [
+    { slot: 'scene', selector: '#scene-filter', label: 'Scene' },
+    { slot: 'genre', selector: '#genre-filter', label: 'Genre' },
+  ];
+  const relocated = [];
 
-test('node sizes are scaled from the tested helpers, per view and on resize', () => {
-  assert.match(EXPLORER, /nodeSizeScale\(\{/);
-  assert.match(EXPLORER, /state\.sizeScale/);
-  // The resize handler also repositions the filter panel now, so it is a block
-  // rather than a one-liner.
-  assert.match(EXPLORER, /renderer\.on\('resize', \(\) => \{\s*\n\s*applySizeScale\(\);/);
-  assert.match(HELPERS, /export function densitySizeScale/);
-  assert.match(HELPERS, /export function viewportSizeScale/);
-  assert.match(HELPERS, /export function nodeSizeScale/);
-});
-
-test('label thresholds follow the drawn node size instead of a fixed 7', () => {
-  assert.match(EXPLORER, /labelSettings\(\{/);
-  assert.match(EXPLORER, /SMALLEST_NODE_SIZE \* state\.sizeScale/);
-  assert.doesNotMatch(EXPLORER, /labelRenderedSizeThreshold: 7/);
-  assert.match(HELPERS, /export function labelSettings/);
-});
-
-test('a highlight dims other nodes but keeps their names', () => {
-  // Blanking labels on dim made names appear only on click.
-  assert.match(EXPLORER, /labelColor: \{ attribute: 'labelColor', color: '#c8d3e0' \}/);
-  assert.match(EXPLORER, /res\.labelColor = DIM_LABEL_COLOR;/);
-  const code = EXPLORER.replace(/^\s*\/\/.*$/gm, '');
-  assert.doesNotMatch(code, /res\.label = '';\s*\n\s*\}\s*\n\s*\}/);
-});
-
-test('the layout is a proportional radial tree, not recursive wedge nesting', () => {
-  // Recursive wedge subdivision was the expanded-view overlap bug: every
-  // generation halved its slice until members landed on identical points.
-  // Uniform per-layer slots replaced it and fixed overlap, but let a member
-  // drift far from its own band, drawing membership edges across the middle.
-  // The current design: a BFS tree where each child sits inside a window
-  // centred on its parent, sized by what that subtree needs.
-  assert.match(HELPERS, /BFS tree/);
-  assert.match(HELPERS, /export const MAX_BRANCH_SPAN/);
-  assert.match(HELPERS, /Subtree weights/);
-  assert.match(HELPERS, /minSeparation/);
-  assert.doesNotMatch(HELPERS, /wedges\.set\(/);
-});
-
-test('hidden overlays are really hidden', () => {
-  // .sigma-home-star sets display:flex, which overrides the `hidden`
-  // attribute's default display:none unless we say otherwise -- that bug
-  // painted a phantom "you are here" star over unrelated views.
-  assert.match(EXPLORER, /\.sigma-home-star\[hidden\],\s*\n#\$\{STAGE_ID\} \.sigma-focus-ring\[hidden\]\{display:none\}/);
-});
-
-test('the explorer module parses', () => {
-  // node --test cannot import this file (it pulls sigma/graphology from the
-  // CDN), so nothing else here would catch a plain syntax error. One did slip
-  // in: a backtick inside a comment in the CSS template literal closed the
-  // string early and the whole renderer failed to boot, silently, because the
-  // flag is opt-in. `node --check` parses without executing imports.
-  execFileSync(process.execPath, ['--check', join(ROOT, 'scripts', 'sigma-explorer.mjs')]);
-  execFileSync(process.execPath, ['--check', join(ROOT, 'scripts', 'neighborhood-helpers.mjs')]);
-});
-
-test('the injected stylesheet contains no stray backticks', () => {
-  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `') + 19);
-  const body = css.slice(0, css.indexOf('\n`;'));
-  assert.ok(!body.includes('`'), 'a backtick inside STAGE_CSS would terminate the template literal');
-});
-
-test('dimmed nodes are opaque so edges cannot show through them', () => {
-  // A translucent dim fill let gold highlight edges draw through the node and
-  // read as two overlapping nodes.
-  assert.match(EXPLORER, /const DIM_NODE_COLOR = '#[0-9a-f]{6}';/);
-  assert.doesNotMatch(EXPLORER, /const DIM_NODE_COLOR = 'rgba/);
-});
-
-test('a framed view leaves room for labels', () => {
-  // At camera ratio 1 Sigma frames the nodes exactly and clips the names of
-  // everything near the edge.
-  assert.match(EXPLORER, /const FRAMED_RATIO = 1\.\d+;/);
-  // The framed ratio is compared with a tolerance rather than for equality,
-  // because framingRatio() may return a smaller (zoomed-in) ratio on dense
-  // views and the "already framed" branch must not fire on a float wobble.
-  // Compared through fitRatio() now: the same value has to drive both the framing
-  // call and the "did it fit?" test, or the branch mis-detects.
-  assert.match(EXPLORER, /ratio >= fitRatio\(\) - 1e-6/);
-});
-
-test('the renderer frames views through the tested framing helper', () => {
-  // The renderer must not compute its own camera ratio: framingRatio() in the
-  // helpers is the unit-tested owner of "how far out should this view sit",
-  // and the renderer reaches it through the local framedRatio() wrapper.
-  assert.match(EXPLORER, /framingRatio\(\{/);
-  assert.match(EXPLORER, /function framedRatio\(\)/);
-  assert.match(EXPLORER, /const ratio = framedRatio\(\);/);
-  assert.match(HELPERS, /export function framingRatio/);
-});
-
-test('hover is drawn in the theme, not with Sigma default white plate', () => {
-  // Sigma's built-in hover renderer draws a white rounded plate behind the node
-  // and label, which is jarring on a dark starfield and washes the label out.
-  assert.match(EXPLORER, /defaultDrawNodeHover: drawHover/);
-  assert.match(EXPLORER, /function drawHover\(context, data, settings\)/);
-  assert.match(EXPLORER, /const HOVER_PLATE_FILL = 'rgba\(9,12,18,/);
-  assert.doesNotMatch(EXPLORER, /HOVER_PLATE_FILL = '(#fff|white|rgba\(255)/);
-});
-
-test('the star label carries a dark halo so threads read as behind it', () => {
-  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
-  const rule = css.match(/\.sigma-star-label\{[^}]*\}/s);
-  assert.ok(rule, 'the star label needs a rule');
-  assert.match(rule[0], /text-shadow:0 0 7px rgba\(8,11,17/);
-});
-
-test('the star label is gold, larger than a node label, and not shouted', () => {
-  const css = EXPLORER.slice(EXPLORER.indexOf('const STAGE_CSS = `')).replace(/\$\{STAGE_ID\}/g, 'stage');
-  const rule = css.match(/\.sigma-home-label\{[^}]*\}/s);
-  assert.ok(rule, 'the home label needs a rule');
-  // Gold, so the one fixed point in the galaxy reads as a different kind of
-  // thing from the band and musician names around it.
-  assert.match(rule[0], /color:#ffc978/);
-  const size = rule[0].match(/font-size:(\d+(?:\.\d+)?)px/);
-  assert.ok(size && Number(size[1]) >= 13, `home label is ${size && size[1]}px; should be >= 13px`);
-  assert.doesNotMatch(rule[0], /text-transform:\s*uppercase/);
-});
-
-test('search suggestions are alphabetical, and cover every band', () => {
-  // Clicking the empty field shows the list as-is, so DOM order IS the order the
-  // visitor reads. Relevance ordering (frontier first, then an arbitrary corpus
-  // slice) looked random in that moment.
-  assert.match(EXPLORER, /\.sort\(\(a, b\) => a\.localeCompare\(b, undefined, \{ sensitivity: 'base', numeric: true \}\)\)/);
-  // Every band, not a slice of the node list.
-  assert.match(EXPLORER, /bandNames = master\.nodes\.filter\(node => node\.type === 'band'\)/);
-  assert.doesNotMatch(EXPLORER, /master\.nodes\.slice\(0, 200\)/);
-  assert.match(EXPLORER, /const MAX_SUGGESTIONS = \d+;/);
-});
-
-test('only bands are suggested, never the 2,700 musicians', () => {
-  // A deliberate product decision, not an accident of the corpus slice this
-  // replaced: musicians would outnumber bands roughly six to one and bury them.
-  // Typing a musician's name still resolves through resolveAnchor -- they are
-  // findable, just not offered.
-  const block = EXPLORER.slice(
-    EXPLORER.indexOf('// Search suggestions'),
-    EXPLORER.indexOf('defaultSuggestions = sorted;') + 400,
-  );
-  assert.ok(block.includes('bandNames'), 'suggestions come from the band list');
-  assert.ok(
-    !/type === 'person'/.test(block) && !/master\.nodes\.map/.test(block),
-    'suggestions must not be drawn from the full node list',
-  );
-  // The one non-band source is the frontier, which is what expanding would
-  // reach next; it is bounded so it cannot flood the list either.
-  assert.match(block, /view\.frontier\.slice\(0, \d+\)/);
-});
-
-test('the page panels the pills open are moved out of the retired toolbar', () => {
-  // Add / Share / Feedback panels are nested INSIDE the toolbar that stands
-  // down, so hiding the toolbar hid them too and the pills opened nothing.
-  assert.match(EXPLORER, /const RELOCATED_PANELS = \['#add-band-popover', '#share-popover', '#feedback-popover'\]/);
-  assert.match(EXPLORER, /stage\.appendChild\(panel\)/);
-  // And they must be put back, or switching the flag off loses them entirely.
-  assert.match(EXPLORER, /parent\.insertBefore\(panel, next\)/);
-  const destroy = EXPLORER.slice(EXPLORER.indexOf('    destroy() {'));
-  const restore = destroy.indexOf('parent.insertBefore(panel, next)');
-  const removeStage = destroy.indexOf('stage.remove()');
-  assert.ok(restore > -1 && removeStage > -1 && restore < removeStage,
-    'panels must be rescued before the stage is removed, or they go with it');
-});
-
-test('a pill click does not reach the page-wide popover closer', () => {
-  // The page closes its popovers on any click outside them. Without
-  // stopPropagation the pill's own click bubbled to that handler and shut the
-  // panel in the tick it opened -- the buttons looked broken.
-  const handler = EXPLORER.slice(
-    EXPLORER.indexOf("button.addEventListener('click', event => {"),
-    EXPLORER.indexOf('runAction(item);') + 40,
-  );
-  assert.match(handler, /event\.stopPropagation\(\)/);
-});
-
-test('pills drive the page\'s real controls rather than reimplementing them', () => {
-  // Two implementations of "add a band" would drift apart; these forward to the
-  // existing buttons instead.
-  assert.match(EXPLORER, /const target = doc\.querySelector\(item\.target\);\s*\n\s*if \(target\) target\.click\(\);/);
-  ['#add-band-btn', '#share-graph-btn', '#send-feedback-btn'].forEach(selector => {
-    assert.ok(EXPLORER.includes(selector), `${selector} should be driven by a pill`);
+  RELOCATED_PANELS.forEach(selector => {
+    const panel = doc.querySelector(selector);
+    if (!panel || !panel.parentNode) return;
+    relocated.push({ panel, parent: panel.parentNode, next: panel.nextSibling });
+    stage.appendChild(panel);
   });
-});
 
-test('Reset returns to the opening view, not just the opening camera', () => {
-  const goHome = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function showTip'));
-  // Budgets have to be reset too: after two expands, recentring the camera alone
-  // would leave 220 nodes on screen.
-  assert.match(goHome, /state\.maxHops = (NEIGHBORHOOD_BUDGET\.MAX_HOPS|initialHopsForAnchor\()/);
-  assert.match(goHome, /maxNodes: NEIGHBORHOOD_BUDGET\.OPENING_MAX_NODES/);
-  assert.match(goHome, /clearHighlight\(\)/);
-});
+  // Node ids whose label would collide with the chrome. See updateLabelBlocking.
+  const homeLabelEl = stage.querySelector('.sigma-home-label');
 
-test('the star label keeps one size and one gap at every zoom', () => {
-  // The star scales with the camera so it keeps marking its node. Its label used
-  // to live inside that transform, so in a zoomed-in view -- which is what a
-  // phone gets -- the text grew with it AND drifted away from the star, since
-  // its offset scaled too. The label is now a sibling, placed in screen space.
-  assert.match(EXPLORER, /<span class="sigma-star-label sigma-home-label" hidden><\/span>/);
-  const place = EXPLORER.slice(EXPLORER.indexOf('const placeLabel ='), EXPLORER.indexOf('const zoomScale ='));
-  // Measured from the overlay's drawn edge, so the gap is constant on screen.
-  assert.match(place, /const GAP = \d+;/);
-  assert.match(place, /const radius = \(overlayEl\.offsetHeight \* scale\) \/ 2;/);
-  assert.match(place, /point\.y \+ radius \+ GAP/);
-  // And no scale on the label itself.
-  assert.doesNotMatch(place, /scale\(/);
-});
-
-
-test('clicking a node travels to it, keeping it lit on arrival', () => {
-  // The point of the whole explorer: Mike McCready is 6 degrees from Aaron and
-  // Pearl Jam is 7, so reaching Pearl Jam by expanding would pull in hundreds of
-  // nodes to show one band. Travelling to Mike puts it one hop away.
-  assert.match(EXPLORER, /renderer\.on\('clickNode', \(\{\ node \}\) => \{[\s\S]*?travelTo\(node\)/);
-  const travel = EXPLORER.slice(EXPLORER.indexOf('function travelTo(node)'), EXPLORER.indexOf("renderer.on('clickNode'"));
-  // Clicking the current centre must not re-render the same view.
-  assert.match(travel, /if \(node === state\.anchorId\)/);
-  // Budgets open up for a requested anchor, as with a search.
-  assert.match(travel, /state\.anchorSource = 'requested'/);
-  assert.match(travel, /maxNodes: NEIGHBORHOOD_BUDGET\.MAX_NODES/);
-  // renderNeighborhood clears the highlight while drawing, so it is re-applied
-  // afterwards -- otherwise you arrive somewhere with nothing lit.
-  // renderNeighborhood returns undefined on success (not true), so the check
-  // is !== false rather than truthy.
-  assert.match(travel, /if \(moved !== false\) highlightFrom\(node\)/);
-  assert.match(travel, /rbft:sigma-travel/);
-});
-
-test('pill copy does not name the default anchor', () => {
-  // Every visitor reads this copy. Naming one person in it makes a shared tool
-  // read as somebody's personal page, and it goes stale if the default changes.
-  const actions = EXPLORER.slice(
-    EXPLORER.indexOf('const STAGE_ACTIONS = ['),
-    EXPLORER.indexOf('// Upper bound on suggestion options'),
-  );
-  const details = [...actions.matchAll(/detail:\s*'([^']+)'/g)].map(m => m[1]);
-  assert.ok(details.length >= 5, `expected every pill to have copy, found ${details.length}`);
-  details.forEach(detail => {
-    assert.doesNotMatch(detail, /Aaron|McRae/i, `pill copy names the anchor: "${detail}"`);
+  // Lives in the page's .graph-stage rather than this stage, so it is looked up
+  // from the document.
+  const nodeCardEl = doc.querySelector('.node-card');
+  const heroEl = stage.querySelector('.sigma-hero');
+  const footerEl = stage.querySelector('.sigma-footer');
+  const filterPanel = stage.querySelector('.sigma-filters');
+  RELOCATED_FILTERS.forEach(({ slot, selector, label }) => {
+    const field = doc.querySelector(selector);
+    const target = filterPanel.querySelector(`[data-slot="${slot}"]`);
+    if (!field || !target || !field.parentNode) return;
+    relocated.push({ panel: field, parent: field.parentNode, next: field.nextSibling });
+    const caption = doc.createElement('label');
+    caption.textContent = label;
+    caption.setAttribute('for', field.id);
+    target.appendChild(caption);
+    target.appendChild(field);
   });
-});
 
-test('Reset returns to the view the visitor arrived on', () => {
-  // Most people arrive on a link shared by another user, so "start over" means
-  // the band in THAT link. Sending them to the project's default anchor would
-  // drop them somewhere they have never been.
-  assert.match(EXPLORER, /state\.openingAnchorId = resolved\.anchorId;/);
-  const goHome = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function showTip'));
-  assert.match(goHome, /state\.openingAnchorId \|\| homeStarId \|\| NEIGHBORHOOD_BUDGET\.DEFAULT_ANCHOR/);
-});
-
-test('the address bar follows the current view', () => {
-  // Share reads the query string, so the URL has to describe what is on screen;
-  // it also makes reload and copy-from-the-bar work.
-  const sync = EXPLORER.slice(EXPLORER.indexOf('function syncAddressBar()'), EXPLORER.indexOf('// -- camera'));
-  assert.match(sync, /url\.searchParams\.set\('anchor', state\.anchorId\)/);
-  // replaceState, not pushState: travelling is not navigation, and a hundred
-  // history entries would bury whatever page the visitor came from.
-  assert.match(sync, /win\.history\.replaceState/);
-  assert.doesNotMatch(sync, /pushState/);
-  // The inbound spellings are cleared so a stale one cannot contradict the view.
-  assert.match(sync, /\['band', 'member', 'node', 'person'\]\.forEach\(key => url\.searchParams\.delete\(key\)\)/);
-  // Called from the same place the rest of the chrome is updated.
-  assert.match(EXPLORER, /syncAddressBar\(\);/);
-});
-
-test('a shared link carries the view, not just the site', () => {
-  // Sharing is the main way people arrive. This used to be
-  // origin + pathname, which threw the query string away: whatever you were
-  // centred on, the person you sent it to landed on the default anchor.
-  assert.match(INDEX_HTML, /function shareableUrl\(\)/);
-  assert.match(INDEX_HTML, /const SHAREABLE_PARAMS = \['anchor', 'band', 'member', 'node', 'person'\]/);
-  // `renderer` is deliberately absent. ?renderer=svg still works on the way IN,
-  // but copying it into a shared link would spread the slow escape-hatch renderer
-  // to everyone who opened that link, without the sharer ever knowing.
-  const params = INDEX_HTML.match(/const SHAREABLE_PARAMS = \[[^\]]*\]/)[0];
-  assert.ok(!params.includes('renderer'), 'renderer must not be copied into shared links');
-  // And the filename must not ride along. Both / and /index.html serve this page,
-  // so whichever the sharer happened to be on used to end up in the link.
-  assert.match(INDEX_HTML, /replace\(\/\(\^\|\\\/\)index\\\.html\$\/, '\$1'\)/);
-  // Every share path must go through it, Copy link included: one button, one
-  // answer, whatever view the sharer is on.
-  const shareSites = INDEX_HTML.match(/const siteUrl = [^;]+;/g) || [];
-  assert.ok(shareSites.length >= 4, `expected several share call sites, found ${shareSites.length}`);
-  shareSites.forEach(line => assert.match(line, /shareableUrl\(\)/));
-  // The bare front door is built by its own helper, never by hand, so that
-  // shareableUrl() and the "which link did I just copy" check agree on what the
-  // root even is.
-  assert.match(INDEX_HTML, /function siteRootUrl\(\)/);
-  // And it must not carry arbitrary query parameters onward.
-  const helper = INDEX_HTML.slice(INDEX_HTML.indexOf('function shareableUrl()'), INDEX_HTML.indexOf('function publishMasterGraph'));
-  assert.match(helper, /SHAREABLE_PARAMS\.forEach/);
-});
-
-test('label placement is measured, collision-free and stable', () => {
-  // Two label collisions reached production -- a band name printed across the
-  // gold you-are-here label, and another across the footer -- because every
-  // check measured node geometry and none measured text.
-  const block = EXPLORER.slice(
-    EXPLORER.indexOf('function updateLabelBlocking()'),
-    EXPLORER.indexOf('function updateParallax()'),
+  const actionRow = stage.querySelector('.sigma-actions');
+  const menuToggle = stage.querySelector('.sigma-menu-toggle');
+  const actionButtons = new Map(
+    [...stage.querySelectorAll('.sigma-action')].map(el => [el.dataset.key, el])
   );
-  // Boxes are reconstructed the way Sigma draws a label.
-  assert.match(block, /point\.x \+ display\.size \+ 3/);
-  assert.match(block, /labelMetrics\.measureText\(attrs\.label\)\.width/);
-  // Chrome zones: the wordmark/field/pills block, the footer, and the gold label.
-  assert.match(block, /addZone\(heroEl\)/);
-  assert.match(block, /addZone\(footerEl\)/);
-  assert.match(block, /addZone\(homeLabelEl\)/);
-  // Bigger nodes win a collision, with a deterministic tie-break so a view does
-  // not flicker between two equally good answers.
-  assert.match(block, /candidates\.sort\(\(a, b\) => b\.size - a\.size \|\| \(a\.id < b\.id \? -1 : 1\)\)/);
-  // A selected node always keeps its name: it is the thing being read.
-  assert.match(block, /const selected = state\.selection && state\.selection\.id === candidate\.id/);
-  // Measured over EVERY labelled node, not the ones Sigma currently displays --
-  // suppressing a label removes it from that set, so reading it would make the
-  // answer depend on the previous frame and oscillate.
-  assert.match(block, /viewGraph\.forEachNode\(\(id, attrs\) => \{/);
-  assert.doesNotMatch(block, /getNodeDisplayedLabels/);
-  // Refresh only when the set changed, or every frame would re-render.
-  assert.match(block, /if \(!changed\) return;/);
-  assert.match(block, /renderer\.refresh\(\{ skipIndexation: true \}\)/);
-  // And the reducer is what applies it.
-  assert.match(EXPLORER, /if \(state\.labelBlocked\.has\(id\)\) res\.label = '';/);
-});
+  const tip = stage.querySelector(`#${TIP_ID}`);
+  const expandBtn = actionButtons.get('expand');
+  const form = stage.querySelector('.sigma-prompt form');
+  const input = stage.querySelector('.sigma-prompt input');
+  const suggestBox = stage.querySelector('#sigma-search-suggest');
+  // The names currently offered in the custom suggestion dropdown, and which
+  // row the arrow keys have highlighted (-1 = none).
+  let suggestNames = [];
+  let suggestActive = -1;
+  // The default alphabetical offering, rebuilt whenever the view changes;
+  // shown when the field is focused empty and restored when the query clears.
+  let defaultSuggestions = [];
 
-test('the chrome band is measured, and used for centring only', () => {
-  const area = EXPLORER.slice(EXPLORER.indexOf('function chromeInsets()'), EXPLORER.indexOf('function cameraOffsetY('));
-  assert.match(area, /hero\.bottom - host\.top/);
-  assert.match(area, /host\.bottom - footer\.top/);
-  // A very short window must still leave a usable band rather than nothing.
-  assert.match(area, /Math\.max\(host\.height \* 0\.45/);
-  // Framing and sizing deliberately use the FULL canvas. Measured: handing them
-  // the band instead reads as "fitting would not be legible", so the camera zooms
-  // into a region -- the opening view went from 17 nodes on screen to 8. Nodes
-  // visible beats names hidden.
-  const framed = EXPLORER.slice(EXPLORER.indexOf('function framedRatio()'), EXPLORER.indexOf('function applySizeScale('));
-  assert.match(framed, /const rect = canvasHost\.getBoundingClientRect\(\);/);
-  assert.doesNotMatch(framed, /safeArea\(\)/);
-});
+  const svg = doc.getElementById('graph-svg');
+  const svgDisplayBefore = svg ? svg.style.display : null;
+  if (svg) svg.style.display = 'none';
+  // Retires the page's duplicate controls for as long as this renderer is up.
+  doc.body.classList.add(BODY_ACTIVE_CLASS);
 
-test('the camera centres the drawing in that band, at the right zoom', () => {
-  const offset = EXPLORER.slice(EXPLORER.indexOf('function cameraOffsetY('), EXPLORER.indexOf('function fitRatio()'));
-  assert.match(offset, /viewportToFramedGraph/);
-  // The shift is applied in the same setState as a new ratio, so it has to be
-  // expressed at the TARGET zoom -- computing it at the current one overshot by
-  // half again as much on a short window.
-  assert.match(offset, /perPixel \*= targetRatio \/ current/);
-  assert.match(EXPLORER, /y: 0\.5 \+ cameraOffsetY\(ratio\)/);
-  assert.match(EXPLORER, /y: display\.y \+ cameraOffsetY\(nextRatio\)/);
-});
+  // Reassignable, not const: setGraph() swaps all five when a filter changes.
+  let adjacency = buildAdjacency(master.nodes, master.links);
+  let masterById = new Map(master.nodes.map(node => [node.id, node]));
+  // Computed once: updateChrome() runs on every view change, and this does not.
+  let bandNames = master.nodes.filter(node => node.type === 'band').map(node => node.id);
+  // Pre-computed once: every band's display name, for filter-as-you-type search.
+  // The suggestion list only holds 800 options, so without this, bands N-Z
+  // would never appear as suggestions (e.g. typing "weezer" would never
+  // suggest Weezer).
+  const allBandDisplayNames = [...new Set(bandNames.map(displayNameForId))];
+  // Also computed once per filter, not per view: which nodes can reach which
+  // others depends on the filtered graph's shape, not on where the anchor is.
+  let components = getConnectedComponents(master.nodes, master.links, adjacency);
 
-test('the fit ratio is deliberately not loosened to clear the chrome', () => {
-  // Measured, not assumed: loosening the fit so the whole drawing clears the
-  // chrome pulls nodes closer together, and labels then collide with each other
-  // instead. On 1440x900 that traded 2 hidden names for 5.
-  const fit = EXPLORER.slice(EXPLORER.indexOf('function fitRatio()'), EXPLORER.indexOf('function framedRatio()'));
-  assert.match(fit, /return FRAMED_RATIO;/);
-});
-
-test('chrome zones are measured in the renderer\'s coordinate space', () => {
-  // This one shipped a false-clean gate. graphToViewport reports positions in the
-  // RENDERER'S container, and the stage wrapper sits ~280px down the page inside
-  // .graph-stage, so converting the chrome rects against the stage shifted every
-  // zone by that much -- one zone ended up with a negative top. Labels printed
-  // across the footer on screen while both the renderer and the audit called it
-  // clean.
-  const block = EXPLORER.slice(
-    EXPLORER.indexOf('function updateLabelBlocking()'),
-    EXPLORER.indexOf('function updateParallax()'),
+  // The silver ringed star belongs to ONE musician -- the project's default
+  // anchor -- not to "wherever the camera happens to be". Someone who lands on
+  // a shared Mudhoney link and then wanders into Aaron's corner should still
+  // see him as the distinctive star. The current focus gets a quieter cyan
+  // focus ring instead (see positionOverlays).
+  const homeStarNode = master.nodes.find(
+    node => normalizeAnchorKey(node.id) === normalizeAnchorKey(NEIGHBORHOOD_BUDGET.DEFAULT_ANCHOR)
   );
-  assert.match(block, /const originBox = canvasHost\.getBoundingClientRect\(\);/);
-  assert.doesNotMatch(block, /stage\.getBoundingClientRect\(\)/);
-});
+  const homeStarId = homeStarNode ? homeStarNode.id : null;
 
-test('blocking is recomputed when the chrome moves, not only per frame', () => {
-  // The footer grows a line when the context text wraps, which moves the zone
-  // under labels that were already placed. Sigma does not draw a frame for a DOM
-  // reflow, so waiting for afterRender left a label across the footer.
-  assert.match(EXPLORER, /new ResizeObserver\(\(\) => updateLabelBlocking\(\)\)/);
-  // The node card joined this list: it is chrome too while it is docked open.
-  assert.match(EXPLORER, /\[heroEl, footerEl, homeLabelEl, nodeCardEl\]\.forEach\(el => \{ if \(el\) chromeObserver\.observe\(el\); \}\)/);
-  assert.match(EXPLORER, /if \(chromeObserver\) chromeObserver\.disconnect\(\)/);
-  // And once more right after the chrome's own text is written.
-  const chrome = EXPLORER.slice(EXPLORER.indexOf('function updateChrome()'), EXPLORER.indexOf('// -- camera'));
-  assert.match(chrome, /updateLabelBlocking\(\);/);
-});
+  // Canonical Graphology graph for the whole data set. Sigma only ever gets
+  // the capped view graph; this one backs traversal, expansion and (next
+  // milestone) Six Degrees shortest paths.
+  const canonical = toGraphologyGraph(master, GraphConstructor);
 
-test('filters narrow the constellation through one implementation', () => {
-  // Scene / Genre / Recently-added / search live in index.html and produce a
-  // filtered {nodes, links}. The explorer explores THAT, so there is one
-  // filtering implementation feeding two renderers.
-  assert.match(INDEX_HTML, /window\.RBFT_SIGMA\.setGraph\(filtered\)/);
-  const setGraph = EXPLORER.slice(EXPLORER.indexOf('function setGraph(next)'), EXPLORER.indexOf('// -- first paint'));
-  // An empty result is a real outcome of a narrow filter, not a crash.
-  assert.match(setGraph, /No bands match these filters\./);
-  // The "most connected survivor" fallback now lives in a shared helper (also
-  // used to pick where "Show next group" jumps to) -- setGraph must call it,
-  // not reimplement it.
-  assert.match(setGraph, /highestDegreeNode\(master\.nodes\.map\(node => node\.id\)\)/);
-  // buildAdjacency stores a Set per node: reading .length gave undefined, every
-  // comparison was false, no anchor was ever chosen, and filtering silently did
-  // nothing at all.
-  assert.match(EXPLORER, /neighbours \? neighbours\.size : 0/);
-  // A filter should narrow what you are looking at, not move you.
-  assert.match(setGraph, /masterById\.has\(state\.anchorId\) \? state\.anchorId : null/);
-  // And clearing it should put you back rather than leaving you somewhere you
-  // never chose.
-  assert.match(setGraph, /state\.displacedAnchorId/);
-});
-
-test('the filter panel reuses the page\'s own controls', () => {
-  // The scene and genre <select> elements are MOVED into the panel, keeping their
-  // existing change handlers; Recently-added and Clear press the page's chips.
-  assert.match(EXPLORER, /const RELOCATED_FILTERS = \[/);
-  assert.match(EXPLORER, /selector: '#scene-filter'/);
-  assert.match(EXPLORER, /selector: '#genre-filter'/);
-  assert.match(EXPLORER, /'\.tool-chip\[data-action="recent"\]'/);
-  assert.match(EXPLORER, /'\.tool-chip\[data-action="clear"\]'/);
-  // Filter state is read from the page, never mirrored: the same filters can be
-  // changed by Reset view or a country chip.
-  assert.match(EXPLORER, /function syncFilterState\(\)/);
-  // Same click-propagation trap as the pills.
-  const panel = EXPLORER.slice(EXPLORER.indexOf("filterPanel.addEventListener('click'"), EXPLORER.indexOf('function runAction'));
-  assert.match(panel, /event\.stopPropagation\(\)/);
-});
-
-test('one click both travels and leaves the card open', () => {
-  // The card needed a SECOND click to appear, and the cause was event ORDER.
-  // The page closes any open card on rbft:sigma-travel, because the view that
-  // card described is gone. highlightFrom() dispatches rbft:sigma-select, which
-  // opens the card for the clicked node. Travel was announced AFTER the
-  // highlight, so it closed the card that had just been opened -- and only a
-  // second click, which is not travel and therefore only re-highlights, made it
-  // stick. Stale card closes first, new card opens second.
-  const travel = EXPLORER.slice(EXPLORER.indexOf('function travelTo(node)'), EXPLORER.indexOf("renderer.on('clickNode'"));
-  const dispatchAt = travel.indexOf("'rbft:sigma-travel'");
-  const highlightAt = travel.indexOf('if (moved !== false) highlightFrom(node)');
-  assert.ok(dispatchAt > 0 && highlightAt > 0, 'travelTo should both announce travel and re-highlight');
-  assert.ok(dispatchAt < highlightAt, 'travel must be announced BEFORE the highlight reopens the card');
-});
-
-test('search navigation retires the old card and opens the new one', () => {
-  // Searching for a band travelled the view but left the old band's card open
-  // and never opened the new one: exploreFor neither announced travel nor
-  // re-highlighted. Same close-then-highlight ordering as travelTo().
-  const explore = EXPLORER.slice(EXPLORER.indexOf('function exploreFor(rawQuery)'), EXPLORER.indexOf('function expand()'));
-  const dispatchAt = explore.indexOf("'rbft:sigma-travel'");
-  const highlightAt = explore.indexOf('highlightFrom(partial.id)');
-  assert.ok(dispatchAt > 0 && highlightAt > 0, 'exploreFor should announce travel and highlight the new anchor');
-  assert.ok(dispatchAt < highlightAt, 'travel must be announced BEFORE the highlight opens the new card');
-});
-
-test('reset retires the open card', () => {
-  // Reset view is navigation: the card described a view that is gone. Nothing
-  // is selected afterwards, so no new card -- just the travel announcement
-  // the page turns into closeNodeCard().
-  const goHome = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function showTip'));
-  assert.ok(goHome.indexOf("'rbft:sigma-travel'") > 0, 'goHome should announce travel so the stale card closes');
-});
-
-test('click-outside closes every popover except Add-band', () => {
-  // The Add-band form was losing in-progress input to stray clicks, so only
-  // it is exempt from the page-wide click-outside closer. Search, scene,
-  // genre, feedback and share keep the classic dismissal.
-  const findCloser = (kind) => {
-    let from = 0;
-    for (;;) {
-      const idx = INDEX_HTML.indexOf(`document.addEventListener('${kind}'`, from);
-      if (idx === -1) return -1;
-      if (INDEX_HTML.slice(idx, idx + 400).includes('closeBottomPopovers(')) return idx;
-      from = idx + 10;
-    }
+  const state = {
+    displacedAnchorId: null,
+    labelBlocked: new Set(),
+    anchorId: null,
+    anchorSource: 'none',
+    maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
+    maxHops: NEIGHBORHOOD_BUDGET.MAX_HOPS,
+    view: null,
+    selection: null,          // { id, type }
+    highlightNodes: new Set(),
+    highlightEdges: new Set(),
+    highlightColor: null,
+    // Sigma node sizes are in screen pixels while the camera fits the whole
+    // view, so a 200-node neighborhood draws the same size dots at a much
+    // tighter spacing than a 40-node one. Scaling size with density keeps the
+    // gaps between nodes readable as views grow.
+    sizeScale: 1,
+    layoutExtent: 0,
+    // Exposed so scripts/layout-audit.mjs can catch a phantom overlay: a star
+    // drawn for a node that is not in the current view.
+    homeStarId: null,
+    // Which component's node ids (as its componentKey()) "Show next group"
+    // has already sent the visitor to this filter, so repeated clicks tour
+    // every disconnected group instead of ping-ponging between the two
+    // largest. Reset whenever setGraph() changes the filtered graph.
+    visitedComponentKeys: new Set(),
+    // The anchor "Show next group" jumps to, recomputed on every render.
+    nextGroupAnchor: null,
   };
-  const at = findCloser('click');
-  assert.ok(at > 0, 'the document click closer must exist');
-  const body = INDEX_HTML.slice(at, at + 400);
-  assert.match(body, /closeBottomPopovers\(document\.getElementById\('add-band-popover'\)\)/);
-  assert.match(body, /toggleSharePopover\(false\)/);
-});
 
-test('Escape closes every popover except Add-band', () => {
-  // Same exemption as click-outside: only the Add-band popover rides out
-  // Escape. The node card keeps its own Escape path.
-  const findCloser = (kind) => {
-    let from = 0;
-    for (;;) {
-      const idx = INDEX_HTML.indexOf(`document.addEventListener('${kind}'`, from);
-      if (idx === -1) return -1;
-      if (INDEX_HTML.slice(idx, idx + 400).includes('closeBottomPopovers(')) return idx;
-      from = idx + 10;
+  state.homeStarId = homeStarId;
+
+  const viewGraph = new GraphConstructor({ type: 'undirected', multi: false, allowSelfLoops: false });
+
+  const renderer = new SigmaConstructor(viewGraph, canvasHost, {
+    // The two border programs from the design legend. 'circle' is Sigma's own and
+    // stays the default, so a node with no `type` renders exactly as before --
+    // bands, the home star's tiny under-node, and anyone with no role in view.
+    nodeProgramClasses: {
+      [NODE_TYPES.RINGED]: RINGED_PROGRAM,
+      [NODE_TYPES.HOLLOW]: HOLLOW_PROGRAM,
+    },
+    // 2.5D contract: pan and zoom only. Sigma's camera rotation stays off.
+    enableCameraRotation: false,
+    // Deliberately tiny: framingRatio() zooms in hard on big views, and a floor
+    // here would silently cap that zoom and let nodes touch again.
+    minCameraRatio: 0.005,
+    maxCameraRatio: 4,
+    labelFont: 'Satoshi, system-ui, sans-serif',
+    labelColor: { color: '#c8d3e0' },
+    // Overwritten per view by applyLabelSettings(); these are the opening
+    // defaults so the very first frame is not label-less.
+    ...labelSettings({ visibleCount: 0, smallestNodeSize: SMALLEST_NODE_SIZE }),
+    // Per-node label colour, so dimmed nodes keep their NAME while losing
+    // emphasis. Stripping labels on dim made names appear only on click.
+    labelColor: { attribute: 'labelColor', color: '#c8d3e0' },
+    defaultEdgeColor: EDGE_COLOR,
+    hideEdgesOnMove: true,
+    hideLabelsOnMove: true,
+    // Replaces the white default hover plate; see drawHover.
+    defaultDrawNodeHover: drawHover,
+    nodeReducer: (id, attrs) => reduceNode(id, attrs),
+    edgeReducer: (edge, attrs) => reduceEdge(edge, attrs),
+  });
+
+  // -- reducers -------------------------------------------------------------
+
+  function reduceNode(id, attrs) {
+    const style = KIND_STYLE[attrs.kind] || KIND_STYLE[NODE_KINDS.PLANET];
+    // Size from kind, colour from role. A person whose role is known overrides
+    // the kind colour, which is what lets a founder read as a founder even when
+    // they are a constellation -- `bandCount > 1` used to win outright and paint
+    // every multi-band musician the same purple regardless of what they did.
+    const roleStyle = attrs.role ? ROLE_STYLE[attrs.role] : null;
+    const res = {
+      ...attrs,
+      size: (attrs.size || style.size) * state.sizeScale,
+      color: (roleStyle && roleStyle.color) || style.color,
+    };
+    // The anchor's visual identity is the DOM ringed star overlay; the WebGL
+    // node underneath is kept tiny and label-free so they don't fight.
+    if (attrs.kind === NODE_KINDS.HOME_STAR) {
+      res.size = 6;
+      res.color = HOME_STAR_STYLE.color;
+      res.label = '';
+      return res;
     }
-  };
-  const at = findCloser('keydown');
-  assert.ok(at > 0, 'the document keydown closer must exist');
-  const body = INDEX_HTML.slice(at, at + 400);
-  assert.match(body, /event\.key !== 'Escape'/);
-  assert.match(body, /closeBottomPopovers\(document\.getElementById\('add-band-popover'\)\)/);
-  assert.match(INDEX_HTML, /if \(e\.key === 'Escape' && nodeCardState\.node\) closeNodeCard\(\);/);
-});
-
-test('the share popover X is wired', () => {
-  // The share popover is not in the bottomPopovers registry, so its X needs
-  // its own wiring -- the registry loop only covers the toolbar popovers.
-  assert.match(INDEX_HTML, /sharePopover\.querySelectorAll\('\[data-popover-close\]'\)/);
-});
-
-test('the docked node card counts as chrome while it is open', () => {
-  // It sits over the constellation, so a label underneath it would look culled
-  // for no reason -- the same fault as the hero and the footer, with a box that
-  // comes and goes.
-  const block = EXPLORER.slice(EXPLORER.indexOf('function updateLabelBlocking()'), EXPLORER.indexOf('function updateParallax()'));
-  assert.match(block, /nodeCardEl && !nodeCardEl\.hidden && nodeCardEl\.classList\.contains\('is-open'\)/);
-  assert.match(block, /addZone\(nodeCardEl\)/);
-  // Closing it is a class change, not a resize, so the size observer can miss it.
-  assert.match(EXPLORER, /cardStateObserver/);
-  assert.match(EXPLORER, /attributeFilter: \['class', 'hidden', 'style'\]/);
-  assert.match(EXPLORER, /if \(cardStateObserver\) cardStateObserver\.disconnect\(\)/);
-});
-
-test('the card docks to a corner on the constellation', () => {
-  // Clicking a node now flies the camera AND opens the card, so a node-anchored
-  // card would ride along with the flight and land under the hero or footer.
-  assert.match(EXPLORER, /body\.\$\{BODY_ACTIVE_CLASS\} \.node-card\{position:fixed/);
-  // The mobile bottom sheet still wins below 700px, where a corner card would
-  // cover the graph it describes.
-  assert.match(EXPLORER, /@media \(min-width:701px\)\{[\s\S]*?body\.\$\{BODY_ACTIVE_CLASS\} \.node-card\{/);
-  // CSS owns the position, so the page's node-following geometry must stand down.
-  assert.match(INDEX_HTML, /if \(document\.body && document\.body\.classList\.contains\('rbft-sigma-chrome'\)\) \{[\s\S]*?nodeCardEl\.style\.left = '';/);
-});
-
-test('relocated panels are restored to wherever they now live', () => {
-  // hookPopoverForMobile captured its parent at startup and a MutationObserver
-  // kept restoring it. The Sigma chrome MOVES these panels into its stage and
-  // hides the toolbar they came from, so "restoring" posted Add and Feedback
-  // back inside a display:none ancestor: both pills opened a panel that measured
-  // 0x0 and never appeared. Share was never hooked here, which is exactly why
-  // Share was the only one of the three that worked.
-  assert.match(INDEX_HTML, /function currentHome\(\)/);
-  assert.match(INDEX_HTML, /if \(stage && document\.body\.classList\.contains\('rbft-sigma-chrome'\)\) return stage;/);
-  assert.match(INDEX_HTML, /const home = currentHome\(\);/);
-});
-
-test('cards and popovers are radiused rectangles, not chamfered ones', () => {
-  // They were border-radius:0 plus a clip-path polygon cutting each corner at 45
-  // degrees. The shape read as a cut-off rectangle, and the diagonal sliced
-  // through the padding so text near a corner sat closer to the visible edge
-  // than the box model claimed.
-  const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
-  assert.doesNotMatch(css, /clip-path:\s*polygon/, 'no chamfered corners should remain');
-  assert.match(INDEX_HTML, /--radius-card: 12px;/);
-  assert.match(INDEX_HTML, /--radius-control: 8px;/);
-});
-
-test('the shared glass popover style carries its own padding', () => {
-  // .share-popover -- used by Share, Add your band and Feedback -- set colour,
-  // border and shadow but no padding at all, so every line sat one pixel off the
-  // border. Padding belongs on the shared style, not on each of the three
-  // panels; that is how it went missing in the first place.
-  const share = INDEX_HTML.slice(INDEX_HTML.indexOf('.share-popover {'));
-  const firstRule = share.slice(0, share.indexOf('}'));
-  assert.match(firstRule, /padding: 1\.1rem 1\.15rem 1\.15rem;/);
-});
-
-test('the focus ring marks a clicked node, not the centre of the view', () => {
-  // Anchored to state.anchorId the ring appeared without anyone asking: on a
-  // shared link (the way most visitors arrive), after a search, and after a
-  // filter displaced the anchor. That put two ringed, glowing objects on screen
-  // in the same visual language -- Aaron's Saturn star and the focus ring --
-  // both saying "look here", neither of them clicked. On load Aaron should be
-  // the only node wearing rings.
-  const overlays = EXPLORER.slice(EXPLORER.indexOf('const zoomScale ='), EXPLORER.indexOf('function updateLabelBlocking'));
-  assert.match(overlays, /const clickedId = state\.selection \? state\.selection\.id : null;/);
-  assert.match(overlays, /clickedId && clickedId !== homeStarId \? clickedId : null/);
-  // The old behaviour, explicitly gone.
-  assert.doesNotMatch(overlays, /state\.anchorId === homeStarId \? null : state\.anchorId/);
-});
-
-test('every non-click path clears the selection the ring depends on', () => {
-  // state.selection is the right signal only because it is set ONLY by a click
-  // and cleared by clearHighlight -- which each of these already calls. If any
-  // of them stopped, a ring would appear on a node nobody chose.
-  assert.match(EXPLORER, /function clearHighlight\(\) \{\s*state\.selection = null;/);
-  // First paint, search and filters all go through renderNeighborhood.
-  const render = EXPLORER.slice(EXPLORER.indexOf('state.layoutExtent = layoutExtent(positions)'));
-  assert.match(render.slice(0, 400), /clearHighlight\(\);/);
-  // Reset.
-  const home = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function goHome()') + 300);
-  assert.match(home, /clearHighlight\(\);/);
-  // A click on empty space.
-  assert.match(EXPLORER, /renderer\.on\('clickStage', \(\) => clearHighlight\(\)\)/);
-  // And a click on a node is what sets it.
-  const highlight = EXPLORER.slice(EXPLORER.indexOf('function highlightFrom(id)'), EXPLORER.indexOf('function exploreFor'));
-  assert.match(highlight, /state\.selection = \{ id, type: entityType \}/);
-});
-
-test('the old chrome is stood down before first paint, not on mount', () => {
-  // The Sigma chrome used to be applied when its module mounted -- after the
-  // band data was fetched AND the SVG graph drawn, about nine seconds. For those
-  // nine seconds a visitor got the whole old interface: toolbar, stats badge,
-  // version pill, sign-up nudge and a full 3,194-node SVG render, then all of it
-  // replaced. A synchronous inline script now marks the document first.
-  assert.match(INDEX_HTML, /document\.body\.classList\.add\('rbft-sigma-boot'\)/);
-  // Inline and synchronous is the whole point: a module or a DOMContentLoaded
-  // handler runs after the browser has already painted the old interface.
-  const bodyStart = INDEX_HTML.indexOf('<body>');
-  const bootScript = INDEX_HTML.indexOf("classList.add('rbft-sigma-boot')");
-  const firstModule = INDEX_HTML.indexOf('<script type="module"', bodyStart);
-  assert.ok(bootScript > bodyStart, 'the boot script belongs inside <body>');
-  assert.ok(firstModule === -1 || bootScript < firstModule, 'it must run before any module');
-  // The rules cannot live in the module's injected stylesheet, which does not
-  // exist yet at that moment.
-  const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
-  assert.match(css, /body\.rbft-sigma-boot \.graph-overlay-top,/);
-  assert.match(css, /body\.rbft-sigma-boot \.graph-stage > svg \{/);
-});
-
-test('the boot script mirrors rendererFromSearch', () => {
-  // If these drift, ?renderer=svg would get the new chrome bolted over the old
-  // interface, or every visitor would get a flash of the thing we just hid.
-  const script = INDEX_HTML.slice(
-    INDEX_HTML.indexOf("new URLSearchParams(window.location.search).get('renderer')"),
-    INDEX_HTML.indexOf("classList.add('rbft-sigma-boot')")
-  );
-  assert.match(script, /requested === 'svg' \|\| requested === 'sigma'/);
-  assert.match(script, /: 'sigma'/);          // unknown values fall back, as the module does
-  assert.deepEqual(RENDERERS, ['svg', 'sigma'], 'a new renderer needs adding to the boot script too');
-  assert.equal(DEFAULT_RENDERER, 'sigma');
-});
-
-test('a placeholder holds the new look until the real chrome mounts', () => {
-  // Hiding the old chrome without this would leave an empty page for the whole
-  // data load. Same wordmark, same field geometry, so the page a visitor lands
-  // on IS the new look and the constellation fills in behind it.
-  assert.match(INDEX_HTML, /class="rbft-boot-shell"/);
-  assert.match(INDEX_HTML, /rbft-boot-shell__wordmark/);
-  assert.match(INDEX_HTML, /who&rsquo;s your favorite band\?/);
-  // And it must get out of the way the moment the real chrome is up.
-  assert.match(INDEX_HTML, /body\.rbft-sigma-chrome \.rbft-boot-shell \{ display: none !important; \}/);
-});
-
-test('the address bar names the view you arrived on, not the last node clicked', () => {
-  // Travelling used to rewrite ?anchor= on every move, so a refresh reopened the
-  // last node clicked and there was no way back to the start short of Reset --
-  // and the opening view was no longer Aaron's.
-  assert.match(EXPLORER, /\/\/ NOT syncAddressBar\(\)/);
-  const chrome = EXPLORER.slice(EXPLORER.indexOf('function updateChrome()'), EXPLORER.indexOf('// -- camera'));
-  assert.doesNotMatch(chrome, /^\s*syncAddressBar\(\);/m);
-  // Written exactly once, after the opening view, to canonicalise the inbound
-  // link (?band= / ?member= / ?node= / ?person= all collapse to ?anchor=).
-  const firstPaint = EXPLORER.slice(EXPLORER.indexOf('// -- first paint'));
-  assert.match(firstPaint, /syncAddressBar\(\);/);
-  assert.equal((EXPLORER.match(/^\s*syncAddressBar\(\);/gm) || []).length, 1, 'exactly one call site');
-});
-
-test('Share reads the live view, since the URL no longer follows travel', () => {
-  // Otherwise Share would send whatever view the visit STARTED from -- for most
-  // visitors, Aaron rather than the band they are looking at.
-  const share = INDEX_HTML.slice(INDEX_HTML.indexOf('function shareableUrl()'), INDEX_HTML.indexOf('let sigmaSelectionBound'));
-  assert.match(share, /window\.RBFT_SIGMA && window\.RBFT_SIGMA\.state/);
-  assert.match(share, /state\.anchorId/);
-  assert.match(share, /kept\.set\('anchor', live\)/);
-  // ...with one exception: the home star on a visit that never asked for it. It
-  // is the opening view because it is the home star, not because the visitor
-  // chose it, so stamping it into a shared link made every share of the front
-  // door read as a deep link to one musician. See tests/share-url-home-star.
-  assert.match(share, /onUnrequestedHomeStar/);
-  assert.match(share, /live === state\.homeStarId/);
-  assert.match(share, /!arrivedAnchored\(\)/);
-  // A stale ?band= alongside a fresh ?anchor= would contradict it.
-  assert.match(share, /\['band', 'member', 'node', 'person'\]\.forEach\(key => kept\.delete\(key\)\)/);
-});
-
-test('the filter panel is placed under its pill, not off the bottom of the stage', () => {
-  // It was left:50%; top:calc(100% + 10px), which reads like "hang below my
-  // trigger" -- but the panel is a child of the STAGE, not of the pill row. So
-  // 100% meant the full height of a 100dvh stage and the panel opened just below
-  // the bottom of the window: measured at top:910 in a 900px viewport. It was
-  // doing everything else correctly, entirely off screen, which is why driving
-  // the selects directly in a test found nothing wrong.
-  assert.match(EXPLORER, /function positionFilters\(\)/);
-  // Only the BASE (desktop) rule is checked against the old bug -- not the
-  // gap up to .sigma-filters[hidden], which as of redesign/mobile-hamburger-nav
-  // also contains a deliberate `left:50%` for the mobile modal centering
-  // below (see that block's own comment for why this panel needs a SECOND,
-  // different fix on a phone).
-  const css = EXPLORER.slice(EXPLORER.indexOf('.sigma-filters{'), EXPLORER.indexOf('text-align:left}') + 'text-align:left}'.length);
-  assert.doesNotMatch(css, /top:calc\(100% \+ 10px\)/);
-  assert.doesNotMatch(css, /left:50%/);
-  // On a phone, positionFilters()'s inline style is deliberately overridden
-  // by a centred, fixed modal -- the trigger it was computed from lives
-  // inside the hamburger sheet and is gone by the time this panel opens.
-  assert.match(
-    EXPLORER,
-    /@media \(max-width:720px\)\{\s*#\$\{STAGE_ID\} \.sigma-filters\{position:fixed !important;left:50% !important;\s*top:50% !important;transform:translate\(-50%,-50%\) !important;/,
-    'Expected a phone-only centred-modal override for the filter panel.'
-  );
-  // Placed from the pill's own rect, and clamped inside the stage.
-  const fn = EXPLORER.slice(EXPLORER.indexOf('function positionFilters()'), EXPLORER.indexOf('function hideTip()'));
-  assert.match(fn, /actionButtons\.get\('filter'\)/);
-  assert.match(fn, /box\.bottom - stageBox\.top \+ 10/);
-  assert.match(fn, /Math\.max\(margin, Math\.min\(left, stageBox\.width - width - margin\)\)/);
-  // Opening it places it; a resize moves the toggle the menu is anchored to.
-  const toggle = EXPLORER.slice(EXPLORER.indexOf('function toggleFilters'), EXPLORER.indexOf('Reflects the page'));
-  assert.match(toggle, /positionFilters\(\);/);
-  assert.match(EXPLORER, /applySizeScale\(\);\s*\n\s*\/\/ The pill rewraps[\s\S]*?positionFilters\(\);/);
-});
-
-test('an unmapped band still offers to add it', () => {
-  // The "No Rawk Found" panel and its CTA already existed, driven by
-  // syncSearchEmptyState() off the SVG renderer's search field. The
-  // constellation's search box goes through exploreFor() instead, which reported
-  // a miss only as a line of footer text -- so the offer looked deleted. Nothing
-  // listened for the event the module was already firing.
-  assert.match(INDEX_HTML, /window\.addEventListener\('rbft:sigma-search-miss', event => \{/);
-  assert.match(INDEX_HTML, /graphEmptyState\.hidden = false;/);
-  // The CTA pre-fills the Add-band form from currentSearch, which the
-  // constellation's search box never sets.
-  assert.match(INDEX_HTML, /currentSearch = query;/);
-  // And a drawn view retires the message -- one event rather than a list that
-  // has to keep up with every way the view can change.
-  assert.match(EXPLORER, /'rbft:sigma-view'/);
-  assert.match(INDEX_HTML, /window\.addEventListener\('rbft:sigma-view', \(\) => \{/);
-  // The footer line stays terse so the screen does not say it twice.
-  assert.match(EXPLORER, /No match for <strong>\$\{escapeHtml\(rawQuery\)\}<\/strong> in the tree yet\./);
-});
-
-test('the share image is captured from the constellation, not the hidden SVG', () => {
-  // "Could not generate the image. Try again in a moment." The export serialised
-  // #graph-svg, and hiding that SVG when the constellation became the default
-  // left a display:none element measuring 0x0 -- so the export canvas came out
-  // zero-sized and every share failed. Capturing Sigma is also the right picture
-  // rather than merely a working one: it is what the visitor is looking at.
-  assert.match(INDEX_HTML, /function captureSigmaCanvas\(\)/);
-  const capture = INDEX_HTML.slice(
-    INDEX_HTML.indexOf('function captureSigmaCanvas()'),
-    INDEX_HTML.indexOf('async function renderGraphPngBlob()')
-  );
-  // WebGL discards its drawing buffer after compositing, so read it in the same
-  // turn as a fresh paint.
-  assert.match(capture, /renderer\.refresh\(\);/);
-  assert.match(capture, /renderer\.getCanvases\(\)/);
-  // Edges under nodes under labels; interaction layers excluded, because they
-  // carry a hover plate for wherever the pointer happened to be resting.
-  // Assert the DRAW LIST specifically -- the prose above it names the excluded
-  // layers, so scanning the whole function would match its own comment.
-  const drawList = capture.match(/\[(('|")[a-zA-Z]+\2,?\s*)+\]\.forEach/);
-  assert.ok(drawList, 'the capture should draw an explicit list of layers');
-  assert.equal(drawList[0], "['edges', 'edgeLabels', 'nodes', 'labels'].forEach");
-  // The starfield is CSS, so the field colour has to be painted in or the graph
-  // lands on transparency.
-  assert.match(capture, /target\.fillStyle = '#070b12'/);
-  // ?renderer=svg keeps the old path.
-  assert.match(capture, /if \(!renderer \|\| typeof renderer\.getCanvases !== 'function'\) return null;/);
-});
-
-test('the export sizes itself from the stage that is on screen', () => {
-  const png = INDEX_HTML.slice(INDEX_HTML.indexOf('async function renderGraphPngBlob()'));
-  assert.match(png, /sigmaCanvas && sigmaStage\s*\n\s*\? sigmaStage\.getBoundingClientRect\(\)/);
-  // A zero-sized rect is what produced the failure; refuse it outright.
-  assert.match(png, /if \(!rect\.width \|\| !rect\.height\) return null;/);
-  // Serialising the SVG clones three thousand nodes, so skip it entirely when
-  // the constellation is the picture.
-  assert.match(png, /const drawGraph = async \(\) => \{[\s\S]*?if \(sigmaCanvas\) \{/);
-});
-
-test('the shared picture includes the star, ring and gold label', () => {
-  // They are DOM overlays layered over the canvas, so a canvas capture misses
-  // them: the first working export had Aaron as an unmarked white dot. On a
-  // picture whose job is to advertise a shared link, the ringed star and the
-  // name are the subject.
-  const overlays = INDEX_HTML.slice(INDEX_HTML.indexOf('const drawOverlays = () =>'), INDEX_HTML.indexOf('try {\n        await drawGraph();'));
-  assert.match(overlays, /\.sigma-home-star/);
-  assert.match(overlays, /\.sigma-focus-ring/);
-  assert.match(overlays, /\.sigma-home-label/);
-  assert.match(overlays, /#ffc978/);           // the same gold as on screen
-  assert.match(overlays, /ctx\.ellipse\(/);    // the tilted ring
-  // Geometry is read from the live elements so it cannot drift from where they
-  // actually are.
-  assert.match(overlays, /getBoundingClientRect\(\)/);
-  assert.match(INDEX_HTML, /await drawGraph\(\);\s*\n\s*drawOverlays\(\);/);
-});
-
-test('the SVG is not drawn when the constellation is the renderer', () => {
-  // It was drawing a force layout over every node and roughly 16,500 SVG
-  // elements -- 89% of the elements on the page -- entirely behind display:none.
-  // Measured on the full graph, about fifteen seconds AFTER the data had already
-  // parsed, to produce a picture nobody sees.
-  const render = INDEX_HTML.slice(INDEX_HTML.indexOf('function renderGraph()'));
-  const stop = render.indexOf("if (document.body && document.body.classList.contains('rbft-sigma-boot'))");
-  assert.ok(stop > 0, 'renderGraph should bail before drawing on the constellation');
-
-  // Order matters: everything the constellation needs has to happen BEFORE the
-  // bail. If setGraph moved below it, filters would stop reaching Sigma.
-  const handOff = render.indexOf('window.RBFT_SIGMA.setGraph(filtered)');
-  assert.ok(handOff > 0 && handOff < stop, 'the filtered graph must reach Sigma before the bail');
-  const state = render.indexOf('graphState.rendered = { nodes, links }');
-  assert.ok(state > 0 && state < stop, 'the view must be recorded before the bail');
-  for (const marker of ['graphBadge.textContent', 'syncFilterBtn(', 'metricNodes.textContent']) {
-    const at = render.indexOf(marker);
-    assert.ok(at > 0 && at < stop, `${marker} must run before the bail`);
+    // A name that would be drawn across the wordmark, the search field or the
+    // footer is dropped: chrome text wins over a node label. Computed from
+    // geometry in updateLabelBlocking(), not from what is currently drawn, so it
+    // cannot oscillate frame to frame.
+    if (state.labelBlocked.has(id)) res.label = '';
+    if (state.highlightNodes.size) {
+      if (state.highlightNodes.has(id) || id === (state.selection && state.selection.id)) {
+        res.color = state.highlightColor;
+        res.size = res.size * HIGHLIGHT_GROWTH;
+        res.zIndex = 2;
+      } else {
+        // Dim, but keep the name: a highlight should answer "who else is
+        // connected", not blank out the rest of the constellation.
+        res.color = DIM_NODE_COLOR;
+        res.labelColor = DIM_LABEL_COLOR;
+      }
+    }
+    return res;
   }
-  // And the drawing really is below it.
-  const wipe = render.indexOf("graphGroup.selectAll('*').remove()");
-  assert.ok(wipe > stop, 'the SVG wipe and draw must sit below the bail');
-});
 
-test('the view is read as data, not from the drawn SVG', () => {
-  // The node card's member list, the highlight sets and the connection names all
-  // read the data BOUND TO THE SVG, so they silently depended on the SVG having
-  // been drawn. Not drawing it would have emptied every band card.
-  assert.match(INDEX_HTML, /function renderedNodeData\(\) \{\s*\n\s*if \(graphState && graphState\.rendered\) return graphState\.rendered\.nodes;/);
-  assert.match(INDEX_HTML, /function renderedLinkData\(\) \{\s*\n\s*if \(graphState && graphState\.rendered\) return graphState\.rendered\.links;/);
-  // The DOM fallback stays, so the SVG path cannot regress.
-  assert.match(INDEX_HTML, /return graphGroup \? graphGroup\.selectAll\('g\.node'\)\.data\(\) : \[\];/);
-  assert.match(INDEX_HTML, /return graphGroup \? graphGroup\.selectAll\('line\.link'\)\.data\(\) : \[\];/);
-});
-
-test('?renderer=svg still draws, because it never gets the boot class', () => {
-  // The bail is keyed on the class the inline boot script only adds for the
-  // constellation, so the escape hatch is untouched: verified at 3,194 nodes and
-  // 3,766 links drawn and visible.
-  const script = INDEX_HTML.slice(
-    INDEX_HTML.indexOf("new URLSearchParams(window.location.search).get('renderer')"),
-    INDEX_HTML.indexOf("classList.add('rbft-sigma-boot')")
-  );
-  assert.match(script, /renderer === 'sigma'/);
-});
-
-test('the not-found card can be dismissed', () => {
-  // Reported by a tester: it offered adding the band and nothing else, so anyone
-  // who had simply mistyped was stuck looking at it.
-  assert.match(INDEX_HTML, /id="graph-empty-state-close"/);
-  assert.match(INDEX_HTML, /class="popover-close graph-empty-state__close"/);
-  assert.match(INDEX_HTML, /aria-label="Close"/);
-  const wiring = INDEX_HTML.slice(INDEX_HTML.indexOf("getElementById('graph-empty-state-close')"));
-  assert.match(wiring.slice(0, 320), /graphEmptyState\.hidden = true;/);
-  // Same stopPropagation trap as every other control inside the stage: without
-  // it the document-level outside-click closer swallows the event.
-  assert.match(wiring.slice(0, 320), /event\.stopPropagation\(\);/);
-});
-
-test('the home star introduces itself instead of just being a stranger', () => {
-  // Landing a visitor on one specific musician only works if they are told why --
-  // the Tom-from-Myspace trick works because Tom introduced himself. Without it
-  // the opening view reads as "here is a person you have never heard of".
-  assert.match(EXPLORER, /const introCopy = \(name\) => \{/);
-  assert.match(EXPLORER, /I built this site &mdash; you&rsquo;re starting on my node\./);
-  assert.match(EXPLORER, /Search for a band or artist above to find your place in the band universe\./);
-  // And it names Travel. Search was the only way in that the copy mentioned, which
-  // left clicking -- the primary way to move through the graph -- undiscoverable.
-  assert.match(EXPLORER, /Click any band or musician to travel there\./);
-  // The name is derived from the home star, so changing the default anchor cannot
-  // leave the copy claiming to be someone else.
-  // Plain substring checks: a regex for this line needs escaping that obscures
-  // what is being asserted.
-  assert.ok(EXPLORER.includes(".trim().split("), 'the first name should be split out of the id');
-  assert.ok(EXPLORER.includes("[0] || 'I'"), 'and it should fall back rather than print undefined');
-  assert.match(EXPLORER, /introCopy\(homeStarId\)/);
-  // Gold, matching his star label, so the voice and the node are visibly one.
-  assert.match(EXPLORER, /\.sigma-intro__hello\{color:#ffc978/);
-});
-
-test('the introduction gives way to the generic explainer once you travel', () => {
-  // Keyed on the anchor rather than on "first visit", so it also returns with
-  // Reset -- the other way to end up back on his node.
-  const chrome = EXPLORER.slice(EXPLORER.indexOf('function updateChrome()'), EXPLORER.indexOf('// -- camera'));
-  assert.match(chrome, /const onHomeStar = Boolean\(homeStarId\) && homeStarId === state\.anchorId;/);
-  assert.match(chrome, /hintEl\.innerHTML = onHomeStar \? introCopy\(homeStarId\) : EXPLORE_COPY;/);
-});
-
-test('the introduction reads before the node count', () => {
-  // A visitor dropped on a stranger's node needs to know why before being told
-  // how many degrees out it is.
-  const footer = EXPLORER.slice(EXPLORER.indexOf('<div class="sigma-footer">'), EXPLORER.indexOf('</div>\n  `;'));
-  assert.ok(footer.indexOf('sigma-hint') < footer.indexOf('sigma-context'), 'the hint should come first');
-});
-
-test('the hamburger is retired on the constellation', () => {
-  // It duplicated the pill row -- Add, Share, Feedback, the filters and search
-  // all had a second home inside it. Two ways to do the same thing, and the pills
-  // are the ones a visitor can see (feedback item xiv).
-  const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
-  assert.match(css, /body\.rbft-sigma-boot \.mobile-menu-btn,/);
-  assert.match(css, /body\.rbft-sigma-boot #mobile-menu-sheet,/);
-  assert.match(css, /body\.rbft-sigma-boot #mobile-sheet-backdrop,/);
-  // Sign-up must stop reaching through the retired sheet for its trigger.
-  assert.match(INDEX_HTML, /const onConstellation = document\.body && document\.body\.classList\.contains\('rbft-sigma-boot'\);/);
-  assert.match(INDEX_HTML, /const isMobile = !onConstellation && window\.matchMedia\('\(max-width: 900px\)'\)\.matches;/);
-});
-
-test('the corner the hamburger vacated carries ONE way in', () => {
-  // A pair shipped here a change ago, when both entry points still existed. With
-  // the flows merged, two controls for one room was the confusion rather than the
-  // cure, so there is a single control (feedback item x).
-  const right = INDEX_HTML.slice(INDEX_HTML.indexOf('<div class="header-right">'), INDEX_HTML.indexOf('id="header-user"'));
-  assert.doesNotMatch(right, /header-signup-btn/);
-  assert.match(right, /id="sign-in-btn"/);
-  assert.equal((right.match(/class="header-btn/g) || []).length, 1, 'exactly one auth control');
-});
-
-test('the auth corner is reachable on a phone, where it is the only way in', () => {
-  const css = INDEX_HTML.slice(0, INDEX_HTML.indexOf('</style>'));
-  // The base stylesheet hides .header-right below 720px; with the sheet gone that
-  // would leave a phone with no way to sign in at all. THIS is what the test is
-  // for, and it is unchanged: the corner must exist and must be reachable.
-  assert.match(css, /body\.rbft-sigma-boot \.header-right \{\s*\n\s*display: flex !important;/);
-  // A density pass pins .header-btn to min-height:26px !important, so every
-  // size here has to be an override carrying the same weight.
-  assert.match(css, /body\.rbft-sigma-boot \.header-right \.header-btn \{\s*\n\s*min-height: 36px !important;/);
-  // The phone size went 40px button -> 24px button -> 44px button as the
-  // search row beside it changed shape (see git history on this test for
-  // that chain). Then it stopped being a button at all: signed OUT, this
-  // corner used to be the one place with two different visual languages
-  // depending on auth state -- a bordered/filled pill here, but plain text
-  // ("Sign out") once signed in. Matching that instead gives the corner one
-  // consistent shape AND less visual weight, which is what a "move Sign In
-  // into the hamburger" design ask was actually reaching for, without that
-  // idea's real cost of hiding auth state behind a tap.
-  assert.match(css, /min-height: auto !important;/);
-  assert.match(css, /text-decoration: underline;/);
-  assert.match(css, /color: var\(--color-accent, #7cc4ff\) !important;/);
-  // And the hero drops below that row, or the wordmark prints through it.
-  // 50px leaves the row's measured ~40px bottom edge the same ~10px
-  // breathing room it has held at every size it's been -- measured in the
-  // browser, since there is no button height left to compute it from.
-  assert.match(css, /body\.rbft-sigma-boot #sigma-stage \.sigma-hero \{ top: 50px; \}/);
-});
-
-test('the action row is a hamburger menu at every viewport, not a squeezed line', () => {
-  // Was phone-only (redesign/mobile-hamburger-nav); the brand asks for one
-  // chrome at every scale, so the desktop pill row became the same hamburger
-  // menu. History: the six action pills used to be forced onto one nowrap
-  // line at 22px each (see git history on this test) -- under the platform's
-  // 44px tap-target minimum. A first pass moved them into a full-width
-  // bottom sheet; compared side by side with the actual mockup, that read
-  // as big boxy bars, so they became small 44px circles anchored near the
-  // hamburger instead -- see mobile-chrome-scale.test.mjs for the circles'
-  // own dimensions.
-  //
-  // Matched directly against EXPLORER rather than by slicing out a media
-  // query: an earlier, unrelated @media (max-width:720px) block (the share
-  // popover) sits before this one in the file, so "everything after the
-  // first @media" is not the same thing as "the phone chrome block."
-  assert.match(EXPLORER, /\.sigma-actions\{\s*display:none;/);
-  assert.match(EXPLORER, /position:fixed;left:auto;bottom:auto;/);
-  assert.match(EXPLORER, /\.sigma-actions\.is-open\{display:flex\}/);
-  // Positioned from the toggle's rect, not a fixed corner -- see
-  // positionActionsRow().
-  assert.match(EXPLORER, /const toggleBox = menuToggle\.getBoundingClientRect\(\);/);
-  assert.match(EXPLORER, /\.sigma-menu-toggle\{/);
-  // No always-visible horizontal pill row any more: the menu is the circles
-  // at every viewport.
-  assert.doesNotMatch(EXPLORER, /\.sigma-actions\{position:absolute;left:50%;top:0;transform:translateX\(-50%\);/);
-});
-
-test('the page title carries no version number', () => {
-  // "v1" in the title told every visitor they had arrived at a draft, and it
-  // disagreed with og:title -- so a shared link and the tab it opened were
-  // labelled differently.
-  const title = INDEX_HTML.match(/<title>([^<]*)<\/title>/);
-  assert.ok(title, 'expected a title tag');
-  assert.equal(title[1], 'Six Degrees of Rock');
-  // Pinned as a shape too, so v2 cannot arrive the same way v1 did.
-  assert.doesNotMatch(title[1], /\bv\d+\b/i, 'no version number in the title');
-  // And it must agree with the card a shared link renders.
-  const og = INDEX_HTML.match(/<meta property="og:title" content="([^"]*)"/);
-  assert.ok(og, 'expected an og:title');
-  assert.equal(og[1], title[1], 'the tab and the shared card should say the same thing');
-});
-
-// --- no third party on the critical path -------------------------------------
-//
-// The page used to need d3js.org and esm.sh in order to boot. Blocking d3js.org
-// produced a blank page, not a slower one -- and that failure was invisible from a
-// machine whose network reaches those hosts, which is every machine we test on.
-// These assertions are the only thing standing between that and a quiet relapse.
-
-test('the import map points at this origin, not a CDN', () => {
-  const map = INDEX_HTML.slice(
-    INDEX_HTML.indexOf('<script type="importmap">'),
-    INDEX_HTML.indexOf('</script>', INDEX_HTML.indexOf('<script type="importmap">')),
-  );
-  assert.ok(map.length > 0, 'expected an import map');
-  assert.match(map, /"sigma":\s*"\/vendor\/sigma\.mjs"/);
-  assert.match(map, /"graphology":\s*"\/vendor\/graphology\.mjs"/);
-  assert.doesNotMatch(map, /esm\.sh/, 'no module may resolve through esm.sh');
-  assert.doesNotMatch(map, /https?:\/\//, 'every mapping must be same-origin');
-});
-
-test('nothing loads a library from a third party', () => {
-  // esm.sh resolved graphology-utils@^2.5.2 -- a caret range -- at request time,
-  // so production JavaScript could change with no commit and no deploy.
-  //
-  // Comments are stripped first: the comments explaining WHY these hosts are gone
-  // name the hosts, and an assertion that forbids saying the words would have to be
-  // satisfied by deleting the explanation.
-  const markup = stripComments(INDEX_HTML);
-  assert.doesNotMatch(markup, /d3js\.org/, 'd3 must not come from d3js.org');
-  assert.doesNotMatch(markup, /esm\.sh/, 'no library may come from esm.sh');
-  assert.doesNotMatch(markup, /unpkg\.com|cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com/);
-});
-
-test('d3 is fetched on demand, not on every load', () => {
-  // d3's only jobs are the SVG force simulation and the CSV fallback. Neither runs
-  // on the constellation, so blocking every visitor on 278KB was pure waste.
-  assert.match(INDEX_HTML, /function ensureD3\(\)/);
-  assert.match(INDEX_HTML, /tag\.src = '\/vendor\/d3\.js';/);
-  // Cached, so several callers cannot start several downloads.
-  assert.match(INDEX_HTML, /if \(window\.d3\) return Promise\.resolve\(window\.d3\);/);
-  assert.match(INDEX_HTML, /if \(d3Loading\) return d3Loading;/);
-  // A failure must not be cached forever, or one flaky load would disable the SVG
-  // renderer for the rest of the session.
-  const loader = INDEX_HTML.slice(
-    INDEX_HTML.indexOf('function ensureD3()'),
-    INDEX_HTML.indexOf('function setupSvgRenderer'),
-  );
-  assert.ok(loader.length > 0, 'expected to find the loader');
-  assert.match(loader, /d3Loading = null;/);
-});
-
-test('the SVG renderer is built only when it is the renderer', () => {
-  // This block used to run inline at boot, which is precisely why blocking d3
-  // blanked a page that draws no SVG at all.
-  assert.match(INDEX_HTML, /function setupSvgRenderer\(\)/);
-  assert.match(INDEX_HTML, /function onSigmaPath\(\)/);
-  assert.match(INDEX_HTML, /const rendererReady = onSigmaPath\(\)\s*\n\s*\? Promise\.resolve\(\)\s*\n\s*: ensureD3\(\)\.then\(setupSvgRenderer\);/);
-  // And the data load waits on it, so nothing draws before the renderer exists.
-  assert.match(INDEX_HTML, /rendererReady\.then\(loadGraphData\)\.then\(async rows => \{/);
-  // The CSV fallback is the constellation's only route to d3, and must await it.
-  const fallback = INDEX_HTML.slice(
-    INDEX_HTML.indexOf('Falling back to CSV load'),
-    INDEX_HTML.indexOf('d3.csv('),
-  );
-  assert.ok(fallback.length > 0, 'expected to find the CSV fallback');
-  assert.match(fallback, /await ensureD3\(\);/);
-});
-
-test('the vendored bundles are self-contained and reproducible', () => {
-  const sigma = readFileSync(new URL('../vendor/sigma.mjs', import.meta.url), 'utf8');
-  const graphology = readFileSync(new URL('../vendor/graphology.mjs', import.meta.url), 'utf8');
-  // A surviving bare specifier would resolve through the import map at runtime and
-  // could quietly reach a network again.
-  for (const [name, src] of [['sigma', sigma], ['graphology', graphology]]) {
-    assert.doesNotMatch(src, /esm\.sh|d3js\.org|unpkg/, `${name} must not reference a CDN`);
-    assert.match(src, /Rebuild with: npm run vendor/, `${name} should record how it was built`);
+  function reduceEdge(edge, attrs) {
+    // One quiet colour at rest, for every thread whatever its role. Gold and
+    // electric blue are reserved for selection: gold when a member is clicked,
+    // electric blue when a band is clicked.
+    //
+    // Touring threads are the exception: a hired gun's starburst (Josh Freese
+    // and a dozen bands) should whisper, not shout. Thinner and more
+    // transparent at rest, sunk even further when another selection dims the
+    // graph -- but fully present when the touring member is the selection.
+    const isTouring = attrs.role === MEMBERSHIP_ROLES.TOURING;
+    if (!state.highlightEdges.size) {
+      return isTouring
+        ? { ...attrs, color: 'rgba(125,142,160,0.28)', size: 0.6 }
+        : { ...attrs, color: EDGE_COLOR };
+    }
+    if (state.highlightEdges.has(edge)) {
+      return { ...attrs, color: state.highlightColor, size: 2.2, zIndex: 1 };
+    }
+    return isTouring
+      ? { ...attrs, color: 'rgba(120,134,150,0.05)', size: 0.5 }
+      : { ...attrs, color: 'rgba(120,134,150,0.10)', size: 0.8 };
   }
-  // package-lock.json is gitignored here, so the lockfile cannot be the record of
-  // what ships -- the committed vendor/ files are, and they change only in a
-  // reviewable diff. The build script and the pinned devDependencies are what make
-  // regenerating them repeatable.
-  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-  assert.equal(pkg.scripts.vendor, 'node scripts/vendor-libs.mjs');
-  for (const dep of ['sigma', 'graphology', 'd3']) {
-    assert.ok(pkg.devDependencies[dep], `${dep} must stay a pinned devDependency`);
+
+  // -- sizing ---------------------------------------------------------------
+
+  // How far out to sit for the current view: fit everything when that is
+  // legible, otherwise show a region at a usable scale and let people pan.
+  /**
+   * How much of the canvas the chrome is sitting on, top and bottom, in pixels.
+   *
+   * The starfield is the whole page, so the hero and footer float over the
+   * drawing. Framing to the full viewport therefore aimed the graph at a
+   * rectangle whose top and bottom strips are occupied: nodes landed under the
+   * wordmark and the footer, and their names had to be suppressed to avoid
+   * printing through the text. Measuring the chrome instead lets the graph be
+   * framed into the space that is actually free.
+   */
+  function chromeInsets() {
+    const host = canvasHost.getBoundingClientRect();
+    const MARGIN = 12;
+    const measure = el => {
+      if (!el || el.hidden) return 0;
+      const r = el.getBoundingClientRect();
+      return r.width && r.height ? r : 0;
+    };
+    const hero = measure(heroEl);
+    const footer = measure(footerEl);
+    return {
+      top: hero ? Math.max(0, hero.bottom - host.top) + MARGIN : 0,
+      bottom: footer ? Math.max(0, host.bottom - footer.top) + MARGIN : 0,
+    };
   }
-});
 
-test('no comment impersonates a live CDN script tag', () => {
-  // A comment used to contain the literal string `<script src="https://d3js.org/...">`
-  // to explain what had been removed. Harmless to the browser, but it made the
-  // served HTML read as though the CDN tag were still there -- it fooled a grep of
-  // the live page twice, including mine. Describing the tag beats quoting it.
-  assert.ok(
-    !INDEX_HTML.includes('<script src="https://d3js.org'),
-    'nothing in the file, comment or not, should look like a live d3js.org script tag'
-  );
-});
+  /** The rectangle the graph is allowed to occupy, in canvas pixels. */
+  function safeArea() {
+    const host = canvasHost.getBoundingClientRect();
+    const insets = chromeInsets();
+    // Never let the chrome claim so much that there is nothing left to draw in;
+    // a very short window keeps a usable band in the middle.
+    const height = Math.max(host.height * 0.45, host.height - insets.top - insets.bottom);
+    const top = Math.min(insets.top, Math.max(0, host.height - height));
+    return { width: host.width, height, top, hostHeight: host.height };
+  }
 
-// --- fonts come from this origin too ----------------------------------------
+  /**
+   * Camera y shift, in framed graph units, that puts the middle of the drawing in
+   * the middle of the space the chrome leaves free rather than the middle of the
+   * window.
+   *
+   * Converted through viewportToFramedGraph rather than derived from the ratio,
+   * because that mapping already accounts for the current zoom and for Sigma's
+   * own framing of the graph into a unit square.
+   */
+  function cameraOffsetY(targetRatio = null) {
+    const area = safeArea();
+    const deltaPx = (area.top + area.height / 2) - area.hostHeight / 2;
+    if (!deltaPx) return 0;
+    const from = renderer.viewportToFramedGraph({ x: 0, y: 0 });
+    const to = renderer.viewportToFramedGraph({ x: 0, y: 100 });
+    let perPixel = (to.y - from.y) / 100;
+    if (!Number.isFinite(perPixel) || !perPixel) return 0;
+    // The mapping above describes the CURRENT zoom, but callers apply this shift
+    // in the same setState as a new ratio. Framed units per pixel scale with the
+    // ratio, so without this the shift was computed at the wrong zoom and
+    // overshot -- by half again as much on a short window.
+    const current = renderer.getCamera().getState().ratio || 1;
+    if (targetRatio && Number.isFinite(targetRatio) && current) {
+      perPixel *= targetRatio / current;
+    }
+    // Moving the camera's centre UP in framed space moves the drawing DOWN on
+    // screen, hence the negation.
+    return -deltaPx * perPixel;
+  }
 
-test('no font is fetched from a third party', () => {
-  const markup = stripComments(INDEX_HTML);
-  assert.doesNotMatch(markup, /fontshare\.com/, 'fonts must not come from fontshare.com');
-  assert.doesNotMatch(markup, /fonts\.googleapis\.com|fonts\.gstatic\.com/);
-  assert.match(markup, /<link rel="stylesheet" href="\/vendor\/fonts\.css">/);
-  // The preconnect went with it -- a preconnect to a host we no longer use is a
-  // DNS and TLS handshake spent on nothing.
-  assert.doesNotMatch(markup, /rel="preconnect"[^>]*fontshare/);
-});
+  /**
+   * The ratio at which a view counts as "fitted".
+   *
+   * Deliberately NOT loosened to make the whole drawing fit the band between the
+   * hero and the footer, which was the obvious next move and measured worse:
+   * zooming out to clear the chrome pulls the nodes closer together, so labels
+   * start colliding with EACH OTHER instead. On a 1440x900 window that traded 2
+   * hidden names for 5. The graph is centred in the band instead, and the few
+   * names that still land under the chrome are dropped by updateLabelBlocking().
+   */
+  function fitRatio() {
+    return FRAMED_RATIO;
+  }
 
-test('the vendored sheet declares both families, at the weights the page asks for', () => {
-  const css = readFileSync(new URL('../vendor/fonts.css', import.meta.url), 'utf8');
-  // Boska is the point of this one. `--font-display: 'Boska', Georgia, serif` had
-  // been rendering as GEORGIA, because the Fontshare API returns Satoshi plus four
-  // faces of Outfit and no Boska when Satoshi is listed first in the request.
-  for (const family of ['Boska', 'Satoshi']) {
-    for (const weight of [400, 500, 700]) {
-      const face = css.split('@font-face').find(
-        b => b.includes(`'${family}'`) && new RegExp(`font-weight: ${weight}\\b`).test(b)
+  function framedRatio() {
+    // The FULL canvas, deliberately, not the band the chrome leaves free.
+    // Measuring the band here was the obvious move and it was wrong: framingRatio
+    // reads a smaller usable area as "fitting would not be legible" and zooms in
+    // on a region instead, which cut the opening view from 17 nodes on screen to
+    // 8. Nodes visible matters more than names hidden. The band is used for
+    // CENTRING (see cameraOffsetY), so the drawing sits in the clear space
+    // without being shrunk into it.
+    const rect = canvasHost.getBoundingClientRect();
+    return framingRatio({
+      extent: state.layoutExtent,
+      viewportWidth: rect.width,
+      viewportHeight: rect.height,
+      // Selection grows a node by a quarter (see reduceNode), so frame for the
+      // biggest a node can ever be drawn, not its resting size.
+      maxNodeSize: LARGEST_NODE_SIZE * state.sizeScale * HIGHLIGHT_GROWTH,
+      baseRatio: fitRatio(),
+    });
+  }
+
+  // Node radii are screen pixels, so how close nodes look depends on the
+  // window as much as on the node count. Recomputed per view AND on resize.
+  function applySizeScale(visibleCount = state.view ? state.view.nodes.length : 0) {
+    // Full canvas, for the same reason as framedRatio: sizing to the band shrank
+    // nodes and pulled their labels closer together.
+    const rect = canvasHost.getBoundingClientRect();
+    state.sizeScale = nodeSizeScale({
+      visibleCount,
+      extent: state.layoutExtent,
+      viewportWidth: rect.width,
+      viewportHeight: rect.height,
+      maxNodeSize: LARGEST_NODE_SIZE,
+    });
+    // Label thresholds follow the smallest node ACTUALLY drawn, so shrinking
+    // nodes never silently costs a name.
+    const labels = labelSettings({
+      visibleCount,
+      smallestNodeSize: SMALLEST_NODE_SIZE * state.sizeScale,
+    });
+    Object.entries(labels).forEach(([key, value]) => renderer.setSetting(key, value));
+    renderer.refresh();
+  }
+
+  // -- view assembly --------------------------------------------------------
+
+
+  // Bands open at 1 hop (band + members only) for a clean first view.
+  // Members open at 2 hops. Expand adds more from there.
+  function initialHopsForAnchor(anchorId) {
+    try {
+      const node = masterById.get(anchorId);
+      if (node && node.type === 'band') return 1;
+    } catch (e) {}
+    return NEIGHBORHOOD_BUDGET.MAX_HOPS;
+  }
+
+  function renderNeighborhood({ anchorId, maxNodes = state.maxNodes, animate = true }) {
+    const view = getNeighborhood({
+      nodes: master.nodes,
+      links: master.links,
+      anchorId,
+      maxHops: state.maxHops,
+      maxNodes,
+      adjacency,
+      maxSatellites: NEIGHBORHOOD_BUDGET.SATELLITE_CAP,
+    });
+    if (!view.nodes.length) return false;
+
+    const positions = radialLayout({
+      nodes: view.nodes,
+      links: view.links,
+      anchorId,
+      depths: view.depths,
+      spacing: 190,
+      adjacency,
+    });
+
+    // When anchored on a BAND, a hired gun's satellite bands cluster around
+    // him instead of spraying across the constellation: Josh Freese's 20
+    // other bands hug his node so Weezer's own constellation stays the focus.
+    // When anchored on a MEMBER, their connections ARE the focus and spread
+    // normally. The band is the focus unless you nav to a member specifically.
+    const anchor = masterById.get(anchorId);
+    const anchorIsBand = anchor && anchor.type === 'band';
+    if (anchorIsBand) {
+      try {
+        clusterTouringSatellites(positions, view.links, view.nodes, view.depths, anchorId);
+      } catch (e) {
+        // Clustering is a visual enhancement -- it must never break the render.
+        console.warn('Satellite clustering skipped:', e);
+      }
+    }
+
+    viewGraph.clear();
+    view.nodes.forEach(node => {
+      const point = positions.get(node.id) || { x: 0, y: 0, hop: node.hop || 0 };
+      const kind =
+        node.id === homeStarId
+          ? NODE_KINDS.HOME_STAR
+          : classifyNode(masterById.get(node.id) || node, { adjacency, links: master.links });
+      const style = KIND_STYLE[kind] || KIND_STYLE[NODE_KINDS.PLANET];
+      // Role is computed against the CURRENT anchor, which is why it is computed
+      // here and re-computed on every travel rather than once at load: centring
+      // on Dillinger makes Ben Weinman a founder, centring on Suicidal
+      // Tendencies makes the same node a member. It reads master.links, not
+      // view.links, so a role is not decided by which memberships happen to have
+      // survived the neighbourhood budget.
+      const role = roleForNode(masterById.get(node.id) || node, {
+        anchorId,
+        links: master.links,
+      });
+      // On band constellations, a sprawling member shrinks to a regular planet:
+      // the band is the focus, not the hired gun. Josh Freese stops rendering
+      // as a giant hub and reads as what he is on this constellation -- a
+      // player. Detected by kind size (not the TOURING tag) so it works even
+      // when the membership tier isn't set in the data. Member-anchored views
+      // are untouched: there, the person IS the focus and keeps their size.
+      const hubShrink =
+        anchorIsBand &&
+        node.id !== anchorId &&
+        node.type !== 'band' &&
+        style.size >= KIND_STYLE[NODE_KINDS.CONSTELLATION].size;
+      // Capped super-connectors grow to signal "there's more" — like a band
+      // node, they visually promise expansion.
+      const cappedGrow = node.hasMoreSatellites && !hubShrink;
+      const nodeSize = hubShrink
+        ? KIND_STYLE[NODE_KINDS.PLANET].size
+        : cappedGrow
+          ? KIND_STYLE[NODE_KINDS.CONSTELLATION].size
+          : style.size;
+      viewGraph.addNode(node.id, {
+        // The label is the display NAME, not the id: a musician who shares a
+        // band's name carries a suffixed id and must still read as himself.
+        // Exception: when several BANDS share one name, the colliding nodes'
+        // ids carry a city suffix ("Skid Row — Tom's River, NJ") while their
+        // names stay plain — render the suffixed id so the two nodes are
+        // distinguishable on the canvas.
+        label: (() => {
+          const master = masterById.get(node.id);
+          if (master && master.type === 'band' && master.name && master.id !== master.name) return master.id;
+          return nodeLabel(node);
+        })(),
+        x: point.x,
+        y: point.y,
+        hop: point.hop,
+        kind,
+        role,
+        // The shape channel. Sigma picks the node program off `type`, and it is
+        // set here rather than in reduceNode because a program change is a
+        // different draw call, not a per-frame style tweak.
+        //
+        // The home star is forced plain. Its visual identity is the DOM ringed-star
+        // overlay and the WebGL node beneath it is deliberately tiny and
+        // label-free; giving that a ring of its own would put two different rings
+        // on one node at two different radii.
+        type: kind === NODE_KINDS.HOME_STAR ? NODE_TYPES.SOLID : nodeTypeForRole(role),
+        entityType: node.type,
+        size: nodeSize,
+        color: style.color,
+      });
+    });
+    view.links.forEach(link => {
+      const [source, target] = linkEndpoints(link);
+      // Shared with toGraphologyGraph, because this check being local is what
+      // broke the site: this writer never tested source === target, viewGraph
+      // forbids self-loops, and a solo act whose band name IS their own name
+      // (Jeremy Enigk, Sir Mix-a-Lot, Ayron Jones, Randy Hansen, LL Cool J)
+      // collapses to exactly that. The throw escaped this forEach and killed
+      // the rest of renderView, so every constellation within two hops of one
+      // of those five names drew its nodes, whatever edges happened to precede
+      // the bad one, and then stopped -- no layout, no chrome, no controller.
+      if (!canRenderEdge(viewGraph, source, target)) return;
+      // weight rides along because the role is derived from it, and because an
+      // edge that has lost its weight cannot be re-classified later.
+      viewGraph.addEdge(source, target, {
+        size: 1,
+        relation: link.relation || 'member',
+        weight: Number(link.weight || 1),
+        role: roleFromMembership(link),
+      });
+    });
+
+    // Auto thread-collision v4: push apart overlapping nodes directly on
+    // the rendered graph. Runs once synchronously -- not per-frame -- so
+    // nodes stay where they land and manual drags aren't fought.
+    // The anchor never moves.
+    try {
+      resolveGraphCollisions(viewGraph, anchorId);
+    } catch (e) {
+      console.warn('Graph collision cleanup skipped:', e);
+    }
+
+    state.layoutExtent = layoutExtent(positions);
+    applySizeScale(view.nodes.length);
+    state.anchorId = anchorId;
+    state.view = view;
+    state.maxNodes = maxNodes;
+    clearHighlight();
+    updateChrome();
+    // Framing, in two cases:
+    //
+    //   FITS      The whole view is legible on this screen, so frame the whole
+    //             view -- centred on its bounding box, not on the anchor. The
+    //             relaxed layout is an asymmetric cloud, so centring on the
+    //             anchor clipped whatever was furthest from it.
+    //   ZOOMED IN Fitting would push nodes into each other, so show a region at
+    //             a usable scale. Now the anchor IS the right thing to centre on:
+    //             it is what the visitor came for.
+    const ratio = framedRatio();
+    if (animate) {
+      flyTo(anchorId, { animate: true, ratio: Math.min(0.8, ratio) });
+    } else if (ratio >= fitRatio() - 1e-6) {
+      // Centred in the space the chrome leaves free, not in the window: framing
+      // to the window put the top of the drawing under the wordmark.
+      renderer.getCamera().setState({ x: 0.5, y: 0.5 + cameraOffsetY(ratio), ratio, angle: 0 });
+      positionOverlays();
+    } else {
+      flyTo(anchorId, { animate: false, ratio });
+    }
+    return true;
+  }
+
+  // The busiest node among `ids` -- the most useful place to land in a
+  // narrowed graph, whether that narrowing came from a filter or from
+  // jumping into a disconnected group. Shared by setGraph() and the
+  // "Show next group" handler so there is one definition of "busiest".
+  function highestDegreeNode(ids) {
+    let best = null;
+    let bestDegree = -1;
+    ids.forEach(id => {
+      const neighbours = adjacency.get(id);
+      // buildAdjacency stores a Set per node, so this is .size -- reading
+      // .length gave undefined, every comparison was false, and no anchor was
+      // ever chosen, so a filtered graph silently did nothing.
+      const degree = neighbours ? neighbours.size : 0;
+      if (degree > bestDegree) { best = id; bestDegree = degree; }
+    });
+    return best;
+  }
+
+  // A stable identity for a component that does not depend on traversal
+  // order -- the same disconnected group produces the same key every time
+  // it is recomputed, so "already shown this filter" can be tracked by key
+  // rather than by object identity.
+  function componentKey(ids) {
+    return ids.length ? ids.slice().sort()[0] : '';
+  }
+
+  function updateChrome() {
+    const view = state.view;
+    const anchor = masterById.get(state.anchorId);
+    const kindWord = anchor && anchor.type === 'band' ? 'band' : 'musician';
+    contextEl.innerHTML = `Centered on <strong>${escapeHtml(state.anchorId)}</strong> — ` +
+      `${view.nodes.length} of ${master.nodes.length} nodes in view, ` +
+      `${state.maxHops} degrees out from this ${kindWord}.`;
+
+    const remaining = view.frontier.length;
+    frontierEl.textContent = remaining
+      ? `${remaining} connected ${remaining === 1 ? 'node' : 'nodes'} just beyond this view`
+      : 'Every connection in this region is on screen';
+    // Disabled rather than hidden: a shortcut row that changes length as you
+    // explore makes the others move under the pointer.
+    expandBtn.disabled = !remaining;
+    expandBtn.setAttribute('aria-disabled', String(!remaining));
+
+    // "Expand" only ever finds more of the anchor's own component. A filtered
+    // scene can leave other bands with no shared members with it at all --
+    // invisible forever, no matter how far this expands -- so that has to be
+    // said explicitly rather than left for "frontier: none" to imply falsely
+    // that the view is complete.
+    const currentComponent = components.find(ids => ids.includes(state.anchorId));
+    const currentKey = currentComponent ? componentKey(currentComponent) : null;
+    if (currentKey) state.visitedComponentKeys.add(currentKey);
+    let otherComponents = currentKey ? components.filter(ids => componentKey(ids) !== currentKey) : [];
+    if (otherComponents.length) {
+      let unvisited = otherComponents.filter(ids => !state.visitedComponentKeys.has(componentKey(ids)));
+      if (!unvisited.length) {
+        // Toured every other group already -- start the loop over rather than
+        // going quiet once the tour is done.
+        state.visitedComponentKeys = new Set([currentKey]);
+        unvisited = otherComponents;
+      }
+      // Randomized, not largest-first: every tap is a surprise jump to another
+      // corner of the universe. The visited-component tracking above still
+      // tours each group exactly once per loop, so nothing repeats until the
+      // full tour is done.
+      const nextGroup = unvisited[Math.floor(Math.random() * unvisited.length)];
+      state.nextGroupAnchor = highestDegreeNode(nextGroup);
+
+      const otherNodeCount = otherComponents.reduce((sum, ids) => sum + ids.length, 0);
+      const otherGroupCount = otherComponents.length;
+      otherGroupsTextEl.textContent =
+        `${otherNodeCount} more ${otherNodeCount === 1 ? 'node' : 'nodes'} in ` +
+        `${otherGroupCount} separate ${otherGroupCount === 1 ? 'group' : 'groups'} — ` +
+        `no shared members with what's on screen.`;
+      otherGroupsBtn.textContent = otherGroupCount === 1 ? 'Show that group' : 'Show next group';
+      otherGroupsEl.hidden = false;
+    } else {
+      state.nextGroupAnchor = null;
+      otherGroupsEl.hidden = true;
+    }
+
+    if (homeStarId) {
+      homeLabelEl.textContent =
+        homeStarId === state.anchorId ? `${homeStarId} — you are here` : homeStarId;
+    }
+
+    // His introduction while the view is centred on him, the generic explainer
+    // once the visitor has gone somewhere of their own choosing. Keyed on the
+    // anchor rather than on "first visit" so it also comes back with Reset,
+    // which is the other way to end up on his node.
+    if (hintEl) {
+      const onHomeStar = Boolean(homeStarId) && homeStarId === state.anchorId;
+      hintEl.innerHTML = onHomeStar ? introCopy(homeStarId) : EXPLORE_COPY;
+      // The class is what lets the phone keep the introduction and drop the
+      // generic commentary. Both live in this one element, so without a marker
+      // CSS cannot tell "Hey, I'm Aaron" from "You are viewing one region of a
+      // much larger music universe" -- and hiding the element outright would
+      // take the introduction with it.
+      hintEl.classList.toggle('sigma-hint--intro', onHomeStar);
+    }
+    positionOverlays();
+
+    stage.dispatchEvent(new CustomEvent('rbft:sigma-view', {
+      bubbles: true,
+      detail: { anchorId: state.anchorId, nodes: state.view.nodes.length },
+    }));
+    // NOT syncAddressBar() -- see below. The address bar is written once, for the
+    // view the visitor opened with, and then left alone: a refresh should return
+    // you to where you came in, not to the last node you happened to click.
+    // Share builds its link from the live view instead (see shareableUrl).
+    // The footer's text just changed, and a longer context line makes it taller.
+    // That moves the zone labels are measured against, so the blocking has to be
+    // recomputed here as well as per frame -- Sigma does not draw a frame when
+    // only the DOM chrome moved, so waiting for afterRender left a label sitting
+    // across the footer with nothing to correct it.
+    updateLabelBlocking();
+
+    // Search suggestions, in alphabetical order.
+    //
+    // The list used to be ordered by relevance -- the frontier first, then an
+    // arbitrary slice of the corpus -- which reads as random the moment someone
+    // clicks the empty field and just looks at what is on offer. Our own
+    // dropdown substring-filters as you type, so relevance ordering buys
+    // nothing once there is a query, and alphabetical is what a person scanning
+    // a list expects. Every band is offered (not a 200-node slice), plus the
+    // current frontier, so the natural next steps are always present.
+    //
+    // Musicians are deliberately not listed: 2,700 names would bury the bands,
+    // and typing any musician's name still resolves through resolveAnchor.
+    const suggestions = new Set([...view.frontier.slice(0, 40), ...bandNames]);
+    // Frontier entries are node IDS, so a suffixed musician id would be
+    // offered verbatim as a suggestion. Names are what a person types.
+    // The anchor is always included: with 6,245 bands and an 800-slot
+    // alphabetical slice, "Weezer" (W) would otherwise never appear.
+    const anchorName = displayNameForId(state.anchorId);
+    const sorted = Array.from(new Set(Array.from(suggestions).map(displayNameForId)))
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }))
+      .slice(0, MAX_SUGGESTIONS);
+    if (anchorName && !sorted.includes(anchorName)) sorted.push(anchorName);
+    // The default offering, shown when the field is focused empty. Stored so
+    // the input handler can restore it when the query is cleared.
+    defaultSuggestions = sorted;
+  }
+
+  /**
+   * Keeps the address bar pointing at the current view.
+   *
+   * Three things depend on it: copying the URL out of the bar, reloading without
+   * losing your place, and Share -- which reads the query string to build the
+   * link it hands to someone else. replaceState rather than pushState, so
+   * exploring does not bury the visitor's previous page under a hundred history
+   * entries; travel is not navigation.
+   */
+  // Called ONCE, after the opening view is drawn, to canonicalise the link the
+  // visitor arrived on -- ?band= / ?member= / ?node= / ?person= all collapse to a
+  // single ?anchor=. It is deliberately not called again: travelling used to
+  // rewrite the URL, which made a refresh reopen the last node clicked and left
+  // no way back to the start short of pressing Reset. Aaron is the opening view
+  // again, and the ringed star is his alone.
+  function syncAddressBar() {
+    if (!win || !win.history || typeof win.history.replaceState !== 'function') return;
+    try {
+      const url = new URL(win.location.href);
+      // One canonical parameter for the anchor. The other accepted spellings
+      // (?band=, ?member=, ?node=, ?person=) are inbound-only, and are cleared
+      // so a stale one cannot contradict the view being shown.
+      const INBOUND_ANCHOR_KEYS = ['band', 'member', 'node', 'person', 'anchor'];
+      // Only a visitor who arrived on a link that named a node gets a canonical
+      // ?anchor= written back. A plain visit to / stays / : Aaron is the opening
+      // view because he is the home star, not because the visitor asked for him,
+      // and stamping his name into the address bar made the site's own front
+      // door look like a deep link to one musician (and got copied around as
+      // one). Shared links such as /?anchor=KISS are still canonicalised and
+      // preserved, so Share, reload-in-place and the previews keep working.
+      const arrivedAnchored = INBOUND_ANCHOR_KEYS.some(key => url.searchParams.has(key));
+      ['band', 'member', 'node', 'person'].forEach(key => url.searchParams.delete(key));
+      if (arrivedAnchored) {
+        url.searchParams.set('anchor', state.anchorId);
+      } else {
+        url.searchParams.delete('anchor');
+      }
+      win.history.replaceState(win.history.state, '', url);
+    } catch (error) {
+      // A malformed or opaque location is not worth breaking exploration over.
+    }
+  }
+
+  // -- camera ---------------------------------------------------------------
+
+  // "Warp": a single animated camera move to the target. This is the RPG-ish
+  // travel feel, achieved with 2D camera state only.
+  function flyTo(id, { animate = true, ratio = null } = {}) {
+    if (!viewGraph.hasNode(id)) return;
+    const camera = renderer.getCamera();
+    // Sigma normalizes graph coordinates into its own framed space, so a
+    // node's display data is already in camera coordinates: centering on it
+    // is just copying x/y across. Refresh first so a node added moments ago
+    // has display data to read.
+    renderer.refresh();
+    const display = renderer.getNodeDisplayData(id);
+    if (!display) return;
+    const nextRatio = ratio || camera.getState().ratio || 1;
+    const next = {
+      x: display.x,
+      // Same shift: centring on a node means centring it in the free band, not
+      // behind the wordmark.
+      y: display.y + cameraOffsetY(nextRatio),
+      ratio: nextRatio,
+      angle: 0,
+    };
+    if (animate && typeof camera.animate === 'function') {
+      camera.animate(next, { duration: 520 }, positionOverlays);
+    } else {
+      camera.setState(next);
+    }
+    positionOverlays();
+  }
+
+  // Keeps the two DOM overlays glued to their WebGL nodes. Called from
+  // afterRender, so it runs with the camera in its final state for the frame.
+  function positionOverlays() {
+    const ratio = renderer.getCamera().getState().ratio || 1;
+    const place = (el, id, scale) => {
+      if (!id || !viewGraph.hasNode(id)) {
+        el.hidden = true;
+        return null;
+      }
+      const point = renderer.graphToViewport({
+        x: viewGraph.getNodeAttribute(id, 'x'),
+        y: viewGraph.getNodeAttribute(id, 'y'),
+      });
+      el.hidden = false;
+      el.style.left = `${point.x}px`;
+      el.style.top = `${point.y}px`;
+      el.style.transform = `translate(-50%,-50%) scale(${scale.toFixed(3)})`;
+      return point;
+    };
+
+    /**
+     * Puts a label just outside the overlay it names, in unscaled screen space.
+     *
+     * GAP is measured from the overlay's drawn edge rather than from its centre,
+     * so the name sits the same short distance from the star whether the camera
+     * is zoomed in on a phone or framing the whole neighbourhood.
+     */
+    const placeLabel = (labelEl, point, overlayEl, scale, above) => {
+      if (!point || !labelEl.textContent) {
+        labelEl.hidden = true;
+        return;
+      }
+      const GAP = 7;
+      const radius = (overlayEl.offsetHeight * scale) / 2;
+      labelEl.hidden = false;
+      labelEl.style.left = `${point.x}px`;
+      labelEl.style.top = above
+        ? `${point.y - radius - GAP - labelEl.offsetHeight}px`
+        : `${point.y + radius + GAP}px`;
+    };
+
+    const zoomScale = Math.max(0.55, Math.min(1.9, 1 / ratio));
+    const homeScale = zoomScale * HOME_STAR_STYLE.sizeMultiplier * 0.5;
+    const homePoint = place(homeStarEl, homeStarId, homeScale);
+    // The ring marks a node the visitor CLICKED, not merely the node the view
+    // happens to be centred on.
+    //
+    // Anchored to state.anchorId it appeared without anyone asking: on a shared
+    // link (the way most visitors arrive), after a search, and after a filter
+    // displaced the anchor. That put two ringed, glowing objects on screen in the
+    // same visual language -- Aaron's Saturn star and this -- both saying "look
+    // here", and neither of them clicked. On page load Aaron should be the only
+    // node wearing the rings.
+    //
+    // state.selection is the right signal because it is set ONLY by
+    // highlightFrom, which runs when a node is clicked, and cleared by
+    // clearHighlight -- which every non-click path already calls: first paint,
+    // explore/search, a filter change, Reset, and a click on empty space.
+    const clickedId = state.selection ? state.selection.id : null;
+    const focusPoint = place(
+      focusRingEl,
+      clickedId && clickedId !== homeStarId ? clickedId : null,
+      zoomScale
+    );
+
+    // Aaron is often one hop from whatever a visitor searched for, which put his
+    // name and the focus label on top of each other. Flip his above the star
+    // when the two overlays are close.
+    const crowded =
+      !!homePoint &&
+      !!focusPoint &&
+      Math.hypot(homePoint.x - focusPoint.x, homePoint.y - focusPoint.y) < 120;
+    // Only the home star is labelled. The focus ring used to carry the anchor's
+    // name too, which printed it twice -- Sigma already draws that node's label,
+    // and the footer says "Centered on ..." as well.
+    placeLabel(homeLabelEl, homePoint, homeStarEl, homeScale, crowded);
+  }
+
+  // One canvas context, reused, for measuring label widths.
+  const labelMetrics = doc.createElement('canvas').getContext('2d');
+
+  /**
+   * Works out which node labels would be drawn across the chrome, and asks for a
+   * refresh when that set changes.
+   *
+   * Measured for EVERY labelled node rather than for the labels Sigma currently
+   * displays: suppressing a label removes it from the displayed set, so reading
+   * that set would make the answer depend on the previous frame and oscillate.
+   * Geometry does not move when a label is hidden, so this is stable.
+   *
+   * Boxes are reconstructed the way Sigma draws them: x + size + 3, baseline at
+   * y + labelSize/3.
+   */
+  function updateLabelBlocking() {
+    const zones = [];
+    // Relative to the CANVAS, not the stage. graphToViewport returns coordinates
+    // in the renderer's own container, and the stage wrapper sits ~280px down the
+    // page inside .graph-stage -- converting the chrome into stage space shifted
+    // every zone by that much, so the zones sat where nothing was drawn (one had
+    // a negative top) and labels printed across the footer unchallenged.
+    const originBox = canvasHost.getBoundingClientRect();
+    const addZone = el => {
+      if (!el || el.hidden) return;
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      zones.push({
+        left: r.left - originBox.left,
+        right: r.right - originBox.left,
+        top: r.top - originBox.top,
+        bottom: r.bottom - originBox.top,
+      });
+    };
+    addZone(heroEl);
+    addZone(footerEl);
+    addZone(homeLabelEl);
+    // The node card is docked over the constellation while it is open, so it is
+    // chrome for as long as it is up. Without this a name could hide underneath
+    // it and look culled for no reason -- the same fault as the hero and footer,
+    // just with a box that comes and goes.
+    if (nodeCardEl && !nodeCardEl.hidden && nodeCardEl.classList.contains('is-open')) {
+      addZone(nodeCardEl);
+    }
+
+    const size = renderer.getSetting('labelSize') || 12;
+    labelMetrics.font = `${renderer.getSetting('labelWeight') || 'normal'} ${size}px `
+      + `${renderer.getSetting('labelFont') || 'sans-serif'}`;
+
+    const hits = (a, b) =>
+      Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
+      Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+
+    const candidates = [];
+    viewGraph.forEachNode((id, attrs) => {
+      if (!attrs.label) return;
+      const display = renderer.getNodeDisplayData(id);
+      if (!display) return;
+      const point = renderer.graphToViewport({ x: attrs.x, y: attrs.y });
+      const left = point.x + display.size + 3;
+      candidates.push({
+        id,
+        size: display.size,
+        box: {
+          left,
+          right: left + labelMetrics.measureText(attrs.label).width,
+          top: point.y + size / 3 - size * 0.78,
+          bottom: point.y + size / 3 + size * 0.24,
+        },
+      });
+    });
+
+    // Bigger nodes keep their names when two would collide -- bands outrank
+    // touring members -- and the id breaks ties so the same view always resolves
+    // the same way rather than flickering between two equally good answers.
+    candidates.sort((a, b) => b.size - a.size || (a.id < b.id ? -1 : 1));
+
+    const blocked = new Set();
+    const placed = [];
+    candidates.forEach(candidate => {
+      // Chrome first: no label may print across the wordmark, field or footer.
+      if (zones.some(zone => hits(candidate.box, zone))) {
+        blocked.add(candidate.id);
+        return;
+      }
+      // A selected node always keeps its name: it is the thing being read.
+      const selected = state.selection && state.selection.id === candidate.id;
+      if (!selected && placed.some(box => hits(candidate.box, box))) {
+        blocked.add(candidate.id);
+        return;
+      }
+      placed.push(candidate.box);
+    });
+
+    const changed =
+      blocked.size !== state.labelBlocked.size ||
+      [...blocked].some(id => !state.labelBlocked.has(id));
+    if (!changed) return;
+    state.labelBlocked = blocked;
+    // refresh() re-runs the reducers, which is what applies the suppression.
+    // skipIndexation because nothing about the graph's structure changed.
+    renderer.refresh({ skipIndexation: true });
+  }
+
+  function updateParallax() {
+    const camera = renderer.getCamera().getState();
+    const drift = 40;
+    starfield.style.transform =
+      `translate(${(-camera.x * drift).toFixed(1)}px, ${(-camera.y * drift).toFixed(1)}px)`;
+  }
+
+  // -- selection / highlighting --------------------------------------------
+
+  function clearHighlight() {
+    state.selection = null;
+    state.highlightNodes = new Set();
+    state.highlightEdges = new Set();
+    state.highlightColor = null;
+    renderer.refresh();
+  }
+
+  function highlightFrom(id) {
+    if (!viewGraph.hasNode(id)) return;
+    const entityType = viewGraph.getNodeAttribute(id, 'entityType');
+    // Band click -> its members in electric blue.
+    // Member click -> their bands in gold. Same contract as the SVG renderer.
+    state.highlightColor = entityType === 'band' ? BAND_HIGHLIGHT_COLOR : MEMBER_HIGHLIGHT_COLOR;
+    state.selection = { id, type: entityType };
+    state.highlightNodes = new Set([id]);
+    state.highlightEdges = new Set();
+    viewGraph.forEachNeighbor(id, neighbor => state.highlightNodes.add(neighbor));
+    viewGraph.forEachEdge(id, edge => state.highlightEdges.add(edge));
+    renderer.refresh();
+    // Let the page's existing card/panel code react without this module
+    // reaching into it.
+    stage.dispatchEvent(
+      new CustomEvent('rbft:sigma-select', { bubbles: true, detail: { id, type: entityType } })
+    );
+  }
+
+  function exploreFor(rawQuery) {
+    const query = normalizeAnchorKey(rawQuery);
+    if (!query) return { ok: false, reason: 'empty' };
+    const exact = master.nodes.find(node => normalizeAnchorKey(node.id) === query);
+    const partial = exact || master.nodes.find(node => normalizeAnchorKey(node.id).includes(query));
+    if (!partial) {
+      // Terse on purpose: the "No Rawk Found" panel makes the offer to add the
+      // band, and two copies of the same sentence on one screen read as a fault.
+      contextEl.innerHTML =
+        `No match for <strong>${escapeHtml(rawQuery)}</strong> in the tree yet.`;
+      stage.dispatchEvent(
+        new CustomEvent('rbft:sigma-search-miss', { bubbles: true, detail: { query: rawQuery } })
       );
-      assert.ok(face, `expected a @font-face for ${family} ${weight}`);
-      assert.match(face, /url\('\/vendor\/fonts\/[a-z]+-\d+\.woff2'\)/, `${family} ${weight} must load locally`);
-      assert.match(face, /font-display: swap/, `${family} ${weight} should not block first paint`);
+      return { ok: false, reason: 'not-found' };
+    }
+    state.anchorSource = 'requested';
+    // A new anchor starts from the standard horizon: expansions belong to the
+    // view they were performed in, not to every later destination.
+    state.maxHops = initialHopsForAnchor(partial.id);
+    renderNeighborhood({ anchorId: partial.id, maxNodes: NEIGHBORHOOD_BUDGET.MAX_NODES });
+    // Searching is navigation: the open card described the view we just left,
+    // so close it first, then open the card for the new anchor -- the same
+    // close-then-highlight ordering travelTo() uses for node clicks. Without
+    // this the old band's card stayed open over the new band's view.
+    stage.dispatchEvent(
+      new CustomEvent('rbft:sigma-travel', { bubbles: true, detail: { anchorId: partial.id } })
+    );
+    highlightFrom(partial.id);
+    return { ok: true, anchorId: partial.id };
+  }
+
+  function expand() {
+    // The deliberate "explore beyond this view" step. Raising the node budget
+    // alone does nothing once a view has exhausted its hop radius, so this
+    // pushes the horizon out one degree AND raises the budget -- both capped,
+    // so expanding stays a series of readable steps rather than an escape
+    // hatch to the whole 50K corpus.
+    const nextHops = Math.min(state.maxHops + 1, NEIGHBORHOOD_BUDGET.EXPAND_MAX_HOPS);
+    const nextNodes = Math.min(
+      state.maxNodes + NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
+      NEIGHBORHOOD_BUDGET.EXPAND_MAX_NODES
+    );
+    if (nextHops === state.maxHops && nextNodes === state.maxNodes) return;
+    state.maxHops = nextHops;
+    renderNeighborhood({ anchorId: state.anchorId, maxNodes: nextNodes, animate: false });
+  }
+
+  // -- wiring ---------------------------------------------------------------
+
+  /**
+   * Travels to a node: it becomes the centre of a fresh neighbourhood, and stays
+   * highlighted so the connections that brought you there still read.
+   *
+   * This is what makes the graph feel like a place rather than a picture. Mike
+   * McCready sits 6 degrees from Aaron and Pearl Jam sits 7, so reaching Pearl
+   * Jam by expanding would mean pulling in hundreds of nodes to show one band;
+   * travelling to Mike puts it one hop away. Clicking is how you cross the
+   * galaxy, one star at a time.
+   */
+  function travelTo(node) {
+    if (!node) return;
+    // Clicking the current centre is not travel -- just re-assert the highlight,
+    // so a second click on the anchor does not re-render the same view.
+    if (node === state.anchorId) {
+      highlightFrom(node);
+      return;
+    }
+    state.anchorSource = 'requested';
+    state.maxHops = initialHopsForAnchor(node);
+    const moved = renderNeighborhood({
+      anchorId: node,
+      maxNodes: NEIGHBORHOOD_BUDGET.MAX_NODES,
+    });
+    // renderNeighborhood clears the highlight as part of drawing a new view;
+    // re-applying it after the fact is what keeps the clicked node lit on
+    // arrival, which is the difference between travelling and being teleported.
+    // Travel is announced BEFORE the highlight, and the order is the whole bug:
+    // the page closes any open card on travel, because the view that card
+    // described is gone. Highlighting dispatches rbft:sigma-select, which opens
+    // the card for the clicked node -- so announcing travel afterwards closed the
+    // card that had just been opened, and only a SECOND click (which is not
+    // travel, so it only re-highlights) could make it stick. Stale card closes
+    // first, new card opens second.
+    stage.dispatchEvent(
+      new CustomEvent('rbft:sigma-travel', { bubbles: true, detail: { anchorId: node } })
+    );
+    if (moved !== false) highlightFrom(node);
+  }
+
+  // Draggable nodes v3: press-drag moves a single node. Neighbors stay put,
+  // edges stretch. Custom hit detection with forgiving grab radius.
+  // <10px movement = tap (navigates); >=10px = drag (moves, suppresses nav).
+  // Positions are session-only: navigating resets the layout.
+  const DRAG_THRESHOLD_PX = 10;
+  const GRAB_RADIUS_TOUCH_PX = 25; // fat fingers need forgiveness
+  const GRAB_RADIUS_MOUSE_PX = 10; // hover already expands nodes on desktop
+  let dragState = null;
+  let suppressNextClick = false;
+
+  function pointerToGraph(clientX, clientY) {
+    try {
+      const rect = canvasHost.getBoundingClientRect();
+      return renderer.viewportToGraph({
+        x: clientX - rect.left,
+        y: clientY - rect.top,
+      });
+    } catch (err) { return null; }
+  }
+
+  function findNodeNear(graphX, graphY, pointerType) {
+    // Nearest node within grab radius (screen space converted to graph).
+    // Touch gets a forgiving radius; mouse is precise (hover expands nodes).
+    const grabPx = pointerType === 'touch' ? GRAB_RADIUS_TOUCH_PX : GRAB_RADIUS_MOUSE_PX;
+    let ratio = 1;
+    try { ratio = renderer.getCamera().ratio || 1; } catch (err) {}
+    const threshold = grabPx * ratio;
+    let closest = null;
+    let closestDist = threshold;
+    try {
+      viewGraph.forEachNode((nodeId) => {
+        let x, y;
+        try {
+          x = viewGraph.getNodeAttribute(nodeId, 'x');
+          y = viewGraph.getNodeAttribute(nodeId, 'y');
+        } catch (err) { return; }
+        if (x == null || y == null) return;
+        const dist = Math.hypot(x - graphX, y - graphY);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = nodeId;
+        }
+      });
+    } catch (err) {}
+    return closest;
+  }
+
+  // Single-node drag: only the grabbed node moves. Neighbors stay put,
+  // edges stretch to show the connections are still there.
+
+  function startDrag(nodeId, clientX, clientY) {
+    const graphPos = pointerToGraph(clientX, clientY);
+    if (!graphPos) return false;
+
+    dragState = {
+      nodeId,
+      startClient: { x: clientX, y: clientY },
+      lastGraph: graphPos,
+      dragged: false,
+    };
+
+    try { renderer.getCamera().disable(); } catch (err) {}
+    return true;
+  }
+
+  function moveDrag(clientX, clientY) {
+    if (!dragState) return;
+
+    const dx = clientX - dragState.startClient.x;
+    const dy = clientY - dragState.startClient.y;
+    if (!dragState.dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+    dragState.dragged = true;
+
+    const graphPos = pointerToGraph(clientX, clientY);
+    if (!graphPos) return;
+
+    const deltaX = graphPos.x - dragState.lastGraph.x;
+    const deltaY = graphPos.y - dragState.lastGraph.y;
+    dragState.lastGraph = graphPos;
+
+    try {
+      const id = dragState.nodeId;
+      const curX = viewGraph.getNodeAttribute(id, 'x');
+      const curY = viewGraph.getNodeAttribute(id, 'y');
+      if (curX != null && curY != null) {
+        viewGraph.setNodeAttribute(id, 'x', curX + deltaX);
+        viewGraph.setNodeAttribute(id, 'y', curY + deltaY);
+      }
+      renderer.refresh();
+    } catch (err) { /* ignore transient errors during drag */ }
+  }
+
+  function endDrag() {
+    if (!dragState) return;
+    try { renderer.getCamera().enable(); } catch (err) {}
+    if (dragState.dragged) {
+      suppressNextClick = true;
+      setTimeout(() => { suppressNextClick = false; }, 100);
+    } else {
+      // Tap (not a drag): travel to the tapped node directly. This bypasses
+      // Sigma's clickNode event, which was unreliable with the custom pointer
+      // handling. findNodeNear already did the hit detection on pointerdown.
+      const tappedId = dragState.nodeId;
+      dragState = null;
+      if (tappedId) travelTo(tappedId);
+      return;
+    }
+    dragState = null;
+  }
+
+  // Pointer events on the canvas host: unified mouse/touch handling.
+  canvasHost.addEventListener('pointerdown', (e) => {
+    if (dragState) return; // already dragging
+    // Only left button / touch contact.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+    const graphPos = pointerToGraph(e.clientX, e.clientY);
+    if (!graphPos) return;
+
+    const nodeId = findNodeNear(graphPos.x, graphPos.y, e.pointerType);
+    if (!nodeId) return; // pressed empty space: let it pan normally
+
+    if (startDrag(nodeId, e.clientX, e.clientY)) {
+      // No preventDefault() here: it would block the compatibility mouse events
+      // Sigma uses for clickNode detection, breaking tap-to-travel. Drag
+      // prevention happens in pointermove once movement exceeds the threshold.
+      try { canvasHost.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+  });
+
+  canvasHost.addEventListener('pointermove', (e) => {
+    if (!dragState) return;
+    e.preventDefault();
+    moveDrag(e.clientX, e.clientY);
+  });
+
+  canvasHost.addEventListener('pointerup', (e) => {
+    if (!dragState) return;
+    try { canvasHost.releasePointerCapture(e.pointerId); } catch (err) {}
+    endDrag();
+  });
+
+  canvasHost.addEventListener('pointercancel', () => {
+    endDrag();
+  });
+
+  renderer.on('clickNode', ({ node }) => {
+    if (suppressNextClick) return;
+    travelTo(node);
+  });
+  // Kept so a double click is not read as two separate journeys.
+  renderer.on('doubleClickNode', ({ node }) => {
+    if (suppressNextClick) return;
+    travelTo(node);
+  });
+  renderer.on('clickStage', () => clearHighlight());
+  // afterRender fires once per painted frame, with the camera in its final
+  // state for that frame -- the only place the DOM home-star overlay can be
+  // kept exactly on top of its WebGL node during pans, zooms and animated
+  // camera flights.
+  renderer.on('afterRender', () => {
+    positionOverlays();
+    updateLabelBlocking();
+    updateParallax();
+  });
+
+  renderer.on('resize', () => {
+    applySizeScale();
+    // The pill rewraps on a narrow window, which moves the toggle, and the
+    // menu is anchored to the toggle -- so re-anchor on resize.
+    positionFilters();
+    positionActionsRow();
+  });
+
+  // Any reflow of the chrome moves the zones labels are measured against.
+  const chromeObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(() => updateLabelBlocking())
+    : null;
+  if (chromeObserver) {
+    [heroEl, footerEl, homeLabelEl, nodeCardEl].forEach(el => { if (el) chromeObserver.observe(el); });
+  }
+
+  // Closing the card is a class change, not a resize, so the size observer above
+  // can miss it and leave a zone standing where there is no longer a card.
+  const cardStateObserver = nodeCardEl && typeof MutationObserver === 'function'
+    ? new MutationObserver(() => updateLabelBlocking())
+    : null;
+  if (cardStateObserver) {
+    cardStateObserver.observe(nodeCardEl, { attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
+  }
+
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    hideSuggestions();
+    exploreFor(input.value);
+  });
+
+  /**
+   * Renders the custom suggestion dropdown. It replaces the native datalist,
+   * whose popup the browser draws over the phone keyboard -- this one is
+   * capped at 38vh and scrolls internally (see the .sigma-suggest CSS).
+   */
+  function renderSuggestions(names) {
+    suggestNames = names;
+    suggestActive = -1;
+    input.removeAttribute('aria-activedescendant');
+    if (!names.length) {
+      hideSuggestions();
+      return;
+    }
+    suggestBox.innerHTML = names
+      .map((name, i) =>
+        `<button type="button" role="option" id="sigma-suggest-${i}" ` +
+        `aria-selected="false" class="sigma-suggest__item" data-idx="${i}">` +
+        `${escapeHtml(name)}</button>`)
+      .join('');
+    suggestBox.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+  }
+
+  function hideSuggestions() {
+    suggestBox.hidden = true;
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+    suggestActive = -1;
+  }
+
+  function syncSuggestActive() {
+    const rows = suggestBox.querySelectorAll('.sigma-suggest__item');
+    rows.forEach((row, i) => {
+      const on = i === suggestActive;
+      row.setAttribute('aria-selected', String(on));
+      if (on) {
+        input.setAttribute('aria-activedescendant', row.id);
+        row.scrollIntoView({ block: 'nearest' });
+      }
+    });
+    if (suggestActive < 0) input.removeAttribute('aria-activedescendant');
+  }
+
+  function pickSuggestion(name) {
+    if (!name) return;
+    input.value = name;
+    hideSuggestions();
+    input.blur();
+    exploreFor(name);
+  }
+
+  // A tap on a row picks it. mousedown + preventDefault keeps focus in the
+  // field so the blur handler below cannot hide the box before the tap lands.
+  suggestBox.addEventListener('mousedown', event => {
+    const btn = event.target.closest('[data-idx]');
+    if (!btn) return;
+    event.preventDefault();
+    pickSuggestion(suggestNames[Number(btn.dataset.idx)]);
+  });
+
+  // Tapping a suggestion used to only fill the field -- the browser never
+  // submitted. If the field's value is a complete suggestion, treat the pick
+  // as the search itself: go there immediately instead of making the visitor
+  // find the magnifier. Two ways to go: tap a suggestion, or tap blue.
+  input.addEventListener('focus', () => {
+    if (!input.value.trim()) renderSuggestions(defaultSuggestions);
+  });
+  input.addEventListener('input', () => {
+    const value = input.value.trim();
+    if (!value) {
+      renderSuggestions(defaultSuggestions);
+      return;
+    }
+    if (suggestNames.includes(value)) {
+      pickSuggestion(value);
+      return;
+    }
+    // Dropdown etiquette: below three characters the query matches too much
+    // of the corpus to offer anything useful, so the list stays hidden until
+    // the visitor has typed enough to mean it.
+    if (value.length < MIN_SUGGEST_CHARS) {
+      hideSuggestions();
+      return;
+    }
+    // Filter-as-you-type: the suggestion list only holds 800 of 6,245 bands,
+    // so a static alphabetical slice hides N-Z entirely. Rebuild the options
+    // from the query so "weezer" always offers Weezer, "nirv" offers Nirvana.
+    // Ranked, not just alphabetical: prefix matches read as the answer, and
+    // the list is capped because even a three-letter query like "the" matches
+    // a huge slice of the universe.
+    const query = value.toLowerCase();
+    const starts = [];
+    const contains = [];
+    for (const name of allBandDisplayNames) {
+      const lower = name.toLowerCase();
+      if (lower.startsWith(query)) starts.push(name);
+      else if (lower.includes(query)) contains.push(name);
+    }
+    const alpha = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+    renderSuggestions([...starts.sort(alpha), ...contains.sort(alpha)]
+      .slice(0, MAX_TYPEAHEAD_SUGGESTIONS));
+  });
+  // Arrow keys walk the rows, Enter picks the highlighted one (a plain Enter
+  // with nothing highlighted still submits the form), Escape dismisses.
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      hideSuggestions();
+      return;
+    }
+    if (suggestBox.hidden || !suggestNames.length) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const dir = event.key === 'ArrowDown' ? 1 : -1;
+      suggestActive = (suggestActive + dir + suggestNames.length) % suggestNames.length;
+      syncSuggestActive();
+    } else if (event.key === 'Enter' && suggestActive >= 0) {
+      event.preventDefault();
+      pickSuggestion(suggestNames[suggestActive]);
+    }
+  });
+  // Tapping anywhere else dismisses. The small delay is belt-and-braces: row
+  // taps are already handled on mousedown above, but a slow tap should never
+  // strand an open box over the constellation.
+  input.addEventListener('blur', () => {
+    setTimeout(hideSuggestions, 120);
+  });
+  // -- shortcut row ---------------------------------------------------------
+
+  /**
+   * Returns the constellation to its opening state: the default anchor at the
+   * centre, budgets back to the opening view. "Reset" on its own is ambiguous,
+   * which is exactly why the pill carries a sentence.
+   */
+  function goHome() {
+    state.maxHops = initialHopsForAnchor(homeStarId);
+    state.anchorSource = 'default';
+    clearHighlight();
+    // The view they OPENED with, which is not necessarily the default anchor.
+    // Most visitors arrive on a link shared by another user, so for them
+    // "start over" means the band in that link -- sending them to the project's
+    // default anchor instead would drop them somewhere they have never been.
+    const home = state.openingAnchorId || homeStarId || NEIGHBORHOOD_BUDGET.DEFAULT_ANCHOR;
+    renderNeighborhood({
+      anchorId: home,
+      maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
+      animate: true,
+    });
+    // Resetting is navigation too: retire any open card, since the view it
+    // described is gone. Nothing is selected afterwards, so no new card.
+    stage.dispatchEvent(
+      new CustomEvent('rbft:sigma-travel', { bubbles: true, detail: { anchorId: home } })
+    );
+  }
+
+  /**
+   * Positions the shared popover under a pill, clamped to stay on screen -- the
+   * end pills of a centred row would otherwise push it off the edge.
+   */
+  function showTip(button) {
+    const item = STAGE_ACTIONS.find(entry => entry.key === button.dataset.key);
+    if (!item) return;
+    tip.textContent = item.detail;
+    tip.hidden = false;
+    const stageBox = stage.getBoundingClientRect();
+    const box = button.getBoundingClientRect();
+    const width = tip.offsetWidth;
+    const margin = 10;
+    let left = box.left - stageBox.left + box.width / 2 - width / 2;
+    left = Math.max(margin, Math.min(left, stageBox.width - width - margin));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${box.bottom - stageBox.top + 8}px`;
+    button.setAttribute('aria-expanded', 'true');
+  }
+
+  // Under the Filter pill, clamped inside the stage. Measured after the panel is
+  // visible, because a hidden element has no width to centre.
+  function positionFilters() {
+    const button = actionButtons.get('filter');
+    if (!button || !filterPanel || filterPanel.hidden) return;
+    const stageBox = stage.getBoundingClientRect();
+    const box = button.getBoundingClientRect();
+    const width = filterPanel.offsetWidth;
+    const margin = 10;
+    let left = box.left - stageBox.left + box.width / 2 - width / 2;
+    left = Math.max(margin, Math.min(left, stageBox.width - width - margin));
+    filterPanel.style.left = `${left}px`;
+    filterPanel.style.top = `${box.bottom - stageBox.top + 10}px`;
+  }
+
+  /**
+   * Sits the actions row where its own layout needs it to be. .sigma-actions
+   * is a SIBLING of .sigma-hero, not a child of it (see the CSS comment on
+   * .sigma-actions for why), so it no longer inherits a position from
+   * whatever it would otherwise be laid out inside of -- the (closed, until
+   * now) menu's own trigger. It needs a real measurement: the toggle moves
+   * whenever the header itself is resized.
+   *
+   * One function, not two: there is exactly one place a resize has to
+   * remember to call -- see the 'resize' listener below, and
+   * toggleActionsMenu(), which also calls this right before opening so the
+   * circles are never stale from a scroll or an orientation change since
+   * the last resize.
+   */
+  function positionActionsRow() {
+    const stageBox = stage.getBoundingClientRect();
+    if (!menuToggle) return;
+    const toggleBox = menuToggle.getBoundingClientRect();
+    actionRow.style.top = `${toggleBox.bottom - stageBox.top + 10}px`;
+    actionRow.style.right = `${stageBox.right - toggleBox.right}px`;
+    actionRow.style.left = 'auto';
+  }
+
+  function hideTip() {
+    tip.hidden = true;
+    actionButtons.forEach(button => button.removeAttribute('aria-expanded'));
+  }
+
+  /**
+   * Opens or closes the filter panel, and keeps the pill's state dot honest.
+   */
+  function toggleFilters(force = null) {
+    const open = force === null ? filterPanel.hidden : force;
+    filterPanel.hidden = !open;
+    const pill = actionButtons.get('filter');
+    if (pill) pill.setAttribute('aria-expanded', String(open));
+    if (open) {
+      syncFilterState();
+      positionFilters();
     }
   }
-  // Outfit was four faces nothing referenced, arriving only because of that quirk.
-  assert.doesNotMatch(css, /Outfit/);
-});
 
-test('every declared font file is actually present', () => {
-  // A @font-face pointing at a missing file fails silently -- the browser just uses
-  // the fallback, which is exactly how Boska went unnoticed in the first place.
-  const css = readFileSync(new URL('../vendor/fonts.css', import.meta.url), 'utf8');
-  const referenced = [...css.matchAll(/url\('(\/vendor\/fonts\/[^']+)'\)/g)].map(m => m[1]);
-  assert.equal(referenced.length, 6, 'expected six faces');
-  for (const href of referenced) {
-    const path = new URL('..' + href, import.meta.url);
-    const bytes = readFileSync(path);
-    assert.ok(bytes.length > 1000, `${href} looks too small to be a real font (${bytes.length}B)`);
-    // woff2 files start with the signature 'wOF2'. Guards against a saved error page.
-    assert.equal(bytes.subarray(0, 4).toString('latin1'), 'wOF2', `${href} is not a woff2`);
+  /**
+   * Reflects the page's filter state in the panel and on the pill.
+   *
+   * Read from the page rather than tracked here: the same filters can be changed
+   * from the SVG renderer's own controls, from Reset view, or by a country chip,
+   * and a second copy of that state would drift.
+   */
+  function syncFilterState() {
+    const recentChip = doc.querySelector('.tool-chip[data-action="recent"]');
+    const recentOn = recentChip ? recentChip.getAttribute('aria-pressed') === 'true' : false;
+    const recentBtn = filterPanel.querySelector('[data-filter-action="recent"]');
+    if (recentBtn) {
+      recentBtn.setAttribute('aria-pressed', String(recentOn));
+      // The page disables Recently-added when the data carries no timestamps.
+      recentBtn.disabled = !recentChip || recentChip.disabled;
+    }
+    const scene = doc.querySelector('#scene-filter');
+    const genre = doc.querySelector('#genre-filter');
+    const active =
+      recentOn ||
+      (scene && scene.value && scene.value !== 'all') ||
+      (genre && genre.value && genre.value !== 'all');
+    const pill = actionButtons.get('filter');
+    if (pill) pill.setAttribute('data-active', String(Boolean(active)));
   }
-});
 
-test('the font build records its licence position', () => {
-  // The ITF Free Font License permits self-hosting but prohibits subsetting and
-  // format conversion, which is why the build stores the CDN's own .woff2 rather
-  // than converting the OTF download. Worth keeping written down next to the code.
-  const script = readFileSync(new URL('../scripts/vendor-fonts.mjs', import.meta.url), 'utf8');
-  assert.match(script, /itf-ffl/, 'link the licence that permits this');
-  assert.match(script, /prohibits subsetting and format conversion|PROHIBITS subsetting/i);
-  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-  assert.equal(pkg.scripts['vendor:fonts'], 'node scripts/vendor-fonts.mjs');
-});
+  /**
+   * Opens or closes the actions menu -- the hamburger in the pill, at every
+   * viewport. force:false from the shared dismiss handlers below closes it
+   * wherever it was opened from.
+   */
+  function toggleActionsMenu(force = null) {
+    const open = force === null ? !actionRow.classList.contains('is-open') : force;
+    // Measured fresh right before showing, same reasoning as
+    // positionFilters() being called from toggleFilters(): the toggle's rect
+    // can be stale from a scroll or a device rotation since the last resize.
+    if (open) positionActionsRow();
+    actionRow.classList.toggle('is-open', open);
+    if (menuToggle) menuToggle.setAttribute('aria-expanded', String(open));
+    if (!open) hideTip();
+  }
 
-// --- the share poster --------------------------------------------------------
-//
-// The old export was the constellation and a thin title bar: no wordmark, no search
-// field, no pills, no card, no status lines, and a 10px URL. It also matched the
-// viewport, so a phone produced a tall image that feeds crop.
+  if (menuToggle) {
+    menuToggle.addEventListener('click', event => {
+      // Same stopPropagation reasoning as the action pills below: without it,
+      // the click that opens the sheet also reaches the page's own
+      // outside-click handler and closes something else in the same tick.
+      event.stopPropagation();
+      toggleActionsMenu();
+    });
+  }
 
-test('the poster is a fixed square, not the viewport', () => {
-  assert.match(INDEX_HTML, /const SHARE_SIZE = 1200;/);
-  // 1200x1200 survives Facebook, Instagram and X without cropping.
-  assert.match(INDEX_HTML, /canvas\.width = SHARE_SIZE;\s*\n\s*canvas\.height = SHARE_SIZE;/);
-});
+  filterPanel.addEventListener('click', event => {
+    const button = event.target.closest('[data-filter-action]');
+    if (!button) return;
+    // The page closes its popovers on any outside click; this panel is outside
+    // them, so the press must not travel (same trap as the pills).
+    event.stopPropagation();
+    const action = button.dataset.filterAction;
+    if (action === 'close') return toggleFilters(false);
+    // Recently-added and Clear press the page's own chips, so the behaviour and
+    // the mutual exclusions stay in one place.
+    const selector = action === 'recent'
+      ? '.tool-chip[data-action="recent"]'
+      : '.tool-chip[data-action="clear"]';
+    const chip = doc.querySelector(selector);
+    if (chip) chip.click();
+    syncFilterState();
+  });
+  // A change to either select re-filters through the page's own handler; this
+  // only needs to catch up the pill's dot.
+  filterPanel.addEventListener('change', () => syncFilterState());
 
-test('the poster reads its content from the live page', () => {
-  const poster = INDEX_HTML.slice(
-    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
-    INDEX_HTML.indexOf('async function renderGraphPngBlob'),
-  );
-  assert.ok(poster.length > 0, 'expected the poster function');
-  // Everything the user asked to see in the picture.
-  assert.match(poster, /SIX DEGREES OF ROCK/, 'the wordmark');
-  assert.match(poster, /\.sigma-prompt input/, 'the typed query');
-  assert.match(poster, /\.sigma-action/, 'the pill row');
-  // The lookup itself, not just the field names: replacing the querySelector with
-  // null left every field name in the file below it, so asserting only the names
-  // passed while the card silently stopped being drawn.
-  assert.match(poster, /const card = document\.querySelector\('\.node-card'\);/, 'the card lookup');
-  assert.match(poster, /visibleEl\(card\)/, 'the card is drawn only when it is open');
-  assert.match(poster, /\.node-card__name/, 'the card name');
-  assert.match(poster, /\.node-card__chips/, 'the card chips');
-  assert.match(poster, /'\.sigma-hint', '\.sigma-context', '\.sigma-frontier'/, 'the status lines');
-});
+  /** Runs a pill's action: a Sigma function, or the page's own button. */
+  function runAction(item) {
+    if (item.action === 'expand') return expand();
+    if (item.action === 'home') return goHome();
+    if (item.action === 'filters') return toggleFilters();
+    if (!item.target) return;
+    const target = doc.querySelector(item.target);
+    if (target) target.click();
+  }
 
-test('the signed-in strip is never drawn into a shared picture', () => {
-  // It carries the sharer's name and a Sign out link, which has no business in a
-  // public post.
-  const poster = INDEX_HTML.slice(
-    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
-    INDEX_HTML.indexOf('async function renderGraphPngBlob'),
-  );
-  assert.ok(!poster.includes('header-user'), 'the poster must not read the auth strip');
-  assert.ok(!poster.includes('Sign out'), 'and must not print it');
-});
+  actionButtons.forEach((button, key) => {
+    const item = STAGE_ACTIONS.find(entry => entry.key === key);
+    if (!item) return;
+    // Hover and keyboard focus reveal the explanation; a tap runs the action, so
+    // touch users get the sentence from the pill they are already pressing --
+    // pointerdown shows it, and it stays up briefly after the action fires.
+    button.addEventListener('pointerenter', () => { if (!button.disabled) showTip(button); });
+    button.addEventListener('pointerleave', hideTip);
+    button.addEventListener('focus', () => showTip(button));
+    button.addEventListener('blur', hideTip);
+    button.addEventListener('click', event => {
+      // stopPropagation is load-bearing. The page closes its popovers on any
+      // click outside them; without this, the pill's own click carried on
+      // bubbling to that handler and shut the panel in the same tick it opened,
+      // so Add / Share / Feedback appeared to do nothing at all.
+      event.stopPropagation();
+      hideTip();
+      runAction(item);
+      // A tap on any action closes the menu it was opened from.
+      toggleActionsMenu(false);
+    });
+  });
 
-test('the URL on the poster is legible rather than a footnote', () => {
-  // Facebook and Instagram drop the link when a file is attached, so on a shared
-  // image this text is often the only route back to the graph. It used to be 10px.
-  const poster = INDEX_HTML.slice(
-    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
-    INDEX_HTML.indexOf('async function renderGraphPngBlob'),
-  );
-  const match = poster.match(/const displayUrl[\s\S]{0,400}?fillText\(fitText\(ctx, decodeURIComponent\(displayUrl\)/);
-  assert.ok(match, 'expected the URL to be drawn through fitText');
-  const size = poster.match(/ctx\.font = `600 (\d+)px Satoshi[^`]*`;\s*\n\s*const displayUrl/);
-  assert.ok(size, 'expected an explicit font size for the URL');
-  assert.ok(Number(size[1]) >= 20, `the URL should be at least 20px, found ${size[1]}`);
-});
+  // Jumps to the busiest node of another disconnected group in this filter.
+  // Reuses the exact same anchor-and-BFS render path a node click uses --
+  // rendering every group at once is the bigger change this defers.
+  otherGroupsBtn.addEventListener('click', () => {
+    if (!state.nextGroupAnchor) return;
+    renderNeighborhood({
+      anchorId: state.nextGroupAnchor,
+      maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
+      animate: true,
+    });
+  });
 
-test('everything positional is measured while the capture is re-framed', () => {
-  // This ordering has bitten twice. Measuring the host box after the restore made
-  // drawImage stretch a landscape render into a portrait slot, so every node came out
-  // an oval; measuring the overlay positions after the restore drew the focus ring
-  // around the wrong musician. Both looked like rendering faults and were neither.
-  const helper = INDEX_HTML.slice(
-    INDEX_HTML.indexOf('async function captureSigmaCanvasWithAllLabels'),
-    INDEX_HTML.indexOf('const POSTER_GRAPH_ASPECT') > 0
-      ? INDEX_HTML.indexOf('async function renderSharePosterBlob')
-      : INDEX_HTML.length,
-  );
-  const measured = helper.indexOf('host.getBoundingClientRect()');
-  const overlays = helper.indexOf('graphToViewport');
-  // lastIndexOf, not indexOf: the same restore line also appears in the catch that
-  // handles a refused resize, which sits BEFORE the measurement. Matching that one
-  // made this assertion compare the wrong pair and fail on correct code.
-  const restored = helper.lastIndexOf('host.style.width = previous.width');
-  assert.ok(measured > 0 && overlays > 0 && restored > 0, 'expected all three');
-  assert.ok(measured < restored, 'the host box must be measured before the restore');
-  assert.ok(overlays < restored, 'overlay positions must be computed before the restore');
-  // And the poster must use the precomputed values rather than asking again.
-  const poster = INDEX_HTML.slice(
-    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
-    INDEX_HTML.indexOf('async function renderGraphPngBlob'),
-  );
-  assert.ok(!poster.includes('graphToViewport'), 'the poster must not re-read positions');
-  assert.match(poster, /capture\.overlay && capture\.overlay\[which\]/);
-});
+  // Escape closes the popover, and so does a press anywhere else -- without
+  // this, a tap-opened popover on a phone has no way out.
+  doc.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    hideTip();
+    toggleFilters(false);
+    toggleActionsMenu(false);
+  });
+  doc.addEventListener('pointerdown', event => {
+    if (!actionRow.contains(event.target)) hideTip();
+    if (!actionRow.contains(event.target) && !filterPanel.contains(event.target)) {
+      toggleFilters(false);
+    }
+    // The toggle button itself is excluded so its own click (handled above,
+    // which runs first and already flipped the state) is not immediately
+    // undone by this same pointerdown bubbling up.
+    if (
+      !actionRow.contains(event.target) &&
+      !(menuToggle && menuToggle.contains(event.target))
+    ) {
+      toggleActionsMenu(false);
+    }
+  });
 
-test('the capture shows every name it can, and puts the screen back', () => {
-  const helper = INDEX_HTML.slice(
-    INDEX_HTML.indexOf('async function captureSigmaCanvasWithAllLabels'),
-    INDEX_HTML.indexOf('async function renderSharePosterBlob'),
-  );
-  // Our own chrome-collision rule is lifted: in the poster the chrome sits in its own
-  // bands, so a suppressed label leaves an unexplained bare dot.
-  assert.match(helper, /blocked\.clear\(\)/);
-  assert.match(helper, /saved\.forEach\(id => blocked\.add\(id\)\)/);
-  // Sharing must not change what the visitor is looking at.
-  assert.match(helper, /host\.style\.right = previous\.right/);
-  assert.match(helper, /camera\.setState\(cameraBefore\)/);
-  // inset:0 pins right and bottom, so an explicit width is ambiguous until they go.
-  assert.match(helper, /host\.style\.right = 'auto'/);
-});
+  /**
+   * Hides pills whose page-side control is not available -- Sign in, once the
+   * visitor is signed in. Watched rather than read once, because signing in
+   * happens without a reload.
+   */
+  function syncActionAvailability() {
+    STAGE_ACTIONS.filter(item => item.hideWhenSignedIn).forEach(item => {
+      const button = actionButtons.get(item.key);
+      const target = item.target ? doc.querySelector(item.target) : null;
+      // offsetParent is null for a control the page has hidden.
+      const available = !!target && (!!target.offsetParent || target.getClientRects().length > 0);
+      if (button) button.hidden = !available;
+    });
+  }
 
-test('the SVG escape hatch keeps the older export', () => {
-  // It is an escape hatch; a second poster layout to maintain buys nothing.
-  assert.match(INDEX_HTML, /if \(sigmaCanvas && capture\.hostBox\) \{/);
-  assert.match(INDEX_HTML, /const poster = await renderSharePosterBlob\(sigmaCanvas, capture\);/);
-});
+  syncActionAvailability();
+  // First paint: the 'resize' listener above keeps this correct afterwards,
+  // but nothing has fired it yet on initial load.
+  positionActionsRow();
+  const authObserver = typeof MutationObserver === 'function'
+    ? new MutationObserver(syncActionAvailability)
+    : null;
+  if (authObserver) {
+    const header = doc.querySelector('.site-header');
+    if (header) authObserver.observe(header, { attributes: true, subtree: true, childList: true });
+  }
+
+  /**
+   * Replaces the graph being explored -- the page calls this every time a filter
+   * changes, with the same filtered {nodes, links} the SVG renderer draws.
+   *
+   * The anchor is preserved when it survives the filter, because a filter should
+   * narrow what you are looking at rather than move you somewhere else. When it
+   * does not survive, the default anchor is tried, then the most connected node
+   * left, so a filtered view still opens somewhere meaningful instead of nowhere.
+   */
+  function setGraph(next) {
+    if (!next || !Array.isArray(next.nodes)) return false;
+    if (!next.nodes.length) {
+      // An empty result is a real outcome of a narrow filter, not a failure.
+      contextEl.textContent = 'No bands match these filters.';
+      frontierEl.textContent = '';
+      otherGroupsEl.hidden = true;
+      viewGraph.clear();
+      renderer.refresh();
+      state.view = { nodes: [], links: [], frontier: [], depths: new Map() };
+      return true;
+    }
+
+    master = next;
+    adjacency = buildAdjacency(master.nodes, master.links);
+    masterById = new Map(master.nodes.map(node => [node.id, node]));
+    bandNames = master.nodes.filter(node => node.type === 'band').map(node => node.id);
+    components = getConnectedComponents(master.nodes, master.links, adjacency);
+    // A new filter is a new graph -- which groups have already been shown by
+    // "Show next group" resets with it.
+    state.visitedComponentKeys = new Set();
+
+    let anchorId = masterById.has(state.anchorId) ? state.anchorId : null;
+
+    // A filter that excludes where you were standing moves you somewhere else,
+    // which is unavoidable -- but clearing it should put you back rather than
+    // leaving you on a node you never chose. The displaced anchor is remembered
+    // for exactly that.
+    if (!anchorId && !state.displacedAnchorId) state.displacedAnchorId = state.anchorId;
+    if (anchorId && state.displacedAnchorId && masterById.has(state.displacedAnchorId)) {
+      anchorId = state.displacedAnchorId;
+      state.displacedAnchorId = null;
+    }
+
+    if (!anchorId && masterById.has(NEIGHBORHOOD_BUDGET.DEFAULT_ANCHOR)) {
+      anchorId = NEIGHBORHOOD_BUDGET.DEFAULT_ANCHOR;
+    }
+    // Most connected survivor: the busiest node is the most useful place to
+    // land in a narrowed graph.
+    if (!anchorId) anchorId = highestDegreeNode(master.nodes.map(node => node.id));
+    if (!anchorId) return false;
+
+    state.maxHops = initialHopsForAnchor(anchorId);
+    clearHighlight();
+    return renderNeighborhood({
+      anchorId,
+      maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
+      animate: false,
+    });
+  }
+
+  // -- first paint ----------------------------------------------------------
+
+  const resolved = resolveAnchor({ search, nodes: master.nodes, links: master.links, adjacency });
+  state.anchorSource = resolved.source;
+  if (!resolved.anchorId) return null;
+  state.openingAnchorId = resolved.anchorId;
+  renderNeighborhood({
+    anchorId: resolved.anchorId,
+    maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
+    animate: false,
+  });
+  // The one and only write: canonicalise the link this visit arrived on. From
+  // here the address bar stays put, so a refresh returns to this view.
+  syncAddressBar();
+
+  // A link asked for a band we do not have. Say so, rather than opening on the
+  // fallback as though nothing was requested -- the recipient of a stale shared
+  // link would otherwise land on a stranger's node with no way to tell they had
+  // been sent somewhere specific. Reuses the same prompt a failed search raises,
+  // which already offers to add the missing band.
+  if (resolved.requestedByLink) {
+    stage.dispatchEvent(
+      new CustomEvent('rbft:sigma-search-miss', {
+        bubbles: true,
+        detail: { query: resolved.requestedByLink, fromLink: true },
+      })
+    );
+  }
+
+  return {
+    stage,
+    renderer,
+    canonical,
+    state,
+    exploreFor,
+    travelTo,
+    setGraph,
+    expand,
+    flyTo,
+    highlightFrom,
+    clearHighlight,
+    destroy() {
+      renderer.kill();
+      if (authObserver) authObserver.disconnect();
+      if (chromeObserver) chromeObserver.disconnect();
+      if (cardStateObserver) cardStateObserver.disconnect();
+      // Panels go home before the stage is dropped, or they would be removed
+      // with it and the SVG renderer would come back without them.
+      relocated.forEach(({ panel, parent, next }) => {
+        panel.hidden = true;
+        parent.insertBefore(panel, next);
+      });
+      stage.remove();
+      // Hand the page's own toolbar, hero and badge back, so switching the flag
+      // off at runtime leaves a working SVG renderer rather than a bare page.
+      doc.body.classList.remove(BODY_ACTIVE_CLASS);
+      if (svg) svg.style.display = svgDisplayBefore || '';
+    },
+  };
+}
+
+/**
+ * Draws the hover treatment for a node: a dark rounded plate behind the label,
+ * a hairline cyan edge, and a soft glow behind the node.
+ *
+ * Signature is Sigma's `defaultDrawNodeHover(context, data, settings)`.
+ */
+function drawHover(context, data, settings) {
+  const size = settings.labelSize || 12;
+  const font = settings.labelFont || 'Satoshi, system-ui, sans-serif';
+  const weight = settings.labelWeight || 'normal';
+  const label = data.label;
+
+  context.font = `${weight} ${size}px ${font}`;
+
+  // Glow behind the node, so hovering reads as "this one" even without a label.
+  context.beginPath();
+  context.fillStyle = HOVER_GLOW;
+  context.arc(data.x, data.y, data.size + 7, 0, Math.PI * 2);
+  context.closePath();
+  context.fill();
+
+  if (!label) return;
+
+  const width = context.measureText(label).width;
+  const paddingX = 10;
+  const paddingY = 6;
+  const plateHeight = size + paddingY * 2;
+  // Starts just inside where Sigma's normal label begins, so the plate covers it
+  // completely -- otherwise the first glyph of the underlying label peeks out
+  // from behind the plate's left edge.
+  const left = data.x + data.size;
+  const top = data.y - plateHeight / 2;
+  const radius = plateHeight / 2;
+
+  context.beginPath();
+  context.fillStyle = HOVER_PLATE_FILL;
+  context.strokeStyle = HOVER_PLATE_EDGE;
+  context.lineWidth = 1;
+  // Rounded rectangle; roundRect is not available everywhere, so it is drawn by
+  // hand from arcs.
+  const right = left + width + paddingX * 2;
+  const bottom = top + plateHeight;
+  context.moveTo(left + radius, top);
+  context.lineTo(right - radius, top);
+  context.arcTo(right, top, right, top + radius, radius);
+  context.lineTo(right, bottom - radius);
+  context.arcTo(right, bottom, right - radius, bottom, radius);
+  context.lineTo(left + radius, bottom);
+  context.arcTo(left, bottom, left, bottom - radius, radius);
+  context.lineTo(left, top + radius);
+  context.arcTo(left, top, left + radius, top, radius);
+  context.closePath();
+  context.fill();
+  context.stroke();
+
+  context.fillStyle = HOVER_LABEL_COLOR;
+  context.fillText(label, left + paddingX + 2, data.y + size / 3);
+}
+
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 // ---------------------------------------------------------------------------
-// One edge-writing rule, two writers.
-//
-// The "broken strings" outage was drift, not logic: toGraphologyGraph skipped
-// self-loops and the explorer's own view-graph writer did not, so a solo act
-// whose band name is their own name threw out of renderView and took the
-// controller with it. These tests exist so the two writers cannot diverge
-// again — a local copy of the check is exactly how this happened.
+// Auto-boot behind the feature flag
 // ---------------------------------------------------------------------------
 
-test('the explorer writes view edges through the shared guard', () => {
-  assert.match(
-    EXPLORER,
-    /canRenderEdge,/,
-    'Expected the explorer to import the shared edge guard rather than re-deriving it.'
-  );
-  assert.match(
-    EXPLORER,
-    /if \(!canRenderEdge\(viewGraph, source, target\)\) return;/,
-    'Expected the view-graph writer to defer to canRenderEdge before addEdge.'
-  );
-});
+// index.html publishes its master graph on window and fires
+// 'rbft:graph-ready' once /api/bands (or the CSV fallback) has been adapted by
+// buildMasterGraph(). We wait for that instead of re-fetching, so both
+// renderers always show the same data.
+export function bootFromPage(win = typeof window !== 'undefined' ? window : null) {
+  if (!win || rendererFromSearch(win.location.search) !== 'sigma') return;
+  const start = () => {
+    const master = win.RBFT_MASTER_GRAPH;
+    if (!master) return false;
+    win.RBFT_SIGMA = initSigmaExplorer({ master, search: win.location.search, win });
+    return Boolean(win.RBFT_SIGMA);
+  };
+  if (!start()) win.addEventListener('rbft:graph-ready', start, { once: true });
+}
 
-test('neither writer keeps a private copy of the edge checks', () => {
-  // The specific shape that broke: hasNode/hasEdge tested inline, source ===
-  // target forgotten. Any inline re-test is a chance to forget it again.
-  const writer = EXPLORER.slice(EXPLORER.indexOf('view.links.forEach'), EXPLORER.indexOf('state.layoutExtent'));
-  assert.ok(
-    !/viewGraph\.hasNode\(/.test(writer) && !/viewGraph\.hasEdge\(/.test(writer),
-    'The view writer must not re-test edge preconditions inline; that is what drifted.'
-  );
-  assert.ok(
-    /export function canRenderEdge/.test(HELPERS),
-    'Expected canRenderEdge to live in the helpers, as the single definition.'
-  );
-  assert.match(
-    HELPERS,
-    /if \(!canRenderEdge\(graph, source, target\)\) return;/,
-    'Expected toGraphologyGraph to use the same guard it exports.'
-  );
-});
-
-test('the shared guard rejects the self-loop that caused the outage', () => {
-  const guard = HELPERS.slice(HELPERS.indexOf('export function canRenderEdge'));
-  assert.match(
-    guard.slice(0, 400),
-    /if \(source === target\) return false;/,
-    'The self-loop check is the whole point of the shared guard.'
-  );
-});
-
-test('search suggestions are a custom dropdown, not a native datalist', () => {
-  // The native datalist popup is drawn by the browser; on Android Chrome it
-  // lands on top of the keyboard and blocks typing. The custom dropdown is
-  // capped at 38vh and scrolls internally instead.
-  assert.doesNotMatch(EXPLORER, /<datalist/, 'no native datalist in the template');
-  assert.doesNotMatch(EXPLORER, /list="sigma-search-options"/, 'input must not reference the datalist');
-  assert.match(EXPLORER, /id="sigma-search-suggest"/, 'custom suggestion dropdown exists');
-  assert.match(EXPLORER, /max-height:min\(38vh,340px\)/, 'dropdown is capped above the keyboard');
-});
-
-test('"Show next group" jumps to a random unvisited group', () => {
-  // Was largest-first: every tap marched through groups biggest to smallest.
-  // Now each tap is a surprise jump; the visited-component tour still visits
-  // every group exactly once per loop.
-  assert.match(
-    EXPLORER,
-    /unvisited\[Math\.floor\(Math\.random\(\) \* unvisited\.length\)\]/,
-    'next group is picked at random',
-  );
-});
+bootFromPage();
