@@ -278,6 +278,15 @@ function actionIconSvg(key) {
 // enough that a pathological graph cannot stall the browser building the list.
 const MAX_SUGGESTIONS = 800;
 
+// Filter-as-you-type only kicks in at three characters: one or two match far
+// too much of the corpus to be useful (a lone "h" once fanned hundreds of
+// rows across the constellation).
+const MIN_SUGGEST_CHARS = 3;
+// Even at three characters some queries ("the") match a huge slice of the
+// universe, so the typed dropdown shows a capped, ranked handful: prefix
+// matches first, then substring matches, each alphabetical.
+const MAX_TYPEAHEAD_SUGGESTIONS = 8;
+
 const SMALLEST_NODE_SIZE = Math.min(...Object.values(KIND_STYLE).map(style => style.size));
 const LARGEST_NODE_SIZE = Math.max(...Object.values(KIND_STYLE).map(style => style.size));
 
@@ -2387,19 +2396,30 @@ export function initSigmaExplorer({
       pickSuggestion(value);
       return;
     }
+    // Dropdown etiquette: below three characters the query matches too much
+    // of the corpus to offer anything useful, so the list stays hidden until
+    // the visitor has typed enough to mean it.
+    if (value.length < MIN_SUGGEST_CHARS) {
+      hideSuggestions();
+      return;
+    }
     // Filter-as-you-type: the suggestion list only holds 800 of 6,245 bands,
     // so a static alphabetical slice hides N-Z entirely. Rebuild the options
     // from the query so "weezer" always offers Weezer, "nirv" offers Nirvana.
+    // Ranked, not just alphabetical: prefix matches read as the answer, and
+    // the list is capped because even a three-letter query like "the" matches
+    // a huge slice of the universe.
     const query = value.toLowerCase();
-    const matches = [];
+    const starts = [];
+    const contains = [];
     for (const name of allBandDisplayNames) {
-      if (name.toLowerCase().includes(query)) {
-        matches.push(name);
-        if (matches.length >= MAX_SUGGESTIONS) break;
-      }
+      const lower = name.toLowerCase();
+      if (lower.startsWith(query)) starts.push(name);
+      else if (lower.includes(query)) contains.push(name);
     }
-    renderSuggestions(matches
-      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })));
+    const alpha = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+    renderSuggestions([...starts.sort(alpha), ...contains.sort(alpha)]
+      .slice(0, MAX_TYPEAHEAD_SUGGESTIONS));
   });
   // Arrow keys walk the rows, Enter picks the highlighted one (a plain Enter
   // with nothing highlighted still submits the form), Escape dismisses.
