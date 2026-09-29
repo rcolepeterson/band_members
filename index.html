@@ -340,6 +340,11 @@
     .confirm-city-btn{font-size:var(--text-xs);font-weight:600;padding:0.3rem 0.7rem;margin:0.15rem 0;border-radius:var(--radius-full);border:1px solid var(--color-primary);background:var(--color-primary);color:var(--color-text-inverse);cursor:pointer}
     .confirm-city-btn-secondary{background:transparent;color:inherit;border-color:currentColor;opacity:0.75}
     .field-error{border-color:#f5c26b !important;box-shadow:0 0 0 3px rgba(245,194,107,0.14) !important}
+    .name-match-warning{border:1px solid #f5c26b;border-radius:var(--radius-md);padding:0.6rem 0.8rem;margin-bottom:0.4rem;background:rgba(245,194,107,0.07)}
+    .name-match-warning strong{display:block;margin-bottom:0.35rem}
+    .name-match-list{list-style:none;margin:0 0 0.35rem;padding:0}
+    .name-match-list li{display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:0.25rem 0;font-size:var(--text-sm)}
+    .name-match-guidance{font-size:var(--text-sm);opacity:0.9}
 
   
     .is-ghosted{opacity:0.45;pointer-events:none;filter:saturate(0.5)}
@@ -7297,7 +7302,22 @@ function downloadPngBlob(blob) {
         let data = null;
         try { data = await response.json(); } catch (parseError) { /* non-JSON error body */ }
         if (!response.ok || !data || data.ok === false) {
-          throw new Error((data && data.error) || `The server rejected the submission (${response.status}).`);
+          // Structured throw: the submit handler's catch needs status /
+          // error_code / the existing band to tell a duplicate rejection
+          // apart from a transient failure. A duplicate renders the loud
+          // card — it must never fork into the offline local fallback.
+          const err = new Error((data && data.error) || `The server rejected the submission (${response.status}).`);
+          err.status = response.status;
+          err.errorCode = data && data.error_code;
+          if (data && (data.existing_band_id || data.existing_band_name)) {
+            err.existingBand = {
+              id: data.existing_band_id,
+              name: data.existing_band_name,
+              city: data.existing_band_city,
+              country: data.existing_band_country,
+            };
+          }
+          throw err;
         }
         return newBandResponseToStoredRecord(data, draft);
       }
@@ -7315,7 +7335,10 @@ function downloadPngBlob(blob) {
       let data = null;
       try { data = await response.json(); } catch (parseError) { /* non-JSON error body */ }
       if (!response.ok) {
-        throw new Error((data && data.error) || `The server rejected the submission (${response.status}).`);
+        const err = new Error((data && data.error) || `The server rejected the submission (${response.status}).`);
+        err.status = response.status;
+        err.errorCode = data && data.error_code;
+        throw err;
       }
       return (data && data.submission) || draft;
     }
@@ -10305,9 +10328,99 @@ function downloadPngBlob(blob) {
     // name+city so re-validation doesn't nag, and so changing the city
     // re-asks. Cleared on form reset (see finishAndReport).
     let confirmedDifferentCityKey = null;
-    function renderDifferentCityConfirm(bandNow, existingNode, location, typedKey) {
+    // Loud duplicate-name card (2026-09-29): the moment the typed name
+    // matches ANY existing band — even before a city is entered — say so
+    // plainly, naming each match with its location and offering a View-band
+    // button. This is the warning the Sep-2026 Sweet Water duplicate would
+    // have tripped: the name alone is enough to warn, and the city field
+    // becomes the explicit disambiguator.
+    // Callers append branch-specific guidance after the card; they must NOT
+    // wipe validation.innerHTML once the card is rendered.
+    function renderNameMatchWarning(bandNow, matches) {
       const validation = document.getElementById('submission-validation');
       validation.innerHTML = '';
+      validation.classList.remove('is-success');
+      validation.classList.add('is-warning');
+      const card = document.createElement('div');
+      card.className = 'name-match-warning';
+      const title = document.createElement('strong');
+      title.textContent = `${bandNow} is already in the Rawk universe:`;
+      card.appendChild(title);
+      const list = document.createElement('ul');
+      list.className = 'name-match-list';
+      matches.slice(0, 4).forEach(node => {
+        const li = document.createElement('li');
+        const label = document.createElement('span');
+        const where = locationLabel(node) || 'location not listed';
+        label.textContent = `${nodeName(node)} — ${where}`;
+        li.appendChild(label);
+        const view = document.createElement('button');
+        view.type = 'button';
+        view.className = 'confirm-city-btn confirm-city-btn-secondary';
+        view.textContent = 'View band';
+        view.addEventListener('click', () => openNodeCard(node));
+        li.appendChild(view);
+        list.appendChild(li);
+      });
+      card.appendChild(list);
+      validation.appendChild(card);
+    }
+
+    // Server-side duplicate rejection card (band_exists 409): same loud
+    // card as the client-side name warning, but the band may not be in the
+    // local graph (stale cache is usually why the server caught what the
+    // client missed), so the existing band's name/location comes from the
+    // server's error payload and the View button only appears when the node
+    // is actually present locally.
+    function renderServerDuplicateError(bandNow, existing) {
+      const validation = document.getElementById('submission-validation');
+      validation.innerHTML = '';
+      validation.classList.remove('is-success');
+      validation.classList.add('is-warning');
+      const card = document.createElement('div');
+      card.className = 'name-match-warning';
+      const title = document.createElement('strong');
+      const name = (existing && existing.name) || bandNow;
+      const where = existing && (existing.city || existing.country)
+        ? ` — ${[existing.city, existing.country].filter(Boolean).join(', ')}`
+        : '';
+      title.textContent = `${name}${where} is already in the Rawk universe.`;
+      card.appendChild(title);
+      const note = document.createElement('div');
+      note.className = 'name-match-guidance';
+      note.textContent = 'No duplicate was created. Search for the band and add a member to it instead.';
+      card.appendChild(note);
+      const nodes = (bandNow && graphState && graphState.master) ? findBandsByName(bandNow) : [];
+      if (nodes.length) {
+        const view = document.createElement('button');
+        view.type = 'button';
+        view.className = 'confirm-city-btn confirm-city-btn-secondary';
+        view.textContent = 'View band';
+        view.addEventListener('click', () => openNodeCard(nodes[0]));
+        card.appendChild(view);
+      }
+      validation.appendChild(card);
+      setSubmissionMode(false);
+    }
+
+    // Branch guidance goes BELOW the name-match card when one was rendered,
+    // and sets the validation text outright when there is no card.
+    function appendValidationGuidance(text) {
+      const validation = document.getElementById('submission-validation');
+      if (validation.querySelector('.name-match-warning')) {
+        const div = document.createElement('div');
+        div.className = 'name-match-guidance';
+        div.textContent = text;
+        validation.appendChild(div);
+      } else {
+        validation.textContent = text;
+      }
+    }
+
+    function renderDifferentCityConfirm(bandNow, existingNode, location, typedKey) {
+      const validation = document.getElementById('submission-validation');
+      // No innerHTML wipe: validateSubmissionForm renders the name-match
+      // card first; the confirm appends below it.
       const existingLabel = locationLabel(existingNode) || 'an unknown location';
       const typedLabel = location.label || 'an unknown location';
       const copy = document.createElement('span');
@@ -10317,6 +10430,21 @@ function downloadPngBlob(blob) {
       yes.className = 'confirm-city-btn';
       yes.textContent = 'Yes — create it';
       yes.addEventListener('click', () => {
+        // A city is required to create the "different" band: a band with no
+        // city can't be told apart from the existing one, which is how
+        // duplicates slip in.
+        const cityNow = document.getElementById('submission-city').value.trim();
+        if (!cityNow) {
+          document.getElementById('submission-city').classList.add('field-error');
+          if (!validation.querySelector('[data-nudge="city-required"]')) {
+            const nudge = document.createElement('div');
+            nudge.className = 'name-match-guidance';
+            nudge.dataset.nudge = 'city-required';
+            nudge.textContent = 'Enter a city for the new band first — without one it can\u2019t be told apart from the existing band.';
+            validation.appendChild(nudge);
+          }
+          return;
+        }
         confirmedDifferentCityKey = typedKey;
         setSubmissionMode(false);
         validateSubmissionForm();
@@ -10386,11 +10514,31 @@ function downloadPngBlob(blob) {
 
       const memberBandState = renderExistingMemberBands(memberNow, bandNow, scene);
 
+      // Band identity lookups — hoisted above the scene gate so the
+      // duplicate-name warning fires on the name alone, even before a city
+      // is entered. nameMatches is [] when the graph isn't loaded yet.
+      const nameMatches = (bandNow && graphState && graphState.master) ? findBandsByName(bandNow) : [];
+      const typedIdentity = { name: bandNow, city: location.city, country: location.country };
+      const nodeIdentity = node => ({ name: nodeName(node), city: node.city, country: node.country });
+      const sameCityMatch = nameMatches.find(node => sameBandIdentity(typedIdentity, nodeIdentity(node)));
+      const otherCityMatch = nameMatches.find(node => node !== sameCityMatch);
+      const typedKey = [normalizeIdentityKey(bandNow), normalizeIdentityKey(location.city), normalizeIdentityKey(location.country)].join('|');
+      const differentCityConfirmed = !!otherCityMatch && confirmedDifferentCityKey === typedKey;
+
+      // The loud card: any same-name band already in the Rawk universe gets
+      // named with its location the moment the typed name matches. Hidden
+      // only after the user confirms the "different band" path for this
+      // exact city.
+      const showNameCard = nameMatches.length > 0 && !differentCityConfirmed;
+      if (showNameCard) renderNameMatchWarning(bandNow, nameMatches);
+
       if (!bandNow || !scene || !graphState || !graphState.master) {
         setSubmissionMode(false);
         renderExistingBandMembers('', '', false);
-        validation.textContent = 'Enter both a band name and a scene to check for duplicates. Members can appear in multiple bands.';
-        return { valid: true, duplicate: false, memberExists: false, duplicateConnection: memberBandState.duplicateConnection };
+        if (!showNameCard) {
+          validation.textContent = 'Enter both a band name and a scene to check for duplicates. Members can appear in multiple bands.';
+        }
+        return { valid: !showNameCard, duplicate: showNameCard, memberExists: false, duplicateConnection: memberBandState.duplicateConnection };
       }
 
       // Band exists check: identity is NAME + CITY (+country). A name match in
@@ -10398,11 +10546,6 @@ function downloadPngBlob(blob) {
       // mode. A name match in a different city is a different band, but the
       // user confirms explicitly before we create it, so a typo'd city never
       // silently forks a band.
-      const nameMatches = findBandsByName(bandNow);
-      const typedIdentity = { name: bandNow, city: location.city, country: location.country };
-      const nodeIdentity = node => ({ name: nodeName(node), city: node.city, country: node.country });
-      const sameCityMatch = nameMatches.find(node => sameBandIdentity(typedIdentity, nodeIdentity(node)));
-      const otherCityMatch = nameMatches.find(node => node !== sameCityMatch);
 
       if (sameCityMatch) {
         bandField.classList.add('field-error');
@@ -10413,16 +10556,15 @@ function downloadPngBlob(blob) {
         setSubmissionMode(true);
         const memberState = renderExistingBandMembers(bandNow, scene, true);
         if (memberState.memberExists || memberBandState.duplicateConnection) {
-          validation.textContent = `${memberNow || memberField.value.trim()} is already connected to ${bandNow} in ${scene}. Add a different member or create a different connection.`;
+          appendValidationGuidance(`${memberNow || memberField.value.trim()} is already connected to ${bandNow} in ${scene}. Add a different member or create a different connection.`);
           return { valid: false, duplicate: true, memberExists: true, duplicateConnection: true };
         }
         const existingLabel = locationLabel(sameCityMatch) || scene;
-        validation.textContent = `A band named ${bandNow} already exists${existingLabel ? ` in ${existingLabel}` : ''}. You can still add a member to this band or add a new connection for an existing member.`;
+        appendValidationGuidance(`A band named ${bandNow} already exists${existingLabel ? ` in ${existingLabel}` : ''}. You can still add a member to this band or add a new connection for an existing member.`);
         return { valid: true, duplicate: true, memberExists: false, duplicateConnection: false };
       }
 
       if (otherCityMatch) {
-        const typedKey = [normalizeIdentityKey(bandNow), normalizeIdentityKey(location.city), normalizeIdentityKey(location.country)].join('|');
         if (confirmedDifferentCityKey !== typedKey) {
           // Same name, different city, not yet confirmed: ask, and block
           // submission until the user answers.
@@ -11082,6 +11224,15 @@ function downloadPngBlob(blob) {
         });
         finishAndReport(result, true);
       } catch (error) {
+        // Duplicate rejection from the server: render the loud card and
+        // stop. Creating a local-only copy of a band the server just
+        // refused would fork the graph (this is the path the Sep-2026
+        // Sweet Water double took through a stale client).
+        if (error && (error.errorCode === 'band_exists' || error.status === 409)) {
+          const bandName = (draft && draft.band) || document.getElementById('band-name').value.trim();
+          renderServerDuplicateError(bandName, error.existingBand || null);
+          return;
+        }
         // Offline/error safety net: this keeps the OLD localStorage-merge
         // behavior so the user isn't blocked in this browser. It is a fallback
         // ONLY — the Netlify Blobs backend is the shared source of truth once
