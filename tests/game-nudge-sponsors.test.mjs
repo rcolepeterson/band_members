@@ -1,6 +1,10 @@
-// Tests for the game signup nudge + sponsor ribbon
+// Tests for the game signup nudge + sponsor API validation
 // (scripts/six-degrees-game.mjs, netlify/functions/game_sponsors.mjs,
 //  netlify/functions/migrate.mjs).
+//
+// The sponsor ribbon was removed 2026-09-29 (it read small with no sponsors);
+// the /api/game-sponsors endpoint and table stay for a future rebuild, and
+// the feedback form keeps its "Game sponsorship" inquiry type.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -10,9 +14,6 @@ import {
   NUDGE_THRESHOLD,
   NUDGE_COPY,
   nudgeShouldShow,
-  SPONSOR_LABEL,
-  SPONSOR_PLACEHOLDER,
-  MAX_SPONSORS,
 } from '../scripts/six-degrees-game.mjs';
 import { validSponsor } from '../netlify/functions/game_sponsors.mjs';
 
@@ -61,33 +62,24 @@ test('game module wires the nudge: counter key, signup funnel, dismiss', () => {
   assert.ok(!/window\.alert|confirm\(/.test(GAME_SRC), 'no blocking dialogs');
 });
 
-// --- sponsor ribbon copy -----------------------------------------------------
+// --- sponsor ribbon removal (2026-09-29) ---------------------------------------
+// The ribbon read small with no sponsors, so it was deleted outright; the
+// sponsor surface gets rebuilt later once real game usage is known. These
+// assertions lock the removal in — the placeholder must not creep back.
 
-test('sponsor ribbon copy is exact and capped at seven', () => {
-  assert.equal(SPONSOR_LABEL, "This week's game is brought to you by");
-  assert.equal(SPONSOR_PLACEHOLDER, 'your brand here');
-  assert.equal(MAX_SPONSORS, 7);
+test('game module has no sponsor ribbon or placeholder', () => {
+  assert.ok(!GAME_SRC.includes('game-sponsor-ribbon'), 'no ribbon element');
+  assert.ok(!GAME_SRC.includes('game-sponsor-placeholder'), 'no placeholder element');
+  assert.ok(!GAME_SRC.includes('game-sponsor-contact-note'), 'no contact-note fallback');
+  assert.ok(!GAME_SRC.includes("fetch('/api/game-sponsors'"), 'no sponsor endpoint fetch');
+  assert.ok(!GAME_SRC.includes('SPONSOR_PLACEHOLDER'), 'no placeholder constant');
+  assert.ok(!GAME_SRC.includes('SPONSOR_LABEL'), 'no ribbon label constant');
 });
 
-test('game module fetches sponsors and degrades to the placeholder', () => {
-  assert.ok(GAME_SRC.includes("fetch('/api/game-sponsors'"), 'ribbon loads from the endpoint');
-  assert.ok(GAME_SRC.includes('game-sponsor-ribbon'), 'ribbon element exists');
-  assert.ok(GAME_SRC.includes('game-sponsor-placeholder'), 'placeholder path exists');
-  // Placeholder opens the feedback form directly through the page's own
-  // openFeedbackPopover routine — never by proxy-clicking the toolbar
-  // button (that handoff missed on a real device).
-  assert.ok(GAME_SRC.includes('window.openFeedbackPopover'), 'placeholder uses the page open routine');
-  assert.ok(!GAME_SRC.includes('send-feedback-btn'), 'no toolbar-button proxy-click remains');
-  // The '/' fallback is gone: nothing in the game module navigates away.
-  assert.ok(!/location\.href\s*=/.test(GAME_SRC), 'no navigation fallback anywhere in the module');
-  assert.ok(!/location\s*=\s*['"]\//.test(GAME_SRC), 'no bare location assignment to a path');
-  // The inquiry is routed: the feedback type is preselected to the new
-  // "Game sponsorship" option; the visitor still writes their own message.
-  assert.ok(GAME_SRC.includes("typeSel.value = 'Game sponsorship'"), 'type preset targets Game sponsorship');
-  assert.ok(!/feedback-message['"]?\)?\.value\s*=/.test(GAME_SRC), 'message textarea is never prefilled');
-  // Last resort keeps the game open and says so inline in the ribbon.
-  assert.ok(GAME_SRC.includes('game-sponsor-contact-note'), 'inline fallback note exists');
-  assert.ok(GAME_SRC.includes("Couldn't open the contact form"), 'fallback note copy is exact');
+test('game card CSS has no sponsor ribbon rules', () => {
+  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+  assert.ok(!html.includes('.game-sponsor-ribbon'), 'no ribbon CSS');
+  assert.ok(!html.includes('.game-sponsor-placeholder'), 'no placeholder CSS');
 });
 
 test('feedback form offers a Game sponsorship type', () => {
