@@ -9,8 +9,8 @@
 // autocomplete, three play modes, matchup-first flow (both bands shown with
 // a Connect button; the chain only renders on reveal), path banner or
 // "No rawk found." results, dead-end drink rule + add-the-connector funnel,
-// native share on wins, an after-3-chains signup nudge for logged-out
-// players, and the sponsor ribbon ("This week's game is brought to you by").
+// native share on wins, and an after-3-chains signup nudge for logged-out
+// players.
 
 // ---------------------------------------------------------------------------
 // Engine
@@ -93,7 +93,7 @@ export function pickFairPair(graph, minHops = 3, maxHops = 5, maxTries = 400) {
 }
 
 // ---------------------------------------------------------------------------
-// Signup nudge + sponsor ribbon (pure helpers, Node-testable)
+// Signup nudge (pure helpers, Node-testable)
 // ---------------------------------------------------------------------------
 
 // The nudge fires exactly once, after the third chain reveal ("end of the
@@ -105,11 +105,6 @@ export function nudgeShouldShow({ plays, done, signedIn } = {}) {
   if (signedIn || done) return false;
   return Number(plays) >= NUDGE_THRESHOLD;
 }
-
-// Sponsor ribbon copy. The placeholder is an invitation, not an empty ad slot.
-export const SPONSOR_LABEL = "This week's game is brought to you by";
-export const SPONSOR_PLACEHOLDER = 'your brand here';
-export const MAX_SPONSORS = 7;
 
 // ---------------------------------------------------------------------------
 // Browser UI
@@ -230,102 +225,9 @@ function initGameUI() {
     result.appendChild(card);
   }
 
-  // --- sponsor ribbon ------------------------------------------------------
-  // "This week's game is brought to you by" + up to MAX_SPONSORS icons from
-  // /api/game-sponsors. Empty list or a failed fetch shows the tasteful
-  // "your brand here" placeholder — the ribbon never breaks the game.
-  let sponsorRibbon = null;
-
-  async function loadSponsors() {
-    try {
-      const res = await fetch('/api/game-sponsors', { headers: { accept: 'application/json' } });
-      if (!res.ok) return null;
-      const data = await res.json();
-      if (!data || !Array.isArray(data.sponsors)) return null;
-      return data.sponsors.slice(0, MAX_SPONSORS);
-    } catch {
-      return null;
-    }
-  }
-
-  // Last-resort path for the sponsor placeholder: the feedback form could
-  // not be opened, so say so inline in the ribbon instead of navigating
-  // anywhere. The game modal stays open.
-  function showSponsorContactNote() {
-    if (!sponsorRibbon) return;
-    const icons = sponsorRibbon.querySelector('.game-sponsor-icons');
-    if (!icons || icons.querySelector('.game-sponsor-contact-note')) return;
-    const note = el('<span class="game-sponsor-contact-note"></span>');
-    note.textContent = "Couldn't open the contact form — email us via Send feedback in the menu.";
-    icons.appendChild(note);
-  }
-
-  function renderSponsorRibbon(sponsors) {
-    if (sponsorRibbon) sponsorRibbon.remove();
-    const card = modal.querySelector('.game-modal-card');
-    if (!card) return;
-    sponsorRibbon = el(`<div class="game-sponsor-ribbon">
-      <span class="game-sponsor-label"></span>
-      <div class="game-sponsor-icons"></div>
-    </div>`);
-    sponsorRibbon.querySelector('.game-sponsor-label').textContent = SPONSOR_LABEL;
-    const icons = sponsorRibbon.querySelector('.game-sponsor-icons');
-    if (sponsors && sponsors.length) {
-      for (const s of sponsors) {
-        const name = String((s && s.name) || 'Sponsor');
-        const wrap = s && s.link_url ? el('<a target="_blank" rel="noopener"></a>') : el('<span class="game-sponsor-icon"></span>');
-        if (s && s.link_url) wrap.setAttribute('href', String(s.link_url));
-        wrap.setAttribute('title', name);
-        const img = document.createElement('img');
-        img.src = String(s.icon_url);
-        img.alt = name;
-        img.loading = 'lazy';
-        img.addEventListener('error', () => wrap.remove());
-        wrap.appendChild(img);
-        icons.appendChild(wrap);
-      }
-    } else {
-      const ph = el('<button type="button" class="game-sponsor-placeholder"></button>');
-      ph.textContent = SPONSOR_PLACEHOLDER;
-      ph.addEventListener('click', (event) => {
-        // Defensive: keep this click from reaching the document-level
-        // handler that dismisses open popovers — the Send feedback trigger
-        // itself does the same in its own handler.
-        event.stopPropagation();
-        // Open the feedback form directly through the page's own routine,
-        // never by proxy-clicking the toolbar button (that handoff missed
-        // on a real device). If the form truly can't open, the game stays
-        // open and the ribbon says so inline — the contact intent must not
-        // fall through the cracks, and nothing here ever navigates away.
-        const openIt = window.openFeedbackPopover;
-        const opened = typeof openIt === 'function' && openIt();
-        if (opened) {
-          closeModal();
-          // Route the inquiry: the visitor writes their own message and
-          // email; only the type is preselected so it lands in the right
-          // pile on arrival.
-          const typeSel = document.getElementById('feedback-type');
-          if (typeSel) typeSel.value = 'Game sponsorship';
-        } else {
-          showSponsorContactNote();
-        }
-      });
-      icons.appendChild(ph);
-    }
-    const anchor = modal.querySelector('.game-modal-sub');
-    if (anchor && anchor.parentElement === card) anchor.after(sponsorRibbon);
-    else card.prepend(sponsorRibbon);
-  }
-
   function openModal() {
     modal.hidden = false;
     document.body.classList.add('game-modal-open');
-    // Placeholder first (the common case: no sponsors yet), then upgrade to
-    // real icons if the endpoint has any. Never blocks the game.
-    renderSponsorRibbon(null);
-    loadSponsors().then((sponsors) => {
-      if (sponsors && sponsors.length) renderSponsorRibbon(sponsors);
-    });
     loadGraph().catch(() => {
       statusLine.textContent = 'Could not load the tree. Check your connection and try again.';
     });
