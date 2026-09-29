@@ -66,6 +66,16 @@ export function citiesMatch(a, b) {
   return small.every((token) => bigSet.has(token));
 }
 
+// Compact identity key for the SQL pre-filter: lowercase with EVERY
+// non-alphanumeric stripped ("Sweet  Water" and "Sweet-Water" both become
+// "sweetwater"). The pre-filter must be at least as permissive as
+// normalizeIdentityKey, otherwise a spacing/punctuation variant slips past
+// the candidate query and the pairwise sameBandIdentity check below never
+// sees it (that's how the Sep-2026 Sweet Water duplicate got in).
+export function compactIdentityKey(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 // Full identity comparison for { name, city, country } shapes.
 export function sameBandIdentity(a, b) {
   if (!a || !b) return false;
@@ -84,8 +94,15 @@ export async function createBandInNeon(sql, input) {
   const links = input.links || {};
 
   // Conflict check: same normalized name AND same location. A name match in
-  // a different city is a different band — allowed through.
-  const candidates = await sql`select id, name, city, country from bands where lower(name) = ${name.toLowerCase()}`;
+  // a different city is a different band — allowed through. The pre-filter
+  // compares compact keys (see compactIdentityKey) so punctuation/spacing
+  // variants can't dodge the candidate query; the pairwise
+  // sameBandIdentity check below then applies the full name+city+country
+  // rule to whatever the pre-filter returns.
+  const candidates = await sql`
+    select id, name, city, country from bands
+    where regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = ${compactIdentityKey(name)}
+  `;
   const clash = candidates.find((row) =>
     sameBandIdentity({ name, city, country }, { name: row.name, city: row.city, country: row.country })
   );

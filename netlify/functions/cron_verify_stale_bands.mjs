@@ -55,6 +55,7 @@ import {
   serverError,
 } from './_db.mjs';
 import { fetchMusicBrainz, fetchWikipedia, scoreVerification } from './_verify_helpers.mjs';
+import { compactIdentityKey, sameBandIdentity } from './_bands_write.mjs';
 
 const MUSICBRAINZ_SLEEP_MS = 1000; // MB's documented 1 req/sec courtesy limit
 export const BATCH_SIZE = 10; // see header comment for the Netlify time-budget math; exported for tests
@@ -199,13 +200,111 @@ export async function runBatch(sql, batchSize = BATCH_SIZE, { now = Date.now } =
   const remaining = await selectStaleBands(sql, 500);
   const nextStaleCount = remaining.length;
 
+  // Duplicate-band monitor (Aaron's ask, 2026-09-29): after the verification
+  // batch, scan for true duplicate identities. Deliberately non-fatal —
+  // a monitor failure must never cost the verification batch above.
+  let duplicateScan = null;
+  try {
+    duplicateScan = await scanDuplicateBands(sql);
+    if (duplicateScan.new_flags > 0) {
+      console.log(`[cron:verify] duplicate scan: ${duplicateScan.pairs_found} pair(s), ${duplicateScan.new_flags} new flag(s)`);
+    }
+  } catch (scanErr) {
+    console.warn('[cron:verify] duplicate scan failed; continuing', scanErr);
+  }
+
   return {
     processed: succeeded + failed,
     succeeded,
     failed,
     skipped_for_time: skippedForTime,
     next_stale_count: nextStaleCount,
+    duplicate_scan: duplicateScan,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Duplicate-band monitor.
+//
+// A "true duplicate" is a pair of bands sharing name + city + country per
+// sameBandIdentity — deliberately EXCLUDING same-name-different-city bands
+// (the two Skid Rows are legitimate). Detection runs in two stages so the
+// DB does the cheap grouping and JS does the careful pairwise rule:
+//
+//   1. findDuplicatePairs(bands) — pure, exported for tests. Groups rows by
+//      the compact name key, then applies sameBandIdentity pairwise inside
+//      each group. Returns [{ a, b }] id pairs (a < b, lexicographically).
+//   2. scanDuplicateBands(sql) — one SELECT over bands, the pure filter,
+//      then inserts only pairs not already flagged unresolved into
+//      duplicate_flags. Returns a small summary; never throws on an empty
+//      table.
+// ---------------------------------------------------------------------------
+
+export function findDuplicatePairs(bands) {
+  const groups = new Map();
+  for (const band of bands || []) {
+    const key = compactIdentityKey(band.name);
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(band);
+  }
+  const pairs = [];
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const a = group[i];
+        const b = group[j];
+        if (sameBandIdentity(a, b)) {
+          const [first, second] = a.id < b.id ? [a.id, b.id] : [b.id, a.id];
+          pairs.push({ a: first, b: second });
+        }
+      }
+    }
+  }
+  return pairs;
+}
+
+function pairKey(a, b) {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+export async function scanDuplicateBands(sql) {
+  const bands = await sql`select id, name, city, country from bands`;
+  const pairs = findDuplicatePairs(bands);
+
+  // Skip pairs already flagged and still unresolved — the monitor reports
+  // each duplicate once, then stays quiet until a maintainer resolves it.
+  let alreadyFlagged = new Set();
+  try {
+    const open = await sql`select band_ids from duplicate_flags where resolved_at is null`;
+    for (const row of open) {
+      const ids = (row.band_ids || []).slice().sort();
+      if (ids.length === 2) alreadyFlagged.add(pairKey(ids[0], ids[1]));
+    }
+  } catch (flagErr) {
+    // The duplicate_flags table may not exist yet on a database whose
+    // /api/migrate hasn't run since this feature shipped. Log and carry
+    // on — flagging everything as new would spam the table on first run
+    // after the migration anyway; better to wait for the table.
+    console.warn('[cron:verify] duplicate_flags read failed (migration pending?)', flagErr);
+    return { pairs_found: pairs.length, new_flags: 0, skipped: true };
+  }
+
+  let newFlags = 0;
+  for (const { a, b } of pairs) {
+    if (alreadyFlagged.has(pairKey(a, b))) continue;
+    const names = bands.filter((band) => band.id === a || band.id === b);
+    const label = names.map((band) => `"${band.name}"`).join(' / ');
+    await sql`
+      insert into duplicate_flags (band_ids, note)
+      values (${[a, b]}, ${`possible duplicate band nodes: ${label}`})
+    `;
+    alreadyFlagged.add(pairKey(a, b));
+    newFlags += 1;
+  }
+
+  return { pairs_found: pairs.length, new_flags: newFlags, skipped: false };
 }
 
 // Scheduled entry point. Netlify invokes this on the cron below with no
