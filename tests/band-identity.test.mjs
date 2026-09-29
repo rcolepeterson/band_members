@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 
 import {
   normalizeIdentityKey,
+  compactIdentityKey,
   citiesMatch,
   sameBandIdentity,
 } from '../netlify/functions/_bands_write.mjs';
@@ -86,4 +87,31 @@ test('sameBandIdentity: a missing city never silently forks', () => {
   const a = { name: 'Nirvana', city: '', country: 'USA' };
   const b = { name: 'Nirvana', city: 'Aberdeen', country: 'USA' };
   assert.equal(sameBandIdentity(a, b), true);
+});
+
+test('compactIdentityKey strips everything but alphanumerics, lowercased', () => {
+  assert.equal(compactIdentityKey('Sweet Water'), 'sweetwater');
+  assert.equal(compactIdentityKey('Sweet-Water'), 'sweetwater');
+  assert.equal(compactIdentityKey('sweet  water'), 'sweetwater');
+  assert.equal(compactIdentityKey("Tom's River, NJ"), 'tomsrivernj');
+  assert.equal(compactIdentityKey('  SEATTLE  '), 'seattle');
+  assert.equal(compactIdentityKey('Hüsker Dü'), 'hskerd'); // non-ascii letters are dropped, consistently
+  assert.equal(compactIdentityKey(null), '');
+  assert.equal(compactIdentityKey(undefined), '');
+  assert.equal(compactIdentityKey(''), '');
+});
+
+test('compactIdentityKey closes the punctuation/double-space bypass', () => {
+  // The Sep-2026 Sweet Water duplicate: the old exact-lower(name) candidate
+  // query would never surface "Sweet-Water" next to "Sweet Water". The
+  // compact key puts every spelling variant in the same candidate bucket.
+  const variants = ['Sweet Water', 'Sweet-Water', 'sweet water', 'SWEET  WATER', 'Sweet_Water'];
+  const keys = new Set(variants.map(compactIdentityKey));
+  assert.equal(keys.size, 1);
+  assert.equal([...keys][0], 'sweetwater');
+});
+
+test('compactIdentityKey keeps genuinely different names apart', () => {
+  assert.notEqual(compactIdentityKey('Sweet Water'), compactIdentityKey('Sweetwater Blues'));
+  assert.notEqual(compactIdentityKey('Skid Row'), compactIdentityKey('Skidrow Joe'));
 });
