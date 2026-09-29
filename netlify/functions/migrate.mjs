@@ -643,6 +643,32 @@ export default async (req) => {
     `;
     results.push('index game_sponsors_sort_order_idx ready');
 
+    // duplicate_flags table --------------------------------------------------
+    // Duplicate-band monitor (see scanDuplicateBands in
+    // cron_verify_stale_bands.mjs). One row per detected true-duplicate pair
+    // (same name + same city + same country, e.g. the Sep-2026 Sweet Water
+    // double). Pairs the monitor flags stay open until a maintainer
+    // resolves them (delete/merge the bad node), at which point
+    // resolved_at is stamped — the monitor never re-flags a resolved pair,
+    // and never flags same-name-different-city bands (the two Skid Rows are
+    // legitimately different bands).
+    await sql`
+      create table if not exists duplicate_flags (
+        id          bigserial primary key,
+        band_ids    uuid[] not null,
+        detected_at timestamptz not null default now(),
+        resolved_at timestamptz,
+        note        text
+      )
+    `;
+    results.push('table duplicate_flags ready');
+
+    await sql`
+      create index if not exists duplicate_flags_resolved_at_idx
+      on duplicate_flags (resolved_at)
+    `;
+    results.push('index duplicate_flags_resolved_at_idx ready');
+
     return ok({ steps: results });
   } catch (err) {
     console.error('migrate failed', err);

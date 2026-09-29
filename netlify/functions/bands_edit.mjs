@@ -41,7 +41,7 @@ import {
   findUserByToken,
 } from './_db.mjs';
 import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
-import { sameBandIdentity } from './_bands_write.mjs';
+import { sameBandIdentity, compactIdentityKey } from './_bands_write.mjs';
 import { notifyBandTouched, EVENT_BAND_BADGE_ADDED, EVENT_BAND_EDITED } from './_notify.mjs';
 import {
   normalizeLinksInput,
@@ -269,7 +269,7 @@ export default async (req, context) => {
       const pendingCountry = 'country' in changes ? (changes.country.new || '') : (existing.country || '');
       const candidates = await sql`
         select id, name, city, country from bands
-        where lower(name) = ${pendingName.toLowerCase()} and id <> ${bandId}
+        where regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = ${compactIdentityKey(pendingName)} and id <> ${bandId}
       `;
       const clash = candidates.find((row) =>
         sameBandIdentity(
