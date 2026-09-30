@@ -2,9 +2,10 @@
 //
 // Providers: Google, Facebook, and Instagram via Meta's "Instagram Login"
 // product (NOT the retired Instagram Basic Display API — that was removed
-// December 2024). Instagram Login runs on the SAME Meta app credentials as
-// Facebook Login (one App ID / App Secret pair); it is a separate product to
-// enable in the Meta app dashboard.
+// December 2024). Instagram Login lives on its OWN Meta app with its own
+// Instagram App ID / Instagram App Secret (visible under the Instagram
+// product's "API setup with Instagram login" page) — it does NOT reuse the
+// Facebook app's credentials.
 //
 // What each provider gives us:
 //   Google    -> sub, name, email, email_verified, picture (userinfo endpoint)
@@ -58,7 +59,8 @@ export function isPlaceholderEmail(email) {
 }
 
 // Credentials come from the environment only — never hardcoded, never logged.
-// Instagram Login reuses the Meta (Facebook) app's ID and secret.
+// Facebook uses FACEBOOK_APP_ID / FACEBOOK_APP_SECRET; Instagram Login uses
+// its own INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET from the second Meta app.
 export function getProviderConfig(provider) {
   if (provider === 'google') {
     const clientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
@@ -66,9 +68,16 @@ export function getProviderConfig(provider) {
     if (!clientId || !clientSecret) return null;
     return { provider, clientId, clientSecret };
   }
-  if (provider === 'facebook' || provider === 'instagram') {
+  if (provider === 'facebook') {
     const clientId = (process.env.FACEBOOK_APP_ID || '').trim();
     const clientSecret = (process.env.FACEBOOK_APP_SECRET || '').trim();
+    if (!clientId || !clientSecret) return null;
+    return { provider, clientId, clientSecret };
+  }
+  if (provider === 'instagram') {
+    // Separate Meta app, separate credentials — see header comment.
+    const clientId = (process.env.INSTAGRAM_APP_ID || '').trim();
+    const clientSecret = (process.env.INSTAGRAM_APP_SECRET || '').trim();
     if (!clientId || !clientSecret) return null;
     return { provider, clientId, clientSecret };
   }
