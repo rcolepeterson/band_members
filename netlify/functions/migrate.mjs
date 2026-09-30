@@ -681,6 +681,43 @@ export default async (req) => {
     `;
     results.push('index game_sponsors_sort_order_idx ready');
 
+    // game_challenges table --------------------------------------------------
+    // Remote head-to-head: one row per invite. The challenger picks band_a
+    // and gets an unguessable token; the invite link is
+    // /game/?invite=<token>. The invitee picks band_b on their own device,
+    // which flips the row to 'answered'. Picks are OPEN (the invitee sees
+    // band_a before choosing), matching the pass-and-play table behavior.
+    // Band refs are the game client's graph node ids (display-name strings,
+    // not band UUIDs) — validated for shape at the API layer, resolved
+    // against the loaded graph on the client. Rows are never deleted: an old
+    // link keeps showing its matchup.
+    await sql`
+      create table if not exists game_challenges (
+        id            uuid primary key default gen_random_uuid(),
+        token         text not null unique,
+        challenger_id uuid not null references users(id) on delete cascade,
+        invitee_id    uuid references users(id) on delete set null,
+        band_a        text not null,
+        band_b        text,
+        status        text not null default 'open' check (status in ('open','answered')),
+        created_at    timestamptz not null default now(),
+        answered_at   timestamptz
+      )
+    `;
+    results.push('table game_challenges ready');
+
+    await sql`
+      create index if not exists game_challenges_challenger_id_idx
+      on game_challenges (challenger_id)
+    `;
+    results.push('index game_challenges_challenger_id_idx ready');
+
+    await sql`
+      create index if not exists game_challenges_invitee_id_idx
+      on game_challenges (invitee_id)
+    `;
+    results.push('index game_challenges_invitee_id_idx ready');
+
     // duplicate_flags table --------------------------------------------------
     // Duplicate-band monitor (see scanDuplicateBands in
     // cron_verify_stale_bands.mjs). One row per detected true-duplicate pair
