@@ -92,8 +92,6 @@
       background:linear-gradient(90deg, transparent, rgba(143,232,246,.5), transparent);pointer-events:none}
     .game-modal-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);margin-bottom:var(--space-1)}
     .game-modal-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.04em}
-    .game-close{font-size:var(--text-sm);color:var(--color-text-muted);text-decoration:none;white-space:nowrap}
-    .game-close:hover{color:var(--color-text)}
     .game-modal-sub{color:var(--color-text-muted);font-size:var(--text-sm);margin:0 0 var(--space-4)}
     .game-modes{display:grid;gap:var(--space-2);margin-bottom:var(--space-4)}
     .game-mode{display:flex;gap:var(--space-3);align-items:flex-start;border:1px solid var(--color-border);
@@ -104,8 +102,6 @@
     .game-mode span{color:var(--color-text-muted);font-size:var(--text-xs)}
     .game-mode-locked{opacity:.55;cursor:not-allowed}
     .game-mode-locked strong{display:flex;align-items:center;gap:var(--space-2)}
-    .game-soon-pill{font-size:var(--text-xs);letter-spacing:.14em;text-transform:uppercase;
-      border:1px solid var(--color-border);border-radius:var(--radius-full);padding:.15rem .6rem;color:var(--color-text-muted)}
     .game-field{margin-bottom:var(--space-3);position:relative}
     .game-field label{display:block;font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;
       color:var(--color-text-muted);margin-bottom:var(--space-1)}
@@ -190,7 +186,6 @@
         <div class="game-modal-card">
           <div class="game-modal-head">
             <div class="game-modal-title" id="game-modal-title"><span aria-hidden="true">6&deg;</span> Six Degrees game</div>
-            <a class="game-close" href="/" data-game-close>&larr; Back to the tree</a>
           </div>
           <p class="game-modal-sub">Name two bands. If the tree connects them, you brag. If it breaks, you drink.</p>
           <div class="game-modes" role="radiogroup" aria-label="How to play">
@@ -208,11 +203,11 @@
             </label>
             <label class="game-mode game-mode-locked" aria-disabled="true">
               <input type="radio" name="game-mode" value="daily" disabled />
-              <span><strong>Daily Chain <span class="game-soon-pill">Soon</span></strong><span>One fresh matchup every day. Same chain for everyone.</span></span>
+              <span><strong>Daily Chain</strong><span>One fresh matchup every day. Same chain for everyone.</span></span>
             </label>
             <label class="game-mode game-mode-locked" aria-disabled="true">
               <input type="radio" name="game-mode" value="stakes" disabled />
-              <span><strong>Stakes <span class="game-soon-pill">Soon</span></strong><span>Put something on it. Winner takes the round.</span></span>
+              <span><strong>Stakes</strong><span>Put something on it. Winner takes the round.</span></span>
             </label>
           </div>
           <div class="game-field" id="game-field-a-wrap">
