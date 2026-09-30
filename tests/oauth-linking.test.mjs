@@ -231,14 +231,23 @@ test('getProviderConfig returns null when Google credentials are missing', () =>
   });
 });
 
-test('facebook and instagram share the Meta app credentials', () => {
-  withEnv({ FACEBOOK_APP_ID: 'fbid', FACEBOOK_APP_SECRET: 'fbsec' }, () => {
-    const fb = getProviderConfig('facebook');
-    const ig = getProviderConfig('instagram');
-    assert.equal(fb.clientId, 'fbid');
-    assert.equal(ig.clientId, 'fbid');
-    assert.equal(ig.clientSecret, 'fbsec');
-  });
+test('instagram uses its own Instagram app credentials', () => {
+  withEnv(
+    {
+      FACEBOOK_APP_ID: 'fbid',
+      FACEBOOK_APP_SECRET: 'fbsec',
+      INSTAGRAM_APP_ID: 'igid',
+      INSTAGRAM_APP_SECRET: 'igsec',
+    },
+    () => {
+      const fb = getProviderConfig('facebook');
+      const ig = getProviderConfig('instagram');
+      assert.equal(fb.clientId, 'fbid');
+      assert.equal(fb.clientSecret, 'fbsec');
+      assert.equal(ig.clientId, 'igid');
+      assert.equal(ig.clientSecret, 'igsec');
+    }
+  );
 });
 
 test('getProviderConfig returns null for an unknown provider', () => {
