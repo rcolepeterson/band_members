@@ -103,7 +103,7 @@ function successPage(user, returnTo) {
   const body = `<div class="spinner" aria-hidden="true"></div><h1>You're signed in</h1><p>Taking you back…</p><noscript><p>JavaScript is required to finish signing in.</p><a href="/">Back to the site</a></noscript>
 <script>
   try {
-    localStorage.setItem('bmft-user', ${safePayload});
+    localStorage.setItem('bmft-user', JSON.stringify(${safePayload}));
   } catch (e) {}
   location.replace(${safeReturn});
 </script>`;
