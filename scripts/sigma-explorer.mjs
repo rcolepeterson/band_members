@@ -655,6 +655,10 @@ const STAGE_CSS = `
    visitor is looking at are visibly the same thing. */
 #${STAGE_ID} .sigma-intro__hello{color:#ffc978;font-weight:500}
 #${STAGE_ID} .sigma-footer .sigma-frontier{font-size:12px;color:#8b98a8}
+/* Legal line: one carriage return below the group jump, quiet like the rest. */
+#${STAGE_ID} .sigma-footer .sigma-legal{margin:6px 0 0;font-size:12px;color:#8b98a8}
+#${STAGE_ID} .sigma-footer .sigma-legal a{color:#9fb0c2;text-decoration:none}
+#${STAGE_ID} .sigma-footer .sigma-legal a:hover{color:#d6e4f2;text-decoration:underline}
 #${STAGE_ID} .sigma-context{margin:0;font-size:12px;color:#9aa7b6;line-height:1.45}
 #${STAGE_ID} .sigma-context strong{color:#dfe6ef;font-weight:500}
 /* Disconnected-scene disclosure: a filtered scene can leave a handful of
@@ -890,6 +894,9 @@ function buildStage(doc, mount) {
         <span class="sigma-other-groups__text"></span>
         <button type="button" class="sigma-other-groups__btn"></button>
       </p>
+      <!-- Legal, one carriage return below the group jump: the graph stage
+           captures scroll for zoom, so this footer is the bottom of the page. -->
+      <p class="sigma-legal"><a href="/privacy.html">Privacy</a><span aria-hidden="true"> &middot; </span><a href="/terms.html">Terms</a></p>
     </div>
   `;
   stage.hidden = false;
