@@ -118,6 +118,44 @@ export default async (req) => {
     await sql`alter table users add column if not exists instrument text`;
     results.push('columns users.{city,state,country,instrument} ready');
 
+    // four-option sign-in: provider identity columns.
+    // provider: which identity source the row belongs to — 'email' for the
+    //   original passwordless flow (the default, so existing rows are email
+    //   rows), or 'google' / 'facebook' / 'instagram' for OAuth rows.
+    // provider_user_id: the provider's stable user id (Google `sub`,
+    //   Facebook `id`, Instagram `id`). Unique per provider — one OAuth
+    //   identity can only ever belong to one row (race-safe linking in
+    //   oauth_callback.mjs relies on this index).
+    // avatar_url: provider profile photo, refreshed on each OAuth sign-in.
+    // email_verified: true ONLY when the provider asserted a verified email.
+    //   The email flow stays unverified by design; the linking rule in
+    //   _oauth.mjs (decideIdentity) relies on this flag, so nothing may set
+    //   it true except a provider's verified claim.
+    await sql`alter table users add column if not exists provider         text not null default 'email'`;
+    await sql`alter table users add column if not exists provider_user_id text`;
+    await sql`alter table users add column if not exists avatar_url       text`;
+    await sql`alter table users add column if not exists email_verified   boolean not null default false`;
+    await sql`
+      create unique index if not exists users_provider_uid_idx
+        on users (provider, provider_user_id)
+        where provider_user_id is not null
+    `;
+    results.push('columns users.{provider,provider_user_id,avatar_url,email_verified} ready');
+
+    // oauth_states: one-shot CSRF states for the OAuth round-trip. The site
+    // has no cookies or server sessions, so the state lives server-side:
+    // 15-minute TTL, consumed exactly once by /api/oauth/callback.
+    // oauth_authorize.mjs sweeps expired rows opportunistically.
+    await sql`
+      create table if not exists oauth_states (
+        state      text primary key,
+        provider   text not null,
+        return_to  text not null,
+        created_at timestamptz not null default now()
+      )
+    `;
+    results.push('table oauth_states ready');
+
     // contributions table ---------------------------------------------------
     // Append-only log. Each row is one recorded action by one user on one
     // band. The metadata column is jsonb so we can extend without migrations

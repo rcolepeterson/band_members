@@ -156,6 +156,12 @@ export const LIMITS = {
   // only accounts actually CREATED, which is the expensive, abusable half.
   signupAttempts: { limit: num('RL_SIGNUP_ATTEMPTS', 30), windowSeconds: 3600 },
   signupCreations: { limit: num('RL_SIGNUP_CREATIONS', 5), windowSeconds: 3600 },
+  // OAuth endpoints: per IP, since no credential exists yet at this point.
+  // authorize is cheap (one redirect URL minted); the callback does provider
+  // HTTP and DB writes, so it gets its own budget. Both comfortably above
+  // human use — a real visitor signs in a handful of times per hour at most.
+  oauthAuthorize: { limit: num('RL_OAUTH_AUTHORIZE', 60), windowSeconds: 3600 },
+  oauthCallback: { limit: num('RL_OAUTH_CALLBACK', 60), windowSeconds: 3600 },
   // Per token, not per IP: these all require a credential, so the credential is the
   // fairer subject. One office behind one address should not share a budget.
   bandCreate: { limit: num('RL_BAND_CREATE', 30), windowSeconds: 3600 },
