@@ -154,6 +154,23 @@
     @media (max-width: 640px){
       .arena-main{padding:var(--space-6) var(--space-3) var(--space-10)}
       .game-modal-card{padding:var(--space-4)}
+      /* Mobile density pass: shrink everything so the page fits on screen
+         with no wrapping in the header. */
+      .arena-header-inner{padding:var(--space-2) var(--space-3);gap:var(--space-2)}
+      .arena-wordmark{font-size:10px;letter-spacing:.18em;white-space:nowrap}
+      .arena-back{white-space:nowrap;font-size:12px;padding:var(--space-1) var(--space-3);min-height:40px}
+      .arena-degree{font-size:clamp(3rem,22vw,4.5rem)}
+      .arena-hero{margin-bottom:var(--space-5)}
+      .arena-eyebrow{margin-top:var(--space-2)}
+      .arena-sub{font-size:13px}
+      .game-modal-title{font-size:1rem}
+      .game-modal-sub{font-size:13px;margin-bottom:var(--space-3)}
+      .game-modes{margin-bottom:var(--space-3)}
+      .game-mode{padding:var(--space-2) var(--space-3);gap:var(--space-2)}
+      .game-mode strong{font-size:13px}
+      .game-mode > span > span{font-size:12px}
+      .game-field input{min-height:44px;font-size:14px}
+      .game-run-btn{min-height:48px}
     }
   </style>
 </head>
