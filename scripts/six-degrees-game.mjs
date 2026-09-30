@@ -167,6 +167,8 @@ function initGameUI() {
     }
   });
   const runBtn = document.getElementById('game-run');
+  const challengeBtn = document.getElementById('game-challenge-btn');
+  const acceptBtn = document.getElementById('game-accept-btn');
   const result = document.getElementById('game-result');
   const statusLine = document.getElementById('game-status');
 
@@ -187,6 +189,14 @@ function initGameUI() {
       const p = JSON.parse(raw);
       return !!(p && typeof p.token === 'string' && p.token.length >= 8 && p.email);
     } catch { return false; }
+  }
+
+  function authToken() {
+    try {
+      const raw = localStorage.getItem('bmft-user');
+      const p = raw && JSON.parse(raw);
+      return p && typeof p.token === 'string' ? p.token : '';
+    } catch { return ''; }
   }
 
   function markNudgeDone() {
@@ -249,10 +259,15 @@ function initGameUI() {
   });
 
   // Deep link: ?game=1 (the QR on share cards) or ?game=<id> (a shared chain)
-  // opens the game straight away. The lure only works if there is no friction
-  // between tapping the link and playing.
+  // opens the game straight away. ?invite=<token> (a head-to-head challenge)
+  // does the same and then loads the challenge. The lure only works if there
+  // is no friction between tapping the link and playing.
+  const inviteToken = (() => {
+    try { return new URLSearchParams(window.location.search).get('invite') || ''; }
+    catch (_) { return ''; }
+  })();
   try {
-    if (new URLSearchParams(window.location.search).has('game')) openModal();
+    if (new URLSearchParams(window.location.search).has('game') || inviteToken) openModal();
   } catch (_) {}
 
   function currentMode() {
@@ -266,7 +281,17 @@ function initGameUI() {
     document.getElementById('game-field-a-wrap').style.display = mode === 'chaos' ? 'none' : '';
     wrapB.style.display = mode === 'head-to-head' ? '' : 'none';
     randomizeBtn.style.display = mode === 'chaos' ? '' : 'none';
+    runBtn.style.display = '';
     runBtn.textContent = mode === 'head-to-head' ? 'Set the matchup' : mode === 'solo' ? 'Challenge me' : 'Deal me a pair';
+    // Remote head-to-head lives next to pass-and-play: challenging needs only
+    // band A (your pick); the opponent picks band B on their own device.
+    // Visible to logged-out players too — tapping it routes through sign-in,
+    // which is the growth loop working as intended.
+    if (challengeBtn) challengeBtn.style.display = mode === 'head-to-head' ? '' : 'none';
+    // The accept button only appears while answering an invite (see
+    // handleInvite); a mode switch always stands it down.
+    if (acceptBtn) acceptBtn.style.display = 'none';
+    fieldA.disabled = false;
     result.innerHTML = '';
     statusLine.textContent = '';
   }
@@ -349,6 +374,249 @@ function initGameUI() {
       statusLine.textContent = 'Could not load the tree. Check your connection and try again.';
     }
   });
+
+  // --- remote head-to-head -----------------------------------------------
+  // Pass-and-play ("Set the matchup") stays untouched. Remote play mints a
+  // challenge on the server: you pick band A, the opponent gets a link and
+  // picks band B on their own phone. Quiet by design — no emails; the
+  // "Your challenges" list below is how anyone learns a challenge moved.
+
+  function bandName(g, ref) {
+    return (g && g.bands.get(ref) && g.bands.get(ref).name) || ref;
+  }
+
+  function setHeadToHead(a, b, g) {
+    const hth = modeInputs.find((i) => i.value === 'head-to-head');
+    if (hth) { hth.checked = true; syncModeUI(); }
+    selected.a = a || null;
+    selected.b = b || null;
+    fieldA.value = a ? bandName(g, a) : '';
+    fieldB.value = b ? bandName(g, b) : '';
+  }
+
+  if (challengeBtn) challengeBtn.addEventListener('click', async () => {
+    if (!isSignedIn()) {
+      // Challenging is a signed-in action — same funnel as every other
+      // signup entry point, no parallel gate.
+      if (typeof window.openSignupPopover === 'function' && !isArenaPage()) window.openSignupPopover();
+      else if (isArenaPage()) window.location.href = '/';
+      else document.getElementById('add-band-btn')?.click();
+      return;
+    }
+    if (currentMode() !== 'head-to-head') return;
+    if (!selected.a) { statusLine.textContent = 'Pick your band first.'; fieldA.focus(); return; }
+    statusLine.textContent = 'Making your invite…';
+    try {
+      const res = await fetch('/api/game-challenge', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
+        body: JSON.stringify({ band_a: selected.a }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok || !data.inviteUrl) throw new Error((data && data.error) || 'request failed');
+      const g = await loadGraph();
+      const text = `Head-to-head: I picked ${bandName(g, selected.a)}. Think you can stump me?`;
+      statusLine.textContent = '';
+      if (navigator.share) {
+        await navigator.share({ title: 'Six Degrees of Rock — head-to-head', text, url: data.inviteUrl }).catch(() => {});
+        statusLine.textContent = 'Invite sent — your opponent picks their band on their own phone.';
+      } else {
+        const copied = await navigator.clipboard.writeText(`${text} ${data.inviteUrl}`).then(() => true).catch(() => false);
+        statusLine.textContent = copied
+          ? 'Invite link copied — send it to your opponent.'
+          : 'Invite ready: ' + data.inviteUrl;
+      }
+      loadChallenges();
+    } catch (err) {
+      statusLine.textContent = (err && err.message) || 'Could not make the invite. Check your connection and try again.';
+    }
+  });
+
+  function isArenaPage() {
+    try { return /(^|\/)game\/?$/.test(window.location.pathname); }
+    catch (_) { return false; }
+  }
+
+  async function isMyChallenge(token) {
+    try {
+      const res = await fetch('/api/game-challenges', { headers: { authorization: 'Bearer ' + authToken() } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) return false;
+      return (data.sent || []).some((c) => c.token === token);
+    } catch { return false; }
+  }
+
+  async function handleInvite(token) {
+    statusLine.textContent = 'Loading the challenge…';
+    let data;
+    try {
+      const res = await fetch('/api/game-challenge?token=' + encodeURIComponent(token));
+      data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error((data && data.error) || 'not found');
+    } catch {
+      statusLine.textContent = 'That invite didn\u2019t land. Ask your challenger for a fresh one.';
+      return;
+    }
+    statusLine.textContent = '';
+    const g = await loadGraph().catch(() => null);
+    const nameA = bandName(g, data.band_a);
+
+    // Answered already — either player (or anyone with the link) can reveal it.
+    if (data.status === 'answered' && data.band_b) {
+      if (g) { setHeadToHead(data.band_a, data.band_b, g); renderMatchup(g, data.band_a, data.band_b); }
+      else { statusLine.textContent = 'Could not load the tree. Check your connection and try again.'; }
+      return;
+    }
+
+    if (!isSignedIn()) {
+      // The lure before the gate: who challenged you, and with what.
+      const card = el(`<div class="game-result-card">
+        <div class="game-result-meta"><span class="game-hops">Head-to-head challenge</span></div>
+        <p class="game-invite-text"></p>
+        <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to accept</button></div>
+      </div>`);
+      card.querySelector('.game-invite-text').textContent =
+        `${data.challenger_name || 'Someone'} picked ${nameA} and wants to stump you. Sign in to pick your band.`;
+      card.querySelector('[data-signin]').addEventListener('click', () => {
+        if (isArenaPage()) {
+          // The arena has no signup UI of its own — bounce to the main page
+          // with the invite intact; after sign-in the modal opens on it.
+          window.location.href = '/?invite=' + encodeURIComponent(token);
+        } else if (typeof window.openSignupPopover === 'function') {
+          window.openSignupPopover();
+        } else {
+          document.getElementById('add-band-btn')?.click();
+        }
+      });
+      result.innerHTML = '';
+      result.appendChild(card);
+      return;
+    }
+
+    if (await isMyChallenge(token)) {
+      // Your own link, opened by you — the waiting room.
+      const card = el(`<div class="game-result-card">
+        <div class="game-result-meta"><span class="game-hops">Waiting on your opponent</span></div>
+        <p class="game-invite-text"></p>
+        <div class="game-result-actions"><button type="button" class="tool-chip" data-copy>Copy invite link</button></div>
+      </div>`);
+      card.querySelector('.game-invite-text').textContent =
+        `You picked ${nameA}. Your opponent hasn't answered yet — the moment they do, it shows up under Your challenges.`;
+      card.querySelector('[data-copy]').addEventListener('click', async () => {
+        const url = `${window.location.origin}/game/?invite=${encodeURIComponent(token)}`;
+        const okCopy = await navigator.clipboard.writeText(url).then(() => true).catch(() => false);
+        statusLine.textContent = okCopy ? 'Invite link copied.' : url;
+      });
+      result.innerHTML = '';
+      result.appendChild(card);
+      return;
+    }
+
+    // The accept view: band A is locked (the challenger's pick, visible —
+    // open picks), you pick band B.
+    setHeadToHead(data.band_a, null, g);
+    fieldA.disabled = true;
+    if (acceptBtn) {
+      acceptBtn.style.display = '';
+      acceptBtn.onclick = () => acceptChallenge(token);
+    }
+    runBtn.style.display = 'none';
+    if (challengeBtn) challengeBtn.style.display = 'none';
+    statusLine.textContent = `${data.challenger_name || 'Your challenger'} picked ${nameA}. Now pick yours — try to stump them.`;
+    setTimeout(() => fieldB.focus(), 60);
+  }
+
+  async function acceptChallenge(token) {
+    if (!selected.b) { statusLine.textContent = 'Pick your band first.'; fieldB.focus(); return; }
+    statusLine.textContent = 'Locking in your pick…';
+    try {
+      const res = await fetch('/api/game-challenge/accept', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
+        body: JSON.stringify({ token, band_b: selected.b }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error((data && data.error) || 'request failed');
+      statusLine.textContent = '';
+      runBtn.style.display = '';
+      if (acceptBtn) acceptBtn.style.display = 'none';
+      fieldA.disabled = false;
+      const g = await loadGraph();
+      renderMatchup(g, data.band_a, data.band_b);
+      loadChallenges();
+    } catch (err) {
+      statusLine.textContent = (err && err.message) || 'Could not save your pick. Try again.';
+    }
+  }
+
+  // --- your challenges (the quiet status view; arena page only) ---------------
+  async function loadChallenges() {
+    const list = document.getElementById('game-challenges');
+    if (!list) return;
+    const wrap = list.closest('[data-challenges-wrap]');
+    if (!isSignedIn()) { if (wrap) wrap.hidden = true; return; }
+    let data;
+    try {
+      const res = await fetch('/api/game-challenges', { headers: { authorization: 'Bearer ' + authToken() } });
+      data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error();
+    } catch { return; }
+    const g = await loadGraph().catch(() => null);
+    list.innerHTML = '';
+    let count = 0;
+
+    const row = (text, buttons) => {
+      const div = el(`<div class="challenge-row"><span class="challenge-text"></span><span class="challenge-actions"></span></div>`);
+      div.querySelector('.challenge-text').textContent = text;
+      const actions = div.querySelector('.challenge-actions');
+      for (const [label, fn] of buttons) {
+        const b = el(`<button type="button" class="tool-chip"></button>`);
+        b.textContent = label;
+        b.addEventListener('click', fn);
+        actions.appendChild(b);
+      }
+      list.appendChild(div);
+      count++;
+    };
+
+    const seeChain = (a, b) => async () => {
+      const gg = g || await loadGraph().catch(() => null);
+      if (!gg) { statusLine.textContent = 'Could not load the tree. Check your connection and try again.'; return; }
+      setHeadToHead(a, b, gg);
+      renderMatchup(gg, a, b);
+      modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    const copyInvite = (token) => async () => {
+      const url = `${window.location.origin}/game/?invite=${encodeURIComponent(token)}`;
+      const okCopy = await navigator.clipboard.writeText(url).then(() => true).catch(() => false);
+      statusLine.textContent = okCopy ? 'Invite link copied.' : url;
+    };
+    const challengeBack = () => {
+      setHeadToHead(null, null, g);
+      statusLine.textContent = 'Your turn to deal — pick your band, then Challenge a friend.';
+      modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => fieldA.focus(), 300);
+    };
+
+    for (const c of data.sent || []) {
+      if (c.status === 'open') {
+        row(`You picked ${bandName(g, c.band_a)} — waiting on your opponent.`, [['Copy invite link', copyInvite(c.token)]]);
+      } else if (c.band_b) {
+        row(`${c.invitee_name || 'Your opponent'} answered: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
+          [['See the chain', seeChain(c.band_a, c.band_b)]]);
+      }
+    }
+    for (const c of data.received || []) {
+      if (c.band_b) {
+        row(`${c.challenger_name || 'Someone'} challenged you: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
+          [['See the chain', seeChain(c.band_a, c.band_b)], ['Challenge back', challengeBack]]);
+      }
+    }
+    if (wrap) wrap.hidden = count === 0;
+  }
+
+  if (inviteToken) handleInvite(inviteToken);
+  loadChallenges();
 
   // Matchup view: band A vs band B with a Connect button. No BFS runs here —
   // the chain (or "No rawk found.") only renders after Connect is hit, so
