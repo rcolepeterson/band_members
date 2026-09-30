@@ -242,7 +242,7 @@ function initGameUI() {
     document.getElementById('mobile-sheet-backdrop')?.setAttribute('hidden', '');
     openModal();
   }));
-  closeBtn.addEventListener('click', closeModal);
+  closeBtn?.addEventListener('click', closeModal);
   backdrop.addEventListener('click', closeModal);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !modal.hidden) closeModal();
