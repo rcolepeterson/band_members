@@ -697,6 +697,61 @@ body {
      validation or network message appears. Empty by default. */
   min-height: 1.2em;
 }
+/* Four-option sign-in: provider buttons above the email form. Quiet,
+   top-shelf styling — full-width bordered buttons, no brand-color noise.
+   The flow is a full-page redirect (not a popup), started by JS via
+   /api/oauth/authorize and finished at /api/oauth/callback. */
+.oauth-options {
+  margin-bottom: var(--space-4);
+}
+.oauth-label {
+  font-size: var(--text-xs);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+.oauth-buttons {
+  display: grid;
+  gap: var(--space-2);
+}
+.oauth-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: rgba(255,255,255,.02);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.oauth-btn:hover {
+  border-color: rgba(82,174,182,.55);
+}
+.oauth-btn:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+.oauth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.oauth-divider::before,
+.oauth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-divider);
+}
 .signed-in-strip {
   /* Small identity chip shown at the top of the signed-in state
      inside the Add-your-band popover. Reads as a soft badge with a
@@ -3628,6 +3683,15 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                   Quick one-time sign-up so we can attribute your contributions and let you edit later.
                   No password. Your email is only used for account recovery — never shared.
                 </p>
+                <div class="oauth-options">
+                  <div class="oauth-label">Continue with</div>
+                  <div class="oauth-buttons">
+                    <button type="button" class="oauth-btn" data-oauth-provider="google">Google</button>
+                    <button type="button" class="oauth-btn" data-oauth-provider="facebook">Facebook</button>
+                    <button type="button" class="oauth-btn" data-oauth-provider="instagram">Instagram</button>
+                  </div>
+                  <div class="oauth-divider"><span>or with email</span></div>
+                </div>
                 <form class="form-grid" id="signup-form" novalidate>
                   <div class="form-span-2">
                     <label for="signup-email">Email</label>
@@ -11706,8 +11770,10 @@ function downloadPngBlob(blob) {
     // screen. See setAuthMode below.
     const AUTH_COPY = {
       title: 'Sign in or create an account',
-      copy: 'One email, no password. If you have been here before we will restore your account; ' +
-            'if not, we will make you one. Your email is only used for account recovery — never shared.',
+      copy: 'Choose how you would like to sign in. Google, Facebook, and Instagram go through ' +
+            'the provider; email needs no password. If you have been here before we will restore ' +
+            'your account; if not, we will make you one. Your email is only used for account ' +
+            'recovery — never shared.',
       submit: 'Continue',
       pending: 'Just a moment…'
     };
@@ -13018,6 +13084,39 @@ function downloadPngBlob(blob) {
           const stateInput = document.getElementById('signup-state');
           const countryInput = document.getElementById('signup-country');
           const instrumentInput = document.getElementById('signup-instrument');
+
+          // Four-option sign-in: Google / Facebook / Instagram go through a
+          // full-page redirect (not a popup). The browser is sent to
+          // /api/oauth/authorize, which returns the provider's authorize URL;
+          // the provider redirects back to /api/oauth/callback, which stores
+          // the user in bmft-user and sends the visitor back to this page.
+          async function startOAuth(provider, button) {
+            const buttons = Array.from(document.querySelectorAll('[data-oauth-provider]'));
+            buttons.forEach((b) => { b.disabled = true; });
+            try {
+              const returnTo = location.pathname + location.search;
+              const res = await fetch(
+                '/api/oauth/authorize?provider=' + encodeURIComponent(provider) +
+                '&return_to=' + encodeURIComponent(returnTo)
+              );
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok || !data.ok || !data.url) {
+                throw new Error((data && data.error) || 'sign-in unavailable');
+              }
+              location.href = data.url;
+            } catch (err) {
+              buttons.forEach((b) => { b.disabled = false; });
+              if (status) {
+                status.textContent = 'Could not start sign-in with ' + provider +
+                  '. Please try email instead.';
+              }
+            }
+          }
+          document.querySelectorAll('[data-oauth-provider]').forEach((button) => {
+            button.addEventListener('click', () => {
+              startOAuth(button.getAttribute('data-oauth-provider'), button);
+            });
+          });
 
           if (form) {
             form.addEventListener('submit', async (event) => {
