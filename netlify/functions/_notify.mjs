@@ -28,6 +28,7 @@
 // but treat the result as informational.
 
 import { generateToken } from './_db.mjs';
+import { isPlaceholderEmail } from './_oauth.mjs';
 import {
   buildBandUpdateEmail,
   buildMemberUpdateEmail,
@@ -137,6 +138,12 @@ async function notifyOneRecipient(sql, bandId, bandName, recipient, mailer, even
   if (!prefs.email_enabled || prefs.unsubscribed_at) {
     return { sent: false, reason: 'opted out' };
   }
+  // OAuth rows without a real address (Instagram sign-ins) carry a synthetic
+  // placeholder email that is not routable — never attempt to mail it. (A
+  // bounce to a dead domain would only hurt sender reputation.)
+  if (isPlaceholderEmail(recipient.email)) {
+    return { sent: false, reason: 'no routable email address' };
+  }
   // Granular event-type opt-out: skip if the user disabled this event type.
   if (eventType && EVENT_PREF_COLUMN[eventType]) {
     const col = EVENT_PREF_COLUMN[eventType];
@@ -226,6 +233,11 @@ async function notifyOneMemberRecipient(sql, memberId, memberName, recipient, ma
   const prefs = await ensureNotifyPrefs(sql, recipient.id);
   if (!prefs.email_enabled || prefs.unsubscribed_at) {
     return { sent: false, reason: 'opted out' };
+  }
+  // Same placeholder-email guard as notifyOneRecipient: Instagram sign-ins
+  // have no real address, so there is nothing to mail.
+  if (isPlaceholderEmail(recipient.email)) {
+    return { sent: false, reason: 'no routable email address' };
   }
   if (eventType && EVENT_PREF_COLUMN[eventType]) {
     const col = EVENT_PREF_COLUMN[eventType];
