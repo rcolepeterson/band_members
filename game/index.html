@@ -139,6 +139,14 @@
     .game-drink-rule{font-size:var(--text-sm);margin:0 0 var(--space-2)}
     .game-dead-sub{font-size:var(--text-sm);color:var(--color-text-muted);margin:0 0 var(--space-3)}
     .game-result-actions{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-3)}
+    .game-invite-text{font-size:var(--text-sm);color:var(--color-text);margin:0 0 var(--space-2)}
+    .arena-challenges{margin-top:var(--space-6);border-top:1px solid var(--color-divider);padding-top:var(--space-4)}
+    .arena-challenges h2{font-size:var(--text-sm);letter-spacing:.08em;text-transform:uppercase;
+      color:var(--color-text-muted);margin:0 0 var(--space-2);font-weight:700}
+    .challenge-row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);
+      padding:var(--space-3) 0;border-bottom:1px solid var(--color-divider)}
+    .challenge-text{font-size:var(--text-sm);color:var(--color-text)}
+    .challenge-actions{display:flex;gap:var(--space-2);flex:0 0 auto}
     .game-nudge{position:relative;margin-top:var(--space-4);border:1px solid var(--color-border);
       border-radius:var(--radius-lg);padding:var(--space-4);background:rgba(255,255,255,.02)}
     .game-nudge p{margin:0 0 var(--space-3);font-size:var(--text-sm);color:var(--color-text)}
@@ -238,10 +246,16 @@
           <div class="game-actions">
             <button class="game-run-btn" type="button" id="game-run">Run the chain</button>
             <button class="tool-chip" type="button" id="game-randomize" style="display:none">Deal me a pair</button>
+            <button class="tool-chip" type="button" id="game-challenge-btn" style="display:none">Challenge a friend</button>
+            <button class="game-run-btn" type="button" id="game-accept-btn" style="display:none">Accept the challenge</button>
           </div>
           <p id="game-status" role="status"></p>
           <div id="game-result"></div>
         </div>
+        <section class="arena-challenges" data-challenges-wrap hidden>
+          <h2>Your challenges</h2>
+          <div id="game-challenges"></div>
+        </section>
       </div>
     </main>
 
