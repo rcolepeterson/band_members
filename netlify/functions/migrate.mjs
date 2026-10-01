@@ -774,6 +774,74 @@ export default async (req) => {
     `;
     results.push('index game_matches_invitee_id_idx ready');
 
+    // Daily Chain tables -----------------------------------------------------
+    // The Wordle-style daily: one band pair per day (lottery, date-seeded),
+    // the player builds the chain link-by-link from multiple-choice options.
+    await sql`
+      create table if not exists daily_chains (
+        date         text primary key,  -- YYYY-MM-DD, Pacific
+        band_a       uuid not null references bands(id) on delete cascade,
+        band_b       uuid not null references bands(id) on delete cascade,
+        optimal_hops integer not null,
+        created_at   timestamptz not null default now()
+      )
+    `;
+    results.push('table daily_chains ready');
+
+    await sql`
+      create table if not exists daily_runs (
+        id              uuid primary key default gen_random_uuid(),
+        user_id         uuid not null references users(id) on delete cascade,
+        chain_date      text not null references daily_chains(date) on delete cascade,
+        status          text not null default 'active',
+        current_band_id uuid not null,
+        hops_used       integer not null default 0,
+        hints_used      integer not null default 0,
+        picks           jsonb not null default '[]',
+        current_options jsonb,
+        escaped         jsonb not null default '[]',
+        created_at      timestamptz not null default now(),
+        completed_at    timestamptz,
+        unique (user_id, chain_date)
+      )
+    `;
+    results.push('table daily_runs ready');
+
+    await sql`
+      create index if not exists daily_runs_user_id_idx
+      on daily_runs (user_id)
+    `;
+    results.push('index daily_runs_user_id_idx ready');
+
+    // Completion ledger — streaks are derived from this, never stored.
+    await sql`
+      create table if not exists daily_completions (
+        user_id    uuid not null references users(id) on delete cascade,
+        chain_date text not null,
+        via_freeze boolean not null default false,
+        created_at timestamptz not null default now(),
+        primary key (user_id, chain_date)
+      )
+    `;
+    results.push('table daily_completions ready');
+
+    // Purchased archive days (playing a missed day repairs the streak).
+    await sql`
+      create table if not exists daily_unlocks (
+        user_id    uuid not null references users(id) on delete cascade,
+        chain_date text not null,
+        created_at timestamptz not null default now(),
+        primary key (user_id, chain_date)
+      )
+    `;
+    results.push('table daily_unlocks ready');
+
+    // Credit economy columns on users.
+    await sql`alter table users add column if not exists credits      integer not null default 50`;
+    results.push('column users.credits ready');
+    await sql`alter table users add column if not exists freeze_count integer not null default 0`;
+    results.push('column users.freeze_count ready');
+
     // duplicate_flags table --------------------------------------------------
     // Duplicate-band monitor (see scanDuplicateBands in
     // cron_verify_stale_bands.mjs). One row per detected true-duplicate pair
