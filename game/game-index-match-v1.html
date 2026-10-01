@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Six Degrees — the game</title>
+  <meta name="description" content="Name two bands. If the tree connects them, you brag. If it breaks, you drink. The Six Degrees of Rock game." />
+  <link rel="canonical" href="https://sixdegreesofrock.com/game" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Six Degrees of Rock" />
+  <meta property="og:title" content="Six Degrees — the game" />
+  <meta property="og:description" content="Name two bands. If the tree connects them, you brag. If it breaks, you drink." />
+  <meta property="og:url" content="https://sixdegreesofrock.com/game" />
+  <meta property="og:image" content="https://sixdegreesofrock.com/og-image.png?v=2" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Six Degrees — the game" />
+  <meta name="twitter:description" content="Name two bands. If the tree connects them, you brag. If it breaks, you drink." />
+  <meta name="twitter:image" content="https://sixdegreesofrock.com/og-image.png?v=2" />
+  <link rel="stylesheet" href="/vendor/fonts.css" />
+  <style>
+    :root {
+      --text-xs: clamp(0.8125rem, 0.7625rem + 0.25vw, 0.9375rem);
+      --text-sm: clamp(0.9375rem, 0.8625rem + 0.35vw, 1.0625rem);
+      --text-base: clamp(1.0625rem, 1.0125rem + 0.25vw, 1.1875rem);
+      --text-lg: clamp(1.1875rem, 1.0625rem + 0.75vw, 1.5625rem);
+      --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+      --text-2xl: clamp(2rem, 1.2rem + 2.5vw, 3.5rem);
+      --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
+      --space-5: 1.25rem; --space-6: 1.5rem; --space-8: 2rem; --space-10: 2.5rem;
+      --space-12: 3rem; --space-16: 4rem; --space-20: 5rem;
+      --color-bg: #04070b; --color-surface: rgba(9,16,24,0.58); --color-surface-2: rgba(14,24,36,0.52);
+      --color-surface-offset: rgba(22,34,48,0.46); --color-border: rgba(225,244,255,0.24); --color-divider: rgba(225,244,255,0.12);
+      --color-text: #edf7ff; --color-text-muted: #c2d5e2; --color-text-faint: #6f7889;
+      --color-text-inverse: #0f1319; --color-primary: #8fe8f6; --color-primary-hover: #68bfd2;
+      --radius-sm: 0.375rem; --radius-md: 0.5rem; --radius-lg: 0.75rem; --radius-xl: 1rem; --radius-full: 9999px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.25); --shadow-md: 0 18px 40px rgba(0,0,0,0.4);
+      --shadow-lg: 0 28px 70px rgba(0,0,0,0.55);
+      --font-display: 'Boska', Georgia, serif; --font-body: 'Satoshi', system-ui, sans-serif;
+      --transition-interactive: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+      --accent: #52aeb6;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{-webkit-font-smoothing:antialiased;scroll-behavior:smooth;color-scheme:dark}
+    body{min-height:100dvh;font-family:var(--font-body);font-size:var(--text-base);line-height:1.6;background:var(--color-bg);color:var(--color-text)}
+    button{cursor:pointer;border:none;background:none;font:inherit;color:inherit}
+    input{font:inherit;color:inherit}
+
+    /* Arena backdrop: the same quiet glow + grid the graph floats on. */
+    .arena{position:relative;min-height:100dvh;overflow:hidden}
+    .arena::before{content:'';position:absolute;inset:0;pointer-events:none;
+      background:radial-gradient(circle at top, rgba(126,145,160,0.20) 0%, rgba(82,174,182,0.14) 24%, transparent 50%)}
+    .arena-grid{position:absolute;inset:0;pointer-events:none;opacity:.4;
+      background-image:linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size:44px 44px;
+      mask-image:linear-gradient(to bottom, rgba(0,0,0,0.55), transparent 85%)}
+
+    .arena-header{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px);
+      background:color-mix(in srgb, var(--color-bg) 78%, transparent);border-bottom:1px solid var(--color-divider)}
+    .arena-header-inner{max-width:880px;margin:0 auto;padding:var(--space-3) var(--space-4);
+      display:flex;align-items:center;justify-content:space-between;gap:var(--space-4)}
+    .arena-wordmark{font-weight:800;letter-spacing:.22em;font-size:var(--text-xs);text-transform:uppercase;
+      color:var(--color-text);text-decoration:none}
+    .arena-wordmark:hover{color:var(--color-primary)}
+    .arena-back{font-size:var(--text-sm);color:var(--color-text-muted);text-decoration:none;
+      display:inline-flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);
+      border:1px solid var(--color-border);border-radius:var(--radius-full)}
+    .arena-back:hover{color:var(--color-text);border-color:rgba(82,174,182,.45)}
+
+    .arena-main{position:relative;max-width:880px;margin:0 auto;padding:var(--space-10) var(--space-4) var(--space-16)}
+    .arena-hero{text-align:center;margin-bottom:var(--space-8)}
+    .arena-degree{font-family:var(--font-display);font-weight:800;font-size:clamp(4rem, 12vw, 7rem);line-height:1;
+      letter-spacing:.02em;color:var(--color-text);
+      text-shadow:0 0 60px rgba(82,174,182,.35), 0 0 140px rgba(82,174,182,.15)}
+    .arena-eyebrow{margin-top:var(--space-3);font-size:var(--text-xs);letter-spacing:.34em;text-transform:uppercase;color:var(--color-text-muted)}
+    .arena-sub{margin:var(--space-3) auto 0;max-width:52ch;color:var(--color-text-muted);font-size:var(--text-sm)}
+
+    /* The game stage. #game-modal keeps its id so scripts/six-degrees-game.mjs
+       wires up with zero changes — here it is the page, not a popup. */
+    #game-modal{position:static;display:block;padding:0}
+    #game-modal[hidden]{display:none}
+    .game-modal-backdrop{display:none}
+    .game-modal-card{position:relative;width:min(640px,100%);margin:0 auto;overflow:auto;
+      background:linear-gradient(180deg, rgba(16,28,40,.72), rgba(9,16,24,.58));
+      border:1px solid rgba(225,244,255,.22);border-radius:var(--radius-xl);
+      padding:var(--space-6);box-shadow:var(--shadow-lg)}
+    .game-modal-card::before{content:'';position:absolute;top:0;left:10%;right:10%;height:1px;
+      background:linear-gradient(90deg, transparent, rgba(143,232,246,.5), transparent);pointer-events:none}
+    .game-modal-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);margin-bottom:var(--space-1)}
+    .game-modal-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.04em}
+    .game-modal-sub{color:var(--color-text-muted);font-size:var(--text-sm);margin:0 0 var(--space-4)}
+    .game-modes{display:grid;gap:var(--space-2);margin-bottom:var(--space-4)}
+    .game-mode{display:flex;gap:var(--space-3);align-items:flex-start;border:1px solid var(--color-border);
+      border-radius:var(--radius-lg);padding:var(--space-3);cursor:pointer;background:rgba(255,255,255,.015)}
+    .game-mode:has(input:checked){border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.06)}
+    .game-mode input{margin-top:2px;accent-color:var(--color-primary)}
+    .game-mode strong{display:block;font-size:var(--text-sm)}
+    .game-mode span{color:var(--color-text-muted);font-size:var(--text-xs)}
+    .game-mode-locked{opacity:.55;cursor:not-allowed}
+    .game-mode-locked strong{display:flex;align-items:center;gap:var(--space-2)}
+    .game-field{margin-bottom:var(--space-3);position:relative}
+    .game-field label{display:block;font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;
+      color:var(--color-text-muted);margin-bottom:var(--space-1)}
+    .game-field input{width:100%;min-height:48px;padding:0 var(--space-3);border:1px solid var(--color-border);
+      border-radius:var(--radius-lg);background:rgba(255,255,255,.02);color:var(--color-text);font-size:var(--text-sm)}
+    .game-field input:focus{outline:none;border-color:rgba(82,174,182,.6)}
+    .game-ac-list{position:absolute;z-index:5;left:0;right:0;margin-top:4px;max-height:220px;overflow-y:auto;
+      background:#0a141d;border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md)}
+    .game-ac-list[hidden]{display:none}
+    .game-ac-item{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;
+      padding:var(--space-2) var(--space-3);background:none;border:0;color:var(--color-text);text-align:left;cursor:pointer}
+    .game-ac-item:hover{background:rgba(82,174,182,.08)}
+    .game-ac-name{font-size:var(--text-sm);font-weight:600}
+    .game-ac-sub{font-size:var(--text-xs);color:var(--color-text-muted)}
+    .game-actions{display:flex;gap:var(--space-2);margin-top:var(--space-4)}
+    .game-run-btn{flex:1;min-height:52px;border-radius:var(--radius-full);border:0;background:var(--color-primary);
+      color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer;letter-spacing:.04em}
+    .game-run-btn:hover{background:var(--color-primary-hover)}
+    .tool-chip{min-height:44px;padding:0 var(--space-4);border:1px solid var(--color-border);
+      border-radius:var(--radius-full);display:inline-flex;align-items:center;gap:var(--space-2);
+      background:rgba(255,255,255,0.02);font-size:var(--text-sm);color:var(--color-text)}
+    .tool-chip:hover{border-color:rgba(82,174,182,.45)}
+    #game-status{font-size:var(--text-sm);color:var(--color-text-muted);margin:var(--space-3) 0 0;min-height:1.2em}
+    .game-result-card{margin-top:var(--space-4);border-top:1px solid var(--color-divider);padding-top:var(--space-4)}
+    .game-result-meta{margin-bottom:var(--space-3)}
+    .game-hops{display:inline-block;padding:.25rem .75rem;border-radius:999px;border:1px solid var(--color-border);
+      font-size:var(--text-xs);letter-spacing:.12em;text-transform:uppercase;color:var(--color-text-muted)}
+    .game-path{display:flex;align-items:center;gap:var(--space-2);overflow-x:auto;padding-bottom:var(--space-2)}
+    .game-node-chip{flex:0 0 auto;padding:.45rem .8rem;border-radius:999px;font-size:var(--text-sm);
+      font-weight:600;white-space:nowrap;border:1px solid var(--color-border)}
+    .game-node-band{background:rgba(82,174,182,.12);border-color:rgba(82,174,182,.4)}
+    .game-node-member{background:rgba(255,255,255,.03);color:var(--color-text-muted);font-weight:500}
+    .game-path-link{color:var(--color-text-muted);flex:0 0 auto}
+    .game-no-rawk{font-size:var(--text-xl);font-weight:800;letter-spacing:.02em;margin:0 0 var(--space-2)}
+    .game-drink-rule{font-size:var(--text-sm);margin:0 0 var(--space-2)}
+    .game-dead-sub{font-size:var(--text-sm);color:var(--color-text-muted);margin:0 0 var(--space-3)}
+    .game-result-actions{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-3)}
+    .game-invite-text{font-size:var(--text-sm);color:var(--color-text);margin:0 0 var(--space-2)}
+    .arena-challenges{margin-top:var(--space-6);border-top:1px solid var(--color-divider);padding-top:var(--space-4)}
+    .arena-challenges h2{font-size:var(--text-sm);letter-spacing:.08em;text-transform:uppercase;
+      color:var(--color-text-muted);margin:0 0 var(--space-2);font-weight:700}
+    .challenge-row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);
+      padding:var(--space-3) 0;border-bottom:1px solid var(--color-divider)}
+    .challenge-text{font-size:var(--text-sm);color:var(--color-text)}
+    .challenge-actions{display:flex;gap:var(--space-2);flex:0 0 auto}
+    .game-nudge{position:relative;margin-top:var(--space-4);border:1px solid var(--color-border);
+      border-radius:var(--radius-lg);padding:var(--space-4);background:rgba(255,255,255,.02)}
+    .game-nudge p{margin:0 0 var(--space-3);font-size:var(--text-sm);color:var(--color-text)}
+    .game-nudge-close{position:absolute;top:6px;right:6px;width:28px;height:28px;border:0;background:none;
+      color:var(--color-text-muted);font-size:18px;line-height:1;cursor:pointer;border-radius:50%}
+    .game-nudge-close:hover{color:var(--color-text);background:rgba(255,255,255,.06)}
+
+    .arena-foot{max-width:880px;margin:0 auto;padding:0 var(--space-4) var(--space-10);text-align:center;
+      color:var(--color-text-faint);font-size:var(--text-xs);letter-spacing:.06em}
+    .arena-foot a{color:var(--color-text-muted);text-decoration:none}
+    .arena-foot a:hover{color:var(--color-text)}
+
+    @media (max-width: 640px){
+      .arena-main{padding:var(--space-6) var(--space-3) var(--space-10)}
+      .game-modal-card{padding:var(--space-4)}
+      /* Mobile density pass: shrink everything so the page fits on screen
+         with no wrapping in the header. */
+      .arena-header-inner{padding:var(--space-2) var(--space-3);gap:var(--space-2)}
+      .arena-wordmark{font-size:10px;letter-spacing:.18em;white-space:nowrap}
+      .arena-back{white-space:nowrap;font-size:12px;padding:var(--space-1) var(--space-3);min-height:40px}
+      .arena-degree{font-size:clamp(3rem,22vw,4.5rem)}
+      .arena-hero{margin-bottom:var(--space-5)}
+      .arena-eyebrow{margin-top:var(--space-2)}
+      .arena-sub{font-size:13px}
+      .game-modal-title{font-size:1rem}
+      .game-modal-sub{font-size:13px;margin-bottom:var(--space-3)}
+      .game-modes{margin-bottom:var(--space-3)}
+      .game-mode{padding:var(--space-2) var(--space-3);gap:var(--space-2)}
+      .game-mode strong{font-size:13px}
+      .game-mode > span > span{font-size:12px}
+      .game-field input{min-height:44px;font-size:14px}
+      .game-run-btn{min-height:48px}
+    }
+  </style>
+</head>
+<body>
+  <div class="arena">
+    <div class="arena-grid" aria-hidden="true"></div>
+
+    <header class="arena-header">
+      <div class="arena-header-inner">
+        <a class="arena-wordmark" href="/">Six Degrees of Rock</a>
+        <a class="arena-back" href="/">&larr; Back to the tree</a>
+      </div>
+    </header>
+
+    <main class="arena-main">
+      <div class="arena-hero">
+        <div class="arena-degree" aria-hidden="true">6&deg;</div>
+        <div class="arena-eyebrow">The game</div>
+        <p class="arena-sub">The rock family tree, playable. Pick your matchup, run the chain, and find out how deep the threads go.</p>
+      </div>
+
+      <!--
+        Six Degrees game stage. The markup below mirrors the game modal in
+        index.html id-for-id so scripts/six-degrees-game.mjs wires up with
+        zero changes — the same engine, the same flow, dressed for the arena.
+        Daily Chain and Stakes are shown locked; they arrive in a later drop.
+      -->
+      <div id="game-modal" role="region" aria-labelledby="game-modal-title">
+        <div class="game-modal-backdrop"></div>
+        <div class="game-modal-card">
+          <div class="game-modal-head">
+            <div class="game-modal-title" id="game-modal-title"><span aria-hidden="true">6&deg;</span> Six Degrees game</div>
+          </div>
+          <p class="game-modal-sub">Name two bands. If the tree connects them, you brag. If it breaks, you drink.</p>
+          <div class="game-modes" role="radiogroup" aria-label="How to play">
+            <label class="game-mode">
+              <input type="radio" name="game-mode" value="head-to-head" checked />
+              <span><strong>Head-to-head</strong><span>You pick a band, your opponent picks the second one — trying to stump you. Then reverse.</span></span>
+            </label>
+            <label class="game-mode">
+              <input type="radio" name="game-mode" value="solo" />
+              <span><strong>Solo vs. the graph</strong><span>You pick one band. The graph deals you a fair opponent.</span></span>
+            </label>
+            <label class="game-mode">
+              <input type="radio" name="game-mode" value="chaos" />
+              <span><strong>Chaos</strong><span>The graph picks both bands. Highest stakes.</span></span>
+            </label>
+            <label class="game-mode game-mode-locked" aria-disabled="true">
+              <input type="radio" name="game-mode" value="daily" disabled />
+              <span><strong>Daily Chain</strong><span>One fresh matchup every day. Same chain for everyone.</span></span>
+            </label>
+            <label class="game-mode game-mode-locked" aria-disabled="true">
+              <input type="radio" name="game-mode" value="stakes" disabled />
+              <span><strong>Stakes</strong><span>Put something on it. Winner takes the round.</span></span>
+            </label>
+          </div>
+          <div class="game-field" id="game-field-a-wrap">
+            <label for="game-band-a">Band one</label>
+            <input id="game-band-a" type="text" placeholder="Start typing a band name&hellip;" autocomplete="off" />
+          </div>
+          <div class="game-field" id="game-field-b-wrap">
+            <label for="game-band-b">Band two</label>
+            <input id="game-band-b" type="text" placeholder="Start typing a band name&hellip;" autocomplete="off" />
+          </div>
+          <div class="game-actions">
+            <button class="game-run-btn" type="button" id="game-run">Run the chain</button>
+            <button class="tool-chip" type="button" id="game-randomize" style="display:none">Deal me a pair</button>
+            <button class="tool-chip" type="button" id="game-challenge-btn" style="display:none">Challenge a friend</button>
+            <button class="game-run-btn" type="button" id="game-accept-btn" style="display:none">Accept the challenge</button>
+          </div>
+          <div class="game-field" id="game-format-wrap" style="display:none">
+            <label for="game-match-format">Match format</label>
+            <select id="game-match-format">
+              <option value="quick">Quick challenge — one and done</option>
+              <option value="best3">Best of 3 — first to 2 rounds</option>
+              <option value="best5">Best of 5 — first to 3 rounds</option>
+              <option value="best7">Best of 7 — first to 4 rounds</option>
+              <option value="timed">Timed — 10 minutes, most rounds wins</option>
+              <option value="open">Open-ended — keep score forever</option>
+            </select>
+          </div>
+          <p id="game-status" role="status"></p>
+          <div id="game-result"></div>
+        </div>
+        <section class="arena-challenges" data-challenges-wrap hidden>
+          <h2>Your challenges</h2>
+          <div id="game-challenges"></div>
+        </section>
+        <section class="arena-challenges" data-matches-wrap hidden>
+          <h2>Your matches</h2>
+          <div id="game-matches"></div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="arena-foot">
+      <a href="/">sixdegreesofrock.com</a> &mdash; the tree is the game<br />
+      <a href="/privacy.html">Privacy</a> &middot; <a href="/terms.html">Terms</a>
+    </footer>
+  </div>
+
+  <!--
+    Funnels that live on the main page get quiet equivalents here so the
+    shared engine never hits a dead button: the nudge's Sign up and the
+    dead-end's Add the connector both land on the tree, where those flows live.
+  -->
+  <button id="add-band-btn" type="button" hidden></button>
+  <script>
+    (function () {
+      document.getElementById('add-band-btn').addEventListener('click', function () {
+        window.location.href = '/';
+      });
+      window.openSignupPopover = function () { window.location.href = '/'; };
+      // On a dedicated page, Escape goes home instead of blanking the stage.
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') window.location.href = '/';
+      });
+    })();
+  </script>
+  <script type="module" src="/scripts/six-degrees-game.mjs"></script>
+</body>
+</html>
