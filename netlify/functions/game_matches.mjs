@@ -32,7 +32,7 @@ function summarize(r) {
     pending_server_id: r.pending_server_id,
     challenger_id: r.challenger_id,
     invitee_id: r.invitee_id,
-    opponent_name: r.opponent_name,
+    opponent_handle: r.opponent_handle,
     created_at: r.created_at,
     completed_at: r.completed_at,
     ends_at: r.ends_at,
@@ -49,14 +49,14 @@ export default async (req) => {
 
   try {
     const sent = await sql`
-      select m.*, u.name as opponent_name
+      select m.*, u.handle as opponent_handle
         from game_matches m
         left join users u on u.id = m.invitee_id
        where m.challenger_id = ${me.id}
        order by m.created_at desc
        limit 20`;
     const received = await sql`
-      select m.*, u.name as opponent_name
+      select m.*, u.handle as opponent_handle
         from game_matches m
         join users u on u.id = m.challenger_id
        where m.invitee_id = ${me.id}

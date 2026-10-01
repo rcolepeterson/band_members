@@ -8,11 +8,13 @@
 //
 // GET /api/game-match?token= — fetch match state. PUBLIC (same rationale as
 // game-challenge): the invitee needs the format and band_a before signing in.
-//   -> { ok, token, format, status, challenger_name, invitee_name,
+// Handles (not real names) are returned for privacy.
+//   -> { ok, match: { token, format, status, challenger_handle, invitee_handle,
 //        challenger_round_wins, invitee_round_wins, current_round,
 //        plays: [{round, server_id, band_a, band_b, hops}],
 //        pending: null | { kind: 'defend'|'serve', server_id, band_a },
-//        winner_id, ends_at }
+//        winner_id, ends_at,
+//        you_are: 'challenger' | 'invitee' | 'spectator' } }
 //
 // Scoring: higher hop count wins the round; tie rounds are replayed (no one
 // scores). Serve order is tennis-style: the challenger leads odd rounds,
@@ -32,8 +34,10 @@ import {
   extractBearerToken,
   findUserByToken,
   generateToken,
+  roleOf,
 } from './_db.mjs';
 import { validBandRef } from './game_challenge.mjs';
+import { ensureHandle } from './me_handle.mjs';
 import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
 
 export const MATCH_FORMATS = ['best3', 'best5', 'best7', 'timed', 'open'];
@@ -50,8 +54,9 @@ export function targetWins(format) {
 }
 
 // Shape of the public state payload shared by create/get and the play/serve
-// endpoints (they all return the fresh state after mutating).
-export function matchState(row, challengerName, inviteeName) {
+// endpoints (they all return the fresh state after mutating). Handles are the
+// only player labels on the wire — real names stay in the users table.
+export function matchState(row, challengerHandle = null, inviteeHandle = null) {
   const plays = Array.isArray(row.plays) ? row.plays : [];
   let pending = null;
   if (row.status !== 'complete') {
@@ -72,8 +77,8 @@ export function matchState(row, challengerName, inviteeName) {
     status: row.status,
     challenger_id: row.challenger_id,
     invitee_id: row.invitee_id,
-    challenger_name: challengerName,
-    invitee_name: inviteeName,
+    challenger_handle: challengerHandle,
+    invitee_handle: inviteeHandle,
     challenger_round_wins: row.challenger_round_wins,
     invitee_round_wins: row.invitee_round_wins,
     current_round: row.current_round,
@@ -86,7 +91,7 @@ export function matchState(row, challengerName, inviteeName) {
 
 async function loadMatch(sql, token) {
   const rows = await sql`
-    select m.*, u1.name as challenger_name, u2.name as invitee_name
+    select m.*, u1.handle as challenger_handle, u2.handle as invitee_handle
       from game_matches m
       join users u1 on u1.id = m.challenger_id
       left join users u2 on u2.id = m.invitee_id
@@ -127,6 +132,12 @@ export default async (req) => {
     }
 
     const token = generateToken();
+    // First match: make sure the challenger has a battle name. Fail-soft.
+    try {
+      await ensureHandle(sql, me);
+    } catch (err) {
+      console.error('game-match: ensureHandle failed', err && err.message);
+    }
     try {
       if (format === 'timed') {
         await sql`insert into game_matches
@@ -159,7 +170,21 @@ export default async (req) => {
       return serverError('could not load the match');
     }
     if (!row) return notFound('match not found');
-    return ok(matchState(row, row.challenger_name || 'Your challenger', row.invitee_name));
+    // Optional auth: identifies the viewer's relationship to the match so the
+    // client can show the "already claimed" message to spectators of a
+    // feed-shared match link instead of the defend flow.
+    let you_are = 'spectator';
+    try {
+      const viewer = await findUserByToken(sql, extractBearerToken(req));
+      you_are = roleOf(viewer && viewer.id, row.challenger_id, row.invitee_id);
+    } catch (_) {
+      // Identification is cosmetic; the public state still loads.
+    }
+    const state = matchState(row, row.challenger_handle, row.invitee_handle);
+    state.you_are = you_are;
+    // Nested under `match` — the same shape the play/serve endpoints return,
+    // which is what the client reads (data.match).
+    return ok({ match: state });
   }
 
   return methodNotAllowed();

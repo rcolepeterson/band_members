@@ -3,6 +3,8 @@
 // POST /api/game-match/play — answer the pending serve (auth).
 //   body: { token, band_b, hops }
 //   -> { ok: true, match: { ...matchState } }
+//   -> 409 { ok: false, error, claimed_by } when someone else claimed the
+//      open match first (feed-shared links can bring two defenders at once).
 //
 // The defender picks band_b against the server's band_a; the client computed
 // the chain's hop count from its loaded graph and submits it (the server
@@ -24,6 +26,7 @@ import {
   badRequest,
   unauthorized,
   notFound,
+  conflict,
   serverError,
   dbUnavailable,
   methodNotAllowed,
@@ -31,6 +34,7 @@ import {
   findUserByToken,
 } from './_db.mjs';
 import { validBandRef } from './game_challenge.mjs';
+import { ensureHandle } from './me_handle.mjs';
 import { matchState, targetWins } from './game_match.mjs';
 import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
 
@@ -76,7 +80,7 @@ export default async (req) => {
   let rows;
   try {
     rows = await sql`
-      select m.*, u1.name as challenger_name, u2.name as invitee_name
+      select m.*, u1.handle as challenger_handle, u2.handle as invitee_handle
         from game_matches m
         join users u1 on u1.id = m.challenger_id
         left join users u2 on u2.id = m.invitee_id
@@ -96,10 +100,17 @@ export default async (req) => {
   // Joining: the first defender becomes the invitee.
   let inviteeId = match.invitee_id;
   let status = match.status;
-  if (status === 'open') {
+  const joining = status === 'open';
+  if (joining) {
     if (match.challenger_id === me.id) return badRequest("you can't answer your own serve");
     inviteeId = me.id;
     status = 'active';
+    // First defend: make sure the joiner has a battle name too. Fail-soft.
+    try {
+      await ensureHandle(sql, me);
+    } catch (err) {
+      console.error('game-match-play: ensureHandle failed', err && err.message);
+    }
   } else if (me.id !== match.challenger_id && me.id !== inviteeId) {
     return badRequest('this match is between two other players');
   }
@@ -158,42 +169,95 @@ export default async (req) => {
     pendingServerId = me.id;
   }
 
+  // Atomic claim on join: exactly one defender flips an open, unclaimed
+  // match. A feed-shared match link can bring two defenders at once — the
+  // loser gets a 409 with the claimer's handle instead of a corrupted row.
+  // Ongoing plays update by id; the turn order (pending_server_id) is
+  // enforced by the checks above.
+  let updated;
   try {
     if (status === 'complete') {
-      await sql`
-        update game_matches
-           set invitee_id = ${inviteeId},
-               status = 'complete',
-               challenger_round_wins = ${challenger_round_wins},
-               invitee_round_wins = ${invitee_round_wins},
-               plays = ${JSON.stringify(plays)}::jsonb,
-               pending_server_id = null,
-               pending_band_a = null,
-               completed_at = now()
-         where id = ${match.id}`;
+      updated = joining
+        ? await sql`
+            update game_matches
+               set invitee_id = ${inviteeId},
+                   status = 'complete',
+                   challenger_round_wins = ${challenger_round_wins},
+                   invitee_round_wins = ${invitee_round_wins},
+                   plays = ${JSON.stringify(plays)}::jsonb,
+                   pending_server_id = null,
+                   pending_band_a = null,
+                   completed_at = now()
+             where id = ${match.id}
+               and status = 'open'
+               and invitee_id is null
+            returning id`
+        : await sql`
+            update game_matches
+               set invitee_id = ${inviteeId},
+                   status = 'complete',
+                   challenger_round_wins = ${challenger_round_wins},
+                   invitee_round_wins = ${invitee_round_wins},
+                   plays = ${JSON.stringify(plays)}::jsonb,
+                   pending_server_id = null,
+                   pending_band_a = null,
+                   completed_at = now()
+             where id = ${match.id}
+            returning id`;
     } else {
-      await sql`
-        update game_matches
-           set invitee_id = ${inviteeId},
-               status = ${status},
-               challenger_round_wins = ${challenger_round_wins},
-               invitee_round_wins = ${invitee_round_wins},
-               current_round = ${current_round},
-               pending_server_id = ${pendingServerId},
-               pending_band_a = ${pendingBandA},
-               plays = ${JSON.stringify(plays)}::jsonb
-         where id = ${match.id}`;
+      updated = joining
+        ? await sql`
+            update game_matches
+               set invitee_id = ${inviteeId},
+                   status = ${status},
+                   challenger_round_wins = ${challenger_round_wins},
+                   invitee_round_wins = ${invitee_round_wins},
+                   current_round = ${current_round},
+                   pending_server_id = ${pendingServerId},
+                   pending_band_a = ${pendingBandA},
+                   plays = ${JSON.stringify(plays)}::jsonb
+             where id = ${match.id}
+               and status = 'open'
+               and invitee_id is null
+            returning id`
+        : await sql`
+            update game_matches
+               set invitee_id = ${inviteeId},
+                   status = ${status},
+                   challenger_round_wins = ${challenger_round_wins},
+                   invitee_round_wins = ${invitee_round_wins},
+                   current_round = ${current_round},
+                   pending_server_id = ${pendingServerId},
+                   pending_band_a = ${pendingBandA},
+                   plays = ${JSON.stringify(plays)}::jsonb
+             where id = ${match.id}
+            returning id`;
     }
   } catch (error) {
     console.error('game-match-play: update failed', error && error.message);
     return serverError('could not save your play');
+  }
+  if (joining && (!updated || !updated.length)) {
+    let claimedBy = null;
+    try {
+      const again = await sql`
+        select u.handle as claimer_handle
+          from game_matches m
+          left join users u on u.id = m.invitee_id
+         where m.id = ${match.id}
+         limit 1`;
+      if (again && again[0]) claimedBy = again[0].claimer_handle || null;
+    } catch (_) {
+      // Cosmetic; the 409 still goes out.
+    }
+    return conflict('this match was just claimed', { claimed_by: claimedBy });
   }
 
   // Fresh state for the client.
   let fresh;
   try {
     const fr = await sql`
-      select m.*, u1.name as challenger_name, u2.name as invitee_name
+      select m.*, u1.handle as challenger_handle, u2.handle as invitee_handle
         from game_matches m
         join users u1 on u1.id = m.challenger_id
         left join users u2 on u2.id = m.invitee_id
@@ -204,7 +268,7 @@ export default async (req) => {
     console.error('game-match-play: refetch failed', error && error.message);
     return serverError('could not load the match');
   }
-  return ok({ match: matchState(fresh, fresh.challenger_name || 'Your challenger', fresh.invitee_name) });
+  return ok({ match: matchState(fresh, fresh.challenger_handle, fresh.invitee_handle) });
 };
 
 export const config = { path: '/api/game-match/play' };

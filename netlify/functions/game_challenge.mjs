@@ -8,9 +8,12 @@
 //
 // GET /api/game-challenge?token=... — fetch challenge state. PUBLIC by
 // design: the token is a 256-bit unguessable secret, and the invitee needs
-// the challenger's name and band one BEFORE signing in, so the landing can
-// say "Aaron challenged you with Metallica" instead of a blank login wall.
-//   -> { ok: true, token, status, band_a, band_b, challenger_name, invitee_name }
+// the challenger's handle and band one BEFORE signing in, so the landing can
+// say "rawker4821 challenged you with Metallica" instead of a blank login
+// wall. Handles (not real names) are returned for privacy.
+//   -> { ok: true, token, status, band_a, band_b,
+//        challenger_handle, invitee_handle,
+//        you_are: 'challenger' | 'invitee' | 'spectator' }
 //
 // WHY the band refs are opaque strings, not UUIDs: the game client resolves
 // bands against its loaded graph, whose node ids are display-name strings
@@ -31,8 +34,10 @@ import {
   extractBearerToken,
   findUserByToken,
   generateToken,
+  roleOf,
 } from './_db.mjs';
 import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
+import { ensureHandle } from './me_handle.mjs';
 
 const MAX_BAND_REF = 160;
 
@@ -76,6 +81,13 @@ export default async (req) => {
     }
 
     const token = generateToken();
+    // First challenge: make sure the challenger has a battle name. Fail-soft —
+    // a handle hiccup must never block creating the challenge.
+    try {
+      await ensureHandle(sql, me);
+    } catch (err) {
+      console.error('game-challenge: ensureHandle failed', err && err.message);
+    }
     try {
       await sql`insert into game_challenges (token, challenger_id, band_a)
                 values (${token}, ${me.id}, ${bandA})`;
@@ -97,7 +109,8 @@ export default async (req) => {
     try {
       rows = await sql`
         select c.token, c.status, c.band_a, c.band_b, c.created_at, c.answered_at,
-               u1.name as challenger_name, u2.name as invitee_name
+               c.challenger_id, c.invitee_id,
+               u1.handle as challenger_handle, u2.handle as invitee_handle
           from game_challenges c
           join users u1 on u1.id = c.challenger_id
           left join users u2 on u2.id = c.invitee_id
@@ -109,13 +122,24 @@ export default async (req) => {
     }
     const row = rows && rows[0];
     if (!row) return notFound('challenge not found');
+    // Optional auth: identifies the viewer's relationship to the challenge so
+    // the client can show the "already claimed" message to spectators (open
+    // challenges shared to a feed) instead of the accept flow.
+    let you_are = 'spectator';
+    try {
+      const viewer = await findUserByToken(sql, extractBearerToken(req));
+      you_are = roleOf(viewer && viewer.id, row.challenger_id, row.invitee_id);
+    } catch (_) {
+      // Identification is cosmetic; the public state still loads.
+    }
     return ok({
       token: row.token,
       status: row.status,
       band_a: row.band_a,
       band_b: row.band_b,
-      challenger_name: row.challenger_name,
-      invitee_name: row.invitee_name,
+      challenger_handle: row.challenger_handle,
+      invitee_handle: row.invitee_handle,
+      you_are,
     });
   }
 
