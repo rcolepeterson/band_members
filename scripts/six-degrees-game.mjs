@@ -200,7 +200,19 @@ function initGameUI() {
     howtoLine.style.display = text ? '' : 'none';
   }
 
+  // Paul's call (2026-10-01): in a challenge the mode is already fixed —
+  // showing the mode picker invites a tap that wrecks the accept flow.
+  // Hidden on challenge entry views, restored on every exit path.
+  function setModePickerVisible(v) {
+    const picker = document.querySelector('.game-modes');
+    if (picker) picker.style.display = v ? '' : 'none';
+  }
+
   const selected = { a: null, b: null };
+  // Challenge-back threading (2026-10-01): a "Challenge back" tap records
+  // which challenge this is answering; the next create stamps in_reply_to so
+  // the opponent's list shows a real incoming row. Cleared on use.
+  let pendingReplyTo = null;
 
   // --- signup nudge -------------------------------------------------------
   // Logged-out players get one calm card after their third chain reveal
@@ -375,6 +387,8 @@ function initGameUI() {
   function closeModal() {
     modal.hidden = true;
     document.body.classList.remove('game-modal-open');
+    // Abandoning the modal abandons any armed challenge-back reply.
+    pendingReplyTo = null;
   }
   openBtns.forEach((b) => b.addEventListener('click', () => {
     document.getElementById('mobile-menu-sheet')?.setAttribute('hidden', '');
@@ -411,6 +425,9 @@ function initGameUI() {
     const mode = currentMode();
     // Any mode change exits the invite accept context.
     showHowto('');
+    setModePickerVisible(true);
+    // ...and abandons any armed challenge-back reply.
+    pendingReplyTo = null;
     // Daily Chain gets its own panel — no band fields, no run button.
     if (mode === 'daily') {
       document.getElementById('game-field-a-wrap').style.display = 'none';
@@ -1426,16 +1443,18 @@ function initGameUI() {
 
   // POST /api/game-challenge and show the invite dialog. Shared by the
   // challenge button and one-tap rematches.
-  async function createCasualChallenge(bandA) {
+  async function createCasualChallenge(bandA, inReplyTo) {
     // Battle name first: the picker shows inline only when the player
     // doesn't have one yet.
     await withHandle(async () => {
     statusLine.textContent = 'Making your invite…';
     try {
+      const reqBody = { band_a: bandA };
+      if (inReplyTo) reqBody.in_reply_to = inReplyTo;
       const res = await fetch('/api/game-challenge', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
-        body: JSON.stringify({ band_a: bandA }),
+        body: JSON.stringify(reqBody),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok || !data.inviteUrl) throw new Error((data && data.error) || 'request failed');
@@ -1484,7 +1503,9 @@ function initGameUI() {
       await createMatch(currentFormat(), selected.a);
       return;
     }
-    await createCasualChallenge(selected.a);
+    const replyTo = pendingReplyTo;
+    pendingReplyTo = null;
+    await createCasualChallenge(selected.a, replyTo);
   });
 
   // POST /api/game-match and show the invite dialog.
@@ -1626,12 +1647,14 @@ function initGameUI() {
       card.querySelector('.game-invite-text').textContent =
         `You picked ${nameA}. Your opponent hasn't answered yet — the moment they do, it shows up under Your challenges.`;
       card.querySelector('[data-copy]').addEventListener('click', async () => {
-        const url = `${window.location.origin}/game/?invite=${encodeURIComponent(token)}`;
+        // Pretty URL: the card unfurls with challenger + band in texts.
+        const url = `${window.location.origin}/invite/${encodeURIComponent(token)}`;
         const okCopy = await navigator.clipboard.writeText(url).then(() => true).catch(() => false);
         statusLine.textContent = okCopy ? 'Invite link copied.' : url;
       });
       result.innerHTML = '';
       result.appendChild(card);
+      setModePickerVisible(false);
       return;
     }
 
@@ -1652,6 +1675,7 @@ function initGameUI() {
       `Bands link through shared members; the tree reveals the shortest chain. Stump them.`
     );
     statusLine.textContent = 'Now pick yours.';
+    setModePickerVisible(false);
     setTimeout(() => fieldB.focus(), 60);
   }
 
@@ -1676,8 +1700,27 @@ function initGameUI() {
       if (acceptBtn) acceptBtn.style.display = 'none';
       fieldA.disabled = false;
       showHowto('');
+      setModePickerVisible(true);
       const g = await loadGraph();
       renderMatchup(g, data.band_a, data.band_b);
+      // Turn handoff (Paul, 2026-10-01: "it's not clear that it's now my
+      // turn"). After the reveal, a Challenge-back button joins the result
+      // actions and the status line names whose turn it is.
+      const connectBtn = result.querySelector('[data-connect]');
+      if (connectBtn) connectBtn.addEventListener('click', () => {
+        const actions = result.querySelector('.game-result-actions');
+        if (!actions || actions.querySelector('[data-challenge-back]')) return;
+        const backBtn = el('<button type="button" class="tool-chip" data-challenge-back>Challenge back</button>');
+        backBtn.addEventListener('click', () => {
+          setHeadToHead(null, null, g);
+          pendingReplyTo = token;
+          statusLine.textContent = 'Your turn to deal — pick your band, then Challenge a friend.';
+          modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          setTimeout(() => fieldA.focus(), 300);
+        });
+        actions.appendChild(backBtn);
+        statusLine.textContent = `It's your turn — challenge ${data.challenger_handle || 'them'} back.`;
+      }, { once: true });
       loadChallenges();
     } catch (err) {
       // 409: someone else claimed the open challenge first (feed-shared
@@ -2005,8 +2048,9 @@ function initGameUI() {
       const okCopy = await navigator.clipboard.writeText(url).then(() => true).catch(() => false);
       statusLine.textContent = okCopy ? 'Invite link copied.' : url;
     };
-    const challengeBack = () => {
+    const challengeBack = (replyToToken) => () => {
       setHeadToHead(null, null, g);
+      pendingReplyTo = replyToToken || null;
       statusLine.textContent = 'Your turn to deal — pick your band, then Challenge a friend.';
       modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
       setTimeout(() => fieldA.focus(), 300);
@@ -2037,7 +2081,13 @@ function initGameUI() {
     for (const c of data.received || []) {
       if (c.band_b) {
         row(`${c.challenger_handle || 'Someone'} challenged you: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
-          [['See the chain', seeChain(c.band_a, c.band_b)], ['Challenge back', challengeBack], ['Rematch', rematch(c.band_b)]]);
+          [['See the chain', seeChain(c.band_a, c.band_b)], ['Challenge back', challengeBack(c.token)], ['Rematch', rematch(c.band_b)]]);
+      } else if (c.status === 'open') {
+        // Incoming unanswered challenge (reply-stamped via in_reply_to).
+        // Aaron's copy call (2026-10-01): make it unmistakable whose turn
+        // it is and what they answered with.
+        row(`${c.challenger_handle || 'Someone'} challenged you back — he answered with ${bandName(g, c.band_a)}.`,
+          [['Accept', () => { window.location.href = `/game/?invite=${encodeURIComponent(c.token)}`; }]]);
       }
     }
     if (wrap) wrap.hidden = count === 0;
