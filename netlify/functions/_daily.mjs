@@ -142,6 +142,24 @@ function pairKey(a, b) {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
+// Shortest path (array of node ids) from fromId to targetId, or null when
+// disconnected. Walks the distance field downhill from the start.
+export function bfsPath(adj, fromId, targetId) {
+  if (fromId === targetId) return [fromId];
+  const dist = bfsDist(adj, targetId);
+  if (!dist.has(fromId)) return null;
+  const path = [fromId];
+  let cur = fromId;
+  while (cur !== targetId) {
+    const d = dist.get(cur);
+    const next = (adj.get(cur) || []).find((nb) => dist.get(nb) === d - 1);
+    if (next == null) return null;
+    path.push(next);
+    cur = next;
+  }
+  return path;
+}
+
 // Seeded fair-pair deal: shortest path within [minHops, maxHops], skipping
 // any pair in excludeKeys. Returns { a, b, hops } or null.
 export function pickDailyPair({ bandIds, adj, seed, minHops = MIN_HOPS, maxHops = MAX_HOPS, excludeKeys = new Set(), maxTries = 400 }) {
@@ -334,14 +352,16 @@ export function sharePicks(picks) {
   return (picks || []).map((p) => PICK_EMOJI[pickColor(p.kind)] || '⬛').join('');
 }
 
-export function dailyShareText({ date, handle, hopsUsed, par, streak, picks, beatTree = false }) {
+export function dailyShareText({ date, handle, hopsUsed, par, streak, picks, beatTree = false, gaveUp = false }) {
   const row = sharePicks(picks);
   const lost = (picks || []).some((p) => p.kind === 'deadend');
-  const line = beatTree
-    ? `I BEAT THE TREE in ${hopsUsed} hops (par was ${par}).`
-    : lost
-      ? `I connected the constellation in ${hopsUsed} hops (par ${par}) — drifted into the void along the way.`
-      : `I connected the constellation in ${hopsUsed} hops (par ${par}).`;
+  const line = gaveUp
+    ? `The tree beat me today — par was ${par}, and I was ${hopsUsed} hops deep.`
+    : beatTree
+      ? `I BEAT THE TREE in ${hopsUsed} hops (par was ${par}).`
+      : lost
+        ? `I connected the constellation in ${hopsUsed} hops (par ${par}) — drifted into the void along the way.`
+        : `I connected the constellation in ${hopsUsed} hops (par ${par}).`;
   return [
     `Six Degrees Daily Chain — ${date}`,
     line,
