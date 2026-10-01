@@ -172,6 +172,34 @@ function initGameUI() {
   const result = document.getElementById('game-result');
   const statusLine = document.getElementById('game-status');
 
+  // --- invite how-it-works line ---------------------------------------------
+  // The invite landing is the game's front door for non-players (Paul's
+  // "I don't understand how the game is played", 2026-10-01). A dedicated
+  // line above the fields explains the rules once, in plain words — the
+  // status line stays free for transient messages. Shown only in the accept
+  // view; hidden on every exit path.
+  const howtoLine = (() => {
+    const p = document.createElement('p');
+    p.id = 'game-howto';
+    p.className = 'game-howto';
+    p.style.display = 'none';
+    const wrapA = document.getElementById('game-field-a-wrap');
+    if (wrapA && wrapA.parentNode) wrapA.parentNode.insertBefore(p, wrapA);
+    if (!document.getElementById('game-howto-style')) {
+      const st = document.createElement('style');
+      st.id = 'game-howto-style';
+      // Quiet register, same as the status line — an explainer, not a banner.
+      // 12px floor: the text-legibility CI gate fails anything smaller.
+      st.textContent = '.game-howto{font-size:12px;color:var(--color-text-muted,#999);margin:0 0 var(--space-2,8px);line-height:1.5}';
+      document.head.appendChild(st);
+    }
+    return p;
+  })();
+  function showHowto(text) {
+    howtoLine.textContent = text || '';
+    howtoLine.style.display = text ? '' : 'none';
+  }
+
   const selected = { a: null, b: null };
 
   // --- signup nudge -------------------------------------------------------
@@ -381,6 +409,8 @@ function initGameUI() {
 
   function syncModeUI() {
     const mode = currentMode();
+    // Any mode change exits the invite accept context.
+    showHowto('');
     // Daily Chain gets its own panel — no band fields, no run button.
     if (mode === 'daily') {
       document.getElementById('game-field-a-wrap').style.display = 'none';
@@ -1567,7 +1597,9 @@ function initGameUI() {
         <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to accept</button></div>
       </div>`);
       card.querySelector('.game-invite-text').textContent =
-        `${data.challenger_handle || 'Someone'} picked ${nameA} and wants to stump you. Sign in to pick your band.`;
+        `${data.challenger_handle || 'Someone'} picked ${nameA}. ` +
+        `You pick a band to stump them \u2014 the tree links bands through shared members ` +
+        `and reveals the shortest chain. Sign in to play.`;
       card.querySelector('[data-signin]').addEventListener('click', () => {
         if (isArenaPage()) {
           // The arena has no signup UI of its own — bounce to the main page
@@ -1613,7 +1645,13 @@ function initGameUI() {
     }
     runBtn.style.display = 'none';
     if (challengeBtn) challengeBtn.style.display = 'none';
-    statusLine.textContent = `${data.challenger_handle || 'Your challenger'} picked ${nameA}. Now pick yours — try to stump them.`;
+    // The front-door explainer (Paul, 2026-10-01): plain-rules, no hype.
+    showHowto(
+      `${data.challenger_handle || 'Your challenger'} picked ${nameA}. ` +
+      `You pick a band \u2014 one you think the tree can't connect to ${nameA}. ` +
+      `Bands link through shared members; the tree reveals the shortest chain. Stump them.`
+    );
+    statusLine.textContent = 'Now pick yours.';
     setTimeout(() => fieldB.focus(), 60);
   }
 
@@ -1637,6 +1675,7 @@ function initGameUI() {
       runBtn.style.display = '';
       if (acceptBtn) acceptBtn.style.display = 'none';
       fieldA.disabled = false;
+      showHowto('');
       const g = await loadGraph();
       renderMatchup(g, data.band_a, data.band_b);
       loadChallenges();
