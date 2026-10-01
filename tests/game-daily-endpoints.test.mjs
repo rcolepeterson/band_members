@@ -125,10 +125,16 @@ test('buy_freeze deducts and increments atomically', () => {
   assert.ok(body.includes('where id = ${me.id} and credits >= ${FREEZE_COST}'));
 });
 
-// Completing a run awards the completion reward (+ optimal bonus on par).
+// Completing a run scores through the replay-aware scorer (first completion,
+// beat-your-best replays, beat-the-tree bounty).
 test('completing a run pays the completion reward and the par bonus', () => {
   const body = src('netlify/functions/game_daily_play.mjs');
-  assert.ok(body.includes('COMPLETION_REWARD + (hopsUsed === chain.optimal_hops ? OPTIMAL_BONUS : 0)'));
+  assert.ok(body.includes('scoreRun({ isFirst, hopsUsed, par: oldPar, prevBest })'));
+  const econ = src('netlify/functions/_daily.mjs');
+  assert.ok(econ.includes('COMPLETION_REWARD'));
+  assert.ok(econ.includes('OPTIMAL_BONUS'));
+  assert.ok(econ.includes('REPLAY_IMPROVEMENT_PER_HOP'));
+  assert.ok(econ.includes('BEAT_TREE_BOUNTY'));
 });
 
 // Match wins pay out of the same economy.
