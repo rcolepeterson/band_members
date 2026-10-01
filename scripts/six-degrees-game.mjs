@@ -436,11 +436,13 @@ function initGameUI() {
     inviteDialogStylesDone = true;
     const st = document.createElement('style');
     st.textContent = `
-      .game-invite-dialog{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);padding:16px}
-      .game-invite-dialog-card{background:#141414;border:1px solid #2a2a2a;border-radius:12px;max-width:420px;width:100%;padding:20px}
-      .game-invite-matchup{font-size:1.05rem;font-weight:600;margin:0 0 12px}
-      .game-invite-link-label{display:block;font-size:.8rem;color:#999;margin-bottom:12px}
-      .game-invite-link{display:block;width:100%;margin-top:6px;padding:10px;font-size:.85rem;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:8px;color:#eee}
+      .game-invite-dialog{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);padding:12px}
+      .game-invite-dialog-card{background:#141414;border:1px solid #2a2a2a;border-radius:12px;max-width:420px;width:100%;max-height:92vh;overflow:auto;padding:14px}
+      .game-invite-dialog-card .game-result-meta{margin-bottom:6px}
+      .game-invite-matchup{font-size:.95rem;font-weight:600;margin:0 0 8px}
+      .game-invite-link-label{display:block;font-size:.78rem;color:#999;margin-bottom:8px}
+      .game-invite-link{display:block;width:100%;margin-top:4px;padding:8px;font-size:.82rem;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:8px;color:#eee}
+      .game-invite-dialog-card .game-result-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
     `;
     document.head.appendChild(st);
   }
@@ -480,19 +482,21 @@ function initGameUI() {
         : 'Copy failed — long-press the link to copy it.';
     });
     dlg.querySelector('[data-share]').addEventListener('click', async () => {
-      if (navigator.share) {
+      const shareData = { title: 'Six Degrees of Rock — head-to-head', text: shareText, url: inviteUrl };
+      const canNativeShare = typeof navigator.share === 'function' &&
+        (typeof navigator.canShare !== 'function' || navigator.canShare(shareData));
+      if (canNativeShare) {
         try {
-          await navigator.share({ title: 'Six Degrees of Rock — head-to-head', text: shareText, url: inviteUrl });
+          await navigator.share(shareData);
+          return;
         } catch (err) {
-          if (!err || err.name !== 'AbortError') {
-            const okCopy = await navigator.clipboard.writeText(`${shareText} ${inviteUrl}`).then(() => true).catch(() => false);
-            statusLine.textContent = okCopy ? 'Share failed — link copied instead.' : 'Share failed — long-press the link to copy it.';
-          }
+          if (err && err.name === 'AbortError') return; // user dismissed the sheet
         }
-      } else {
-        const okCopy = await navigator.clipboard.writeText(`${shareText} ${inviteUrl}`).then(() => true).catch(() => false);
-        statusLine.textContent = okCopy ? 'Invite link copied — send it to your opponent.' : inviteUrl;
       }
+      const okCopy = await navigator.clipboard.writeText(`${shareText} ${inviteUrl}`).then(() => true).catch(() => false);
+      statusLine.textContent = okCopy
+        ? 'Link copied — paste it to your opponent.'
+        : 'Copy failed — long-press the link above to copy it.';
     });
     document.body.appendChild(dlg);
     setTimeout(selectLink, 60);
