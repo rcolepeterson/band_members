@@ -112,7 +112,7 @@ export async function findUserByToken(sql, token) {
   // signups populate them via signup.mjs's validation.
   const rows = await sql`
     select id, email, name, token, bands_added, bands_edited, created_at,
-           city, state, country, instrument, handle
+           city, state, country, instrument, handle, credits, freeze_count
     from users
     where token = ${token}
     limit 1

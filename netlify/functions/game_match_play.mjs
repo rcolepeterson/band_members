@@ -36,6 +36,7 @@ import {
 import { validBandRef } from './game_challenge.mjs';
 import { ensureHandle } from './me_handle.mjs';
 import { matchState, targetWins } from './game_match.mjs';
+import { MATCH_WIN_REWARD } from './_daily.mjs';
 import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
 
 function validHops(raw) {
@@ -254,6 +255,16 @@ export default async (req) => {
   }
 
   // Fresh state for the client.
+  // Daily Chain economy: a completed match pays the winner.
+  if (status === 'complete') {
+    const winnerId =
+      challenger_round_wins > invitee_round_wins ? match.challenger_id : inviteeId;
+    if (winnerId) {
+      await sql`update users set credits = credits + ${MATCH_WIN_REWARD} where id = ${winnerId}`.catch(
+        () => null,
+      );
+    }
+  }
   let fresh;
   try {
     const fr = await sql`
