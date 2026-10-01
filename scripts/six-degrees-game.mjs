@@ -476,6 +476,18 @@ function initGameUI() {
       .game-daily-archive-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-divider);font-size:.9rem}
       .game-daily-archive-row .game-daily-archive-date{color:#999;min-width:86px}
       .game-daily-archive-row .game-daily-archive-pair{flex:1}
+      .game-credit-btn{background:none;border:none;padding:0;font:inherit;color:#7fc9c7;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+      .game-credit-sheet{border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:12px;margin:8px 0;font-size:.88rem;line-height:1.6}
+      .game-credit-sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+      .game-credit-sheet-head strong{font-size:.95rem}
+      .game-credit-sheet-head button{background:none;border:none;color:#999;font-size:1rem;cursor:pointer;padding:4px}
+      .game-credit-sheet ul{margin:6px 0 6px 18px;padding:0}
+      .game-credit-sheet-balance{font-size:1.02rem;margin:4px 0}
+      .game-daily-postmortem{border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:10px 12px;margin:8px 0;font-size:.85rem;line-height:1.7}
+      .game-daily-postmortem p{margin:6px 0}
+      .game-daily-postmortem .pm-par{color:#d4a017}
+      .game-daily-postmortem .pm-you{color:#7fc9c7}
+      .game-daily-postmortem .pm-label{color:#999;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em}
     `;
     document.head.appendChild(st);
   }
@@ -487,6 +499,133 @@ function initGameUI() {
     return `<svg class="${cls}" viewBox="0 0 24 28" aria-hidden="true">` +
       `<path d="M12 2.5c-5.2 0-9.5 4-9.5 9.3 0 6 5.2 11.6 8.6 14.2.5.4 1.3.4 1.8 0 3.4-2.6 8.6-8.2 8.6-14.2C21.5 6.5 17.2 2.5 12 2.5z" ` +
       `fill="${hex}" stroke="${stroke}" stroke-width="1"/></svg>`;
+  }
+
+  // --- Daily Chain share card: a real drawn image with actual guitar picks ---
+  const SHARE_W = 1080, SHARE_H = 1350;
+  function drawPickCanvas(ctx, cx, cy, s, color) {
+    // Same teardrop as pickSvg, translated to absolute canvas path commands.
+    const hex = DAILY_PICK_HEX[color] || DAILY_PICK_HEX.black;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(s / 24, s / 28);
+    ctx.beginPath();
+    ctx.moveTo(12, 2.5);
+    ctx.bezierCurveTo(6.8, 2.5, 2.5, 6.5, 2.5, 11.8);
+    ctx.bezierCurveTo(2.5, 17.8, 7.7, 23.4, 11.1, 26);
+    ctx.bezierCurveTo(11.6, 26.4, 12.4, 26.4, 12.9, 26);
+    ctx.bezierCurveTo(16.3, 23.4, 21.5, 17.8, 21.5, 11.8);
+    ctx.bezierCurveTo(21.5, 6.5, 17.2, 2.5, 12, 2.5);
+    ctx.closePath();
+    ctx.fillStyle = hex;
+    ctx.fill();
+    ctx.strokeStyle = color === 'black' ? '#555' : 'rgba(0,0,0,.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+  function fmtChainDate(ds) {
+    const parts = String(ds || '').split('-').map(Number);
+    if (parts.length < 3) return String(ds || '');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[parts[1] - 1] || ''} ${parts[2]}, ${parts[0]}`;
+  }
+  function drawDailyShareCard(data) {
+    // data: { mode:'win'|'lost', date, startName, targetName, hops, par, streak, picks:[{color}] }
+    const c = document.createElement('canvas');
+    c.width = SHARE_W; c.height = SHARE_H;
+    const ctx = c.getContext('2d');
+    const gold = '#d4a017', robin = '#7fc9c7', gray = '#9aa0ae';
+    // Arena background.
+    const bg = ctx.createLinearGradient(0, 0, 0, SHARE_H);
+    bg.addColorStop(0, '#10131a');
+    bg.addColorStop(1, '#1b212e');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, SHARE_W, SHARE_H);
+    const glow = ctx.createRadialGradient(SHARE_W / 2, 300, 60, SHARE_W / 2, 300, 640);
+    glow.addColorStop(0, 'rgba(212,160,23,.10)');
+    glow.addColorStop(1, 'rgba(212,160,23,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, SHARE_W, SHARE_H);
+    const center = (text, y, font, fill) => {
+      ctx.font = font; ctx.fillStyle = fill; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(text, SHARE_W / 2, y, SHARE_W - 120);
+    };
+    const FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    try { ctx.letterSpacing = '8px'; } catch {}
+    center('SIX DEGREES OF RAWK', 118, `600 42px ${FONT}`, gold);
+    try { ctx.letterSpacing = '2px'; } catch {}
+    center(`Daily Chain · ${fmtChainDate(data.date)}`, 172, `400 30px ${FONT}`, gray);
+    center(data.mode === 'win' ? 'I connected the constellation' : 'The tree wins today',
+      232, `600 36px ${FONT}`, data.mode === 'win' ? gold : gray);
+    // Stats.
+    const stats = [
+      [String(data.hops), 'HOPS'],
+      [String(data.par), 'PAR'],
+      [String(data.streak), 'STREAK'],
+    ];
+    stats.forEach(([num, label], i) => {
+      const x = SHARE_W / 2 + (i - 1) * 280;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `700 84px ${FONT}`; ctx.fillStyle = i === 1 ? robin : '#f2f3f5';
+      ctx.fillText(num, x, 330);
+      try { ctx.letterSpacing = '5px'; } catch {}
+      ctx.font = `400 26px ${FONT}`; ctx.fillStyle = gray;
+      ctx.fillText(label, x, 392);
+      try { ctx.letterSpacing = '2px'; } catch {}
+    });
+    center(`${data.startName}  →  ${data.targetName}`, 452, `400 30px ${FONT}`, gray);
+    // Pick grid — real picks, flowing rows.
+    const picks = data.picks || [];
+    const MAX_DRAW = 60;
+    const shown = picks.slice(0, MAX_DRAW);
+    const perRow = 10, s = 64, pitch = 88;
+    const rows = Math.ceil(shown.length / perRow);
+    const top = 540;
+    shown.forEach((p, i) => {
+      const r = Math.floor(i / perRow), k = i % perRow;
+      const inRow = Math.min(perRow, shown.length - r * perRow);
+      const x0 = SHARE_W / 2 - ((inRow - 1) * pitch) / 2;
+      drawPickCanvas(ctx, x0 + k * pitch, top + r * pitch, s, p.color);
+    });
+    let legendY = top + rows * pitch + 24;
+    if (picks.length > MAX_DRAW) {
+      center(`+${picks.length - MAX_DRAW} more`, legendY - 34, `400 28px ${FONT}`, gray);
+    }
+    center('Gold is optimal · robin\u2019s egg is valid · black is lost in space',
+      legendY, `400 26px ${FONT}`, gray);
+    // Footer.
+    center('sixdegreesofrock.com/game', SHARE_H - 110, `600 34px ${FONT}`, gold);
+    try { ctx.letterSpacing = '4px'; } catch {}
+    center('DAILY CHAIN', SHARE_H - 62, `400 24px ${FONT}`, '#5b616e');
+    try { ctx.letterSpacing = '0px'; } catch {}
+    return c;
+  }
+  async function shareDailyCard(btn, data) {
+    const canvas = drawDailyShareCard(data);
+    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+    if (!blob) { btn.textContent = 'Could not draw the card'; return; }
+    const file = new File([blob], `daily-chain-${data.date}.png`, { type: 'image/png' });
+    // Native image share where supported (phones).
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Daily Chain', text: data.text });
+        btn.textContent = 'Shared';
+        setTimeout(() => { btn.textContent = 'Share image'; }, 2500);
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return; // user dismissed — leave it
+      }
+    }
+    // Fallback: download the PNG and copy the text.
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = file.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+    try { await navigator.clipboard.writeText(data.text); } catch {}
+    btn.textContent = 'Image downloaded · text copied';
+    setTimeout(() => { btn.textContent = 'Share image'; }, 4000);
   }
 
   let dailyRun = null;      // last run state from the server
@@ -588,6 +727,28 @@ function initGameUI() {
     wireDailyArchive(card);
   }
 
+  // Tappable credit balance: what you hold, how it's earned, what's coming.
+  function toggleCreditSheet(card) {
+    const open = card.querySelector('.game-credit-sheet');
+    if (open) { open.remove(); return; }
+    const balance = (dailyRun && dailyRun.credits != null) ? dailyRun.credits : 0;
+    const sheet = el(`<div class="game-credit-sheet">
+      <div class="game-credit-sheet-head"><strong>Credits</strong><button type="button" aria-label="Close">✕</button></div>
+      <p class="game-credit-sheet-balance">Balance: <strong></strong></p>
+      <ul>
+        <li>Finish the daily chain · <strong>+20</strong></li>
+        <li>Match par · <strong>+10</strong></li>
+        <li>Replay and beat your best · <strong>+5</strong> per hop</li>
+        <li>Beat the tree (shorter than par) · <strong>+50</strong></li>
+      </ul>
+      <p class="game-daily-note">Cut −10 · Ask −10 · Dig out −50 · Freeze 100 · Archive day 75</p>
+      <p class="game-daily-note">Credit packs — coming soon · Redeem Play Points — later</p>
+    </div>`);
+    sheet.querySelector('.game-credit-sheet-balance strong').textContent = balance;
+    sheet.querySelector('[aria-label="Close"]').addEventListener('click', () => sheet.remove());
+    card.querySelector('.game-daily-econ').after(sheet);
+  }
+
   function paintDailyBoard(card, completed, gaveUpInfo) {
     const run = dailyRun;
     if (!run) return;
@@ -600,10 +761,16 @@ function initGameUI() {
     pair.appendChild(mk('→', 'game-daily-arrow'));
     pair.appendChild(mk(run.target.name));
 
-    q('.game-daily-econ').textContent =
-      `Streak ${run.streak} · ${run.credits} credits` +
-      (run.freeze_count ? ` · ❄ ${run.freeze_count} Seattle Freeze${run.freeze_count === 1 ? '' : 's'}` : '') +
-      (run.best_hops != null ? ` · Best today: ${run.best_hops}` : '');
+    const econLine = q('.game-daily-econ');
+    econLine.innerHTML = '';
+    econLine.appendChild(mk(`Par ${run.par} · Streak ${run.streak} · `));
+    const creditBtn = el('<button type="button" class="game-credit-btn"></button>');
+    creditBtn.textContent = `${run.credits} credits`;
+    creditBtn.setAttribute('aria-label', 'Your credit balance — how credits work');
+    creditBtn.addEventListener('click', () => toggleCreditSheet(card));
+    econLine.appendChild(creditBtn);
+    if (run.freeze_count) econLine.appendChild(mk(` · ❄ ${run.freeze_count}`));
+    if (run.best_hops != null) econLine.appendChild(mk(` · Best today: ${run.best_hops}`));
 
     const picksRow = q('.game-daily-picks');
     picksRow.innerHTML = '';
@@ -639,6 +806,7 @@ function initGameUI() {
         line = `You beat the tree in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} — par was ${c.old_par}.`;
       } else {
         line = `Connected in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} (par ${run.par}).`;
+        if (run.hops_used === run.par) line += ' The tree nods.';
         if (run.best_hops != null && run.best_hops < run.hops_used) {
           line += ` Best today: ${run.best_hops}.`;
         }
@@ -668,9 +836,9 @@ function initGameUI() {
 
     const hintsLeft = run.hints_total - run.hints_used;
     if (hintsLeft > 0) {
-      const elim = el('<button type="button" class="tool-chip">Eliminate one (−10)</button>');
+      const elim = el('<button type="button" class="tool-chip">Cut one option (−10)</button>');
       elim.addEventListener('click', () => dailyHint(card, 'eliminate'));
-      const peek = el('<button type="button" class="tool-chip">Peek at a band (−10)</button>');
+      const peek = el('<button type="button" class="tool-chip">Ask the tree (−10)</button>');
       peek.addEventListener('click', () => {
         dailyRevealArmed = true;
         note.textContent = 'Tap a band to check whether it\u2019s on the optimal path. Helpers never solve — this only narrows.';
@@ -684,13 +852,19 @@ function initGameUI() {
 
     const last = run.picks[run.picks.length - 1];
     if (last && last.kind === 'deadend') {
-      const esc = el('<button type="button" class="tool-chip">Dig out of the dead end (−50)</button>');
+      const esc = el('<button type="button" class="tool-chip"></button>');
+      // Bail-out: when a session legend is actually in the room (the server
+      // checked the graph), the escape wears his name. Same price, same
+      // effect — and yes, it's a Freese/Freeze pun.
+      esc.textContent = run.bailout
+        ? `${run.bailout} bails you out (−50)`
+        : 'Dig out of the dead end (−50)';
       esc.addEventListener('click', () => dailyEscape(card));
       tools.appendChild(esc);
-      note.textContent = `Dead end — that hop burned. ${note.textContent}`;
+      note.textContent = `Lost in space. ${note.textContent}`;
     }
 
-    const econ = el('<button type="button" class="tool-chip">Buy Seattle Freeze (100)</button>');
+    const econ = el('<button type="button" class="tool-chip">Freeze my streak (100)</button>');
     econ.addEventListener('click', () => dailyBuyFreeze(card));
     tools.appendChild(econ);
 
@@ -778,8 +952,7 @@ function initGameUI() {
       } else {
         paintDailyBoard(card);
         if (data.picked && data.picked.deadend) {
-          card.querySelector('.game-daily-note').textContent =
-            'Dead end — that hop burned, but the run continues.';
+          card.querySelector('.game-daily-note').textContent = 'Lost in space.';
         }
       }
     } catch (err) {
@@ -809,6 +982,7 @@ function initGameUI() {
 
   async function dailyEscape(card) {
     const note = card.querySelector('.game-daily-note');
+    const who = dailyRun && dailyRun.bailout;
     try {
       const data = await dailyFetch('/api/game-daily/play', {
         method: 'POST',
@@ -817,8 +991,9 @@ function initGameUI() {
       dailyRun = data.run;
       dailyOptions = data.options || [];
       paintDailyBoard(card);
-      card.querySelector('.game-daily-note').textContent =
-        `Dug out — ${data.escaped.name} is off your trail.`;
+      card.querySelector('.game-daily-note').textContent = who
+        ? `${who.split(' ').pop()} got you out of the black hole.`
+        : `Dug out — ${data.escaped.name} is off your trail.`;
     } catch (err) {
       note.textContent = err.message;
     }
@@ -834,7 +1009,7 @@ function initGameUI() {
       dailyRun = { ...dailyRun, credits: data.credits, freeze_count: data.freeze_count, streak: data.streak };
       paintDailyBoard(card);
       card.querySelector('.game-daily-note').textContent =
-        'Seattle Freeze stocked — it auto-burns if you miss exactly one day.';
+        'Freeze stocked — it auto-burns if you miss exactly one day.';
     } catch (err) {
       note.textContent = err.message;
     }
@@ -857,7 +1032,7 @@ function initGameUI() {
       `Six Degrees Daily Chain — ${run.chain_date}\nThe tree beat me today — par was ${par}, and I was ${hops} hops deep.\nsixdegreesofrock.com/game`;
     const share = el(`<div class="game-daily-share">
       <p class="game-daily-share-line"></p>
-      <div class="game-result-actions"><button type="button" class="tool-chip" data-copy>Copy share text</button></div>
+      <div class="game-result-actions"><button type="button" class="tool-chip" data-share>Share image</button><button type="button" class="tool-chip" data-copy>Copy share text</button></div>
     </div>`);
     share.querySelector('.game-daily-share-line').textContent =
       `The tree beat me today — par was ${par}, and I was ${hops} hop${hops === 1 ? '' : 's'} deep.`;
@@ -871,6 +1046,16 @@ function initGameUI() {
         copyBtn.textContent = 'Copy failed — long-press to copy';
       }
     });
+    const shareBtn = share.querySelector('[data-share]');
+    shareBtn.addEventListener('click', () => shareDailyCard(shareBtn, {
+      mode: 'lost',
+      date: run.chain_date,
+      startName: run.start_band.name,
+      targetName: run.target.name,
+      hops, par, streak: run.streak,
+      picks: run.picks || [],
+      text: shareText,
+    }));
     finish.appendChild(share);
   }
 
@@ -881,7 +1066,7 @@ function initGameUI() {
       <div class="game-daily-share-picks"></div>
       <p class="game-daily-share-line"></p>
       <p class="game-daily-note"></p>
-      <div class="game-result-actions"><button type="button" class="tool-chip" data-copy>Copy share text</button></div>
+      <div class="game-result-actions"><button type="button" class="tool-chip" data-share>Share image</button><button type="button" class="tool-chip" data-copy>Copy share text</button></div>
     </div>`);
     const row = share.querySelector('.game-daily-share-picks');
     for (const p of picks) {
@@ -899,17 +1084,27 @@ function initGameUI() {
     share.querySelector('.game-daily-note').textContent =
       'Gold is optimal, robin\u2019s egg is valid, black is lost in space.';
     const copyBtn = share.querySelector('[data-copy]');
+    const shareText = completed.share_text ||
+      `Daily Chain ${dailyRun.chain_date} — ${hops} hops (par ${par}), streak ${streak}. Play: https://sixdegreesofrock.com/game/`;
     copyBtn.addEventListener('click', async () => {
-      const text = completed.share_text ||
-        `Daily Chain ${dailyRun.chain_date} — ${hops} hops (par ${par}), streak ${streak}. Play: https://sixdegreesofrock.com/game/`;
       try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(shareText);
         copyBtn.textContent = 'Copied';
         setTimeout(() => { copyBtn.textContent = 'Copy share text'; }, 2000);
       } catch {
         copyBtn.textContent = 'Copy failed — long-press to copy';
       }
     });
+    const shareBtn = share.querySelector('[data-share]');
+    shareBtn.addEventListener('click', () => shareDailyCard(shareBtn, {
+      mode: 'win',
+      date: dailyRun.chain_date,
+      startName: dailyRun.start_band.name,
+      targetName: dailyRun.target.name,
+      hops, par, streak,
+      picks,
+      text: shareText,
+    }));
     if (completed.freeze_used) {
       const fz = document.createElement('p');
       fz.className = 'game-daily-note';
@@ -917,6 +1112,49 @@ function initGameUI() {
       share.appendChild(fz);
     }
     finish.appendChild(share);
+  }
+
+  // Post-mortem: par path in gold vs your route in blue, for archive days you
+  // actually played. The server enforces the two-day gate; this just decides
+  // whether to offer the button.
+  function pmEligible(dateStr) {
+    const day = new Date(String(dateStr) + 'T12:00:00');
+    if (Number.isNaN(day.getTime())) return false;
+    return Math.floor((Date.now() - day.getTime()) / 86400000) >= 2;
+  }
+  async function togglePostMortem(row, date) {
+    let box = row.querySelector('.game-daily-postmortem');
+    if (box) { box.remove(); return; }
+    box = el('<div class="game-daily-postmortem"><p class="game-daily-note">Loading…</p></div>');
+    row.appendChild(box);
+    try {
+      const data = await dailyFetch(`/api/game-daily/postmortem?date=${encodeURIComponent(date)}`);
+      box.innerHTML = '';
+      const parP = el('<p></p>');
+      parP.appendChild(mk('Par · '));
+      const parSpan = document.createElement('span');
+      parSpan.className = 'pm-par';
+      parSpan.textContent = (data.par_path || []).join(' → ');
+      parP.appendChild(parSpan);
+      const youP = el('<p></p>');
+      youP.appendChild(mk(`You · ${data.your_hops} hop${data.your_hops === 1 ? '' : 's'} · `));
+      const youSpan = document.createElement('span');
+      youSpan.className = 'pm-you';
+      youSpan.textContent = (data.your_path || []).join(' → ');
+      youP.appendChild(youSpan);
+      const meta = el('<p class="game-daily-note"></p>');
+      meta.textContent = data.outcome === 'complete'
+        ? `Completed in ${data.your_hops} vs par ${data.par}.`
+        : `Gave up ${data.your_hops} deep — the tree's answer is the gold route.`;
+      box.appendChild(parP);
+      box.appendChild(youP);
+      box.appendChild(meta);
+    } catch (err) {
+      box.innerHTML = '';
+      const p = el('<p class="game-daily-note"></p>');
+      p.textContent = err.message;
+      box.appendChild(p);
+    }
   }
 
   function wireDailyArchive(card) {
@@ -944,6 +1182,11 @@ function initGameUI() {
           row.querySelector('.game-daily-archive-pair').textContent =
             `${d.band_a} → ${d.band_b}${d.completed ? ' ✓' : ''}`;
           const act = row.querySelector('.game-daily-archive-act');
+          if (d.played && pmEligible(d.date)) {
+            const pm = el('<button type="button" class="tool-chip">Post-mortem</button>');
+            pm.addEventListener('click', () => togglePostMortem(row, d.date));
+            act.appendChild(pm);
+          }
           if (d.completed || d.unlocked) {
             const play = el('<button type="button" class="tool-chip">Play</button>');
             play.addEventListener('click', () => renderDailyBoard({ date: d.date }));
