@@ -51,6 +51,7 @@ export const badRequest = (message, extra = {}) => json(400, { ok: false, error:
 export const unauthorized = (message = 'unauthorized') => json(401, { ok: false, error: message });
 export const forbidden = (message = 'forbidden') => json(403, { ok: false, error: message });
 export const conflict = (message, extra = {}) => json(409, { ok: false, error: message, ...extra });
+export const gone = (message = 'gone') => json(410, { ok: false, error: message });
 export const notFound = (message = 'not found') => json(404, { ok: false, error: message });
 export const methodNotAllowed = () => json(405, { ok: false, error: 'method not allowed' });
 export const serverError = (message = 'server error', extra = {}) => json(500, { ok: false, error: message, ...extra });

@@ -51,7 +51,8 @@ export default async (req) => {
         select c.date, c.band_a, c.band_b, c.optimal_hops,
                ba.name as band_a_name, bb.name as band_b_name,
                (r.id is not null) as completed,
-               (u.chain_date is not null) as unlocked
+               (u.chain_date is not null) as unlocked,
+               exists (select 1 from daily_runs rr where rr.user_id = ${me.id} and rr.chain_date = c.date) as played
           from daily_chains c
           join bands ba on ba.id = c.band_a
           join bands bb on bb.id = c.band_b
@@ -72,6 +73,7 @@ export default async (req) => {
         optimal_hops: r.optimal_hops,
         completed: !!r.completed,
         unlocked: !!r.unlocked || !!r.completed,
+        played: !!r.played,
       })),
     });
   }

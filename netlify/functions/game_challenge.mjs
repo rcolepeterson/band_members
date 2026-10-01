@@ -35,11 +35,56 @@ import {
   findUserByToken,
   generateToken,
   roleOf,
+  gone,
 } from './_db.mjs';
 import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
 import { ensureHandle } from './me_handle.mjs';
 
 const MAX_BAND_REF = 160;
+
+// Head-to-head hygiene (Aaron's call): unanswered challenges expire after
+// this many days — they quietly leave the active list. No graveyard, no
+// pile-up. Answered challenges never expire: the matchup stays viewable.
+// One constant so the window is a single-line change.
+export const CHALLENGE_EXPIRY_DAYS = 5;
+
+// True when an unanswered ('open') challenge is older than the expiry window.
+// createdAt is whatever the driver returns for timestamptz (ISO string or
+// Date). Bad data fails open — never expire on a date we can't parse.
+export function challengeIsExpired(status, createdAt) {
+  if (status !== 'open') return false;
+  const t = createdAt instanceof Date ? createdAt.getTime() : Date.parse(createdAt);
+  if (!Number.isFinite(t)) return false;
+  return Date.now() - t > CHALLENGE_EXPIRY_DAYS * 86400000;
+}
+
+// Fetch one challenge by token for the public single view. Returns { row }
+// on success, or { error } carrying the 404/410 response — the 410 keeps a
+// dead invite link from rendering an accept flow for a challenge that's
+// already expired (the client shows its "ask for a fresh one" state).
+export async function getChallengeDetail(sql, token) {
+  let rows;
+  try {
+    rows = await sql`
+      select c.token, c.status, c.band_a, c.band_b, c.created_at, c.answered_at,
+             c.challenger_id, c.invitee_id,
+             u1.handle as challenger_handle, u2.handle as invitee_handle
+        from game_challenges c
+        join users u1 on u1.id = c.challenger_id
+        left join users u2 on u2.id = c.invitee_id
+       where c.token = ${token}
+       limit 1`;
+  } catch (error) {
+    console.error('game-challenge: fetch failed', error && error.message);
+    return { error: serverError('could not load the challenge') };
+  }
+  const row = rows && rows[0];
+  if (!row) return { error: notFound('challenge not found') };
+  if (challengeIsExpired(row.status, row.created_at)) {
+    return { error: gone('this challenge expired') };
+  }
+  return { row };
+}
 
 // Printable, non-empty, length-capped. Returns the cleaned ref or null.
 export function validBandRef(raw) {
@@ -105,23 +150,8 @@ export default async (req) => {
     if (!token) return badRequest('missing token');
     if (!isDbConfigured()) return dbUnavailable();
     const sql = getSql();
-    let rows;
-    try {
-      rows = await sql`
-        select c.token, c.status, c.band_a, c.band_b, c.created_at, c.answered_at,
-               c.challenger_id, c.invitee_id,
-               u1.handle as challenger_handle, u2.handle as invitee_handle
-          from game_challenges c
-          join users u1 on u1.id = c.challenger_id
-          left join users u2 on u2.id = c.invitee_id
-         where c.token = ${token}
-         limit 1`;
-    } catch (error) {
-      console.error('game-challenge: fetch failed', error && error.message);
-      return serverError('could not load the challenge');
-    }
-    const row = rows && rows[0];
-    if (!row) return notFound('challenge not found');
+    const { error, row } = await getChallengeDetail(sql, token);
+    if (error) return error;
     // Optional auth: identifies the viewer's relationship to the challenge so
     // the client can show the "already claimed" message to spectators (open
     // challenges shared to a feed) instead of the accept flow.
