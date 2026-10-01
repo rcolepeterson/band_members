@@ -718,6 +718,48 @@ export default async (req) => {
     `;
     results.push('index game_challenges_invitee_id_idx ready');
 
+    // game_matches table -----------------------------------------------------
+    // Structured head-to-head: best-of-N / timed / open-ended matches.
+    // A match is a series of rounds; each round is two plays (one serve
+    // each, tennis-style alternation — the challenger leads odd rounds).
+    // Scoring: higher hop count wins the round; tie rounds are replayed.
+    // plays is a JSONB array of {round, server_id, band_a, band_b, hops}.
+    // pending_server_id + pending_band_a describe the in-flight serve:
+    //   pending_band_a set   -> waiting on the defender to pick band_b
+    //   pending_band_a null  -> waiting on pending_server to pick band_a
+    await sql`
+      create table if not exists game_matches (
+        id                    uuid primary key default gen_random_uuid(),
+        token                 text not null unique,
+        challenger_id         uuid not null references users(id) on delete cascade,
+        invitee_id            uuid references users(id) on delete set null,
+        format                text not null check (format in ('best3','best5','best7','timed','open')),
+        status                text not null default 'open' check (status in ('open','active','complete')),
+        challenger_round_wins integer not null default 0,
+        invitee_round_wins     integer not null default 0,
+        current_round         integer not null default 1,
+        pending_server_id     uuid references users(id) on delete set null,
+        pending_band_a        text,
+        plays                 jsonb not null default '[]',
+        created_at            timestamptz not null default now(),
+        ends_at               timestamptz,
+        completed_at          timestamptz
+      )
+    `;
+    results.push('table game_matches ready');
+
+    await sql`
+      create index if not exists game_matches_challenger_id_idx
+      on game_matches (challenger_id)
+    `;
+    results.push('index game_matches_challenger_id_idx ready');
+
+    await sql`
+      create index if not exists game_matches_invitee_id_idx
+      on game_matches (invitee_id)
+    `;
+    results.push('index game_matches_invitee_id_idx ready');
+
     // duplicate_flags table --------------------------------------------------
     // Duplicate-band monitor (see scanDuplicateBands in
     // cron_verify_stale_bands.mjs). One row per detected true-duplicate pair
