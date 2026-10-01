@@ -207,6 +207,89 @@ function initGameUI() {
     } catch { return ''; }
   }
 
+  // Player handle ("battle name") — the privacy-safe name shown on
+  // challenges and matches instead of the real name. null = unknown yet,
+  // '' = signed out or none set.
+  let myHandleCache = null;
+  async function loadMyHandle() {
+    if (!isSignedIn()) { myHandleCache = ''; return ''; }
+    if (myHandleCache !== null) return myHandleCache;
+    try {
+      const res = await fetch('/api/me/handle', {
+        headers: { authorization: 'Bearer ' + authToken() },
+      });
+      const data = await res.json().catch(() => ({}));
+      myHandleCache = (res.ok && data.ok && data.handle) ? data.handle : '';
+    } catch { myHandleCache = ''; }
+    return myHandleCache;
+  }
+
+  // Inline battle-name picker. Rendered into the game result area so it
+  // works identically in the burger modal and on /game/.
+  function showHandlePicker({ title, subtitle, cta, onSaved }) {
+    const card = el(`<div class="game-result-card">
+      <div class="game-result-meta"><span class="game-hops"></span></div>
+      <p class="game-invite-text"></p>
+      <label class="game-invite-link-label">Battle name
+        <input class="game-invite-link" type="text" maxlength="20" autocomplete="off"
+               placeholder="e.g. rawker4821" />
+      </label>
+      <p class="game-empty-note"></p>
+      <div class="game-result-actions"><button type="button" class="game-run-btn" data-save></button></div>
+    </div>`);
+    card.querySelector('.game-hops').textContent = title;
+    card.querySelector('.game-invite-text').textContent = subtitle;
+    const input = card.querySelector('input');
+    const note = card.querySelector('.game-empty-note');
+    const saveBtn = card.querySelector('[data-save]');
+    saveBtn.textContent = cta;
+    const save = async () => {
+      const value = (input.value || '').trim();
+      if (!/^[A-Za-z0-9_]{3,20}$/.test(value)) {
+        note.textContent = 'Use 3-20 letters, numbers, or underscores.';
+        input.focus();
+        return;
+      }
+      saveBtn.disabled = true;
+      note.textContent = 'Saving…';
+      try {
+        const res = await fetch('/api/me/handle', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
+          body: JSON.stringify({ handle: value }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok || !data.handle) {
+          throw new Error((data && data.error) || 'could not save');
+        }
+        myHandleCache = data.handle;
+        onSaved(data.handle);
+      } catch (err) {
+        note.textContent = (err && err.message) || 'Could not save. Try again.';
+        saveBtn.disabled = false;
+      }
+    };
+    saveBtn.addEventListener('click', save);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+    result.innerHTML = '';
+    result.appendChild(card);
+    setTimeout(() => input.focus(), 60);
+  }
+
+  // Runs fn only once the player has a battle name. First-timers get the
+  // picker inline ("Pick your battle name"); everyone else sails through.
+  async function withHandle(fn) {
+    const h = await loadMyHandle();
+    if (h) { await fn(); return; }
+    statusLine.textContent = '';
+    showHandlePicker({
+      title: 'Pick your battle name',
+      subtitle: 'This is the name opponents see on challenges and matches — not your real name.',
+      cta: 'Save and continue',
+      onSaved: () => { fn(); },
+    });
+  }
+
   function currentFormat() {
     const sel = document.getElementById('game-match-format');
     return (sel && sel.value) || 'quick';
@@ -505,6 +588,9 @@ function initGameUI() {
   // POST /api/game-challenge and show the invite dialog. Shared by the
   // challenge button and one-tap rematches.
   async function createCasualChallenge(bandA) {
+    // Battle name first: the picker shows inline only when the player
+    // doesn't have one yet.
+    await withHandle(async () => {
     statusLine.textContent = 'Making your invite…';
     try {
       const res = await fetch('/api/game-challenge', {
@@ -525,6 +611,7 @@ function initGameUI() {
     } catch (err) {
       statusLine.textContent = (err && err.message) || 'Could not make the invite. Check your connection and try again.';
     }
+    });
   }
 
   function setHeadToHead(a, b, g) {
@@ -563,6 +650,7 @@ function initGameUI() {
 
   // POST /api/game-match and show the invite dialog.
   async function createMatch(format, bandA) {
+    await withHandle(async () => {
     statusLine.textContent = 'Starting your match…';
     try {
       const res = await fetch('/api/game-match', {
@@ -584,6 +672,7 @@ function initGameUI() {
     } catch (err) {
       statusLine.textContent = (err && err.message) || 'Could not start the match. Check your connection and try again.';
     }
+    });
   }
 
   function isArenaPage() {
@@ -598,6 +687,38 @@ function initGameUI() {
       if (!res.ok || !data.ok) return false;
       return (data.sent || []).some((c) => c.token === token);
     } catch { return false; }
+  }
+
+  // "Already claimed" card: a spectator opened an invite/match link whose
+  // opponent slot is taken. Shows who claimed it and offers a fresh start —
+  // the link is stripped from the URL so a reload doesn't reopen it.
+  function renderClaimedCard({ claimedBy, kind, token, g }) {
+    const card = el(`<div class="game-result-card">
+      <div class="game-result-meta"><span class="game-hops">Already claimed</span></div>
+      <p class="game-invite-text"></p>
+      <div class="game-result-actions"><button type="button" class="game-run-btn" data-start>Start your own</button></div>
+    </div>`);
+    card.querySelector('.game-invite-text').textContent =
+      `${claimedBy || 'Someone'} already claimed this one — it's taken. Start your own and put them on notice.`;
+    card.querySelector('[data-start]').addEventListener('click', () => {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('invite');
+        url.searchParams.delete('match');
+        window.history.replaceState(null, '', url.pathname + url.search);
+      } catch {}
+      if (g) setHeadToHead(null, null, g);
+      fieldA.disabled = false;
+      if (acceptBtn) acceptBtn.style.display = 'none';
+      runBtn.style.display = '';
+      syncModeUI();
+      statusLine.textContent = 'Pick a band, then Challenge a friend.';
+      modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => fieldA.focus(), 300);
+    });
+    result.innerHTML = '';
+    result.appendChild(card);
+    statusLine.textContent = '';
   }
 
   async function handleInvite(token) {
@@ -615,8 +736,15 @@ function initGameUI() {
     const g = await loadGraph().catch(() => null);
     const nameA = bandName(g, data.band_a);
 
-    // Answered already — either player (or anyone with the link) can reveal it.
+    // Answered already — the two players can reveal it. A spectator who
+    // opened a claimed link (e.g. a feed-shared invite) gets the claimed
+    // message and a nudge to start their own instead.
     if (data.status === 'answered' && data.band_b) {
+      const viewerIsPlayer = data.you_are === 'challenger' || data.you_are === 'invitee';
+      if (!viewerIsPlayer) {
+        renderClaimedCard({ claimedBy: data.invitee_handle, kind: 'challenge', token, g });
+        return;
+      }
       if (g) { setHeadToHead(data.band_a, data.band_b, g); renderMatchup(g, data.band_a, data.band_b); }
       else { statusLine.textContent = 'Could not load the tree. Check your connection and try again.'; }
       return;
@@ -630,7 +758,7 @@ function initGameUI() {
         <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to accept</button></div>
       </div>`);
       card.querySelector('.game-invite-text').textContent =
-        `${data.challenger_name || 'Someone'} picked ${nameA} and wants to stump you. Sign in to pick your band.`;
+        `${data.challenger_handle || 'Someone'} picked ${nameA} and wants to stump you. Sign in to pick your band.`;
       card.querySelector('[data-signin]').addEventListener('click', () => {
         if (isArenaPage()) {
           // The arena has no signup UI of its own — bounce to the main page
@@ -676,7 +804,7 @@ function initGameUI() {
     }
     runBtn.style.display = 'none';
     if (challengeBtn) challengeBtn.style.display = 'none';
-    statusLine.textContent = `${data.challenger_name || 'Your challenger'} picked ${nameA}. Now pick yours — try to stump them.`;
+    statusLine.textContent = `${data.challenger_handle || 'Your challenger'} picked ${nameA}. Now pick yours — try to stump them.`;
     setTimeout(() => fieldB.focus(), 60);
   }
 
@@ -690,7 +818,12 @@ function initGameUI() {
         body: JSON.stringify({ token, band_b: selected.b }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) throw new Error((data && data.error) || 'request failed');
+      if (!res.ok || !data.ok) {
+        const err = new Error((data && data.error) || 'request failed');
+        err.status = res.status;
+        err.claimedBy = data.claimed_by;
+        throw err;
+      }
       statusLine.textContent = '';
       runBtn.style.display = '';
       if (acceptBtn) acceptBtn.style.display = 'none';
@@ -699,6 +832,12 @@ function initGameUI() {
       renderMatchup(g, data.band_a, data.band_b);
       loadChallenges();
     } catch (err) {
+      // 409: someone else claimed the open challenge first (feed-shared
+      // link, two tappers). Show the claimed message, not an error.
+      if (err && err.status === 409) {
+        renderClaimedCard({ claimedBy: err.claimedBy, kind: 'challenge', token, g });
+        return;
+      }
       statusLine.textContent = (err && err.message) || 'Could not save your pick. Try again.';
     }
   }
@@ -730,9 +869,9 @@ function initGameUI() {
   }
 
   function opponentName(m, myId) {
-    if (myId && m.challenger_id === myId) return m.invitee_name || 'Your opponent';
-    if (myId && m.invitee_id === myId) return m.challenger_name || 'Your opponent';
-    return m.challenger_name || 'Your challenger';
+    if (myId && m.challenger_id === myId) return m.invitee_handle || 'Your opponent';
+    if (myId && m.invitee_id === myId) return m.challenger_handle || 'Your opponent';
+    return m.challenger_handle || 'Your challenger';
   }
 
   function scoreLine(m, myId) {
@@ -779,7 +918,7 @@ function initGameUI() {
       card.querySelector('.game-hops').textContent = `${formatLabelFor(m.format)} match`;
       const servedBand = m.pending && m.pending.band_a ? bandName(g, m.pending.band_a) : 'their band';
       card.querySelector('.game-invite-text').textContent =
-        `${m.challenger_name || 'Someone'} started a match and served ${servedBand}. Sign in to pick your band and defend.`;
+        `${m.challenger_handle || 'Someone'} started a match and served ${servedBand}. Sign in to pick your band and defend.`;
       card.querySelector('[data-signin]').addEventListener('click', () => {
         if (isArenaPage()) {
           window.location.href = '/?match=' + encodeURIComponent(token);
@@ -791,6 +930,13 @@ function initGameUI() {
       });
       result.innerHTML = '';
       result.appendChild(card);
+      return;
+    }
+
+    // Spectator of a claimed match (feed-shared link, someone else took the
+    // opponent slot): the claimed message, not the match view.
+    if (m.invitee_id && m.you_are === 'spectator') {
+      renderClaimedCard({ claimedBy: m.invitee_handle, kind: 'match', token, g });
       return;
     }
 
@@ -852,11 +998,21 @@ function initGameUI() {
             body: JSON.stringify({ token, band_b: selected.b, hops: path.hops }),
           });
           const data = await res.json().catch(() => ({}));
-          if (!res.ok || !data.ok) throw new Error((data && data.error) || 'request failed');
+          if (!res.ok || !data.ok) {
+            const err = new Error((data && data.error) || 'request failed');
+            err.status = res.status;
+            err.claimedBy = data.claimed_by;
+            throw err;
+          }
           statusLine.textContent = '';
           renderMatchView(data.match, g, token);
           loadMatches();
         } catch (err) {
+          // 409: someone else defended first and claimed the open match.
+          if (err && err.status === 409) {
+            renderClaimedCard({ claimedBy: err.claimedBy, kind: 'match', token, g });
+            return;
+          }
           statusLine.textContent = (err && err.message) || 'Could not save your defend. Try again.';
         }
       });
@@ -918,7 +1074,7 @@ function initGameUI() {
     for (const m of items) {
       const myWins = (m.challenger_id === myId) ? m.challenger_round_wins : m.invitee_round_wins;
       const opWins = (m.challenger_id === myId) ? m.invitee_round_wins : m.challenger_round_wins;
-      const opp = (m.challenger_id === myId) ? (m.opponent_name || 'Your opponent') : (m.opponent_name || 'Your challenger');
+      const opp = (m.challenger_id === myId) ? (m.opponent_handle || 'Your opponent') : (m.opponent_handle || 'Your challenger');
       const turnLabel = m.status === 'complete' ? 'Final'
         : m.pending_kind === 'serve' && m.pending_server_id === myId ? 'Your serve'
         : m.pending_kind === 'defend' && m.pending_server_id !== myId ? 'Your turn to defend'
@@ -946,6 +1102,28 @@ function initGameUI() {
       data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error();
     } catch { return; }
+    // Battle-name row: shows your handle and offers a change. The picker
+    // itself is the same inline card used on first create.
+    const handleRow = wrap && wrap.querySelector('[data-handle-row]');
+    if (handleRow) {
+      const h = await loadMyHandle();
+      if (h) {
+        handleRow.hidden = false;
+        handleRow.querySelector('[data-handle-name]').textContent = h;
+        handleRow.querySelector('[data-change-handle]').onclick = () => {
+          showHandlePicker({
+            title: 'Change your battle name',
+            subtitle: 'Opponents see this on challenges and matches — not your real name.',
+            cta: 'Save',
+            onSaved: (saved) => {
+              handleRow.querySelector('[data-handle-name]').textContent = saved;
+              result.innerHTML = '';
+              statusLine.textContent = 'Battle name updated.';
+            },
+          });
+        };
+      } else { handleRow.hidden = true; }
+    }
     const g = await loadGraph().catch(() => null);
     list.innerHTML = '';
     let count = 0;
@@ -1001,13 +1179,13 @@ function initGameUI() {
       if (c.status === 'open') {
         row(`You picked ${bandName(g, c.band_a)} — waiting on your opponent.`, [['Copy invite link', copyInvite(c.token)]]);
       } else if (c.band_b) {
-        row(`${c.invitee_name || 'Your opponent'} answered: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
+        row(`${c.invitee_handle || 'Your opponent'} answered: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
           [['See the chain', seeChain(c.band_a, c.band_b)], ['Rematch', rematch(c.band_a)]]);
       }
     }
     for (const c of data.received || []) {
       if (c.band_b) {
-        row(`${c.challenger_name || 'Someone'} challenged you: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
+        row(`${c.challenger_handle || 'Someone'} challenged you: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
           [['See the chain', seeChain(c.band_a, c.band_b)], ['Challenge back', challengeBack], ['Rematch', rematch(c.band_b)]]);
       }
     }
