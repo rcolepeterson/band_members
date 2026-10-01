@@ -3093,7 +3093,8 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     #game-modal{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:var(--space-4)}
     #game-modal[hidden]{display:none}
     .game-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(6px)}
-    .game-modal-card{position:relative;width:min(560px,100%);max-height:min(88vh,720px);overflow:auto;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:var(--space-5);box-shadow:var(--shadow-lg)}
+    .game-modal-card{position:relative;width:min(560px,100%);max-height:min(94vh,880px);overflow:auto;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:var(--space-5);box-shadow:var(--shadow-lg)}
+    @media (max-width:720px){.game-modal-card{max-height:min(88vh,720px)}}
     .game-modal-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);margin-bottom:var(--space-1)}
     .game-modal-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.04em}
     .game-modal-sub{color:var(--color-text-muted);font-size:var(--text-sm);margin:0 0 var(--space-4)}
@@ -3480,7 +3481,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
           <div class="game-modal-title" id="game-modal-title"><span aria-hidden="true">6°</span> Six Degrees game</div>
           <button class="popover-close" type="button" data-game-close aria-label="Close game">&times;</button>
         </div>
-        <p class="game-modal-sub">Name two bands. If the tree connects them, you brag. If it breaks, you drink.</p>
+        <p class="game-modal-sub">Name two bands. If the tree connects them, you brag. If it breaks, the tree wins.</p>
         <div class="game-modes" role="radiogroup" aria-label="How to play">
           <label class="game-mode">
             <input type="radio" name="game-mode" value="head-to-head" checked />
