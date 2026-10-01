@@ -3139,6 +3139,24 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     .game-nudge p{margin:0 0 var(--space-3);font-size:var(--text-sm);color:var(--color-text)}
     .game-nudge-close{position:absolute;top:6px;right:6px;width:28px;height:28px;border:0;background:none;color:var(--color-text-muted);font-size:18px;line-height:1;cursor:pointer;border-radius:50%}
     .game-nudge-close:hover{color:var(--color-text);background:rgba(255,255,255,.06)}
+    /* Phone density pass for the burger-menu game modal: compact paddings
+       and gaps so the whole card fits a phone viewport without scrolling.
+       The hidden scrollbar is a backstop — the card still scrolls internally
+       if content ever overflows (e.g. a long result), just without a visible bar.
+       No font sizes change here (legibility floor: 12px). */
+    @media (max-width:720px){
+      #game-modal{padding:var(--space-3)}
+      #game-modal .game-modal-card{padding:var(--space-3);scrollbar-width:none}
+      #game-modal .game-modal-card::-webkit-scrollbar{display:none}
+      #game-modal .game-modal-head{margin-bottom:0}
+      #game-modal .game-modal-sub{margin:0 0 var(--space-2)}
+      #game-modal .game-modes{gap:var(--space-1);margin-bottom:var(--space-3)}
+      #game-modal .game-mode{padding:var(--space-1) var(--space-2)}
+      #game-modal .game-field{margin-bottom:var(--space-2)}
+      #game-modal .game-actions{margin-top:var(--space-3)}
+      #game-modal .game-more-options{margin:var(--space-1) 0 0}
+      #game-modal #game-status{margin:var(--space-2) 0 0}
+    }
 
   </style>
 </head>
