@@ -6,6 +6,7 @@
 //   pick    { option_id }        — play a band from the current options
 //   hint    { type, option_id? } — type 'eliminate' | 'reveal'; costs credits + hint budget
 //   escape                       — dig out of the last dead end (5x hint cost)
+//   giveup                       — "Show me the chain": tree reveals the par path, day is done
 //   status                       — credits, freezes, streak, completion dates
 //
 // The server is authoritative: option kinds stay hidden, picks are validated
@@ -43,6 +44,7 @@ import {
   ESCAPE_COST,
   ARCHIVE_COST,
   scoreRun,
+  bfsPath,
 } from './_daily.mjs';
 import { loadBandGraph } from './game_daily.mjs';
 
@@ -68,7 +70,7 @@ function publicPicks(picks) {
 }
 
 async function runState(sql, run, chain, me) {
-  const { meta } = await loadBandGraph(sql);
+  const { adj, meta } = await loadBandGraph(sql);
   const cur = meta.get(run.current_band_id) || {};
   const tgt = meta.get(chain.band_b) || {};
   const comps = await sql`select chain_date from daily_completions where user_id = ${me.id}`;
@@ -78,6 +80,12 @@ async function runState(sql, run, chain, me) {
     select coalesce(min(hops_used), null) as best,
            count(*) filter (where status = 'complete') as done
       from daily_runs where user_id = ${me.id} and chain_date = ${run.chain_date}`;
+  // After a give-up the tree's answer is recomputed live — no stored copy.
+  let reveal_path = null;
+  if (run.status === 'given_up') {
+    const ids = bfsPath(adj, chain.band_a, chain.band_b) || [];
+    reveal_path = ids.map((id) => ({ id, name: (meta.get(id) || {}).name || 'Band' }));
+  }
   return {
     id: run.id,
     chain_date: run.chain_date,
@@ -85,6 +93,7 @@ async function runState(sql, run, chain, me) {
     run_number: run.run_number || 1,
     best_hops: replayRows[0].best,
     replays_done: Number(replayRows[0].done || 0),
+    reveal_path,
     current_band: { id: run.current_band_id, name: cur.name || 'Band' },
     target: { id: chain.band_b, name: tgt.name || 'Band' },
     start_band: { id: chain.band_a, name: (meta.get(chain.band_a) || {}).name || 'Band' },
@@ -386,6 +395,41 @@ export default async (req) => {
       run: await runState(sql, saved, chain, { ...me, credits }),
       options: publicOptions(saved.current_options),
       escaped: { band_id: last.band_id, name: last.name },
+    });
+  }
+
+  // --- giveup ---------------------------------------------------------------
+  // "Show me the chain." The tree reveals the par path and the day is done:
+  // no credits, no completion row, no streak — but the loss is shareable.
+  // The reveal is recomputed live, so nothing needs storing.
+  if (action === 'giveup') {
+    const { run, chain, error } = await getActiveRun();
+    if (error) return error;
+    const { adj, meta } = await loadBandGraph(sql);
+    const ids = bfsPath(adj, chain.band_a, chain.band_b) || [];
+    const path = ids.map((id) => ({ id, name: (meta.get(id) || {}).name || 'Band' }));
+    const handle = await ensureHandle(sql, me).catch(() => null);
+    await sql`
+      update daily_runs set status = 'given_up', picks = ${JSON.stringify(run.picks || [])}::jsonb,
+             current_options = '[]'::jsonb, completed_at = now()
+       where id = ${run.id} and status = 'active'`;
+    const doneRun = { ...run, status: 'given_up' };
+    return ok({
+      run: await runState(sql, doneRun, chain, me),
+      gave_up: {
+        hops_deep: run.hops_used,
+        par: chain.optimal_hops,
+        path,
+        share_text: dailyShareText({
+          date: run.chain_date,
+          handle: handle || me.handle,
+          hopsUsed: run.hops_used,
+          par: chain.optimal_hops,
+          streak: 0,
+          picks: run.picks,
+          gaveUp: true,
+        }),
+      },
     });
   }
 
