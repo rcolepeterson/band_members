@@ -199,6 +199,24 @@ function initGameUI() {
     } catch { return ''; }
   }
 
+  function myUserId() {
+    try {
+      const raw = localStorage.getItem('bmft-user');
+      const p = raw && JSON.parse(raw);
+      return p && typeof p.id === 'string' ? p.id : '';
+    } catch { return ''; }
+  }
+
+  function currentFormat() {
+    const sel = document.getElementById('game-match-format');
+    return (sel && sel.value) || 'quick';
+  }
+
+  function formatLabelFor(format) {
+    return { best3: 'Best of 3', best5: 'Best of 5', best7: 'Best of 7',
+             timed: 'Timed (10 min)', open: 'Open-ended' }[format] || 'Quick challenge';
+  }
+
   function markNudgeDone() {
     try { localStorage.setItem(NUDGE_DONE_KEY, '1'); } catch { /* private mode */ }
   }
@@ -266,8 +284,12 @@ function initGameUI() {
     try { return new URLSearchParams(window.location.search).get('invite') || ''; }
     catch (_) { return ''; }
   })();
+  const matchToken = (() => {
+    try { return new URLSearchParams(window.location.search).get('match') || ''; }
+    catch (_) { return ''; }
+  })();
   try {
-    if (new URLSearchParams(window.location.search).has('game') || inviteToken) openModal();
+    if (new URLSearchParams(window.location.search).has('game') || inviteToken || matchToken) openModal();
   } catch (_) {}
 
   function currentMode() {
@@ -287,7 +309,15 @@ function initGameUI() {
     // band A (your pick); the opponent picks band B on their own device.
     // Visible to logged-out players too — tapping it routes through sign-in,
     // which is the growth loop working as intended.
+    // On the arena page, a format picker offers structured matches (best-of,
+    // timed, open-ended); the burger modal stays quick-challenge only.
     if (challengeBtn) challengeBtn.style.display = mode === 'head-to-head' ? '' : 'none';
+    const formatWrap = document.getElementById('game-format-wrap');
+    const showFormat = isArenaPage() && mode === 'head-to-head' && !!formatWrap;
+    if (formatWrap) formatWrap.style.display = showFormat ? '' : 'none';
+    if (challengeBtn && mode === 'head-to-head') {
+      challengeBtn.textContent = showFormat && currentFormat() !== 'quick' ? 'Start match' : 'Challenge a friend';
+    }
     // The accept button only appears while answering an invite (see
     // handleInvite); a mode switch always stands it down.
     if (acceptBtn) acceptBtn.style.display = 'none';
@@ -296,6 +326,16 @@ function initGameUI() {
     statusLine.textContent = '';
   }
   modeInputs.forEach((i) => i.addEventListener('change', syncModeUI));
+  // The format picker re-labels the challenge button (quick vs match).
+  // Direct getElementById→addEventListener pair (kept adjacent) so
+  // tests/mobile-toolbar-parity.test.mjs sees the dedicated handler —
+  // though a <select> is not a .tool-chip, so the test does not require it.
+  const formatSelDirect = document.getElementById('game-match-format');
+  if (formatSelDirect) formatSelDirect.addEventListener('change', () => {
+    if (challengeBtn && currentMode() === 'head-to-head') {
+      challengeBtn.textContent = currentFormat() !== 'quick' ? 'Start match' : 'Challenge a friend';
+    }
+  });
 
   // --- autocomplete ---
   function wireAutocomplete(input, key) {
@@ -385,6 +425,97 @@ function initGameUI() {
     return (g && g.bands.get(ref) && g.bands.get(ref).name) || ref;
   }
 
+  // --- invite dialog ------------------------------------------------------
+  // A proper dialog for sharing a challenge/match invite: the matchup, the
+  // link visible and selectable, Copy + native Share + Done. Replaces the
+  // old bare "invite link copied" toast Aaron found abrupt. Styles are
+  // injected once so both the burger modal and the arena page get them.
+  let inviteDialogStylesDone = false;
+  function ensureInviteDialogStyles() {
+    if (inviteDialogStylesDone) return;
+    inviteDialogStylesDone = true;
+    const st = document.createElement('style');
+    st.textContent = `
+      .game-invite-dialog{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);padding:16px}
+      .game-invite-dialog-card{background:#141414;border:1px solid #2a2a2a;border-radius:12px;max-width:420px;width:100%;padding:20px}
+      .game-invite-matchup{font-size:1.05rem;font-weight:600;margin:0 0 12px}
+      .game-invite-link-label{display:block;font-size:.8rem;color:#999;margin-bottom:12px}
+      .game-invite-link{display:block;width:100%;margin-top:6px;padding:10px;font-size:.85rem;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:8px;color:#eee}
+    `;
+    document.head.appendChild(st);
+  }
+
+  function showInviteDialog({ matchup, inviteUrl, shareText }) {
+    ensureInviteDialogStyles();
+    const dlg = el(`<div class="game-invite-dialog" role="dialog" aria-modal="true" aria-label="Share your invite">
+      <div class="game-invite-dialog-card">
+        <div class="game-result-meta"><span class="game-hops">Invite ready</span></div>
+        <p class="game-invite-matchup"></p>
+        <label class="game-invite-link-label">Invite link
+          <input class="game-invite-link" type="text" readonly />
+        </label>
+        <div class="game-result-actions">
+          <button type="button" class="game-run-btn" data-copy>Copy link</button>
+          <button type="button" class="tool-chip" data-share>Share…</button>
+          <button type="button" class="tool-chip" data-close>Done</button>
+        </div>
+      </div>
+    </div>`);
+    dlg.querySelector('.game-invite-matchup').textContent = matchup;
+    const input = dlg.querySelector('.game-invite-link');
+    input.value = inviteUrl;
+    const selectLink = () => { input.focus(); input.select(); };
+    input.addEventListener('focus', selectLink);
+    input.addEventListener('click', selectLink);
+    const close = () => dlg.remove();
+    dlg.querySelector('[data-close]').addEventListener('click', close);
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) close(); });
+    document.addEventListener('keydown', function esc(e) {
+      if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+    });
+    dlg.querySelector('[data-copy]').addEventListener('click', async () => {
+      const okCopy = await navigator.clipboard.writeText(inviteUrl).then(() => true).catch(() => false);
+      statusLine.textContent = okCopy
+        ? 'Invite link copied — send it to your opponent.'
+        : 'Copy failed — long-press the link to copy it.';
+    });
+    dlg.querySelector('[data-share]').addEventListener('click', async () => {
+      if (navigator.share) {
+        await navigator.share({ title: 'Six Degrees of Rock — head-to-head', text: shareText, url: inviteUrl }).catch(() => {});
+      } else {
+        const okCopy = await navigator.clipboard.writeText(`${shareText} ${inviteUrl}`).then(() => true).catch(() => false);
+        statusLine.textContent = okCopy ? 'Invite link copied — send it to your opponent.' : inviteUrl;
+      }
+    });
+    document.body.appendChild(dlg);
+    setTimeout(selectLink, 60);
+  }
+
+  // POST /api/game-challenge and show the invite dialog. Shared by the
+  // challenge button and one-tap rematches.
+  async function createCasualChallenge(bandA) {
+    statusLine.textContent = 'Making your invite…';
+    try {
+      const res = await fetch('/api/game-challenge', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
+        body: JSON.stringify({ band_a: bandA }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok || !data.inviteUrl) throw new Error((data && data.error) || 'request failed');
+      const g = await loadGraph();
+      statusLine.textContent = '';
+      showInviteDialog({
+        matchup: `${bandName(g, bandA)} vs ?`,
+        inviteUrl: data.inviteUrl,
+        shareText: `Head-to-head: I picked ${bandName(g, bandA)}. Think you can stump me?`,
+      });
+      loadChallenges();
+    } catch (err) {
+      statusLine.textContent = (err && err.message) || 'Could not make the invite. Check your connection and try again.';
+    }
+  }
+
   function setHeadToHead(a, b, g) {
     const hth = modeInputs.find((i) => i.value === 'head-to-head');
     if (hth) { hth.checked = true; syncModeUI(); }
@@ -399,8 +530,10 @@ function initGameUI() {
   const challengeBtnHandler = document.getElementById('game-challenge-btn');
   if (challengeBtnHandler) challengeBtnHandler.addEventListener('click', async () => {
     if (!isSignedIn()) {
-      // Challenging is a signed-in action — same funnel as every other
-      // signup entry point, no parallel gate.
+      // Stash the pick so sign-in (which may reload the page via OAuth)
+      // resumes right back here with the band still selected, instead of
+      // dumping the player at the graph.
+      try { sessionStorage.setItem('sdr_pending_challenge', JSON.stringify({ band: selected.a || null })); } catch {}
       if (typeof window.openSignupPopover === 'function' && !isArenaPage()) window.openSignupPopover();
       else if (isArenaPage()) window.location.href = '/';
       else document.getElementById('add-band-btn')?.click();
@@ -408,32 +541,39 @@ function initGameUI() {
     }
     if (currentMode() !== 'head-to-head') return;
     if (!selected.a) { statusLine.textContent = 'Pick your band first.'; fieldA.focus(); return; }
-    statusLine.textContent = 'Making your invite…';
+    // Arena page with a match format selected -> structured match.
+    // Everywhere else -> the casual quick challenge.
+    if (isArenaPage() && currentFormat() !== 'quick') {
+      await createMatch(currentFormat(), selected.a);
+      return;
+    }
+    await createCasualChallenge(selected.a);
+  });
+
+  // POST /api/game-match and show the invite dialog.
+  async function createMatch(format, bandA) {
+    statusLine.textContent = 'Starting your match…';
     try {
-      const res = await fetch('/api/game-challenge', {
+      const res = await fetch('/api/game-match', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
-        body: JSON.stringify({ band_a: selected.a }),
+        body: JSON.stringify({ format, band_a: bandA }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok || !data.inviteUrl) throw new Error((data && data.error) || 'request failed');
       const g = await loadGraph();
-      const text = `Head-to-head: I picked ${bandName(g, selected.a)}. Think you can stump me?`;
       statusLine.textContent = '';
-      if (navigator.share) {
-        await navigator.share({ title: 'Six Degrees of Rock — head-to-head', text, url: data.inviteUrl }).catch(() => {});
-        statusLine.textContent = 'Invite sent — your opponent picks their band on their own phone.';
-      } else {
-        const copied = await navigator.clipboard.writeText(`${text} ${data.inviteUrl}`).then(() => true).catch(() => false);
-        statusLine.textContent = copied
-          ? 'Invite link copied — send it to your opponent.'
-          : 'Invite ready: ' + data.inviteUrl;
-      }
-      loadChallenges();
+      const label = formatLabelFor(format);
+      showInviteDialog({
+        matchup: `${label} — you served ${bandName(g, bandA)}`,
+        inviteUrl: data.inviteUrl,
+        shareText: `Six Degrees match (${label}): I served ${bandName(g, bandA)}. Think you can stump me?`,
+      });
+      loadMatches();
     } catch (err) {
-      statusLine.textContent = (err && err.message) || 'Could not make the invite. Check your connection and try again.';
+      statusLine.textContent = (err && err.message) || 'Could not start the match. Check your connection and try again.';
     }
-  });
+  }
 
   function isArenaPage() {
     try { return /(^|\/)game\/?$/.test(window.location.pathname); }
@@ -554,6 +694,237 @@ function initGameUI() {
 
   // --- your challenges (the quiet status view; arena page only) ---------------
   async function loadChallenges() {
+
+  // --- structured match play ---------------------------------------------
+  // A match is a series of serves. On your serve you pick band A; your
+  // opponent defends by picking band B; the revealed chain's hop count is
+  // your score for the round. Higher hops takes the round; tie rounds are
+  // replayed. Challenger leads odd rounds, tennis-style.
+
+  let matchStylesDone = false;
+  function ensureMatchStyles() {
+    if (matchStylesDone) return;
+    matchStylesDone = true;
+    const st = document.createElement('style');
+    st.textContent = `
+      .game-match-score{margin:12px 0}
+      .game-match-score-line{font-size:1.25rem;font-weight:700}
+      .game-match-winner{margin:8px 0 0;font-weight:600}
+      .game-match-history{margin-top:12px}
+      .game-match-history-title{font-size:.9rem;text-transform:uppercase;letter-spacing:.05em;color:#999;margin:0 0 8px}
+      .game-match-turn{margin:12px 0}
+      .game-match-turn .game-run-btn{margin-top:8px}
+    `;
+    document.head.appendChild(st);
+  }
+
+  function opponentName(m, myId) {
+    if (myId && m.challenger_id === myId) return m.invitee_name || 'Your opponent';
+    if (myId && m.invitee_id === myId) return m.challenger_name || 'Your opponent';
+    return m.challenger_name || 'Your challenger';
+  }
+
+  function scoreLine(m, myId) {
+    const myWins = (myId && m.challenger_id === myId) ? m.challenger_round_wins : m.invitee_round_wins;
+    const opWins = (myId && m.challenger_id === myId) ? m.invitee_round_wins : m.challenger_round_wins;
+    return `You ${myWins} — ${opWins} ${opponentName(m, myId)}`;
+  }
+
+  function roundHistoryHtml(m, g) {
+    if (!m.plays.length) return '<p class="game-empty-note">No rounds played yet.</p>';
+    return m.plays.map((p) => {
+      const roundPlays = m.plays.filter((x) => x.round === p.round);
+      const maxHops = Math.max(...roundPlays.map((x) => x.hops));
+      const decided = roundPlays.length >= 2 && !roundPlays.every((x) => x.hops === maxHops);
+      const takesIt = decided && p.hops === maxHops;
+      return `<div class="game-challenge-row"><span>Round ${p.round}: ${bandName(g, p.band_a)} vs ${bandName(g, p.band_b)} — ${p.hops} hops${takesIt ? ' · takes the round' : ''}</span></div>`;
+    }).join('');
+  }
+
+  async function handleMatch(token) {
+    statusLine.textContent = 'Loading the match…';
+    let m;
+    try {
+      const res = await fetch('/api/game-match?token=' + encodeURIComponent(token));
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok || !data.match) throw new Error((data && data.error) || 'not found');
+      m = data.match;
+    } catch (err) {
+      statusLine.textContent = 'That match didn\u2019t land. Ask your challenger for a fresh link.';
+      return;
+    }
+    statusLine.textContent = '';
+    const g = await loadGraph().catch(() => null);
+    if (!g) { statusLine.textContent = 'Could not load the tree. Check your connection and try again.'; return; }
+
+    // Logged out: lure them in. The arena has no signup UI, so bounce to the
+    // main page with the match link intact (same pattern as invites).
+    if (!isSignedIn()) {
+      const card = el(`<div class="game-result-card">
+        <div class="game-result-meta"><span class="game-hops"></span></div>
+        <p class="game-invite-text"></p>
+        <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to play</button></div>
+      </div>`);
+      card.querySelector('.game-hops').textContent = `${formatLabelFor(m.format)} match`;
+      const servedBand = m.pending && m.pending.band_a ? bandName(g, m.pending.band_a) : 'their band';
+      card.querySelector('.game-invite-text').textContent =
+        `${m.challenger_name || 'Someone'} started a match and served ${servedBand}. Sign in to pick your band and defend.`;
+      card.querySelector('[data-signin]').addEventListener('click', () => {
+        if (isArenaPage()) {
+          window.location.href = '/?match=' + encodeURIComponent(token);
+        } else if (typeof window.openSignupPopover === 'function') {
+          window.openSignupPopover();
+        } else {
+          document.getElementById('add-band-btn')?.click();
+        }
+      });
+      result.innerHTML = '';
+      result.appendChild(card);
+      return;
+    }
+
+    renderMatchView(m, g, token);
+  }
+
+  function renderMatchView(m, g, token) {
+    ensureMatchStyles();
+    const myId = myUserId();
+    const opp = opponentName(m, myId);
+    const isMyServe = m.pending && m.pending.server_id === myId;
+    const isMyDefend = m.pending && m.pending.kind === 'defend' && m.pending.server_id !== myId;
+    const waitingOnOpp = m.pending && !isMyServe && !isMyDefend && m.status === 'active';
+
+    const card = el(`<div class="game-result-card">
+      <div class="game-result-meta">
+        <span class="game-hops"></span>
+        <span class="game-band-names"></span>
+      </div>
+      <div class="game-match-score"></div>
+      <div class="game-match-turn"></div>
+      <div class="game-match-history"></div>
+      <div class="game-result-actions">
+        <button type="button" class="tool-chip" data-refresh>Refresh</button>
+      </div>
+    </div>`);
+    card.querySelector('.game-hops').textContent = formatLabelFor(m.format);
+    card.querySelector('.game-band-names').textContent = m.status === 'complete' ? 'Final' : `Round ${m.current_round}`;
+    card.querySelector('.game-match-score').innerHTML =
+      `<div class="game-match-score-line"></div>` +
+      (m.status === 'complete' && m.winner_id
+        ? `<p class="game-match-winner"></p>` : '');
+    card.querySelector('.game-match-score-line').textContent = scoreLine(m, myId);
+    if (m.status === 'complete' && m.winner_id) {
+      card.querySelector('.game-match-winner').textContent =
+        m.winner_id === myId ? 'You take the match. \uD83C\uDFC6' : `${opp} takes the match.`;
+    }
+
+    const turn = card.querySelector('.game-match-turn');
+    if (m.status === 'complete') {
+      // Nothing to do — the history below tells the story.
+    } else if (m.status === 'open') {
+      turn.innerHTML = `<p class="game-empty-note">Waiting for ${opp} to answer your serve…</p>`;
+    } else if (isMyDefend) {
+      turn.innerHTML = `<p><strong>${opp}</strong> served <strong class="js-served"></strong>. Pick your band to defend — the chain's hop count is their score, yours is next.</p>`;
+      turn.querySelector('.js-served').textContent = bandName(g, m.pending.band_a);
+      // Reuse band B's picker for the defend; the Defend button posts the play.
+      setHeadToHead(m.pending.band_a, null, g);
+      const btn = el(`<button type="button" class="game-run-btn" data-defend>Defend</button>`);
+      btn.addEventListener('click', async () => {
+        if (!selected.b) { statusLine.textContent = 'Pick your band first.'; fieldB.focus(); return; }
+        statusLine.textContent = 'Scoring your defend…';
+        try {
+          const path = await findPath(g, m.pending.band_a, selected.b);
+          if (!path) throw new Error('no chain found between those bands');
+          const res = await fetch('/api/game-match/play', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
+            body: JSON.stringify({ token, band_b: selected.b, hops: path.hops }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) throw new Error((data && data.error) || 'request failed');
+          statusLine.textContent = '';
+          renderMatchView(data.match, g, token);
+          loadMatches();
+        } catch (err) {
+          statusLine.textContent = (err && err.message) || 'Could not save your defend. Try again.';
+        }
+      });
+      turn.appendChild(btn);
+    } else if (isMyServe) {
+      turn.innerHTML = `<p>Your serve — pick a band that's hard to connect to. The chain's hop count is your score.</p>`;
+      setHeadToHead(null, null, g);
+      const btn = el(`<button type="button" class="game-run-btn" data-serve>Serve</button>`);
+      btn.addEventListener('click', async () => {
+        if (!selected.a) { statusLine.textContent = 'Pick your band first.'; fieldA.focus(); return; }
+        statusLine.textContent = 'Serving…';
+        try {
+          const res = await fetch('/api/game-match/serve', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
+            body: JSON.stringify({ token, band_a: selected.a }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) throw new Error((data && data.error) || 'request failed');
+          statusLine.textContent = '';
+          renderMatchView(data.match, g, token);
+          loadMatches();
+        } catch (err) {
+          statusLine.textContent = (err && err.message) || 'Could not save your serve. Try again.';
+        }
+      });
+      turn.appendChild(btn);
+    } else if (waitingOnOpp) {
+      turn.innerHTML = `<p class="game-empty-note">Waiting on ${opp}…</p>`;
+    }
+
+    card.querySelector('.game-match-history').innerHTML =
+      `<h3 class="game-match-history-title">Rounds</h3>` + roundHistoryHtml(m, g);
+    card.querySelector('[data-refresh]').addEventListener('click', () => handleMatch(token));
+
+    result.innerHTML = '';
+    result.appendChild(card);
+  }
+
+  async function loadMatches() {
+    const wrap = document.querySelector('[data-matches-wrap]');
+    const list = document.getElementById('game-matches');
+    if (!wrap || !list) return;
+    if (!isSignedIn()) { wrap.hidden = true; return; }
+    let data;
+    try {
+      const res = await fetch('/api/game-matches', {
+        headers: { authorization: 'Bearer ' + authToken() },
+      });
+      data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) return;
+    } catch { return; }
+    const items = [...(data.sent || []).map((m) => ({ ...m, mine: true })),
+                   ...(data.received || []).map((m) => ({ ...m, mine: false }))];
+    if (!items.length) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    list.innerHTML = '';
+    const myId = myUserId();
+    for (const m of items) {
+      const myWins = (m.challenger_id === myId) ? m.challenger_round_wins : m.invitee_round_wins;
+      const opWins = (m.challenger_id === myId) ? m.invitee_round_wins : m.challenger_round_wins;
+      const opp = (m.challenger_id === myId) ? (m.opponent_name || 'Your opponent') : (m.opponent_name || 'Your challenger');
+      const turnLabel = m.status === 'complete' ? 'Final'
+        : m.pending_kind === 'serve' && m.pending_server_id === myId ? 'Your serve'
+        : m.pending_kind === 'defend' && m.pending_server_id !== myId ? 'Your turn to defend'
+        : 'Waiting on ' + opp;
+      const row = el(`<div class="game-challenge-row">
+        <span></span>
+        <div class="game-challenge-row-actions"><button type="button" class="tool-chip" data-open>Open</button></div>
+      </div>`);
+      row.querySelector('span').textContent =
+        `${formatLabelFor(m.format)} vs ${opp} — ${myWins}:${opWins} · ${turnLabel}`;
+      row.querySelector('[data-open]').addEventListener('click', () => {
+        if (isArenaPage()) handleMatch(m.token);
+        else window.location.href = '/game/?match=' + encodeURIComponent(m.token);
+      });
+      list.appendChild(row);
+    }
+  }
     const list = document.getElementById('game-challenges');
     if (!list) return;
     const wrap = list.closest('[data-challenges-wrap]');
@@ -600,26 +971,62 @@ function initGameUI() {
       modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
       setTimeout(() => fieldA.focus(), 300);
     };
+    // One-tap rematch: a fresh challenge with your previous pick, straight
+    // to the invite dialog — no re-picking, no scrolling.
+    const rematch = (bandA) => async () => {
+      if (!bandA) return;
+      if (!isSignedIn()) {
+        try { sessionStorage.setItem('sdr_pending_challenge', JSON.stringify({ band: bandA })); } catch {}
+        if (typeof window.openSignupPopover === 'function' && !isArenaPage()) window.openSignupPopover();
+        else if (isArenaPage()) window.location.href = '/';
+        else document.getElementById('add-band-btn')?.click();
+        return;
+      }
+      await createCasualChallenge(bandA);
+      modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
 
     for (const c of data.sent || []) {
       if (c.status === 'open') {
         row(`You picked ${bandName(g, c.band_a)} — waiting on your opponent.`, [['Copy invite link', copyInvite(c.token)]]);
       } else if (c.band_b) {
         row(`${c.invitee_name || 'Your opponent'} answered: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
-          [['See the chain', seeChain(c.band_a, c.band_b)]]);
+          [['See the chain', seeChain(c.band_a, c.band_b)], ['Rematch', rematch(c.band_a)]]);
       }
     }
     for (const c of data.received || []) {
       if (c.band_b) {
         row(`${c.challenger_name || 'Someone'} challenged you: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
-          [['See the chain', seeChain(c.band_a, c.band_b)], ['Challenge back', challengeBack]]);
+          [['See the chain', seeChain(c.band_a, c.band_b)], ['Challenge back', challengeBack], ['Rematch', rematch(c.band_b)]]);
       }
     }
     if (wrap) wrap.hidden = count === 0;
   }
 
   if (inviteToken) handleInvite(inviteToken);
+  if (matchToken) handleMatch(matchToken);
   loadChallenges();
+  if (isArenaPage()) loadMatches();
+
+  // Resume a challenge interrupted by sign-in. OAuth does a full-page
+  // redirect, so the modal state is gone on return — the pick was stashed in
+  // sessionStorage before the sign-in flow started. Put the player right back
+  // where they left off: game open, band still selected, challenge ready.
+  (function resumePendingChallenge() {
+    let pending = null;
+    try {
+      const raw = sessionStorage.getItem('sdr_pending_challenge');
+      if (raw) pending = JSON.parse(raw);
+    } catch {}
+    if (!pending || !pending.band || !isSignedIn()) return;
+    try { sessionStorage.removeItem('sdr_pending_challenge'); } catch {}
+    openModal();
+    loadGraph().then((g) => {
+      setHeadToHead(pending.band, null, g);
+      statusLine.textContent = 'You\u2019re signed in — hit Challenge a friend to send the invite.';
+      setTimeout(() => document.getElementById('game-challenge-btn')?.focus(), 120);
+    }).catch(() => {});
+  })();
 
   // Matchup view: band A vs band B with a Connect button. No BFS runs here —
   // the chain (or "No rawk found.") only renders after Connect is hit, so
