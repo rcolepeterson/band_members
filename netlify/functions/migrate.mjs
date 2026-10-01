@@ -142,6 +142,20 @@ export default async (req) => {
     `;
     results.push('columns users.{provider,provider_user_id,avatar_url,email_verified} ready');
 
+    // player handles: the privacy-safe battle name shown on challenges and
+    // matches instead of the real name. Nullable — existing users predate it
+    // and get one auto-assigned on their first challenge/match creation
+    // (see ensureHandle in me_handle.mjs); the auto-assign never overwrites
+    // a handle the player chose themselves. Case-insensitive uniqueness via
+    // the expression index below.
+    await sql`alter table users add column if not exists handle text`;
+    await sql`
+      create unique index if not exists users_handle_lower_idx
+      on users (lower(handle))
+      where handle is not null
+    `;
+    results.push('column users.handle ready');
+
     // oauth_states: one-shot CSRF states for the OAuth round-trip. The site
     // has no cookies or server sessions, so the state lives server-side:
     // 15-minute TTL, consumed exactly once by /api/oauth/callback.

@@ -50,6 +50,7 @@ export const ok = (body) => json(200, { ok: true, ...body });
 export const badRequest = (message, extra = {}) => json(400, { ok: false, error: message, ...extra });
 export const unauthorized = (message = 'unauthorized') => json(401, { ok: false, error: message });
 export const forbidden = (message = 'forbidden') => json(403, { ok: false, error: message });
+export const conflict = (message, extra = {}) => json(409, { ok: false, error: message, ...extra });
 export const notFound = (message = 'not found') => json(404, { ok: false, error: message });
 export const methodNotAllowed = () => json(405, { ok: false, error: 'method not allowed' });
 export const serverError = (message = 'server error', extra = {}) => json(500, { ok: false, error: message, ...extra });
@@ -59,6 +60,16 @@ export const dbUnavailable = () =>
     error: 'database not configured',
     hint: `Set the ${DB_URL_ENV} environment variable in Netlify (Site config -> Environment variables). Scope to Functions only.`,
   });
+
+// Viewer role on a challenge or match: 'challenger', 'invitee', or
+// 'spectator' (anyone else holding the link — e.g. a feed-shared invite).
+// Signed-out viewers get 'spectator' so the client can still show the
+// "already claimed" message to latecomers.
+export function roleOf(viewerId, challengerId, inviteeId) {
+  if (viewerId && viewerId === challengerId) return 'challenger';
+  if (inviteeId && viewerId === inviteeId) return 'invitee';
+  return 'spectator';
+}
 
 // --- Auth token helpers ------------------------------------------------------
 //
@@ -101,7 +112,7 @@ export async function findUserByToken(sql, token) {
   // signups populate them via signup.mjs's validation.
   const rows = await sql`
     select id, email, name, token, bands_added, bands_edited, created_at,
-           city, state, country, instrument
+           city, state, country, instrument, handle
     from users
     where token = ${token}
     limit 1

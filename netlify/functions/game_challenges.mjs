@@ -33,7 +33,7 @@ export default async (req) => {
   try {
     const sent = await sql`
       select c.token, c.status, c.band_a, c.band_b, c.created_at, c.answered_at,
-             u.name as invitee_name
+             u.handle as invitee_handle
         from game_challenges c
         left join users u on u.id = c.invitee_id
        where c.challenger_id = ${me.id}
@@ -41,7 +41,7 @@ export default async (req) => {
        limit 20`;
     const received = await sql`
       select c.token, c.status, c.band_a, c.band_b, c.created_at, c.answered_at,
-             u.name as challenger_name
+             u.handle as challenger_handle
         from game_challenges c
         join users u on u.id = c.challenger_id
        where c.invitee_id = ${me.id}
@@ -53,7 +53,7 @@ export default async (req) => {
         status: r.status,
         band_a: r.band_a,
         band_b: r.band_b,
-        invitee_name: r.invitee_name,
+        invitee_handle: r.invitee_handle,
         created_at: r.created_at,
         answered_at: r.answered_at,
       })),
@@ -62,7 +62,7 @@ export default async (req) => {
         status: r.status,
         band_a: r.band_a,
         band_b: r.band_b,
-        challenger_name: r.challenger_name,
+        challenger_handle: r.challenger_handle,
         created_at: r.created_at,
         answered_at: r.answered_at,
       })),
