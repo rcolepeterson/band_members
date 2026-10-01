@@ -598,7 +598,8 @@ function initGameUI() {
 
     q('.game-daily-econ').textContent =
       `Streak ${run.streak} · ${run.credits} credits` +
-      (run.freeze_count ? ` · ❄ ${run.freeze_count} Seattle Freeze${run.freeze_count === 1 ? '' : 's'}` : '');
+      (run.freeze_count ? ` · ❄ ${run.freeze_count} Seattle Freeze${run.freeze_count === 1 ? '' : 's'}` : '') +
+      (run.best_hops != null ? ` · Best today: ${run.best_hops}` : '');
 
     const picksRow = q('.game-daily-picks');
     picksRow.innerHTML = '';
@@ -619,8 +620,21 @@ function initGameUI() {
     dailyRevealArmed = false;
 
     if (completed || run.status === 'complete') {
-      q('.game-daily-current').textContent = `Connected in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} (par ${run.par}).`;
-      paintDailyShare(card, completed || {});
+      const c = completed || {};
+      let line;
+      if (c.beat_tree) {
+        line = `You beat the tree in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} — par was ${c.old_par}.`;
+      } else {
+        line = `Connected in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} (par ${run.par}).`;
+        if (run.best_hops != null && run.best_hops < run.hops_used) {
+          line += ` Best today: ${run.best_hops}.`;
+        }
+      }
+      q('.game-daily-current').textContent = line;
+      paintDailyShare(card, c);
+      const again = el('<button type="button" class="tool-chip">Play again</button>');
+      again.addEventListener('click', () => dailyReplay(card));
+      finish.appendChild(again);
       return;
     }
 
@@ -666,6 +680,22 @@ function initGameUI() {
     const econ = el('<button type="button" class="tool-chip">Buy Seattle Freeze (100)</button>');
     econ.addEventListener('click', () => dailyBuyFreeze(card));
     tools.appendChild(econ);
+  }
+
+  async function dailyReplay(card) {
+    const note = card.querySelector('.game-daily-note');
+    note.textContent = 'Dealing a fresh run…';
+    try {
+      const data = await dailyFetch('/api/game-daily/play', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'start', replay: true }),
+      });
+      dailyRun = data.run;
+      dailyOptions = data.options || [];
+      paintDailyBoard(card);
+    } catch (err) {
+      note.textContent = (err && err.message) || 'Could not start a replay.';
+    }
   }
 
   async function dailyPick(card, optionId, btn) {
@@ -786,8 +816,9 @@ function initGameUI() {
     const hops = completed.hops_used != null ? completed.hops_used : dailyRun.hops_used;
     const par = dailyRun.par;
     const streak = completed.streak != null ? completed.streak : dailyRun.streak;
-    share.querySelector('.game-daily-share-line').textContent =
-      `I connected the constellation in ${hops} hops (par ${par}). Streak ${streak}.`;
+    share.querySelector('.game-daily-share-line').textContent = completed.beat_tree
+      ? `I BEAT THE TREE in ${hops} hops (par was ${completed.old_par}). Streak ${streak}.`
+      : `I connected the constellation in ${hops} hops (par ${par}). Streak ${streak}.`;
     share.querySelector('.game-daily-note').textContent =
       'Gold is optimal, robin\u2019s egg is valid, black is lost in space.';
     const copyBtn = share.querySelector('[data-copy]');
