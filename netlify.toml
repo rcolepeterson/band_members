@@ -17,3 +17,11 @@
   # forbids format conversion — and pureimage reads TTF, not woff2. Hence a different
   # face here than in the browser.
   included_files = ["vendor/fonts/og/**"]
+
+[[redirects]]
+  # Head-to-head invite previews (Aaron's text-message card, 2026-10-01):
+  # /invite/<token> serves the challenge card (dynamic og: tags naming the
+  # challenger and their band pick) and hands humans off to /game/?invite=.
+  from = "/invite/*"
+  to = "/api/game-invite-card?token=:splat"
+  status = 200
