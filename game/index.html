@@ -21,8 +21,19 @@
   <meta name="twitter:title" content="Six Degrees — the game" />
   <meta name="twitter:description" content="Name two bands. If the tree connects them, you brag. If it breaks, you drink." />
   <meta name="twitter:image" content="https://sixdegreesofrock.com/og-image.png?v=2" />
+  <link rel="preload" href="/vendor/fonts/boska-700.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/vendor/fonts.css" />
   <style>
+    /* The arena hero's 6° must never paint in the Georgia fallback: Boska is
+       re-declared here with font-display:block (the vendored file uses swap),
+       so the glyph waits briefly, then arrives whole. The hero asks for
+       weight 800, which resolves to the 700 face — preloaded above. */
+    @font-face{font-family:'Boska';src:url('/vendor/fonts/boska-400.woff2') format('woff2');
+      font-weight:400;font-style:normal;font-display:block}
+    @font-face{font-family:'Boska';src:url('/vendor/fonts/boska-500.woff2') format('woff2');
+      font-weight:500;font-style:normal;font-display:block}
+    @font-face{font-family:'Boska';src:url('/vendor/fonts/boska-700.woff2') format('woff2');
+      font-weight:700;font-style:normal;font-display:block}
     :root {
       --text-xs: clamp(0.8125rem, 0.7625rem + 0.25vw, 0.9375rem);
       --text-sm: clamp(0.9375rem, 0.8625rem + 0.35vw, 1.0625rem);
@@ -94,10 +105,10 @@
     .game-modal-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.04em}
     .game-modal-sub{color:var(--color-text-muted);font-size:var(--text-sm);margin:0 0 var(--space-4)}
     .game-modes{display:grid;gap:var(--space-2);margin-bottom:var(--space-4)}
-    .game-mode{display:flex;gap:var(--space-3);align-items:flex-start;border:1px solid var(--color-border);
-      border-radius:var(--radius-lg);padding:var(--space-3);cursor:pointer;background:rgba(255,255,255,.015)}
+    .game-mode{display:flex;gap:var(--space-2);align-items:flex-start;border:1px solid var(--color-border);
+      border-radius:var(--radius-lg);padding:var(--space-2) var(--space-3);cursor:pointer;background:rgba(255,255,255,.015)}
     .game-mode:has(input:checked){border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.06)}
-    .game-mode input{margin-top:2px;accent-color:var(--color-primary)}
+    .game-mode input{margin-top:2px;accent-color:var(--color-primary);width:18px;height:18px;flex:none}
     .game-mode strong{display:block;font-size:var(--text-sm)}
     .game-mode span{color:var(--color-text-muted);font-size:var(--text-xs)}
     .game-mode-locked{opacity:.55;cursor:not-allowed}
@@ -116,10 +127,12 @@
     .game-ac-item:hover{background:rgba(82,174,182,.08)}
     .game-ac-name{font-size:var(--text-sm);font-weight:600}
     .game-ac-sub{font-size:var(--text-xs);color:var(--color-text-muted)}
-    .game-actions{display:flex;gap:var(--space-2);margin-top:var(--space-4)}
-    .game-run-btn{flex:1;min-height:52px;border-radius:var(--radius-full);border:0;background:var(--color-primary);
-      color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer;letter-spacing:.04em}
+    .game-actions{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-4)}
+    .game-run-btn{flex:1 1 auto;min-height:52px;border-radius:var(--radius-full);border:0;background:var(--color-primary);
+      color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer;letter-spacing:.04em;
+      white-space:nowrap}
     .game-run-btn:hover{background:var(--color-primary-hover)}
+    .game-actions .tool-chip{white-space:nowrap}
     .tool-chip{min-height:44px;padding:0 var(--space-4);border:1px solid var(--color-border);
       border-radius:var(--radius-full);display:inline-flex;align-items:center;gap:var(--space-2);
       background:rgba(255,255,255,0.02);font-size:var(--text-sm);color:var(--color-text)}
