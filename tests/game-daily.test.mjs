@@ -18,6 +18,7 @@ import {
   hintsFor,
   applyCompletion,
   currentStreak,
+  scoreRun,
   HINT_COST,
   ESCAPE_COST,
   MIN_HOPS,
@@ -271,4 +272,28 @@ test('currentStreak derives the trailing run', () => {
 test('MIN/MAX hops bound the daily deal', () => {
   assert.equal(MIN_HOPS, 3);
   assert.equal(MAX_HOPS, 6);
+});
+
+// --- replay economy ----------------------------------------------------------
+
+test('scoreRun: first completion pays 20, +10 on par', () => {
+  assert.deepEqual(scoreRun({ isFirst: true, hopsUsed: 6, par: 4, prevBest: null }), { reward: 20, beatTree: false, newPar: 4 });
+  assert.deepEqual(scoreRun({ isFirst: true, hopsUsed: 4, par: 4, prevBest: null }), { reward: 30, beatTree: false, newPar: 4 });
+});
+
+test('scoreRun: replays pay only for beating your best (5/hop)', () => {
+  assert.deepEqual(scoreRun({ isFirst: false, hopsUsed: 6, par: 4, prevBest: 13 }), { reward: 35, beatTree: false, newPar: 4 });
+  assert.deepEqual(scoreRun({ isFirst: false, hopsUsed: 13, par: 4, prevBest: 13 }), { reward: 0, beatTree: false, newPar: 4 });
+  assert.deepEqual(scoreRun({ isFirst: false, hopsUsed: 15, par: 4, prevBest: 13 }), { reward: 0, beatTree: false, newPar: 4 });
+  assert.deepEqual(scoreRun({ isFirst: false, hopsUsed: 4, par: 4, prevBest: 6 }), { reward: 10, beatTree: false, newPar: 4 });
+});
+
+test('scoreRun: beating the tree pays the bounty and lowers par', () => {
+  assert.deepEqual(scoreRun({ isFirst: true, hopsUsed: 3, par: 4, prevBest: null }), { reward: 70, beatTree: true, newPar: 3 });
+  assert.deepEqual(scoreRun({ isFirst: false, hopsUsed: 3, par: 4, prevBest: 13 }), { reward: 100, beatTree: true, newPar: 3 });
+});
+
+test('dailyShareText has a beat-the-tree variant', () => {
+  const text = dailyShareText({ date: '2026-10-01', handle: 'aaron', hopsUsed: 3, par: 4, streak: 5, picks: [], beatTree: true });
+  assert.match(text, /I BEAT THE TREE in 3 hops \(par was 4\)/);
 });
