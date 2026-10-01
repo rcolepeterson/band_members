@@ -1,7 +1,8 @@
 // Daily Chain gameplay.
 //
 // POST /api/game-daily/play (auth) — body { action, ... }:
-//   start   { date? }            — begin/resume today's run (or an unlocked archive day)
+//   start   { date?, replay? }    — begin/resume today's run (or an unlocked archive day);
+//                                 replay:true starts a fresh run after completing
 //   pick    { option_id }        — play a band from the current options
 //   hint    { type, option_id? } — type 'eliminate' | 'reveal'; costs credits + hint budget
 //   escape                       — dig out of the last dead end (5x hint cost)
@@ -41,8 +42,7 @@ import {
   HINT_COST,
   ESCAPE_COST,
   ARCHIVE_COST,
-  COMPLETION_REWARD,
-  OPTIMAL_BONUS,
+  scoreRun,
 } from './_daily.mjs';
 import { loadBandGraph } from './game_daily.mjs';
 
@@ -74,10 +74,17 @@ async function runState(sql, run, chain, me) {
   const comps = await sql`select chain_date from daily_completions where user_id = ${me.id}`;
   const dates = (comps || []).map((c) => c.chain_date);
   const fresh = await findUserByToken(sql, me.token).catch(() => me);
+  const replayRows = await sql`
+    select coalesce(min(hops_used), null) as best,
+           count(*) filter (where status = 'complete') as done
+      from daily_runs where user_id = ${me.id} and chain_date = ${run.chain_date}`;
   return {
     id: run.id,
     chain_date: run.chain_date,
     status: run.status,
+    run_number: run.run_number || 1,
+    best_hops: replayRows[0].best,
+    replays_done: Number(replayRows[0].done || 0),
     current_band: { id: run.current_band_id, name: cur.name || 'Band' },
     target: { id: chain.band_b, name: tgt.name || 'Band' },
     start_band: { id: chain.band_a, name: (meta.get(chain.band_a) || {}).name || 'Band' },
@@ -137,11 +144,14 @@ export default async (req) => {
   if (action === 'status') {
     const comps = await sql`select chain_date from daily_completions where user_id = ${me.id} order by chain_date desc limit 60`;
     const dates = (comps || []).map((c) => c.chain_date);
+    const today = pacificDate();
+    const bestRows = await sql`select coalesce(min(hops_used), null) as best from daily_runs where user_id = ${me.id} and chain_date = ${today} and status = 'complete'`;
     return ok({
       credits: me.credits ?? 50,
       freeze_count: me.freeze_count ?? 0,
       streak: currentStreak(dates),
       completed_dates: dates,
+      best_today: bestRows[0].best == null ? null : Number(bestRows[0].best),
     });
   }
 
@@ -162,15 +172,23 @@ export default async (req) => {
     }
 
     await ensureHandle(sql, me).catch(() => null);
-    let runs = await sql`select * from daily_runs where user_id = ${me.id} and chain_date = ${date} limit 1`;
+    let runs = await sql`select * from daily_runs where user_id = ${me.id} and chain_date = ${date} order by run_number desc limit 1`;
     let run = runs && runs[0];
     if (!run) {
       const created = await sql`
-        insert into daily_runs (user_id, chain_date, current_band_id)
-        values (${me.id}, ${date}, ${chain.band_a})
-        on conflict (user_id, chain_date) do nothing
+        insert into daily_runs (user_id, chain_date, current_band_id, run_number)
+        values (${me.id}, ${date}, ${chain.band_a}, 1)
+        on conflict (user_id, chain_date, run_number) do nothing
         returning *`;
-      run = (created && created[0]) || (await sql`select * from daily_runs where user_id = ${me.id} and chain_date = ${date} limit 1`)[0];
+      run = (created && created[0]) || (await sql`select * from daily_runs where user_id = ${me.id} and chain_date = ${date} order by run_number desc limit 1`)[0];
+    } else if (run.status === 'complete' && body.replay === true) {
+      // Replay: fresh run, fresh options. Credits only for beating your best.
+      const created = await sql`
+        insert into daily_runs (user_id, chain_date, current_band_id, run_number)
+        values (${me.id}, ${date}, ${chain.band_a}, ${run.run_number + 1})
+        on conflict (user_id, chain_date, run_number) do nothing
+        returning *`;
+      run = (created && created[0]) || (await sql`select * from daily_runs where user_id = ${me.id} and chain_date = ${date} order by run_number desc limit 1`)[0];
     }
     if (!run) return serverError('could not start the run');
     if (!run.current_options || !run.current_options.length) {
@@ -187,7 +205,7 @@ export default async (req) => {
     const chains = await sql`select date, band_a, band_b, optimal_hops from daily_chains where date = ${date} limit 1`;
     const chain = chains && chains[0];
     if (!chain) return { error: notFound('no chain for that day') };
-    const runs = await sql`select * from daily_runs where user_id = ${me.id} and chain_date = ${date} limit 1`;
+    const runs = await sql`select * from daily_runs where user_id = ${me.id} and chain_date = ${date} order by run_number desc limit 1`;
     const run = runs && runs[0];
     if (!run) return { error: badRequest('no run started for that day') };
     if (run.status !== 'active') return { error: badRequest('that run is over'), run, chain };
@@ -216,12 +234,32 @@ export default async (req) => {
       const handle = await ensureHandle(sql, me).catch(() => null);
       const comps = await sql`select chain_date, via_freeze from daily_completions where user_id = ${me.id}`;
       const dates = (comps || []).map((c) => c.chain_date);
-      const { streak, freezeUsed, frozenDate } = applyCompletion({
-        dates,
-        newDate: run.chain_date,
-        freezeCount: me.freeze_count ?? 0,
-      });
-      const reward = COMPLETION_REWARD + (hopsUsed === chain.optimal_hops ? OPTIMAL_BONUS : 0);
+      const isFirst = !dates.includes(run.chain_date);
+      // Previous best among this date's completed runs (this run not yet marked).
+      const bestRows = await sql`select min(hops_used) as best from daily_runs where user_id = ${me.id} and chain_date = ${run.chain_date} and status = 'complete'`;
+      const prevBest = bestRows[0].best == null ? null : Number(bestRows[0].best);
+
+      // Streaks and freezes only move on the day's first completion.
+      let streak = currentStreak(dates);
+      let freezeUsed = false;
+      let frozenDate = null;
+      if (isFirst) {
+        const r = applyCompletion({
+          dates,
+          newDate: run.chain_date,
+          freezeCount: me.freeze_count ?? 0,
+        });
+        streak = r.streak;
+        freezeUsed = r.freezeUsed;
+        frozenDate = r.frozenDate;
+      }
+      const oldPar = chain.optimal_hops;
+      const { reward, beatTree, newPar } = scoreRun({ isFirst, hopsUsed, par: oldPar, prevBest });
+      if (beatTree) {
+        // The graph grew since the deal — the tree learns the shorter par.
+        await sql`update daily_chains set optimal_hops = ${newPar} where date = ${run.chain_date}`;
+      }
+      const effChain = beatTree ? { ...chain, optimal_hops: newPar } : chain;
       await sql`
         update daily_runs set status = 'complete', hops_used = ${hopsUsed},
                picks = ${JSON.stringify(picks)}::jsonb, current_options = '[]'::jsonb,
@@ -236,12 +274,18 @@ export default async (req) => {
           values (${me.id}, ${frozenDate}, true) on conflict do nothing`;
         await sql`update users set freeze_count = freeze_count - 1 where id = ${me.id} and freeze_count > 0`;
       }
-      await sql`update users set credits = credits + ${reward} where id = ${me.id}`;
+      if (reward > 0) {
+        await sql`update users set credits = credits + ${reward} where id = ${me.id}`;
+      }
       const fresh = await findUserByToken(sql, me.token).catch(() => me);
       completed = {
         hops_used: hopsUsed,
-        par: chain.optimal_hops,
-        optimal: hopsUsed === chain.optimal_hops,
+        par: newPar,
+        old_par: oldPar,
+        optimal: hopsUsed === newPar,
+        beat_tree: beatTree,
+        is_replay: !isFirst,
+        prev_best: prevBest,
         streak,
         freeze_used: freezeUsed,
         credits_earned: reward,
@@ -251,13 +295,14 @@ export default async (req) => {
           date: run.chain_date,
           handle: handle || me.handle,
           hopsUsed,
-          par: chain.optimal_hops,
+          par: oldPar,
           streak,
           picks,
+          beatTree,
         }),
       };
       const doneRun = { ...run, status: 'complete', hops_used: hopsUsed, picks };
-      return ok({ run: await runState(sql, doneRun, chain, { ...me, credits: fresh.credits }), completed });
+      return ok({ run: await runState(sql, doneRun, effChain, { ...me, credits: fresh.credits }), completed });
     }
 
     // Mid-run: advance (or burn) and deal fresh options.

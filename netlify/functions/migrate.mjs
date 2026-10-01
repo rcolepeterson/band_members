@@ -842,6 +842,18 @@ export default async (req) => {
     await sql`alter table users add column if not exists freeze_count integer not null default 0`;
     results.push('column users.freeze_count ready');
 
+    // Daily Chain replays ----------------------------------------------------
+    // v1 allowed one run per user per day (unique(user_id, chain_date)).
+    // Replays need many: replace with unique(user_id, chain_date, run_number).
+    // Existing rows keep run_number = 1, so Aaron's in-progress run survives.
+    await sql`alter table daily_runs add column if not exists run_number integer not null default 1`;
+    await sql`alter table daily_runs drop constraint if exists daily_runs_user_id_chain_date_key`;
+    const _rr = await sql`select 1 from pg_constraint where conname = 'daily_runs_user_replay_key'`;
+    if (!_rr[0]) {
+      await sql`alter table daily_runs add constraint daily_runs_user_replay_key unique (user_id, chain_date, run_number)`;
+    }
+    results.push('daily_runs replay support ready');
+
     // duplicate_flags table --------------------------------------------------
     // Duplicate-band monitor (see scanDuplicateBands in
     // cron_verify_stale_bands.mjs). One row per detected true-duplicate pair
