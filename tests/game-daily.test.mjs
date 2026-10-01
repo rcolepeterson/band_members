@@ -10,6 +10,7 @@ import {
   addDays,
   buildBandAdj,
   bfsDist,
+  bfsPath,
   pickDailyPair,
   optionsFor,
   pickColor,
@@ -296,4 +297,25 @@ test('scoreRun: beating the tree pays the bounty and lowers par', () => {
 test('dailyShareText has a beat-the-tree variant', () => {
   const text = dailyShareText({ date: '2026-10-01', handle: 'aaron', hopsUsed: 3, par: 4, streak: 5, picks: [], beatTree: true });
   assert.match(text, /I BEAT THE TREE in 3 hops \(par was 4\)/);
+});
+
+// --- give-up reveal ------------------------------------------------------------
+
+test('bfsPath returns the shortest route as node ids', () => {
+  const adj = new Map([
+    ['a', ['b', 'd']],
+    ['b', ['a', 'c']],
+    ['c', ['b']],
+    ['d', ['a', 'c']],
+  ]);
+  assert.deepEqual(bfsPath(adj, 'a', 'c'), ['a', 'b', 'c']);
+  assert.deepEqual(bfsPath(adj, 'a', 'a'), ['a']);
+  assert.equal(bfsPath(new Map([['a', []]]), 'a', 'c'), null);
+});
+
+test('dailyShareText has a give-up variant', () => {
+  const text = dailyShareText({ date: '2026-10-01', handle: 'aaron', hopsUsed: 17, par: 4, streak: 0, picks: [], gaveUp: true });
+  assert.match(text, /The tree beat me today/);
+  assert.match(text, /par was 4/);
+  assert.match(text, /17 hops deep/);
 });
