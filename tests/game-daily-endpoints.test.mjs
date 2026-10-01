@@ -160,3 +160,23 @@ test('eliminate never removes the optimal option', () => {
   const body = src('netlify/functions/game_daily_play.mjs');
   assert.ok(body.includes("if (!victim || victim.kind === 'optimal') return badRequest('nothing to eliminate')"));
 });
+
+// Give-up reveals the par path, ends the day, and pays nothing.
+test('giveup marks the run given_up with no credit payout', () => {
+  const body = src('netlify/functions/game_daily_play.mjs');
+  assert.ok(body.includes("action === 'giveup'"));
+  assert.ok(body.includes("status = 'given_up'"));
+  assert.ok(body.includes('bfsPath(adj, chain.band_a, chain.band_b)'));
+  // The giveup block must not award credits.
+  const giveupBlock = body.slice(body.indexOf("action === 'giveup'"));
+  const nextAction = giveupBlock.indexOf("return badRequest('unknown action')");
+  assert.ok(!giveupBlock.slice(0, nextAction).includes('credits = credits +'));
+});
+
+// The client shows the chain as text (mobile has no hover) and offers the reveal.
+test('client renders a text trail and a show-me-the-chain button', () => {
+  const body = src('scripts/six-degrees-game.mjs');
+  assert.ok(body.includes('game-daily-trail'));
+  assert.ok(body.includes('Show me the chain'));
+  assert.ok(body.includes("action: 'giveup'"));
+});
