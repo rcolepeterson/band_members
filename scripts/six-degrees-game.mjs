@@ -1959,7 +1959,10 @@ function initGameUI() {
       modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
     const copyInvite = (token) => async () => {
-      const url = `${window.location.origin}/game/?invite=${encodeURIComponent(token)}`;
+      // Pretty invite URL: /invite/<token> serves the challenge card (dynamic
+      // og: tags) and hands the recipient off to /game/?invite=. (2026-10-01:
+      // the old /game/?invite= link unfurled as a generic webpage share.)
+      const url = `${window.location.origin}/invite/${encodeURIComponent(token)}`;
       const okCopy = await navigator.clipboard.writeText(url).then(() => true).catch(() => false);
       statusLine.textContent = okCopy ? 'Invite link copied.' : url;
     };
