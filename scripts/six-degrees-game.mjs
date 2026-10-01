@@ -381,6 +381,23 @@ function initGameUI() {
 
   function syncModeUI() {
     const mode = currentMode();
+    // Daily Chain gets its own panel — no band fields, no run button.
+    if (mode === 'daily') {
+      document.getElementById('game-field-a-wrap').style.display = 'none';
+      wrapB.style.display = 'none';
+      randomizeBtn.style.display = 'none';
+      runBtn.style.display = 'none';
+      if (challengeBtn) challengeBtn.style.display = 'none';
+      const formatWrap = document.getElementById('game-format-wrap');
+      if (formatWrap) formatWrap.style.display = 'none';
+      if (acceptBtn) acceptBtn.style.display = 'none';
+      fieldA.disabled = true;
+      result.innerHTML = '';
+      statusLine.textContent = '';
+      renderDailyPanel();
+      return;
+    }
+    fieldA.disabled = false;
     // Solo: only band A is picked; the graph supplies band B.
     // Chaos: the graph supplies both; hide both fields, show randomize.
     document.getElementById('game-field-a-wrap').style.display = mode === 'chaos' ? 'none' : '';
@@ -419,6 +436,447 @@ function initGameUI() {
       challengeBtn.textContent = currentFormat() !== 'quick' ? 'Start match' : 'Challenge a friend';
     }
   });
+
+  // --- Daily Chain -----------------------------------------------------------
+  // The Wordle-style daily: one band pair per day, same for everyone. The
+  // player builds the chain link-by-link from four multiple-choice options
+  // per hop. The server is authoritative — option kinds never reach the
+  // client, and hops/streaks/credits mutate server-side.
+  let dailyStylesDone = false;
+  function ensureDailyStyles() {
+    if (dailyStylesDone) return;
+    dailyStylesDone = true;
+    const st = document.createElement('style');
+    st.textContent = `
+      .game-daily{margin-top:4px}
+      .game-daily-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin:0 0 4px}
+      .game-daily-date{font-size:.85rem;color:#999}
+      .game-daily-pair{font-size:1.05rem;font-weight:700;margin:4px 0 8px}
+      .game-daily-pair .game-daily-arrow{color:#999;font-weight:400;margin:0 6px}
+      .game-daily-econ{font-size:.85rem;color:#bbb;margin:0 0 10px}
+      .game-daily-picks{display:flex;gap:6px;align-items:center;margin:8px 0;min-height:26px;flex-wrap:wrap}
+      .game-daily-pick{width:20px;height:24px;flex:none}
+      .game-daily-current{font-size:.9rem;color:#bbb;margin:8px 0 6px}
+      .game-daily-current strong{color:#fff}
+      .game-daily-options{display:grid;gap:8px;margin:6px 0 10px}
+      .game-daily-option{text-align:left;padding:10px 12px;border:1px solid var(--color-border);border-radius:var(--radius-lg);background:transparent;color:inherit;font-size:.95rem;cursor:pointer}
+      .game-daily-option:hover{border-color:rgba(82,174,182,.6)}
+      .game-daily-option:disabled{opacity:.55;cursor:default}
+      .game-daily-tools{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+      .game-daily-note{font-size:.8rem;color:#999;margin:6px 0}
+      .game-daily-share{border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:12px;margin:12px 0 4px}
+      .game-daily-share-picks{display:flex;gap:8px;margin:8px 0}
+      .game-daily-share-pick{width:34px;height:40px}
+      .game-daily-share-line{font-size:.95rem;margin:6px 0}
+      .game-daily-archive{margin-top:12px}
+      .game-daily-archive summary{cursor:pointer;font-size:.9rem;color:#bbb}
+      .game-daily-archive-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-divider);font-size:.9rem}
+      .game-daily-archive-row .game-daily-archive-date{color:#999;min-width:86px}
+      .game-daily-archive-row .game-daily-archive-pair{flex:1}
+    `;
+    document.head.appendChild(st);
+  }
+
+  const DAILY_PICK_HEX = { gold: '#d4a017', robin: '#7fc9c7', black: '#2a2a2a' };
+  function pickSvg(color, cls) {
+    const hex = DAILY_PICK_HEX[color] || DAILY_PICK_HEX.black;
+    const stroke = color === 'black' ? '#555' : 'rgba(0,0,0,.25)';
+    return `<svg class="${cls}" viewBox="0 0 24 28" aria-hidden="true">` +
+      `<path d="M12 2.5c-5.2 0-9.5 4-9.5 9.3 0 6 5.2 11.6 8.6 14.2.5.4 1.3.4 1.8 0 3.4-2.6 8.6-8.2 8.6-14.2C21.5 6.5 17.2 2.5 12 2.5z" ` +
+      `fill="${hex}" stroke="${stroke}" stroke-width="1"/></svg>`;
+  }
+
+  let dailyRun = null;      // last run state from the server
+  let dailyOptions = [];    // public options: [{id, name}]
+  let dailyRevealArmed = false;
+
+  async function dailyFetch(path, opts = {}) {
+    const res = await fetch(path, {
+      ...opts,
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken(), ...(opts.headers || {}) },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) {
+      throw new Error((data && data.error) || `request failed (${res.status})`);
+    }
+    return data;
+  }
+
+  function renderDailyPanel() {
+    ensureDailyStyles();
+    if (!isSignedIn()) {
+      renderDailyGate();
+      return;
+    }
+    renderDailyBoard({ loading: true });
+  }
+
+  // Logged-out: the pair is the lure, playing needs sign-in.
+  async function renderDailyGate() {
+    result.innerHTML = '';
+    const card = el(`<div class="game-result-card game-daily">
+      <div class="game-daily-head"><span class="game-hops">Daily Chain</span><span class="game-daily-date"></span></div>
+      <p class="game-daily-pair"></p>
+      <p class="game-daily-note">One fresh chain every day — same for everyone. Sign in to play, keep your streak, and earn credits.</p>
+      <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to play</button></div>
+    </div>`);
+    result.appendChild(card);
+    try {
+      const res = await fetch('/api/game-daily');
+      const data = await res.json();
+      if (!res.ok) throw new Error((data && data.error) || 'failed');
+      card.querySelector('.game-daily-date').textContent = data.date || '';
+      const a = document.createElement('span'); a.textContent = (data.band_a && data.band_a.name) || 'Band A';
+      const arrow = document.createElement('span'); arrow.className = 'game-daily-arrow'; arrow.textContent = '→';
+      const b = document.createElement('span'); b.textContent = (data.band_b && data.band_b.name) || 'Band B';
+      const pair = card.querySelector('.game-daily-pair');
+      pair.appendChild(a); pair.appendChild(arrow); pair.appendChild(b);
+    } catch {
+      card.querySelector('.game-daily-note').textContent = 'Could not load today\u2019s chain. Check your connection and try again.';
+    }
+    card.querySelector('[data-signin]').addEventListener('click', () => {
+      if (isArenaPage()) {
+        try { sessionStorage.setItem('sdr_pending_daily', '1'); } catch {}
+        window.location.href = '/';
+      } else if (typeof window.openSignupPopover === 'function') {
+        try { sessionStorage.setItem('sdr_pending_daily', '1'); } catch {}
+        window.openSignupPopover();
+      } else {
+        document.getElementById('add-band-btn')?.click();
+      }
+    });
+  }
+
+  async function renderDailyBoard({ loading = false, date } = {}) {
+    result.innerHTML = '';
+    const card = el(`<div class="game-result-card game-daily">
+      <div class="game-daily-head"><span class="game-hops">Daily Chain</span><span class="game-daily-date"></span></div>
+      <p class="game-daily-pair"></p>
+      <p class="game-daily-econ"></p>
+      <div class="game-daily-picks" aria-label="Your picks"></div>
+      <div class="game-daily-current"></div>
+      <div class="game-daily-options"></div>
+      <div class="game-daily-tools"></div>
+      <p class="game-daily-note"></p>
+      <div class="game-daily-finish"></div>
+      <details class="game-daily-archive"><summary>Past days</summary><div class="game-daily-archive-list"></div></details>
+    </div>`);
+    result.appendChild(card);
+    if (loading) {
+      card.querySelector('.game-daily-note').textContent = 'Dealing today\u2019s chain…';
+    }
+    try {
+      const data = await dailyFetch('/api/game-daily/play', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'start', ...(date ? { date } : {}) }),
+      });
+      dailyRun = data.run;
+      dailyOptions = data.options || [];
+      paintDailyBoard(card);
+    } catch (err) {
+      const note = card.querySelector('.game-daily-note');
+      if (err && /locked/.test(err.message)) {
+        note.textContent = 'That day is locked. Unlock it from Past days below.';
+      } else {
+        note.textContent = err.message || 'Could not start the run.';
+      }
+    }
+    wireDailyArchive(card);
+  }
+
+  function paintDailyBoard(card, completed) {
+    const run = dailyRun;
+    if (!run) return;
+    const q = (sel) => card.querySelector(sel);
+    q('.game-daily-date').textContent = run.chain_date || '';
+    const pair = q('.game-daily-pair');
+    pair.innerHTML = '';
+    const mk = (t, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = t; return s; };
+    pair.appendChild(mk(run.start_band.name));
+    pair.appendChild(mk('→', 'game-daily-arrow'));
+    pair.appendChild(mk(run.target.name));
+
+    q('.game-daily-econ').textContent =
+      `Streak ${run.streak} · ${run.credits} credits` +
+      (run.freeze_count ? ` · ❄ ${run.freeze_count} Seattle Freeze${run.freeze_count === 1 ? '' : 's'}` : '');
+
+    const picksRow = q('.game-daily-picks');
+    picksRow.innerHTML = '';
+    for (const p of run.picks) {
+      const wrap = document.createElement('span');
+      wrap.innerHTML = pickSvg(p.color, 'game-daily-pick');
+      wrap.title = `${p.name} — ${p.kind === 'optimal' ? 'optimal' : p.kind === 'deadend' ? 'dead end' : 'valid'}`;
+      picksRow.appendChild(wrap);
+    }
+
+    const note = q('.game-daily-note');
+    const tools = q('.game-daily-tools');
+    const optsBox = q('.game-daily-options');
+    const finish = q('.game-daily-finish');
+    optsBox.innerHTML = '';
+    tools.innerHTML = '';
+    finish.innerHTML = '';
+    dailyRevealArmed = false;
+
+    if (completed || run.status === 'complete') {
+      q('.game-daily-current').textContent = `Connected in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} (par ${run.par}).`;
+      paintDailyShare(card, completed || {});
+      return;
+    }
+
+    const cur = q('.game-daily-current');
+    cur.innerHTML = '';
+    cur.appendChild(mk('Now at: '));
+    const strong = document.createElement('strong');
+    strong.textContent = run.current_band.name;
+    cur.appendChild(strong);
+
+    for (const o of dailyOptions) {
+      const btn = el('<button type="button" class="game-daily-option"></button>');
+      btn.textContent = o.name;
+      btn.dataset.optionId = o.id;
+      btn.addEventListener('click', () => dailyPick(card, o.id, btn));
+      optsBox.appendChild(btn);
+    }
+
+    const hintsLeft = run.hints_total - run.hints_used;
+    if (hintsLeft > 0) {
+      const elim = el('<button type="button" class="tool-chip">Eliminate one (−10)</button>');
+      elim.addEventListener('click', () => dailyHint(card, 'eliminate'));
+      const peek = el('<button type="button" class="tool-chip">Peek at a band (−10)</button>');
+      peek.addEventListener('click', () => {
+        dailyRevealArmed = true;
+        note.textContent = 'Tap a band to check whether it\u2019s on the optimal path. Helpers never solve — this only narrows.';
+      });
+      tools.appendChild(elim);
+      tools.appendChild(peek);
+      note.textContent = `${hintsLeft} hint${hintsLeft === 1 ? '' : 's'} left today.`;
+    } else {
+      note.textContent = 'No hints left today.';
+    }
+
+    const last = run.picks[run.picks.length - 1];
+    if (last && last.kind === 'deadend') {
+      const esc = el('<button type="button" class="tool-chip">Dig out of the dead end (−50)</button>');
+      esc.addEventListener('click', () => dailyEscape(card));
+      tools.appendChild(esc);
+      note.textContent = `Dead end — that hop burned. ${note.textContent}`;
+    }
+
+    const econ = el('<button type="button" class="tool-chip">Buy Seattle Freeze (100)</button>');
+    econ.addEventListener('click', () => dailyBuyFreeze(card));
+    tools.appendChild(econ);
+  }
+
+  async function dailyPick(card, optionId, btn) {
+    const note = card.querySelector('.game-daily-note');
+    if (dailyRevealArmed && btn) {
+      // Peek: reveal whether this band is on the optimal path, no pick made.
+      dailyRevealArmed = false;
+      btn.disabled = true;
+      try {
+        const data = await dailyFetch('/api/game-daily/play', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'hint', type: 'reveal', option_id: optionId }),
+        });
+        dailyRun = data.run;
+        dailyOptions = data.options || [];
+        paintDailyBoard(card);
+        const yes = data.hint && data.hint.on_optimal_path;
+        note.textContent = yes
+          ? `${data.hint.option.name} is on the optimal path.`
+          : `${data.hint.option.name} is not on the optimal path — scenic route at best.`;
+      } catch (err) {
+        btn.disabled = false;
+        note.textContent = err.message;
+      }
+      return;
+    }
+    card.querySelectorAll('.game-daily-option').forEach((b) => { b.disabled = true; });
+    try {
+      const data = await dailyFetch('/api/game-daily/play', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'pick', option_id: optionId }),
+      });
+      dailyRun = data.run;
+      dailyOptions = data.options || [];
+      if (data.completed) {
+        paintDailyBoard(card, data.completed);
+      } else {
+        paintDailyBoard(card);
+        if (data.picked && data.picked.deadend) {
+          card.querySelector('.game-daily-note').textContent =
+            'Dead end — that hop burned, but the run continues.';
+        }
+      }
+    } catch (err) {
+      note.textContent = err.message;
+      card.querySelectorAll('.game-daily-option').forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  async function dailyHint(card, type) {
+    const note = card.querySelector('.game-daily-note');
+    try {
+      const data = await dailyFetch('/api/game-daily/play', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'hint', type }),
+      });
+      dailyRun = data.run;
+      dailyOptions = data.options || [];
+      paintDailyBoard(card);
+      if (data.hint && data.hint.eliminated) {
+        card.querySelector('.game-daily-note').textContent =
+          `${data.hint.eliminated.name} is out — not the way through.`;
+      }
+    } catch (err) {
+      note.textContent = err.message;
+    }
+  }
+
+  async function dailyEscape(card) {
+    const note = card.querySelector('.game-daily-note');
+    try {
+      const data = await dailyFetch('/api/game-daily/play', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'escape' }),
+      });
+      dailyRun = data.run;
+      dailyOptions = data.options || [];
+      paintDailyBoard(card);
+      card.querySelector('.game-daily-note').textContent =
+        `Dug out — ${data.escaped.name} is off your trail.`;
+    } catch (err) {
+      note.textContent = err.message;
+    }
+  }
+
+  async function dailyBuyFreeze(card) {
+    const note = card.querySelector('.game-daily-note');
+    try {
+      const data = await dailyFetch('/api/game-credits', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'buy_freeze' }),
+      });
+      dailyRun = { ...dailyRun, credits: data.credits, freeze_count: data.freeze_count, streak: data.streak };
+      paintDailyBoard(card);
+      card.querySelector('.game-daily-note').textContent =
+        'Seattle Freeze stocked — it auto-burns if you miss exactly one day.';
+    } catch (err) {
+      note.textContent = err.message;
+    }
+  }
+
+  function paintDailyShare(card, completed) {
+    const finish = card.querySelector('.game-daily-finish');
+    const picks = completed.picks && completed.picks.length ? completed.picks : dailyRun.picks;
+    const share = el(`<div class="game-daily-share">
+      <div class="game-daily-share-picks"></div>
+      <p class="game-daily-share-line"></p>
+      <p class="game-daily-note"></p>
+      <div class="game-result-actions"><button type="button" class="tool-chip" data-copy>Copy share text</button></div>
+    </div>`);
+    const row = share.querySelector('.game-daily-share-picks');
+    for (const p of picks) {
+      const wrap = document.createElement('span');
+      wrap.innerHTML = pickSvg(p.color, 'game-daily-share-pick');
+      wrap.title = p.name;
+      row.appendChild(wrap);
+    }
+    const hops = completed.hops_used != null ? completed.hops_used : dailyRun.hops_used;
+    const par = dailyRun.par;
+    const streak = completed.streak != null ? completed.streak : dailyRun.streak;
+    share.querySelector('.game-daily-share-line').textContent =
+      `I connected the constellation in ${hops} hops (par ${par}). Streak ${streak}.`;
+    share.querySelector('.game-daily-note').textContent =
+      'Gold is optimal, robin\u2019s egg is valid, black is lost in space.';
+    const copyBtn = share.querySelector('[data-copy]');
+    copyBtn.addEventListener('click', async () => {
+      const text = completed.share_text ||
+        `Daily Chain ${dailyRun.chain_date} — ${hops} hops (par ${par}), streak ${streak}. Play: https://sixdegreesofrock.com/game/`;
+      try {
+        await navigator.clipboard.writeText(text);
+        copyBtn.textContent = 'Copied';
+        setTimeout(() => { copyBtn.textContent = 'Copy share text'; }, 2000);
+      } catch {
+        copyBtn.textContent = 'Copy failed — long-press to copy';
+      }
+    });
+    if (completed.freeze_used) {
+      const fz = document.createElement('p');
+      fz.className = 'game-daily-note';
+      fz.textContent = 'A Seattle Freeze bridged your missed day — streak intact.';
+      share.appendChild(fz);
+    }
+    finish.appendChild(share);
+  }
+
+  function wireDailyArchive(card) {
+    const details = card.querySelector('.game-daily-archive');
+    const list = card.querySelector('.game-daily-archive-list');
+    let loaded = false;
+    details.addEventListener('toggle', async () => {
+      if (!details.open || loaded) return;
+      loaded = true;
+      list.innerHTML = '<p class="game-daily-note">Loading…</p>';
+      try {
+        const data = await dailyFetch('/api/game-daily/archive');
+        list.innerHTML = '';
+        if (!data.days.length) {
+          list.innerHTML = '<p class="game-daily-note">No past days yet — the archive starts tomorrow.</p>';
+          return;
+        }
+        for (const d of data.days) {
+          const row = el(`<div class="game-daily-archive-row">
+            <span class="game-daily-archive-date"></span>
+            <span class="game-daily-archive-pair"></span>
+            <span class="game-daily-archive-act"></span>
+          </div>`);
+          row.querySelector('.game-daily-archive-date').textContent = d.date;
+          row.querySelector('.game-daily-archive-pair').textContent =
+            `${d.band_a} → ${d.band_b}${d.completed ? ' ✓' : ''}`;
+          const act = row.querySelector('.game-daily-archive-act');
+          if (d.completed || d.unlocked) {
+            const play = el('<button type="button" class="tool-chip">Play</button>');
+            play.addEventListener('click', () => renderDailyBoard({ date: d.date }));
+            act.appendChild(play);
+          } else {
+            const unlock = el('<button type="button" class="tool-chip">Unlock (75)</button>');
+            unlock.addEventListener('click', async () => {
+              try {
+                await dailyFetch('/api/game-daily/archive', {
+                  method: 'POST',
+                  body: JSON.stringify({ date: d.date }),
+                });
+                renderDailyBoard({ date: d.date });
+              } catch (err) {
+                card.querySelector('.game-daily-note').textContent = err.message;
+              }
+            });
+            act.appendChild(unlock);
+          }
+          list.appendChild(row);
+        }
+      } catch (err) {
+        list.innerHTML = `<p class="game-daily-note">${err.message}</p>`;
+        loaded = false;
+      }
+    });
+  }
+
+  // Resume a daily run interrupted by sign-in (same pattern as challenges).
+  (function resumePendingDaily() {
+    let pending = null;
+    try { pending = sessionStorage.getItem('sdr_pending_daily'); } catch {}
+    if (!pending || !isSignedIn()) return;
+    try { sessionStorage.removeItem('sdr_pending_daily'); } catch {}
+    openModal();
+    const dailyInput = [...document.querySelectorAll('input[name="game-mode"]')].find((i) => i.value === 'daily');
+    if (dailyInput && !dailyInput.disabled) {
+      dailyInput.checked = true;
+      syncModeUI();
+    }
+  })();
 
   // --- autocomplete ---
   function wireAutocomplete(input, key) {
