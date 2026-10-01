@@ -141,7 +141,10 @@ export default async (req) => {
       return serverError('could not create the challenge');
     }
     const origin = `${url.protocol}//${url.host}`;
-    return ok({ token, inviteUrl: `${origin}/game/?invite=${encodeURIComponent(token)}` });
+    // Pretty invite URL: /invite/<token> serves the challenge card (dynamic
+    // og: tags naming the challenger + their band pick) and hands humans off
+    // to /game/?invite=. Tokens are base64url — path-safe, no escaping needed.
+    return ok({ token, inviteUrl: `${origin}/invite/${token}` });
   }
 
   // --- GET: read challenge state (public; see header comment) ----------------
