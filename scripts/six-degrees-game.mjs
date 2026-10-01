@@ -481,7 +481,14 @@ function initGameUI() {
     });
     dlg.querySelector('[data-share]').addEventListener('click', async () => {
       if (navigator.share) {
-        await navigator.share({ title: 'Six Degrees of Rock — head-to-head', text: shareText, url: inviteUrl }).catch(() => {});
+        try {
+          await navigator.share({ title: 'Six Degrees of Rock — head-to-head', text: shareText, url: inviteUrl });
+        } catch (err) {
+          if (!err || err.name !== 'AbortError') {
+            const okCopy = await navigator.clipboard.writeText(`${shareText} ${inviteUrl}`).then(() => true).catch(() => false);
+            statusLine.textContent = okCopy ? 'Share failed — link copied instead.' : 'Share failed — long-press the link to copy it.';
+          }
+        }
       } else {
         const okCopy = await navigator.clipboard.writeText(`${shareText} ${inviteUrl}`).then(() => true).catch(() => false);
         statusLine.textContent = okCopy ? 'Invite link copied — send it to your opponent.' : inviteUrl;
@@ -1105,7 +1112,13 @@ function initGameUI() {
       } catch (_) { /* plain link fallback below */ }
       statusLine.textContent = '';
       if (navigator.share) {
-        navigator.share({ title: 'Six Degrees of Rock', text: shareText, url: shareUrl }).catch(() => {});
+        try {
+          await navigator.share({ title: 'Six Degrees of Rock', text: shareText, url: shareUrl });
+        } catch (err) {
+          if (!err || err.name !== 'AbortError') {
+            statusLine.textContent = 'Share failed — copy the link from the card instead.';
+          }
+        }
       } else if (navigator.clipboard) {
         navigator.clipboard.writeText(`${shareText} ${shareUrl}`).then(() => {
           statusLine.textContent = 'Copied — paste it anywhere to brag.';
