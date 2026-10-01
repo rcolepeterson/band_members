@@ -21,6 +21,52 @@ import {
   extractBearerToken,
   findUserByToken,
 } from './_db.mjs';
+import { CHALLENGE_EXPIRY_DAYS } from './game_challenge.mjs';
+
+// The quiet status list, minus dead invites: unanswered ('open') challenges
+// older than CHALLENGE_EXPIRY_DAYS are filtered on read — rows are never
+// deleted, they just leave the active list. Answered challenges are
+// unaffected, however old.
+export async function listChallenges(sql, userId) {
+  const sent = await sql`
+    select c.token, c.status, c.band_a, c.band_b, c.created_at, c.answered_at,
+           u.handle as invitee_handle
+      from game_challenges c
+      left join users u on u.id = c.invitee_id
+     where c.challenger_id = ${userId}
+       and (c.status <> 'open' or c.created_at > now() - (${CHALLENGE_EXPIRY_DAYS} || ' days')::interval)
+     order by c.created_at desc
+     limit 20`;
+  const received = await sql`
+    select c.token, c.status, c.band_a, c.band_b, c.created_at, c.answered_at,
+           u.handle as challenger_handle
+      from game_challenges c
+      join users u on u.id = c.challenger_id
+     where c.invitee_id = ${userId}
+       and (c.status <> 'open' or c.created_at > now() - (${CHALLENGE_EXPIRY_DAYS} || ' days')::interval)
+     order by c.created_at desc
+     limit 20`;
+  return {
+    sent: (sent || []).map((r) => ({
+      token: r.token,
+      status: r.status,
+      band_a: r.band_a,
+      band_b: r.band_b,
+      invitee_handle: r.invitee_handle,
+      created_at: r.created_at,
+      answered_at: r.answered_at,
+    })),
+    received: (received || []).map((r) => ({
+      token: r.token,
+      status: r.status,
+      band_a: r.band_a,
+      band_b: r.band_b,
+      challenger_handle: r.challenger_handle,
+      created_at: r.created_at,
+      answered_at: r.answered_at,
+    })),
+  };
+}
 
 export default async (req) => {
   if (req.method !== 'GET') return methodNotAllowed();
@@ -31,42 +77,7 @@ export default async (req) => {
   if (!me) return unauthorized();
 
   try {
-    const sent = await sql`
-      select c.token, c.status, c.band_a, c.band_b, c.created_at, c.answered_at,
-             u.handle as invitee_handle
-        from game_challenges c
-        left join users u on u.id = c.invitee_id
-       where c.challenger_id = ${me.id}
-       order by c.created_at desc
-       limit 20`;
-    const received = await sql`
-      select c.token, c.status, c.band_a, c.band_b, c.created_at, c.answered_at,
-             u.handle as challenger_handle
-        from game_challenges c
-        join users u on u.id = c.challenger_id
-       where c.invitee_id = ${me.id}
-       order by c.created_at desc
-       limit 20`;
-    return ok({
-      sent: (sent || []).map((r) => ({
-        token: r.token,
-        status: r.status,
-        band_a: r.band_a,
-        band_b: r.band_b,
-        invitee_handle: r.invitee_handle,
-        created_at: r.created_at,
-        answered_at: r.answered_at,
-      })),
-      received: (received || []).map((r) => ({
-        token: r.token,
-        status: r.status,
-        band_a: r.band_a,
-        band_b: r.band_b,
-        challenger_handle: r.challenger_handle,
-        created_at: r.created_at,
-        answered_at: r.answered_at,
-      })),
-    });
+    return ok(await listChallenges(sql, me.id));
   } catch (error) {
     console.error('game-challenges: list failed', error && error.message);
     return serverError('could not load your challenges');

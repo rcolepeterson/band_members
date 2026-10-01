@@ -86,10 +86,31 @@ async function runState(sql, run, chain, me) {
     const ids = bfsPath(adj, chain.band_a, chain.band_b) || [];
     reveal_path = ids.map((id) => ({ id, name: (meta.get(id) || {}).name || 'Band' }));
   }
+  // Bail-out: if the last hop died and a session legend is in the room (a
+  // member of the band you're stuck at), the escape wears his name. Freese
+  // first — it's his joke — Aronoff as backup. Same price, same effect.
+  let bailout = null;
+  const lastPick = (run.picks || [])[(run.picks || []).length - 1];
+  if (run.status === 'active' && lastPick && lastPick.kind === 'deadend') {
+    try {
+      const rows = await sql`
+        select bm.name from memberships ms
+        join band_members bm on bm.id = ms.member_id
+        where ms.band_id = ${run.current_band_id}
+          and ms.relation = 'member_of'
+          and bm.name in ('Josh Freese', 'Kenny Aronoff')
+        order by case when bm.name = 'Josh Freese' then 0 else 1 end
+        limit 1`;
+      if (rows && rows[0]) bailout = rows[0].name;
+    } catch {
+      // The plain dig-out stands.
+    }
+  }
   return {
     id: run.id,
     chain_date: run.chain_date,
     status: run.status,
+    bailout,
     run_number: run.run_number || 1,
     best_hops: replayRows[0].best,
     replays_done: Number(replayRows[0].done || 0),
@@ -192,6 +213,9 @@ export default async (req) => {
       run = (created && created[0]) || (await sql`select * from daily_runs where user_id = ${me.id} and chain_date = ${date} order by run_number desc limit 1`)[0];
     } else if (run.status === 'complete' && body.replay === true) {
       // Replay: fresh run, fresh options. Credits only for beating your best.
+      // Replays are a same-day affair — past days replay through nothing;
+      // this also keeps the post-mortem reveal from becoming a credit farm.
+      if (date !== pacificDate()) return badRequest('replays are only for today');
       const created = await sql`
         insert into daily_runs (user_id, chain_date, current_band_id, run_number)
         values (${me.id}, ${date}, ${chain.band_a}, ${run.run_number + 1})

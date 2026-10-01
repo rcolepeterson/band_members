@@ -346,10 +346,10 @@ export function scoreRun({ isFirst, hopsUsed, par, prevBest = null }) {
 // Share copy — the constellation framing.
 // ---------------------------------------------------------------------------
 
-const PICK_EMOJI = { gold: '🟨', robin: '🟦', black: '⬛' };
+const PICK_EMOJI = { gold: '🟡', robin: '🔵', black: '⚫' };
 
 export function sharePicks(picks) {
-  return (picks || []).map((p) => PICK_EMOJI[pickColor(p.kind)] || '⬛').join('');
+  return (picks || []).map((p) => PICK_EMOJI[pickColor(p.kind)] || '⚫').join('');
 }
 
 export function dailyShareText({ date, handle, hopsUsed, par, streak, picks, beatTree = false, gaveUp = false }) {
