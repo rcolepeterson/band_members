@@ -20,6 +20,8 @@ export const FREEZE_COST = 100;       // Seattle Freeze purchase
 export const ARCHIVE_COST = 75;       // play a missed day, repair the streak
 export const COMPLETION_REWARD = 20;  // credits for finishing the daily chain
 export const OPTIMAL_BONUS = 10;      // extra when hops_used === optimal_hops
+export const REPLAY_IMPROVEMENT_PER_HOP = 5; // replay credits per hop better than your best
+export const BEAT_TREE_BOUNTY = 50;   // outsmart the tree's par (graph grew since deal)
 export const MATCH_WIN_REWARD = 10;   // credits for winning a structured match
 export const STARTING_CREDITS = 50;   // new users start with a taste
 
@@ -295,6 +297,33 @@ export function currentStreak(dates = []) {
   return streak;
 }
 
+// Replay scoring (pure — the wallet rules for finishing a run).
+// - First completion of the day: COMPLETION_REWARD (+ OPTIMAL_BONUS on par).
+// - Replays: unlimited, but credits only for beating your previous best —
+//   REPLAY_IMPROVEMENT_PER_HOP per hop better. No farming: once you hit
+//   your floor, the well is dry.
+// - Beat the tree: hopsUsed < par means the graph grew since the deal and a
+//   genuinely shorter path appeared. BEAT_TREE_BOUNTY, and the tree learns
+//   (newPar becomes the stored par). Rare enough to brag about.
+export function scoreRun({ isFirst, hopsUsed, par, prevBest = null }) {
+  let reward = 0;
+  let beatTree = false;
+  let newPar = par;
+  if (hopsUsed < par) {
+    beatTree = true;
+    newPar = hopsUsed;
+    reward += BEAT_TREE_BOUNTY;
+  } else if (hopsUsed === par && isFirst) {
+    reward += OPTIMAL_BONUS;
+  }
+  if (isFirst) {
+    reward += COMPLETION_REWARD;
+  } else if (prevBest != null && hopsUsed < prevBest) {
+    reward += REPLAY_IMPROVEMENT_PER_HOP * (prevBest - hopsUsed);
+  }
+  return { reward, beatTree, newPar };
+}
+
 // ---------------------------------------------------------------------------
 // Share copy — the constellation framing.
 // ---------------------------------------------------------------------------
@@ -305,12 +334,14 @@ export function sharePicks(picks) {
   return (picks || []).map((p) => PICK_EMOJI[pickColor(p.kind)] || '⬛').join('');
 }
 
-export function dailyShareText({ date, handle, hopsUsed, par, streak, picks }) {
+export function dailyShareText({ date, handle, hopsUsed, par, streak, picks, beatTree = false }) {
   const row = sharePicks(picks);
   const lost = (picks || []).some((p) => p.kind === 'deadend');
-  const line = lost
-    ? `I connected the constellation in ${hopsUsed} hops (par ${par}) — drifted into the void along the way.`
-    : `I connected the constellation in ${hopsUsed} hops (par ${par}).`;
+  const line = beatTree
+    ? `I BEAT THE TREE in ${hopsUsed} hops (par was ${par}).`
+    : lost
+      ? `I connected the constellation in ${hopsUsed} hops (par ${par}) — drifted into the void along the way.`
+      : `I connected the constellation in ${hopsUsed} hops (par ${par}).`;
   return [
     `Six Degrees Daily Chain — ${date}`,
     line,
