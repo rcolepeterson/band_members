@@ -197,9 +197,9 @@ test('pickColor maps kinds to gold/robin/black', () => {
   assert.equal(pickColor('deadend'), 'black');
 });
 
-test('sharePicks renders one square per pick in order', () => {
+test('sharePicks renders one circle per pick in order (no pick emoji exists)', () => {
   const picks = [{ kind: 'optimal' }, { kind: 'solid' }, { kind: 'deadend' }, { kind: 'obscure' }];
-  assert.equal(sharePicks(picks), '🟨🟦⬛🟦');
+  assert.equal(sharePicks(picks), '🟡🔵⚫🔵');
 });
 
 test('dailyShareText frames the constellation, names the void', () => {
@@ -212,7 +212,7 @@ test('dailyShareText frames the constellation, names the void', () => {
   assert.ok(text.includes('Streak 12'));
   assert.ok(text.includes('rawker1'));
   assert.ok(text.includes('constellation'));
-  assert.ok(text.includes('🟨⬛🟦🟨'));
+  assert.ok(text.includes('🟡⚫🔵🟡'));
 });
 
 // --- streaks --------------------------------------------------------------------
