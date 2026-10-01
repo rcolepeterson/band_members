@@ -1,10 +1,14 @@
 // Remote head-to-head challenges.
 //
-// POST /api/game-challenge — create a challenge (auth). body: { band_a }
+// POST /api/game-challenge — create a challenge (auth). body: { band_a, in_reply_to? }
 //   -> { ok: true, token, inviteUrl }
 // The challenger picks band one; the invite link goes to the opponent, who
 // picks band two on their own device. Picks are OPEN: the invitee sees band
 // one before choosing (matches the pass-and-play table behavior).
+// in_reply_to (a challenge token) stamps the new challenge as a reply: the
+// server resolves the original's challenger into invitee_id, so the
+// opponent's "Your challenges" list shows a real incoming row instead of a
+// faceless open link. Server-side lookup — the client can't spoof it.
 //
 // GET /api/game-challenge?token=... — fetch challenge state. PUBLIC by
 // design: the token is a 256-bit unguessable secret, and the invitee needs
@@ -47,6 +51,24 @@ const MAX_BAND_REF = 160;
 // pile-up. Answered challenges never expire: the matchup stays viewable.
 // One constant so the window is a single-line change.
 export const CHALLENGE_EXPIRY_DAYS = 5;
+
+// Challenge-back (Aaron, 2026-10-01): an in_reply_to token records WHO the
+// new challenge is for. Without it the opponent never sees an incoming row —
+// the invite is just a link in a text. Resolves the original's challenger;
+// null when absent, unknown, or self. Fail-soft — a lookup hiccup must never
+// block creating the challenge.
+export async function resolveReplyInvitee(sql, meId, inReplyTo) {
+  const token = typeof inReplyTo === 'string' ? inReplyTo.slice(0, 128) : '';
+  if (!token) return null;
+  try {
+    const orig = await sql`select challenger_id from game_challenges where token = ${token} limit 1`;
+    const origChallenger = orig && orig[0] && orig[0].challenger_id;
+    if (origChallenger && origChallenger !== meId) return origChallenger;
+  } catch (err) {
+    console.error('game-challenge: in_reply_to lookup failed', err && err.message);
+  }
+  return null;
+}
 
 // True when an unanswered ('open') challenge is older than the expiry window.
 // createdAt is whatever the driver returns for timestamptz (ISO string or
@@ -133,9 +155,12 @@ export default async (req) => {
     } catch (err) {
       console.error('game-challenge: ensureHandle failed', err && err.message);
     }
+    // Challenge-back stamping: record WHO the new challenge is for, so the
+    // opponent's list shows a real incoming row. Fail-soft (see helper).
+    const inviteeId = await resolveReplyInvitee(sql, me.id, body && body.in_reply_to);
     try {
-      await sql`insert into game_challenges (token, challenger_id, band_a)
-                values (${token}, ${me.id}, ${bandA})`;
+      await sql`insert into game_challenges (token, challenger_id, invitee_id, band_a)
+                values (${token}, ${me.id}, ${inviteeId}, ${bandA})`;
     } catch (error) {
       console.error('game-challenge: insert failed', error && error.message);
       return serverError('could not create the challenge');
