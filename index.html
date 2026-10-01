@@ -3114,6 +3114,8 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     .game-ac-name{font-size:var(--text-sm);font-weight:600}
     .game-ac-sub{font-size:var(--text-xs);color:var(--color-text-muted)}
     .game-actions{display:flex;gap:var(--space-2);margin-top:var(--space-4)}
+    .game-more-options{margin:var(--space-2) 0 0;font-size:var(--text-sm)}
+    .game-more-options a{color:var(--color-text-muted);text-decoration:none;border-bottom:1px dotted currentColor}
     .game-run-btn{flex:1;min-height:48px;border-radius:var(--radius-full);border:0;background:var(--color-primary);color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer}
     .game-run-btn:hover{background:var(--color-primary-hover)}
     #game-status{font-size:var(--text-sm);color:var(--color-text-muted);margin:var(--space-3) 0 0;min-height:1.2em}
@@ -3505,6 +3507,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
           <button class="tool-chip" type="button" id="game-randomize" style="display:none">Deal me a pair</button>
           <button class="tool-chip" type="button" id="game-challenge-btn" style="display:none">Challenge a friend</button>
           <button class="game-run-btn" type="button" id="game-accept-btn" style="display:none">Accept the challenge</button>
+        <p class="game-more-options"><a href="/game/">More options — match play, scores &amp; rematches &rarr;</a></p>
         </div>
         <p id="game-status" role="status"></p>
         <div id="game-result"></div>
