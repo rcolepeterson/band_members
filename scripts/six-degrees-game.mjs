@@ -458,6 +458,9 @@ function initGameUI() {
       .game-daily-pick{width:20px;height:24px;flex:none}
       .game-daily-current{font-size:.9rem;color:#bbb;margin:8px 0 6px}
       .game-daily-current strong{color:#fff}
+      .game-daily-trail{font-size:.78rem;color:#8a8a8a;margin:0 0 8px;line-height:1.6}
+      .game-daily-reveal{font-size:.9rem;color:#bbb;margin:10px 0;line-height:1.7}
+      .game-daily-reveal strong{color:#fff;font-weight:600}
       .game-daily-options{display:grid;gap:8px;margin:6px 0 10px}
       .game-daily-option{text-align:left;padding:10px 12px;border:1px solid var(--color-border);border-radius:var(--radius-lg);background:transparent;color:inherit;font-size:.95rem;cursor:pointer}
       .game-daily-option:hover{border-color:rgba(82,174,182,.6)}
@@ -555,6 +558,7 @@ function initGameUI() {
       <p class="game-daily-econ"></p>
       <div class="game-daily-picks" aria-label="Your picks"></div>
       <div class="game-daily-current"></div>
+      <div class="game-daily-trail"></div>
       <div class="game-daily-options"></div>
       <div class="game-daily-tools"></div>
       <p class="game-daily-note"></p>
@@ -584,7 +588,7 @@ function initGameUI() {
     wireDailyArchive(card);
   }
 
-  function paintDailyBoard(card, completed) {
+  function paintDailyBoard(card, completed, gaveUpInfo) {
     const run = dailyRun;
     if (!run) return;
     const q = (sel) => card.querySelector(sel);
@@ -610,6 +614,10 @@ function initGameUI() {
       picksRow.appendChild(wrap);
     }
 
+    // Your chain, in words — no hover needed (mobile has none).
+    const trailNames = [run.start_band.name, ...(run.picks || []).map((p) => p.name)];
+    q('.game-daily-trail').textContent = trailNames.join(' → ');
+
     const note = q('.game-daily-note');
     const tools = q('.game-daily-tools');
     const optsBox = q('.game-daily-options');
@@ -618,6 +626,11 @@ function initGameUI() {
     tools.innerHTML = '';
     finish.innerHTML = '';
     dailyRevealArmed = false;
+
+    if (run.status === 'given_up') {
+      paintDailyGiveUp(card, gaveUpInfo);
+      return;
+    }
 
     if (completed || run.status === 'complete') {
       const c = completed || {};
@@ -680,6 +693,36 @@ function initGameUI() {
     const econ = el('<button type="button" class="tool-chip">Buy Seattle Freeze (100)</button>');
     econ.addEventListener('click', () => dailyBuyFreeze(card));
     tools.appendChild(econ);
+
+    const giveup = el('<button type="button" class="tool-chip">Show me the chain</button>');
+    giveup.addEventListener('click', () => {
+      note.innerHTML = '';
+      note.appendChild(mk('Today ends and the tree reveals the path. '));
+      const yes = el('<button type="button" class="tool-chip">Show me</button>');
+      const no = el('<button type="button" class="tool-chip">Keep playing</button>');
+      yes.addEventListener('click', () => dailyGiveUp(card));
+      no.addEventListener('click', () => paintDailyBoard(card));
+      note.appendChild(yes);
+      note.appendChild(mk(' '));
+      note.appendChild(no);
+    });
+    tools.appendChild(giveup);
+  }
+
+  async function dailyGiveUp(card) {
+    const note = card.querySelector('.game-daily-note');
+    note.textContent = 'The tree is revealing the path…';
+    try {
+      const data = await dailyFetch('/api/game-daily/play', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'giveup' }),
+      });
+      dailyRun = data.run;
+      dailyOptions = [];
+      paintDailyBoard(card, null, data.gave_up);
+    } catch (err) {
+      note.textContent = (err && err.message) || 'Could not show the chain.';
+    }
   }
 
   async function dailyReplay(card) {
@@ -795,6 +838,40 @@ function initGameUI() {
     } catch (err) {
       note.textContent = err.message;
     }
+  }
+
+  function paintDailyGiveUp(card, gaveUp) {
+    const run = dailyRun;
+    card.querySelector('.game-daily-current').textContent = 'The tree wins today.';
+    const finish = card.querySelector('.game-daily-finish');
+    const rev = el('<div class="game-daily-reveal"></div>');
+    rev.appendChild(mk('The tree reveals the path: '));
+    const strong = document.createElement('strong');
+    strong.textContent = (run.reveal_path || []).map((b) => b.name).join(' → ');
+    rev.appendChild(strong);
+    finish.appendChild(rev);
+
+    const hops = run.hops_used;
+    const par = run.par;
+    const shareText = (gaveUp && gaveUp.share_text) ||
+      `Six Degrees Daily Chain — ${run.chain_date}\nThe tree beat me today — par was ${par}, and I was ${hops} hops deep.\nsixdegreesofrock.com/game`;
+    const share = el(`<div class="game-daily-share">
+      <p class="game-daily-share-line"></p>
+      <div class="game-result-actions"><button type="button" class="tool-chip" data-copy>Copy share text</button></div>
+    </div>`);
+    share.querySelector('.game-daily-share-line').textContent =
+      `The tree beat me today — par was ${par}, and I was ${hops} hop${hops === 1 ? '' : 's'} deep.`;
+    const copyBtn = share.querySelector('[data-copy]');
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(shareText);
+        copyBtn.textContent = 'Copied';
+        setTimeout(() => { copyBtn.textContent = 'Copy share text'; }, 2000);
+      } catch {
+        copyBtn.textContent = 'Copy failed — long-press to copy';
+      }
+    });
+    finish.appendChild(share);
   }
 
   function paintDailyShare(card, completed) {
