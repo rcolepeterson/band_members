@@ -75,3 +75,17 @@ test('game page re-declares Boska with font-display:block', () => {
   // The vendored file itself must stay on swap (it's rebuilt, not edited).
   assert.match(read('vendor/fonts.css'), /font-display:\s*swap/, 'vendored fonts.css untouched');
 });
+
+test('mode-card text wrapper shrinks inside the flex row (iPhone Safari)', () => {
+  // Paul's iPhone Safari report: blank mode cards + text spilling off the
+  // right edge. The label is display:flex and the text <span> is a flex
+  // item — with the default min-width:auto it refuses to shrink, so long
+  // text blows the card out. min-width:0 lets it shrink; overflow-wrap
+  // breaks long words instead of spilling.
+  for (const [name, html] of [['index.html', rootHtml], ['game/index.html', gameHtml]]) {
+    const m = html.match(/\.game-mode>span\{([^}]*)\}/);
+    assert.ok(m, `${name}: .game-mode>span rule exists`);
+    assert.match(m[1], /min-width:\s*0/, `${name}: text wrapper may shrink`);
+    assert.match(m[1], /overflow-wrap:\s*anywhere/, `${name}: long words break instead of spilling`);
+  }
+});
