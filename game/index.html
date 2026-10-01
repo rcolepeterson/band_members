@@ -249,12 +249,27 @@
             <button class="tool-chip" type="button" id="game-challenge-btn" style="display:none">Challenge a friend</button>
             <button class="game-run-btn" type="button" id="game-accept-btn" style="display:none">Accept the challenge</button>
           </div>
+          <div class="game-field" id="game-format-wrap" style="display:none">
+            <label for="game-match-format">Match format</label>
+            <select id="game-match-format">
+              <option value="quick">Quick challenge — one and done</option>
+              <option value="best3">Best of 3 — first to 2 rounds</option>
+              <option value="best5">Best of 5 — first to 3 rounds</option>
+              <option value="best7">Best of 7 — first to 4 rounds</option>
+              <option value="timed">Timed — 10 minutes, most rounds wins</option>
+              <option value="open">Open-ended — keep score forever</option>
+            </select>
+          </div>
           <p id="game-status" role="status"></p>
           <div id="game-result"></div>
         </div>
         <section class="arena-challenges" data-challenges-wrap hidden>
           <h2>Your challenges</h2>
           <div id="game-challenges"></div>
+        </section>
+        <section class="arena-challenges" data-matches-wrap hidden>
+          <h2>Your matches</h2>
+          <div id="game-matches"></div>
         </section>
       </div>
     </main>
