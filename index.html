@@ -3098,9 +3098,9 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     .game-modal-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.04em}
     .game-modal-sub{color:var(--color-text-muted);font-size:var(--text-sm);margin:0 0 var(--space-4)}
     .game-modes{display:grid;gap:var(--space-2);margin-bottom:var(--space-4)}
-    .game-mode{display:flex;gap:var(--space-3);align-items:flex-start;border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-3);cursor:pointer}
+    .game-mode{display:flex;gap:var(--space-2);align-items:flex-start;border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-2) var(--space-3);cursor:pointer}
     .game-mode:has(input:checked){border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.06)}
-    .game-mode input{margin-top:2px;accent-color:var(--color-primary)}
+    .game-mode input{margin-top:2px;accent-color:var(--color-primary);width:18px;height:18px;flex:none}
     .game-mode strong{display:block;font-size:var(--text-sm)}
     .game-mode span{color:var(--color-text-muted);font-size:var(--text-xs)}
     .game-field{margin-bottom:var(--space-3);position:relative}
@@ -3113,11 +3113,12 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     .game-ac-item:hover{background:rgba(82,174,182,.08)}
     .game-ac-name{font-size:var(--text-sm);font-weight:600}
     .game-ac-sub{font-size:var(--text-xs);color:var(--color-text-muted)}
-    .game-actions{display:flex;gap:var(--space-2);margin-top:var(--space-4)}
+    .game-actions{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-4)}
     .game-more-options{margin:var(--space-2) 0 0;font-size:var(--text-sm)}
     .game-more-options a{color:var(--color-text-muted);text-decoration:none;border-bottom:1px dotted currentColor}
-    .game-run-btn{flex:1;min-height:48px;border-radius:var(--radius-full);border:0;background:var(--color-primary);color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer}
+    .game-run-btn{flex:1 1 auto;min-height:48px;border-radius:var(--radius-full);border:0;background:var(--color-primary);color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer;white-space:nowrap}
     .game-run-btn:hover{background:var(--color-primary-hover)}
+    .game-actions .tool-chip{white-space:nowrap}
     #game-status{font-size:var(--text-sm);color:var(--color-text-muted);margin:var(--space-3) 0 0;min-height:1.2em}
     .game-result-card{margin-top:var(--space-4);border-top:1px solid var(--color-divider);padding-top:var(--space-4)}
     .game-result-meta{margin-bottom:var(--space-3)}
