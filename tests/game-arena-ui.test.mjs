@@ -1,15 +1,12 @@
-// Regression tests for the compact game-modal pass and the /game/ hero
-// font-flash fix.
+// Regression tests for the /game/ arena UI.
 //
-// 1. Mode cards (.game-mode) stay compact on both the burger modal
-//    (index.html) and the arena (game/index.html): the radio inputs have an
-//    explicit size so oversized native radios can't stretch the cards, and
-//    the action row wraps with no-wrap pills so "Set the matchup" can't
-//    overflow its pill.
-// 2. The /game/ hero 6° (.arena-degree) must never paint in the Georgia
-//    fallback: Boska is preloaded and re-declared with font-display:block
-//    in game/index.html (vendor/fonts.css itself uses swap and is vendored,
-//    so it can't be edited).
+// History: these began as compact game-modal tests covering both the burger
+// modal (index.html) and the arena. The modal is gone — /game is the single
+// game surface (branch game-single-surface) — so the mode-card rules are
+// asserted on game/index.html only, plus the single-surface invariants:
+// the burger 6* links to /game, the root page carries no modal markup or
+// game engine, deep links redirect to /game, and the challenge queue sits
+// above the game card (no-scroll: your move is the first thing you see).
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,31 +19,26 @@ const read = (p) => readFileSync(join(root, p), 'utf8');
 const rootHtml = read('index.html');
 const gameHtml = read('game/index.html');
 
-test('mode-card radios have an explicit size in both pages', () => {
-  for (const [name, html] of [['index.html', rootHtml], ['game/index.html', gameHtml]]) {
-    const m = html.match(/\.game-mode input\{([^}]*)\}/);
-    assert.ok(m, `${name}: .game-mode input rule exists`);
-    assert.match(m[1], /width:\s*18px/, `${name}: radio width pinned`);
-    assert.match(m[1], /height:\s*18px/, `${name}: radio height pinned`);
-  }
+test('mode-card radios have an explicit size on the game page', () => {
+  const m = gameHtml.match(/\.game-mode input\{([^}]*)\}/);
+  assert.ok(m, 'game/index.html: .game-mode input rule exists');
+  assert.match(m[1], /width:\s*18px/, 'radio width pinned');
+  assert.match(m[1], /height:\s*18px/, 'radio height pinned');
 });
 
 test('game action row wraps and pills keep their text on one line', () => {
-  for (const [name, html] of [['index.html', rootHtml], ['game/index.html', gameHtml]]) {
-    const actions = html.match(/\.game-actions\{([^}]*)\}/);
-    assert.ok(actions, `${name}: .game-actions rule exists`);
-    assert.match(actions[1], /flex-wrap:\s*wrap/, `${name}: action row wraps`);
-    assert.match(html, /\.game-run-btn\{[^}]*white-space:\s*nowrap/, `${name}: run button never wraps its label`);
-    assert.match(html, /\.game-actions \.tool-chip\{[^}]*white-space:\s*nowrap/, `${name}: action chips never wrap`);
-  }
+  const html = gameHtml;
+  const actions = html.match(/\.game-actions\{([^}]*)\}/);
+  assert.ok(actions, '.game-actions rule exists');
+  assert.match(actions[1], /flex-wrap:\s*wrap/, 'action row wraps');
+  assert.match(html, /\.game-run-btn\{[^}]*white-space:\s*nowrap/, 'run button never wraps its label');
+  assert.match(html, /\.game-actions \.tool-chip\{[^}]*white-space:\s*nowrap/, 'action chips never wrap');
 });
 
-test('mode cards use the compact padding in both pages', () => {
-  for (const [name, html] of [['index.html', rootHtml], ['game/index.html', gameHtml]]) {
-    const m = html.match(/\.game-mode\{([^}]*)\}/);
-    assert.ok(m, `${name}: .game-mode rule exists`);
-    assert.match(m[1], /padding:var\(--space-2\)/, `${name}: compact vertical padding`);
-  }
+test('mode cards use the compact padding on the game page', () => {
+  const m = gameHtml.match(/\.game-mode\{([^}]*)\}/);
+  assert.ok(m, '.game-mode rule exists');
+  assert.match(m[1], /padding:var\(--space-2\)/, 'compact vertical padding');
 });
 
 test('game page preloads the Boska 700 face the hero resolves to', () => {
@@ -82,10 +74,44 @@ test('mode-card text wrapper shrinks inside the flex row (iPhone Safari)', () =>
   // item — with the default min-width:auto it refuses to shrink, so long
   // text blows the card out. min-width:0 lets it shrink; overflow-wrap
   // breaks long words instead of spilling.
-  for (const [name, html] of [['index.html', rootHtml], ['game/index.html', gameHtml]]) {
-    const m = html.match(/\.game-mode>span\{([^}]*)\}/);
-    assert.ok(m, `${name}: .game-mode>span rule exists`);
-    assert.match(m[1], /min-width:\s*0/, `${name}: text wrapper may shrink`);
-    assert.match(m[1], /overflow-wrap:\s*anywhere/, `${name}: long words break instead of spilling`);
-  }
+  const m = gameHtml.match(/\.game-mode>span\{([^}]*)\}/);
+  assert.ok(m, '.game-mode>span rule exists');
+  assert.match(m[1], /min-width:\s*0/, 'text wrapper may shrink');
+  assert.match(m[1], /overflow-wrap:\s*anywhere/, 'long words break instead of spilling');
+});
+
+// --- Single game surface (no burger-modal game) ---
+
+test('burger 6* navigates to /game instead of opening a modal', () => {
+  const tag = rootHtml.match(/<[^>]*id="mobile-game-open-btn"[^>]*>/);
+  assert.ok(tag, '#mobile-game-open-btn exists');
+  assert.ok(/^<a[\s>]/.test(tag[0]), '6* is an anchor, not a button');
+  assert.match(tag[0], /href="\/game"/, '6* points at /game');
+  assert.ok(!tag[0].includes('aria-haspopup="dialog"'), 'no dialog affordance');
+});
+
+test('root page carries no game modal and no game engine', () => {
+  assert.ok(!rootHtml.includes('id="game-modal"'), 'no #game-modal markup on the main page');
+  assert.ok(!rootHtml.includes('six-degrees-game.mjs'), 'game engine not loaded on the main page');
+});
+
+test('root deep links redirect to the game page', () => {
+  // ?game=1 (old share-card QR codes), ?invite=<token>, ?match=<token>
+  // all land on /game now that the modal is gone.
+  assert.match(rootHtml, /q\.has\('game'\)/, '?game=1 handled');
+  assert.match(rootHtml, /window\.location\.replace\('\/game\/'\)/, '?game=1 redirects to /game/');
+  assert.match(rootHtml, /\/game\/\?invite='/, '?invite= redirects to /game/?invite=');
+  assert.match(rootHtml, /\/game\/\?match='/, '?match= redirects to /game/?match=');
+});
+
+test('challenge queue sits above the game card (no-scroll)', () => {
+  // Your move is the first thing you see: the queue renders before the
+  // game card in DOM order, so nobody scrolls past modes and inputs to
+  // find their challenges.
+  const chalAt = gameHtml.indexOf('data-challenges-wrap');
+  const matchAt = gameHtml.indexOf('data-matches-wrap');
+  const cardAt = gameHtml.indexOf('id="game-modal"');
+  assert.ok(chalAt !== -1 && matchAt !== -1 && cardAt !== -1, 'queue sections and game card present');
+  assert.ok(chalAt < cardAt, 'Your challenges precedes the game card');
+  assert.ok(matchAt < cardAt, 'Your matches precedes the game card');
 });

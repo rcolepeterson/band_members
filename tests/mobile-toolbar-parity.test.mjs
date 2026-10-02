@@ -270,6 +270,7 @@ test('every non-filter tool-chip with an id has a dedicated click handler', () =
     const tag = match[0];
     if (tag.includes('data-filter=') || tag.includes('data-action=')) continue;
     if (tag.includes('aria-hidden="true"')) continue; // status pill etc.
+    if (/^<a[\s>]/.test(tag) && tag.includes('href=')) continue; // navigation links (e.g. the 6* game entry -> /game) need no JS click handler
     const idMatch = tag.match(/\sid="([^"]+)"/);
     if (!idMatch) continue;
     const id = idMatch[1];
