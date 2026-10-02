@@ -74,7 +74,7 @@ export async function ensureNotifyPrefs(sql, userId) {
   const rows = await sql`
     select user_id, email_enabled, unsubscribed_at, unsubscribe_token,
       notify_band_member_joined, notify_band_badge_added, notify_band_edited,
-      notify_member_band_changed, notify_member_edited
+      notify_member_band_changed, notify_member_edited, email_onboarding
     from notification_prefs
     where user_id = ${userId}
     limit 1
@@ -88,7 +88,7 @@ export async function ensureNotifyPrefs(sql, userId) {
         where user_id = ${userId}
         returning user_id, email_enabled, unsubscribed_at, unsubscribe_token,
           notify_band_member_joined, notify_band_badge_added, notify_band_edited,
-          notify_member_band_changed, notify_member_edited
+          notify_member_band_changed, notify_member_edited, email_onboarding
       `;
       return updated[0];
     }
@@ -100,7 +100,7 @@ export async function ensureNotifyPrefs(sql, userId) {
     values (${userId}, true, ${token})
     returning user_id, email_enabled, unsubscribed_at, unsubscribe_token,
       notify_band_member_joined, notify_band_badge_added, notify_band_edited,
-      notify_member_band_changed, notify_member_edited
+      notify_member_band_changed, notify_member_edited, email_onboarding
   `;
   return inserted[0];
 }

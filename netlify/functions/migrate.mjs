@@ -511,6 +511,21 @@ export default async (req) => {
     `;
     results.push('notification_prefs event-type columns ready');
 
+    // Onboarding email toggle + sent log (thank-you from Aaron, day-2 drip).
+    await sql`
+      alter table notification_prefs
+      add column if not exists email_onboarding boolean not null default true
+    `;
+    await sql`
+      create table if not exists onboarding_emails (
+        user_id        uuid primary key references users(id) on delete cascade,
+        kind           text not null check (kind in ('blast', 'drip')),
+        credits_granted integer not null,
+        sent_at        timestamptz not null default now()
+      )
+    `;
+    results.push('onboarding email prefs + log ready');
+
     await sql`drop trigger if exists notification_prefs_set_updated_at on notification_prefs`;
     await sql`
       create trigger notification_prefs_set_updated_at
