@@ -271,10 +271,21 @@
         <p class="arena-sub">The rock family tree, playable. Pick your matchup, run the chain, and find out how deep the threads go.</p>
       </div>
 
+      <section class="arena-challenges" data-challenges-wrap hidden>
+      <h2>Your challenges</h2>
+      <p class="game-handle-row" data-handle-row hidden>Playing as <strong data-handle-name></strong>
+      <button type="button" class="game-change-handle" data-change-handle>Change</button></p>
+      <div id="game-challenges"></div>
+      </section>
+      <section class="arena-challenges" data-matches-wrap hidden>
+      <h2>Your matches</h2>
+      <div id="game-matches"></div>
+      </section>
+
       <!--
-        Six Degrees game stage. The markup below mirrors the game modal in
-        index.html id-for-id so scripts/six-degrees-game.mjs wires up with
-        zero changes — the same engine, the same flow, dressed for the arena.
+        Six Degrees game stage. The game lives here now — /game is the
+        single surface (the old burger-menu modal is gone). The same
+        engine (scripts/six-degrees-game.mjs) wires it up.
         Daily Chain and Stakes are shown locked; they arrive in a later drop.
       -->
       <div id="game-modal" role="region" aria-labelledby="game-modal-title">
@@ -334,16 +345,6 @@
           <p id="game-status" role="status"></p>
           <div id="game-result"></div>
         </div>
-        <section class="arena-challenges" data-challenges-wrap hidden>
-          <h2>Your challenges</h2>
-          <p class="game-handle-row" data-handle-row hidden>Playing as <strong data-handle-name></strong>
-            <button type="button" class="game-change-handle" data-change-handle>Change</button></p>
-          <div id="game-challenges"></div>
-        </section>
-        <section class="arena-challenges" data-matches-wrap hidden>
-          <h2>Your matches</h2>
-          <div id="game-matches"></div>
-        </section>
       </div>
     </main>
 
