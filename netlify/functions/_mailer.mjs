@@ -25,6 +25,7 @@ export const RESEND_API_URL = 'https://api.resend.com/emails';
 // 2026-09-24). Aaron's personal Network Solutions mailbox is deliberately
 // NOT used here — automated mail never goes through it (spam risk).
 export const MAIL_FROM = 'Six Degrees of Rawk <updates@sixdegreesofrock.com>';
+export const MAIL_FROM_ADDRESS = 'updates@sixdegreesofrock.com';
 
 export const SITE_URL = 'https://sixdegreesofrock.com';
 
@@ -101,8 +102,10 @@ export function buildMemberUpdateEmail({ memberName, unsubscribeUrl, eventLabel 
 }
 
 // Send one email via Resend. `to` is a single address string.
+// `from` overrides the default from-line (e.g. the onboarding email goes
+// out as Aaron); the address itself stays on the verified domain.
 // Never throws — see the module header for the failure contract.
-export async function sendEmail({ to, subject, html, text }) {
+export async function sendEmail({ to, subject, html, text, from = MAIL_FROM }) {
   if (!isMailerConfigured()) {
     return { ok: false, error: 'mailer not configured (RESEND_API_KEY missing)' };
   }
@@ -117,7 +120,7 @@ export async function sendEmail({ to, subject, html, text }) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: MAIL_FROM,
+        from,
         to: [to],
         subject,
         html,
