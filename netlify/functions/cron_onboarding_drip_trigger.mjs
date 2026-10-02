@@ -27,6 +27,10 @@ import { runOnboarding } from './_onboarding.mjs';
 
 const ADMIN_TOKEN_HEADER = 'x-admin-token';
 
+// Path follows the cron_verify_stale_bands_trigger convention: dashes,
+// no _trigger suffix.
+export const config = { path: '/api/cron-onboarding-drip', method: 'POST' };
+
 function isAdminAuthorized(req) {
   const expected = process.env.ADMIN_TOKEN;
   if (!expected) return false;
