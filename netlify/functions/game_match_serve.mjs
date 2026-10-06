@@ -57,7 +57,7 @@ export default async (req) => {
   let rows;
   try {
     rows = await sql`
-      select m.*, u1.handle as challenger_handle, u2.handle as invitee_handle
+      select m.*, u1.name as challenger_name, u2.name as invitee_name
         from game_matches m
         join users u1 on u1.id = m.challenger_id
         left join users u2 on u2.id = m.invitee_id
@@ -90,7 +90,7 @@ export default async (req) => {
   let fresh;
   try {
     const fr = await sql`
-      select m.*, u1.handle as challenger_handle, u2.handle as invitee_handle
+      select m.*, u1.name as challenger_name, u2.name as invitee_name
         from game_matches m
         join users u1 on u1.id = m.challenger_id
         left join users u2 on u2.id = m.invitee_id
@@ -101,7 +101,7 @@ export default async (req) => {
     console.error('game-match-serve: refetch failed', error && error.message);
     return serverError('could not load the match');
   }
-  return ok({ match: matchState(fresh, fresh.challenger_handle, fresh.invitee_handle) });
+  return ok({ match: matchState(fresh, fresh.challenger_name || 'Your challenger', fresh.invitee_name) });
 };
 
 export const config = { path: '/api/game-match/serve' };

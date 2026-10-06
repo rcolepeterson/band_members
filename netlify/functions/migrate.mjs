@@ -142,20 +142,6 @@ export default async (req) => {
     `;
     results.push('columns users.{provider,provider_user_id,avatar_url,email_verified} ready');
 
-    // player handles: the privacy-safe battle name shown on challenges and
-    // matches instead of the real name. Nullable — existing users predate it
-    // and get one auto-assigned on their first challenge/match creation
-    // (see ensureHandle in me_handle.mjs); the auto-assign never overwrites
-    // a handle the player chose themselves. Case-insensitive uniqueness via
-    // the expression index below.
-    await sql`alter table users add column if not exists handle text`;
-    await sql`
-      create unique index if not exists users_handle_lower_idx
-      on users (lower(handle))
-      where handle is not null
-    `;
-    results.push('column users.handle ready');
-
     // oauth_states: one-shot CSRF states for the OAuth round-trip. The site
     // has no cookies or server sessions, so the state lives server-side:
     // 15-minute TTL, consumed exactly once by /api/oauth/callback.
@@ -511,21 +497,6 @@ export default async (req) => {
     `;
     results.push('notification_prefs event-type columns ready');
 
-    // Onboarding email toggle + sent log (thank-you from Aaron, day-2 drip).
-    await sql`
-      alter table notification_prefs
-      add column if not exists email_onboarding boolean not null default true
-    `;
-    await sql`
-      create table if not exists onboarding_emails (
-        user_id        uuid primary key references users(id) on delete cascade,
-        kind           text not null check (kind in ('blast', 'drip')),
-        credits_granted integer not null,
-        sent_at        timestamptz not null default now()
-      )
-    `;
-    results.push('onboarding email prefs + log ready');
-
     await sql`drop trigger if exists notification_prefs_set_updated_at on notification_prefs`;
     await sql`
       create trigger notification_prefs_set_updated_at
@@ -788,86 +759,6 @@ export default async (req) => {
       on game_matches (invitee_id)
     `;
     results.push('index game_matches_invitee_id_idx ready');
-
-    // Daily Chain tables -----------------------------------------------------
-    // The Wordle-style daily: one band pair per day (lottery, date-seeded),
-    // the player builds the chain link-by-link from multiple-choice options.
-    await sql`
-      create table if not exists daily_chains (
-        date         text primary key,  -- YYYY-MM-DD, Pacific
-        band_a       uuid not null references bands(id) on delete cascade,
-        band_b       uuid not null references bands(id) on delete cascade,
-        optimal_hops integer not null,
-        created_at   timestamptz not null default now()
-      )
-    `;
-    results.push('table daily_chains ready');
-
-    await sql`
-      create table if not exists daily_runs (
-        id              uuid primary key default gen_random_uuid(),
-        user_id         uuid not null references users(id) on delete cascade,
-        chain_date      text not null references daily_chains(date) on delete cascade,
-        status          text not null default 'active',
-        current_band_id uuid not null,
-        hops_used       integer not null default 0,
-        hints_used      integer not null default 0,
-        picks           jsonb not null default '[]',
-        current_options jsonb,
-        escaped         jsonb not null default '[]',
-        created_at      timestamptz not null default now(),
-        completed_at    timestamptz,
-        unique (user_id, chain_date)
-      )
-    `;
-    results.push('table daily_runs ready');
-
-    await sql`
-      create index if not exists daily_runs_user_id_idx
-      on daily_runs (user_id)
-    `;
-    results.push('index daily_runs_user_id_idx ready');
-
-    // Completion ledger — streaks are derived from this, never stored.
-    await sql`
-      create table if not exists daily_completions (
-        user_id    uuid not null references users(id) on delete cascade,
-        chain_date text not null,
-        via_freeze boolean not null default false,
-        created_at timestamptz not null default now(),
-        primary key (user_id, chain_date)
-      )
-    `;
-    results.push('table daily_completions ready');
-
-    // Purchased archive days (playing a missed day repairs the streak).
-    await sql`
-      create table if not exists daily_unlocks (
-        user_id    uuid not null references users(id) on delete cascade,
-        chain_date text not null,
-        created_at timestamptz not null default now(),
-        primary key (user_id, chain_date)
-      )
-    `;
-    results.push('table daily_unlocks ready');
-
-    // Credit economy columns on users.
-    await sql`alter table users add column if not exists credits      integer not null default 50`;
-    results.push('column users.credits ready');
-    await sql`alter table users add column if not exists freeze_count integer not null default 0`;
-    results.push('column users.freeze_count ready');
-
-    // Daily Chain replays ----------------------------------------------------
-    // v1 allowed one run per user per day (unique(user_id, chain_date)).
-    // Replays need many: replace with unique(user_id, chain_date, run_number).
-    // Existing rows keep run_number = 1, so Aaron's in-progress run survives.
-    await sql`alter table daily_runs add column if not exists run_number integer not null default 1`;
-    await sql`alter table daily_runs drop constraint if exists daily_runs_user_id_chain_date_key`;
-    const _rr = await sql`select 1 from pg_constraint where conname = 'daily_runs_user_replay_key'`;
-    if (!_rr[0]) {
-      await sql`alter table daily_runs add constraint daily_runs_user_replay_key unique (user_id, chain_date, run_number)`;
-    }
-    results.push('daily_runs replay support ready');
 
     // duplicate_flags table --------------------------------------------------
     // Duplicate-band monitor (see scanDuplicateBands in
