@@ -321,16 +321,6 @@
             <label for="game-band-a">Band one</label>
             <input id="game-band-a" type="text" placeholder="Start typing a band name&hellip;" autocomplete="off" />
           </div>
-          <div class="game-field" id="game-field-b-wrap">
-            <label for="game-band-b">Band two</label>
-            <input id="game-band-b" type="text" placeholder="Start typing a band name&hellip;" autocomplete="off" />
-          </div>
-          <div class="game-actions">
-            <button class="game-run-btn" type="button" id="game-run">Run the chain</button>
-            <button class="tool-chip" type="button" id="game-randomize" style="display:none">Deal me a pair</button>
-            <button class="tool-chip" type="button" id="game-challenge-btn" style="display:none">Challenge a friend</button>
-            <button class="game-run-btn" type="button" id="game-accept-btn" style="display:none">Accept the challenge</button>
-          </div>
           <div class="game-field" id="game-format-wrap">
             <label for="game-match-format">Match format</label>
             <select id="game-match-format">
@@ -341,6 +331,16 @@
               <option value="timed">Timed — 10 minutes, most rounds wins</option>
               <option value="open">Open-ended — keep score forever</option>
             </select>
+          </div>
+          <div class="game-field" id="game-field-b-wrap" style="display:none">
+            <label for="game-band-b">Band two</label>
+            <input id="game-band-b" type="text" placeholder="Start typing a band name&hellip;" autocomplete="off" />
+          </div>
+          <div class="game-actions">
+            <button class="game-run-btn" type="button" id="game-run">Run the chain</button>
+            <button class="tool-chip" type="button" id="game-randomize" style="display:none">Deal me a pair</button>
+            <button class="tool-chip" type="button" id="game-challenge-btn">Challenge a friend</button>
+            <button class="game-run-btn" type="button" id="game-accept-btn" style="display:none">Accept the challenge</button>
           </div>
           <p id="game-status" role="status"></p>
           <div id="game-result"></div>
