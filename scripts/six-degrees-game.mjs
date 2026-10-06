@@ -2256,3 +2256,18 @@ if (isBrowser) {
     initGameUI();
   }
 }
+
+// Defensive re-sync for the page-load UI bug: initGameUI() ends with a
+// syncModeUI() call, but if anything earlier in init throws, the "Challenge a
+// friend" button and the match-format picker stay hidden until the user
+// switches modes. Re-dispatching 'change' on the checked mode radio re-runs
+// the existing mode-change handler (which calls syncModeUI()). Harmless when
+// init already completed — it simply re-syncs to the same state.
+if (isBrowser) {
+  window.addEventListener('load', () => {
+    try {
+      const checked = document.querySelector('input[name="game-mode"]:checked');
+      if (checked) checked.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (_) { /* never break page load for a UI re-sync */ }
+  });
+}
