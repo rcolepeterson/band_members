@@ -447,8 +447,10 @@ function initGameUI() {
     fieldA.disabled = false;
     // Solo: only band A is picked; the graph supplies band B.
     // Chaos: the graph supplies both; hide both fields, show randomize.
+    // Head-to-head: opponent picks band B on their own device — band B field
+    // stays hidden in challenge mode (2026-10-06).
     document.getElementById('game-field-a-wrap').style.display = mode === 'chaos' ? 'none' : '';
-    wrapB.style.display = mode === 'head-to-head' ? '' : 'none';
+    wrapB.style.display = 'none';
     randomizeBtn.style.display = mode === 'chaos' ? '' : 'none';
     runBtn.style.display = '';
     runBtn.textContent = mode === 'head-to-head' ? 'Set the matchup' : mode === 'solo' ? 'Challenge me' : 'Deal me a pair';
