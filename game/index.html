@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Six Degrees — the game</title>
-  <meta name="description" content="Name two bands. If the tree connects them, you brag. If it breaks, the tree wins. The Six Degrees of Rock game." />
+  <meta name="description" content="Name two bands. If the tree connects them, you brag. If it breaks, you drink. The Six Degrees of Rock game." />
   <link rel="canonical" href="https://sixdegreesofrock.com/game" />
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
@@ -12,28 +12,17 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Six Degrees of Rock" />
   <meta property="og:title" content="Six Degrees — the game" />
-  <meta property="og:description" content="Name two bands. If the tree connects them, you brag. If it breaks, the tree wins." />
+  <meta property="og:description" content="Name two bands. If the tree connects them, you brag. If it breaks, you drink." />
   <meta property="og:url" content="https://sixdegreesofrock.com/game" />
   <meta property="og:image" content="https://sixdegreesofrock.com/og-image.png?v=2" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Six Degrees — the game" />
-  <meta name="twitter:description" content="Name two bands. If the tree connects them, you brag. If it breaks, the tree wins." />
+  <meta name="twitter:description" content="Name two bands. If the tree connects them, you brag. If it breaks, you drink." />
   <meta name="twitter:image" content="https://sixdegreesofrock.com/og-image.png?v=2" />
-  <link rel="preload" href="/vendor/fonts/boska-700.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/vendor/fonts.css" />
   <style>
-    /* The arena hero's 6° must never paint in the Georgia fallback: Boska is
-       re-declared here with font-display:block (the vendored file uses swap),
-       so the glyph waits briefly, then arrives whole. The hero asks for
-       weight 800, which resolves to the 700 face — preloaded above. */
-    @font-face{font-family:'Boska';src:url('/vendor/fonts/boska-400.woff2') format('woff2');
-      font-weight:400;font-style:normal;font-display:block}
-    @font-face{font-family:'Boska';src:url('/vendor/fonts/boska-500.woff2') format('woff2');
-      font-weight:500;font-style:normal;font-display:block}
-    @font-face{font-family:'Boska';src:url('/vendor/fonts/boska-700.woff2') format('woff2');
-      font-weight:700;font-style:normal;font-display:block}
     :root {
       --text-xs: clamp(0.8125rem, 0.7625rem + 0.25vw, 0.9375rem);
       --text-sm: clamp(0.9375rem, 0.8625rem + 0.35vw, 1.0625rem);
@@ -74,7 +63,6 @@
       background:color-mix(in srgb, var(--color-bg) 78%, transparent);border-bottom:1px solid var(--color-divider)}
     .arena-header-inner{max-width:880px;margin:0 auto;padding:var(--space-3) var(--space-4);
       display:flex;align-items:center;justify-content:space-between;gap:var(--space-4)}
-    .arena-header-actions{display:flex;align-items:center;gap:var(--space-2)}
     .arena-wordmark{font-weight:800;letter-spacing:.22em;font-size:var(--text-xs);text-transform:uppercase;
       color:var(--color-text);text-decoration:none}
     .arena-wordmark:hover{color:var(--color-primary)}
@@ -106,11 +94,10 @@
     .game-modal-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.04em}
     .game-modal-sub{color:var(--color-text-muted);font-size:var(--text-sm);margin:0 0 var(--space-4)}
     .game-modes{display:grid;gap:var(--space-2);margin-bottom:var(--space-4)}
-    .game-mode{display:flex;gap:var(--space-2);align-items:flex-start;border:1px solid var(--color-border);
-      border-radius:var(--radius-lg);padding:var(--space-2) var(--space-3);cursor:pointer;background:rgba(255,255,255,.015)}
+    .game-mode{display:flex;gap:var(--space-3);align-items:flex-start;border:1px solid var(--color-border);
+      border-radius:var(--radius-lg);padding:var(--space-3);cursor:pointer;background:rgba(255,255,255,.015)}
     .game-mode:has(input:checked){border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.06)}
-    .game-mode>span{min-width:0;overflow-wrap:anywhere}
-    .game-mode input{margin-top:2px;accent-color:var(--color-primary);width:18px;height:18px;flex:none}
+    .game-mode input{margin-top:2px;accent-color:var(--color-primary)}
     .game-mode strong{display:block;font-size:var(--text-sm)}
     .game-mode span{color:var(--color-text-muted);font-size:var(--text-xs)}
     .game-mode-locked{opacity:.55;cursor:not-allowed}
@@ -129,12 +116,10 @@
     .game-ac-item:hover{background:rgba(82,174,182,.08)}
     .game-ac-name{font-size:var(--text-sm);font-weight:600}
     .game-ac-sub{font-size:var(--text-xs);color:var(--color-text-muted)}
-    .game-actions{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-4)}
-    .game-run-btn{flex:1 1 auto;min-height:52px;border-radius:var(--radius-full);border:0;background:var(--color-primary);
-      color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer;letter-spacing:.04em;
-      white-space:nowrap}
+    .game-actions{display:flex;gap:var(--space-2);margin-top:var(--space-4)}
+    .game-run-btn{flex:1;min-height:52px;border-radius:var(--radius-full);border:0;background:var(--color-primary);
+      color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer;letter-spacing:.04em}
     .game-run-btn:hover{background:var(--color-primary-hover)}
-    .game-actions .tool-chip{white-space:nowrap}
     .tool-chip{min-height:44px;padding:0 var(--space-4);border:1px solid var(--color-border);
       border-radius:var(--radius-full);display:inline-flex;align-items:center;gap:var(--space-2);
       background:rgba(255,255,255,0.02);font-size:var(--text-sm);color:var(--color-text)}
@@ -158,9 +143,6 @@
     .arena-challenges{margin-top:var(--space-6);border-top:1px solid var(--color-divider);padding-top:var(--space-4)}
     .arena-challenges h2{font-size:var(--text-sm);letter-spacing:.08em;text-transform:uppercase;
       color:var(--color-text-muted);margin:0 0 var(--space-2);font-weight:700}
-    .game-handle-row{font-size:var(--text-sm);color:var(--color-text-muted);margin:0 0 var(--space-3)}
-    .game-change-handle{background:none;border:0;padding:0;color:inherit;font:inherit;cursor:pointer;
-      text-decoration:underline;text-underline-offset:2px}
     .challenge-row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);
       padding:var(--space-3) 0;border-bottom:1px solid var(--color-divider)}
     .challenge-text{font-size:var(--text-sm);color:var(--color-text)}
@@ -176,43 +158,6 @@
       color:var(--color-text-faint);font-size:var(--text-xs);letter-spacing:.06em}
     .arena-foot a{color:var(--color-text-muted);text-decoration:none}
     .arena-foot a:hover{color:var(--color-text)}
-
-    /* Feedback: trigger sits in the arena header; the dialog is a fixed
-       overlay dressed for the arena. Same Netlify form backend as the main
-       site (form name "feedback", honeypot "bot-field"). */
-    #feedback-popover{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:var(--space-4)}
-    #feedback-popover[hidden]{display:none}
-    .feedback-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(6px)}
-    .feedback-card{position:relative;width:min(460px,100%);max-height:min(90vh,640px);overflow-y:auto;
-      background:linear-gradient(180deg, rgba(16,28,40,.96), rgba(9,16,24,.96));
-      border:1px solid rgba(225,244,255,.22);border-radius:var(--radius-xl);
-      padding:var(--space-6);box-shadow:var(--shadow-lg);scrollbar-width:none}
-    .feedback-card::-webkit-scrollbar{display:none}
-    .feedback-close{position:absolute;top:10px;right:10px;width:32px;height:32px;border:0;background:none;
-      color:var(--color-text-muted);font-size:20px;line-height:1;cursor:pointer;border-radius:50%}
-    .feedback-close:hover{color:var(--color-text);background:rgba(255,255,255,.06)}
-    .feedback-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.02em;margin:0 0 var(--space-2);padding-right:var(--space-8)}
-    .feedback-copy{color:var(--color-text-muted);font-size:var(--text-sm);margin:0 0 var(--space-4)}
-    .feedback-field{margin-bottom:var(--space-3)}
-    .feedback-field label{display:block;font-size:var(--text-xs);letter-spacing:.06em;text-transform:uppercase;
-      color:var(--color-text-muted);margin-bottom:var(--space-1)}
-    .feedback-field input,.feedback-field select,.feedback-field textarea{width:100%;padding:var(--space-2) var(--space-3);
-      border:1px solid var(--color-border);border-radius:var(--radius-lg);background:rgba(255,255,255,.02);
-      color:var(--color-text);font-size:var(--text-sm);font-family:inherit}
-    .feedback-field textarea{min-height:6.5rem;resize:vertical}
-    .feedback-field input:focus,.feedback-field select:focus,.feedback-field textarea:focus{outline:none;border-color:rgba(82,174,182,.6)}
-    .feedback-field select option{background:#0a141d;color:var(--color-text)}
-    .feedback-note{font-size:var(--text-xs);color:var(--color-text-faint);margin:var(--space-1) 0 0}
-    .field-note-inline{font-weight:400;font-size:.85em;letter-spacing:0;text-transform:none;color:var(--color-text-muted);margin-left:.35em}
-    .feedback-honeypot{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
-    #feedback-status{font-size:var(--text-sm);margin:0 0 var(--space-3);min-height:1.2em}
-    #feedback-status:empty{display:none}
-    #feedback-status.is-error{color:#ff9b9b}
-    #feedback-status.is-success{color:#9befcf}
-    .feedback-submit{width:100%;min-height:52px;border-radius:var(--radius-full);border:0;background:var(--color-primary);
-      color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer;letter-spacing:.04em}
-    .feedback-submit:hover{background:var(--color-primary-hover)}
-    .feedback-submit:disabled{opacity:.6;cursor:default}
 
     @media (max-width: 640px){
       .arena-main{padding:var(--space-6) var(--space-3) var(--space-10)}
@@ -238,29 +183,13 @@
   </style>
 </head>
 <body>
-  <!--
-    Hidden static form for Netlify Forms build-time discovery — same pattern
-    as index.html. The visible form lives in #feedback-popover below; this
-    duplicate exists solely so Netlify registers a form named "feedback"
-    with these fields for submissions from this page. If you add a field to
-    the visible form, mirror it here too.
-  -->
-  <form name="feedback" data-netlify="true" netlify-honeypot="bot-field" hidden>
-    <input type="text" name="feedback-type" />
-    <textarea name="feedback-message"></textarea>
-    <input type="email" name="feedback-email" />
-    <input type="text" name="bot-field" />
-  </form>
   <div class="arena">
     <div class="arena-grid" aria-hidden="true"></div>
 
     <header class="arena-header">
       <div class="arena-header-inner">
         <a class="arena-wordmark" href="/">Six Degrees of Rock</a>
-        <div class="arena-header-actions">
-          <button class="arena-back" id="send-feedback-btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="feedback-popover">Send feedback</button>
-          <a class="arena-back" href="/">&larr; Back to the tree</a>
-        </div>
+        <a class="arena-back" href="/">&larr; Back to the tree</a>
       </div>
     </header>
 
@@ -271,21 +200,10 @@
         <p class="arena-sub">The rock family tree, playable. Pick your matchup, run the chain, and find out how deep the threads go.</p>
       </div>
 
-      <section class="arena-challenges" data-challenges-wrap hidden>
-      <h2>Your challenges</h2>
-      <p class="game-handle-row" data-handle-row hidden>Playing as <strong data-handle-name></strong>
-      <button type="button" class="game-change-handle" data-change-handle>Change</button></p>
-      <div id="game-challenges"></div>
-      </section>
-      <section class="arena-challenges" data-matches-wrap hidden>
-      <h2>Your matches</h2>
-      <div id="game-matches"></div>
-      </section>
-
       <!--
-        Six Degrees game stage. The game lives here now — /game is the
-        single surface (the old burger-menu modal is gone). The same
-        engine (scripts/six-degrees-game.mjs) wires it up.
+        Six Degrees game stage. The markup below mirrors the game modal in
+        index.html id-for-id so scripts/six-degrees-game.mjs wires up with
+        zero changes — the same engine, the same flow, dressed for the arena.
         Daily Chain and Stakes are shown locked; they arrive in a later drop.
       -->
       <div id="game-modal" role="region" aria-labelledby="game-modal-title">
@@ -294,7 +212,7 @@
           <div class="game-modal-head">
             <div class="game-modal-title" id="game-modal-title"><span aria-hidden="true">6&deg;</span> Six Degrees game</div>
           </div>
-          <p class="game-modal-sub">Name two bands. If the tree connects them, you brag. If it breaks, the tree wins.</p>
+          <p class="game-modal-sub">Name two bands. If the tree connects them, you brag. If it breaks, you drink.</p>
           <div class="game-modes" role="radiogroup" aria-label="How to play">
             <label class="game-mode">
               <input type="radio" name="game-mode" value="head-to-head" checked />
@@ -308,8 +226,8 @@
               <input type="radio" name="game-mode" value="chaos" />
               <span><strong>Chaos</strong><span>The graph picks both bands. Highest stakes.</span></span>
             </label>
-            <label class="game-mode">
-              <input type="radio" name="game-mode" value="daily" />
+            <label class="game-mode game-mode-locked" aria-disabled="true">
+              <input type="radio" name="game-mode" value="daily" disabled />
               <span><strong>Daily Chain</strong><span>One fresh matchup every day. Same chain for everyone.</span></span>
             </label>
             <label class="game-mode game-mode-locked" aria-disabled="true">
@@ -345,6 +263,14 @@
           <p id="game-status" role="status"></p>
           <div id="game-result"></div>
         </div>
+        <section class="arena-challenges" data-challenges-wrap hidden>
+          <h2>Your challenges</h2>
+          <div id="game-challenges"></div>
+        </section>
+        <section class="arena-challenges" data-matches-wrap hidden>
+          <h2>Your matches</h2>
+          <div id="game-matches"></div>
+        </section>
       </div>
     </main>
 
@@ -360,174 +286,18 @@
     dead-end's Add the connector both land on the tree, where those flows live.
   -->
   <button id="add-band-btn" type="button" hidden></button>
-
-  <!--
-    Feedback dialog. Same Netlify form backend as the main site (form name
-    "feedback", honeypot "bot-field", POST urlencoded to the site root with
-    form-name=feedback). The shared game engine calls window.openFeedbackPopover
-    (mirroring index.html) for its contact handoffs.
-  -->
-  <div id="feedback-popover" role="dialog" aria-modal="true" aria-label="Send feedback" hidden>
-    <div class="feedback-backdrop" data-feedback-close></div>
-    <div class="feedback-card">
-      <button class="feedback-close" type="button" data-feedback-close aria-label="Close feedback">&times;</button>
-      <div class="feedback-title">Send feedback</div>
-      <p class="feedback-copy">Spot a bug, want a feature, or have a suggestion? Send a short note and it&rsquo;ll land in the maintainer&rsquo;s inbox.</p>
-      <form id="feedback-form" name="feedback" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/game/?feedback=thanks">
-        <!-- Netlify requires the form-name hidden input for JS-submitted forms. Do not remove. -->
-        <input type="hidden" name="form-name" value="feedback" />
-        <!-- Honeypot: visually hidden but NOT display:none, so bots still fill it and Netlify drops the submission. -->
-        <p class="feedback-honeypot" aria-hidden="true">
-          <label>Don&rsquo;t fill this out if you&rsquo;re human: <input name="bot-field" tabindex="-1" autocomplete="off" /></label>
-        </p>
-        <div class="feedback-field">
-          <label for="feedback-type">Type of feedback</label>
-          <select id="feedback-type" name="feedback-type" required>
-            <option value="Suggestion">Suggestion</option>
-            <option value="Feature request">Feature request</option>
-            <option value="Bug report">Bug report</option>
-            <option value="Game sponsorship">Game sponsorship</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-        <div class="feedback-field">
-          <label for="feedback-message">Message</label>
-          <textarea id="feedback-message" name="feedback-message" required rows="5" placeholder="What&rsquo;s on your mind? Describe the bug, feature idea, or suggestion."></textarea>
-        </div>
-        <div class="feedback-field">
-          <label for="feedback-email">Your email <span class="field-note-inline">(optional &mdash; leave blank to stay anonymous)</span></label>
-          <input id="feedback-email" name="feedback-email" type="email" autocomplete="email" placeholder="you@example.com" />
-          <p class="feedback-note">Only used if the maintainer needs to reply. Not stored anywhere else.</p>
-        </div>
-        <div id="feedback-status" aria-live="polite"></div>
-        <button class="feedback-submit" type="submit" id="feedback-submit-btn">Send feedback</button>
-      </form>
-    </div>
-  </div>
-
   <script>
     (function () {
       document.getElementById('add-band-btn').addEventListener('click', function () {
         window.location.href = '/';
       });
       window.openSignupPopover = function () { window.location.href = '/'; };
-      // On a dedicated page, Escape goes home instead of blanking the stage —
-      // unless the feedback dialog is open, in which case Escape just closes it.
+      // On a dedicated page, Escape goes home instead of blanking the stage.
       document.addEventListener('keydown', function (e) {
-        if (e.key !== 'Escape') return;
-        if (window.__feedbackOpen && typeof window.__closeFeedback === 'function') {
-          window.__closeFeedback();
-          return;
-        }
-        window.location.href = '/';
+        if (e.key === 'Escape') window.location.href = '/';
       });
     })();
   </script>
   <script type="module" src="/scripts/six-degrees-game.mjs"></script>
-  <script>
-    // Feedback dialog open/close + Netlify Forms submit. Mirrors the main
-    // site's initFeedbackForm UX contract:
-    //   - Success: show confirmation, clear the form, auto-close after ~2.5s.
-    //   - Error: show an error, leave the form filled so the user can retry.
-    //   - Never navigate away (preventDefault always).
-    // Submissions POST urlencoded to the site root with form-name=feedback;
-    // Netlify intercepts and routes them to the same Forms dashboard as the
-    // main site's form. The honeypot (bot-field) is checked server-side.
-    (function () {
-      var popover = document.getElementById('feedback-popover');
-      var trigger = document.getElementById('send-feedback-btn');
-      if (!popover || !trigger) return;
-
-      function openFeedback() {
-        popover.hidden = false;
-        trigger.setAttribute('aria-expanded', 'true');
-        window.__feedbackOpen = true;
-        document.body.style.overflow = 'hidden';
-        var first = document.getElementById('feedback-type');
-        if (first) first.focus();
-      }
-      function closeFeedback() {
-        popover.hidden = true;
-        trigger.setAttribute('aria-expanded', 'false');
-        window.__feedbackOpen = false;
-        document.body.style.overflow = '';
-      }
-      window.__closeFeedback = closeFeedback;
-      // Mirrors index.html so the shared game engine can open the contact
-      // form without depending on the main site's toolbar.
-      window.openFeedbackPopover = openFeedback;
-
-      trigger.addEventListener('click', function (event) {
-        event.stopPropagation();
-        if (popover.hidden) openFeedback(); else closeFeedback();
-      });
-      popover.querySelectorAll('[data-feedback-close]').forEach(function (el) {
-        el.addEventListener('click', closeFeedback);
-      });
-      popover.addEventListener('click', function (event) { event.stopPropagation(); });
-
-      var form = document.getElementById('feedback-form');
-      var statusEl = document.getElementById('feedback-status');
-      var submitBtn = document.getElementById('feedback-submit-btn');
-
-      function setStatus(kind, message) {
-        if (!statusEl) return;
-        statusEl.classList.remove('is-error', 'is-success');
-        if (kind === 'error') statusEl.classList.add('is-error');
-        if (kind === 'success') statusEl.classList.add('is-success');
-        statusEl.textContent = message || '';
-      }
-
-      if (!form) return;
-      form.addEventListener('submit', async function (event) {
-        event.preventDefault();
-        if (submitBtn && submitBtn.disabled) return;
-
-        // URL-encode per Netlify's docs for JS submissions (no file inputs,
-        // so url-encoded is a strict superset of what we need).
-        var body = new URLSearchParams();
-        Array.from(new FormData(form).entries()).forEach(function (entry) {
-          body.append(entry[0], String(entry[1]));
-        });
-
-        setStatus('', 'Sending\u2026');
-        if (submitBtn) {
-          submitBtn.disabled = true;
-          submitBtn.dataset._label = submitBtn.textContent;
-          submitBtn.textContent = 'Sending\u2026';
-        }
-
-        try {
-          var response = await fetch('/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: body.toString(),
-          });
-          if (!response.ok) throw new Error('HTTP ' + response.status);
-
-          setStatus('success', 'Thanks \u2014 your feedback was sent. The maintainer will read it soon.');
-          form.reset();
-
-          setTimeout(function () {
-            closeFeedback();
-            setStatus('', '');
-          }, 2500);
-        } catch (err) {
-          console.error('feedback submit failed', err);
-          setStatus('error',
-            'Couldn\u2019t send your feedback right now. Check your connection and try again, ' +
-            'or email vimana17@gmail.com directly.');
-        } finally {
-          if (submitBtn) {
-            submitBtn.disabled = false;
-            if (submitBtn.dataset._label) {
-              submitBtn.textContent = submitBtn.dataset._label;
-              delete submitBtn.dataset._label;
-            }
-          }
-        }
-      });
-    })();
-  </script>
 </body>
 </html>
