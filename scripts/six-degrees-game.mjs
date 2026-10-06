@@ -172,47 +172,7 @@ function initGameUI() {
   const result = document.getElementById('game-result');
   const statusLine = document.getElementById('game-status');
 
-  // --- invite how-it-works line ---------------------------------------------
-  // The invite landing is the game's front door for non-players (Paul's
-  // "I don't understand how the game is played", 2026-10-01). A dedicated
-  // line above the fields explains the rules once, in plain words — the
-  // status line stays free for transient messages. Shown only in the accept
-  // view; hidden on every exit path.
-  const howtoLine = (() => {
-    const p = document.createElement('p');
-    p.id = 'game-howto';
-    p.className = 'game-howto';
-    p.style.display = 'none';
-    const wrapA = document.getElementById('game-field-a-wrap');
-    if (wrapA && wrapA.parentNode) wrapA.parentNode.insertBefore(p, wrapA);
-    if (!document.getElementById('game-howto-style')) {
-      const st = document.createElement('style');
-      st.id = 'game-howto-style';
-      // Quiet register, same as the status line — an explainer, not a banner.
-      // 12px floor: the text-legibility CI gate fails anything smaller.
-      st.textContent = '.game-howto{font-size:12px;color:var(--color-text-muted,#999);margin:0 0 var(--space-2,8px);line-height:1.5}';
-      document.head.appendChild(st);
-    }
-    return p;
-  })();
-  function showHowto(text) {
-    howtoLine.textContent = text || '';
-    howtoLine.style.display = text ? '' : 'none';
-  }
-
-  // Paul's call (2026-10-01): in a challenge the mode is already fixed —
-  // showing the mode picker invites a tap that wrecks the accept flow.
-  // Hidden on challenge entry views, restored on every exit path.
-  function setModePickerVisible(v) {
-    const picker = document.querySelector('.game-modes');
-    if (picker) picker.style.display = v ? '' : 'none';
-  }
-
   const selected = { a: null, b: null };
-  // Challenge-back threading (2026-10-01): a "Challenge back" tap records
-  // which challenge this is answering; the next create stamps in_reply_to so
-  // the opponent's list shows a real incoming row. Cleared on use.
-  let pendingReplyTo = null;
 
   // --- signup nudge -------------------------------------------------------
   // Logged-out players get one calm card after their third chain reveal
@@ -245,89 +205,6 @@ function initGameUI() {
       const p = raw && JSON.parse(raw);
       return p && typeof p.id === 'string' ? p.id : '';
     } catch { return ''; }
-  }
-
-  // Player handle ("battle name") — the privacy-safe name shown on
-  // challenges and matches instead of the real name. null = unknown yet,
-  // '' = signed out or none set.
-  let myHandleCache = null;
-  async function loadMyHandle() {
-    if (!isSignedIn()) { myHandleCache = ''; return ''; }
-    if (myHandleCache !== null) return myHandleCache;
-    try {
-      const res = await fetch('/api/me/handle', {
-        headers: { authorization: 'Bearer ' + authToken() },
-      });
-      const data = await res.json().catch(() => ({}));
-      myHandleCache = (res.ok && data.ok && data.handle) ? data.handle : '';
-    } catch { myHandleCache = ''; }
-    return myHandleCache;
-  }
-
-  // Inline battle-name picker. Rendered into the game result area so it
-  // works identically in the burger modal and on /game/.
-  function showHandlePicker({ title, subtitle, cta, onSaved }) {
-    const card = el(`<div class="game-result-card">
-      <div class="game-result-meta"><span class="game-hops"></span></div>
-      <p class="game-invite-text"></p>
-      <label class="game-invite-link-label">Battle name
-        <input class="game-invite-link" type="text" maxlength="20" autocomplete="off"
-               placeholder="e.g. rawker4821" />
-      </label>
-      <p class="game-empty-note"></p>
-      <div class="game-result-actions"><button type="button" class="game-run-btn" data-save></button></div>
-    </div>`);
-    card.querySelector('.game-hops').textContent = title;
-    card.querySelector('.game-invite-text').textContent = subtitle;
-    const input = card.querySelector('input');
-    const note = card.querySelector('.game-empty-note');
-    const saveBtn = card.querySelector('[data-save]');
-    saveBtn.textContent = cta;
-    const save = async () => {
-      const value = (input.value || '').trim();
-      if (!/^[A-Za-z0-9_]{3,20}$/.test(value)) {
-        note.textContent = 'Use 3-20 letters, numbers, or underscores.';
-        input.focus();
-        return;
-      }
-      saveBtn.disabled = true;
-      note.textContent = 'Saving…';
-      try {
-        const res = await fetch('/api/me/handle', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
-          body: JSON.stringify({ handle: value }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.ok || !data.handle) {
-          throw new Error((data && data.error) || 'could not save');
-        }
-        myHandleCache = data.handle;
-        onSaved(data.handle);
-      } catch (err) {
-        note.textContent = (err && err.message) || 'Could not save. Try again.';
-        saveBtn.disabled = false;
-      }
-    };
-    saveBtn.addEventListener('click', save);
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
-    result.innerHTML = '';
-    result.appendChild(card);
-    setTimeout(() => input.focus(), 60);
-  }
-
-  // Runs fn only once the player has a battle name. First-timers get the
-  // picker inline ("Pick your battle name"); everyone else sails through.
-  async function withHandle(fn) {
-    const h = await loadMyHandle();
-    if (h) { await fn(); return; }
-    statusLine.textContent = '';
-    showHandlePicker({
-      title: 'Pick your battle name',
-      subtitle: 'This is the name opponents see on challenges and matches — not your real name.',
-      cta: 'Save and continue',
-      onSaved: () => { fn(); },
-    });
   }
 
   function currentFormat() {
@@ -387,8 +264,6 @@ function initGameUI() {
   function closeModal() {
     modal.hidden = true;
     document.body.classList.remove('game-modal-open');
-    // Abandoning the modal abandons any armed challenge-back reply.
-    pendingReplyTo = null;
   }
   openBtns.forEach((b) => b.addEventListener('click', () => {
     document.getElementById('mobile-menu-sheet')?.setAttribute('hidden', '');
@@ -423,28 +298,6 @@ function initGameUI() {
 
   function syncModeUI() {
     const mode = currentMode();
-    // Any mode change exits the invite accept context.
-    showHowto('');
-    setModePickerVisible(true);
-    // ...and abandons any armed challenge-back reply.
-    pendingReplyTo = null;
-    // Daily Chain gets its own panel — no band fields, no run button.
-    if (mode === 'daily') {
-      document.getElementById('game-field-a-wrap').style.display = 'none';
-      wrapB.style.display = 'none';
-      randomizeBtn.style.display = 'none';
-      runBtn.style.display = 'none';
-      if (challengeBtn) challengeBtn.style.display = 'none';
-      const formatWrap = document.getElementById('game-format-wrap');
-      if (formatWrap) formatWrap.style.display = 'none';
-      if (acceptBtn) acceptBtn.style.display = 'none';
-      fieldA.disabled = true;
-      result.innerHTML = '';
-      statusLine.textContent = '';
-      renderDailyPanel();
-      return;
-    }
-    fieldA.disabled = false;
     // Solo: only band A is picked; the graph supplies band B.
     // Chaos: the graph supplies both; hide both fields, show randomize.
     document.getElementById('game-field-a-wrap').style.display = mode === 'chaos' ? 'none' : '';
@@ -483,798 +336,6 @@ function initGameUI() {
       challengeBtn.textContent = currentFormat() !== 'quick' ? 'Start match' : 'Challenge a friend';
     }
   });
-
-  // --- Daily Chain -----------------------------------------------------------
-  // The Wordle-style daily: one band pair per day, same for everyone. The
-  // player builds the chain link-by-link from four multiple-choice options
-  // per hop. The server is authoritative — option kinds never reach the
-  // client, and hops/streaks/credits mutate server-side.
-  let dailyStylesDone = false;
-  function ensureDailyStyles() {
-    if (dailyStylesDone) return;
-    dailyStylesDone = true;
-    const st = document.createElement('style');
-    st.textContent = `
-      .game-daily{margin-top:4px}
-      .game-daily-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin:0 0 4px}
-      .game-daily-date{font-size:.85rem;color:#999}
-      .game-daily-pair{font-size:1.05rem;font-weight:700;margin:4px 0 8px}
-      .game-daily-pair .game-daily-arrow{color:#999;font-weight:400;margin:0 6px}
-      .game-daily-econ{font-size:.85rem;color:#bbb;margin:0 0 10px}
-      .game-daily-picks{display:flex;gap:6px;align-items:center;margin:8px 0;min-height:26px;flex-wrap:wrap}
-      .game-daily-pick{width:20px;height:24px;flex:none}
-      .game-daily-current{font-size:.9rem;color:#bbb;margin:8px 0 6px}
-      .game-daily-current strong{color:#fff}
-      .game-daily-trail{font-size:.78rem;color:#8a8a8a;margin:0 0 8px;line-height:1.6}
-      .game-daily-reveal{font-size:.9rem;color:#bbb;margin:10px 0;line-height:1.7}
-      .game-daily-reveal strong{color:#fff;font-weight:600}
-      .game-daily-options{display:grid;gap:8px;margin:6px 0 10px}
-      .game-daily-option{text-align:left;padding:10px 12px;border:1px solid var(--color-border);border-radius:var(--radius-lg);background:transparent;color:inherit;font-size:.95rem;cursor:pointer}
-      .game-daily-option:hover{border-color:rgba(82,174,182,.6)}
-      .game-daily-option:disabled{opacity:.55;cursor:default}
-      .game-daily-tools{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
-      .game-daily-note{font-size:.8rem;color:#999;margin:6px 0}
-      .game-daily-share{border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:12px;margin:12px 0 4px}
-      .game-daily-share-picks{display:flex;gap:8px;margin:8px 0}
-      .game-daily-share-pick{width:34px;height:40px}
-      .game-daily-share-line{font-size:.95rem;margin:6px 0}
-      .game-daily-archive{margin-top:12px}
-      .game-daily-archive summary{cursor:pointer;font-size:.9rem;color:#bbb}
-      .game-daily-archive-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-divider);font-size:.9rem}
-      .game-daily-archive-row .game-daily-archive-date{color:#999;min-width:86px}
-      .game-daily-archive-row .game-daily-archive-pair{flex:1}
-      .game-credit-btn{background:none;border:none;padding:0;font:inherit;color:#7fc9c7;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
-      .game-credit-sheet{border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:12px;margin:8px 0;font-size:.88rem;line-height:1.6}
-      .game-credit-sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
-      .game-credit-sheet-head strong{font-size:.95rem}
-      .game-credit-sheet-head button{background:none;border:none;color:#999;font-size:1rem;cursor:pointer;padding:4px}
-      .game-credit-sheet ul{margin:6px 0 6px 18px;padding:0}
-      .game-credit-sheet-balance{font-size:1.02rem;margin:4px 0}
-      .game-daily-postmortem{border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:10px 12px;margin:8px 0;font-size:.85rem;line-height:1.7}
-      .game-daily-postmortem p{margin:6px 0}
-      .game-daily-postmortem .pm-par{color:#d4a017}
-      .game-daily-postmortem .pm-you{color:#7fc9c7}
-      .game-daily-postmortem .pm-label{color:#999;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em}
-    `;
-    document.head.appendChild(st);
-  }
-
-  const DAILY_PICK_HEX = { gold: '#d4a017', robin: '#7fc9c7', black: '#2a2a2a' };
-  function pickSvg(color, cls) {
-    const hex = DAILY_PICK_HEX[color] || DAILY_PICK_HEX.black;
-    const stroke = color === 'black' ? '#555' : 'rgba(0,0,0,.25)';
-    return `<svg class="${cls}" viewBox="0 0 24 28" aria-hidden="true">` +
-      `<path d="M12 2.5c-5.2 0-9.5 4-9.5 9.3 0 6 5.2 11.6 8.6 14.2.5.4 1.3.4 1.8 0 3.4-2.6 8.6-8.2 8.6-14.2C21.5 6.5 17.2 2.5 12 2.5z" ` +
-      `fill="${hex}" stroke="${stroke}" stroke-width="1"/></svg>`;
-  }
-
-  // --- Daily Chain share card: a real drawn image with actual guitar picks ---
-  const SHARE_W = 1080, SHARE_H = 1350;
-  function drawPickCanvas(ctx, cx, cy, s, color) {
-    // Same teardrop as pickSvg, translated to absolute canvas path commands.
-    const hex = DAILY_PICK_HEX[color] || DAILY_PICK_HEX.black;
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.scale(s / 24, s / 28);
-    ctx.beginPath();
-    ctx.moveTo(12, 2.5);
-    ctx.bezierCurveTo(6.8, 2.5, 2.5, 6.5, 2.5, 11.8);
-    ctx.bezierCurveTo(2.5, 17.8, 7.7, 23.4, 11.1, 26);
-    ctx.bezierCurveTo(11.6, 26.4, 12.4, 26.4, 12.9, 26);
-    ctx.bezierCurveTo(16.3, 23.4, 21.5, 17.8, 21.5, 11.8);
-    ctx.bezierCurveTo(21.5, 6.5, 17.2, 2.5, 12, 2.5);
-    ctx.closePath();
-    ctx.fillStyle = hex;
-    ctx.fill();
-    ctx.strokeStyle = color === 'black' ? '#555' : 'rgba(0,0,0,.25)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.restore();
-  }
-  function fmtChainDate(ds) {
-    const parts = String(ds || '').split('-').map(Number);
-    if (parts.length < 3) return String(ds || '');
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${months[parts[1] - 1] || ''} ${parts[2]}, ${parts[0]}`;
-  }
-  function drawDailyShareCard(data) {
-    // data: { mode:'win'|'lost', date, startName, targetName, hops, par, streak, picks:[{color}] }
-    const c = document.createElement('canvas');
-    c.width = SHARE_W; c.height = SHARE_H;
-    const ctx = c.getContext('2d');
-    const gold = '#d4a017', robin = '#7fc9c7', gray = '#9aa0ae';
-    // Arena background.
-    const bg = ctx.createLinearGradient(0, 0, 0, SHARE_H);
-    bg.addColorStop(0, '#10131a');
-    bg.addColorStop(1, '#1b212e');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, SHARE_W, SHARE_H);
-    const glow = ctx.createRadialGradient(SHARE_W / 2, 300, 60, SHARE_W / 2, 300, 640);
-    glow.addColorStop(0, 'rgba(212,160,23,.10)');
-    glow.addColorStop(1, 'rgba(212,160,23,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, SHARE_W, SHARE_H);
-    const center = (text, y, font, fill) => {
-      ctx.font = font; ctx.fillStyle = fill; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(text, SHARE_W / 2, y, SHARE_W - 120);
-    };
-    const FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-    try { ctx.letterSpacing = '8px'; } catch {}
-    center('SIX DEGREES OF RAWK', 118, `600 42px ${FONT}`, gold);
-    try { ctx.letterSpacing = '2px'; } catch {}
-    center(`Daily Chain · ${fmtChainDate(data.date)}`, 172, `400 30px ${FONT}`, gray);
-    center(data.mode === 'win' ? 'I connected the constellation' : 'The tree wins today',
-      232, `600 36px ${FONT}`, data.mode === 'win' ? gold : gray);
-    // Stats.
-    const stats = [
-      [String(data.hops), 'HOPS'],
-      [String(data.par), 'PAR'],
-      [String(data.streak), 'STREAK'],
-    ];
-    stats.forEach(([num, label], i) => {
-      const x = SHARE_W / 2 + (i - 1) * 280;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = `700 84px ${FONT}`; ctx.fillStyle = i === 1 ? robin : '#f2f3f5';
-      ctx.fillText(num, x, 330);
-      try { ctx.letterSpacing = '5px'; } catch {}
-      ctx.font = `400 26px ${FONT}`; ctx.fillStyle = gray;
-      ctx.fillText(label, x, 392);
-      try { ctx.letterSpacing = '2px'; } catch {}
-    });
-    center(`${data.startName}  →  ${data.targetName}`, 452, `400 30px ${FONT}`, gray);
-    // Pick grid — real picks, flowing rows.
-    const picks = data.picks || [];
-    const MAX_DRAW = 60;
-    const shown = picks.slice(0, MAX_DRAW);
-    const perRow = 10, s = 64, pitch = 88;
-    const rows = Math.ceil(shown.length / perRow);
-    const top = 540;
-    shown.forEach((p, i) => {
-      const r = Math.floor(i / perRow), k = i % perRow;
-      const inRow = Math.min(perRow, shown.length - r * perRow);
-      const x0 = SHARE_W / 2 - ((inRow - 1) * pitch) / 2;
-      drawPickCanvas(ctx, x0 + k * pitch, top + r * pitch, s, p.color);
-    });
-    let legendY = top + rows * pitch + 24;
-    if (picks.length > MAX_DRAW) {
-      center(`+${picks.length - MAX_DRAW} more`, legendY - 34, `400 28px ${FONT}`, gray);
-    }
-    center('Gold is optimal · robin\u2019s egg is valid · black is lost in space',
-      legendY, `400 26px ${FONT}`, gray);
-    // Footer.
-    center('sixdegreesofrock.com/game', SHARE_H - 110, `600 34px ${FONT}`, gold);
-    try { ctx.letterSpacing = '4px'; } catch {}
-    center('DAILY CHAIN', SHARE_H - 62, `400 24px ${FONT}`, '#5b616e');
-    try { ctx.letterSpacing = '0px'; } catch {}
-    return c;
-  }
-  async function shareDailyCard(btn, data) {
-    const canvas = drawDailyShareCard(data);
-    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
-    if (!blob) { btn.textContent = 'Could not draw the card'; return; }
-    const file = new File([blob], `daily-chain-${data.date}.png`, { type: 'image/png' });
-    // Native image share where supported (phones).
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: 'Daily Chain', text: data.text });
-        btn.textContent = 'Shared';
-        setTimeout(() => { btn.textContent = 'Share image'; }, 2500);
-        return;
-      } catch (err) {
-        if (err && err.name === 'AbortError') return; // user dismissed — leave it
-      }
-    }
-    // Fallback: download the PNG and copy the text.
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = file.name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 8000);
-    try { await navigator.clipboard.writeText(data.text); } catch {}
-    btn.textContent = 'Image downloaded · text copied';
-    setTimeout(() => { btn.textContent = 'Share image'; }, 4000);
-  }
-
-  let dailyRun = null;      // last run state from the server
-  let dailyOptions = [];    // public options: [{id, name}]
-  let dailyRevealArmed = false;
-
-  async function dailyFetch(path, opts = {}) {
-    const res = await fetch(path, {
-      ...opts,
-      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken(), ...(opts.headers || {}) },
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data.ok === false) {
-      throw new Error((data && data.error) || `request failed (${res.status})`);
-    }
-    return data;
-  }
-
-  function renderDailyPanel() {
-    ensureDailyStyles();
-    if (!isSignedIn()) {
-      renderDailyGate();
-      return;
-    }
-    renderDailyBoard({ loading: true });
-  }
-
-  // Logged-out: the pair is the lure, playing needs sign-in.
-  async function renderDailyGate() {
-    result.innerHTML = '';
-    const card = el(`<div class="game-result-card game-daily">
-      <div class="game-daily-head"><span class="game-hops">Daily Chain</span><span class="game-daily-date"></span></div>
-      <p class="game-daily-pair"></p>
-      <p class="game-daily-note">One fresh chain every day — same for everyone. Sign in to play, keep your streak, and earn credits.</p>
-      <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to play</button></div>
-    </div>`);
-    result.appendChild(card);
-    try {
-      const res = await fetch('/api/game-daily');
-      const data = await res.json();
-      if (!res.ok) throw new Error((data && data.error) || 'failed');
-      card.querySelector('.game-daily-date').textContent = data.date || '';
-      const a = document.createElement('span'); a.textContent = (data.band_a && data.band_a.name) || 'Band A';
-      const arrow = document.createElement('span'); arrow.className = 'game-daily-arrow'; arrow.textContent = '→';
-      const b = document.createElement('span'); b.textContent = (data.band_b && data.band_b.name) || 'Band B';
-      const pair = card.querySelector('.game-daily-pair');
-      pair.appendChild(a); pair.appendChild(arrow); pair.appendChild(b);
-    } catch {
-      card.querySelector('.game-daily-note').textContent = 'Could not load today\u2019s chain. Check your connection and try again.';
-    }
-    card.querySelector('[data-signin]').addEventListener('click', () => {
-      if (isArenaPage()) {
-        try { sessionStorage.setItem('sdr_pending_daily', '1'); } catch {}
-        window.location.href = '/';
-      } else if (typeof window.openSignupPopover === 'function') {
-        try { sessionStorage.setItem('sdr_pending_daily', '1'); } catch {}
-        window.openSignupPopover();
-      } else {
-        document.getElementById('add-band-btn')?.click();
-      }
-    });
-  }
-
-  async function renderDailyBoard({ loading = false, date } = {}) {
-    result.innerHTML = '';
-    const card = el(`<div class="game-result-card game-daily">
-      <div class="game-daily-head"><span class="game-hops">Daily Chain</span><span class="game-daily-date"></span></div>
-      <p class="game-daily-pair"></p>
-      <p class="game-daily-econ"></p>
-      <div class="game-daily-picks" aria-label="Your picks"></div>
-      <div class="game-daily-current"></div>
-      <div class="game-daily-trail"></div>
-      <div class="game-daily-options"></div>
-      <div class="game-daily-tools"></div>
-      <p class="game-daily-note"></p>
-      <div class="game-daily-finish"></div>
-      <details class="game-daily-archive"><summary>Past days</summary><div class="game-daily-archive-list"></div></details>
-    </div>`);
-    result.appendChild(card);
-    if (loading) {
-      card.querySelector('.game-daily-note').textContent = 'Dealing today\u2019s chain…';
-    }
-    try {
-      const data = await dailyFetch('/api/game-daily/play', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'start', ...(date ? { date } : {}) }),
-      });
-      dailyRun = data.run;
-      dailyOptions = data.options || [];
-      paintDailyBoard(card);
-    } catch (err) {
-      const note = card.querySelector('.game-daily-note');
-      if (err && /locked/.test(err.message)) {
-        note.textContent = 'That day is locked. Unlock it from Past days below.';
-      } else {
-        note.textContent = err.message || 'Could not start the run.';
-      }
-    }
-    wireDailyArchive(card);
-  }
-
-  // Tappable credit balance: what you hold, how it's earned, what's coming.
-  function toggleCreditSheet(card) {
-    const open = card.querySelector('.game-credit-sheet');
-    if (open) { open.remove(); return; }
-    const balance = (dailyRun && dailyRun.credits != null) ? dailyRun.credits : 0;
-    const sheet = el(`<div class="game-credit-sheet">
-      <div class="game-credit-sheet-head"><strong>Credits</strong><button type="button" aria-label="Close">✕</button></div>
-      <p class="game-credit-sheet-balance">Balance: <strong></strong></p>
-      <ul>
-        <li>Finish the daily chain · <strong>+20</strong></li>
-        <li>Match par · <strong>+10</strong></li>
-        <li>Replay and beat your best · <strong>+5</strong> per hop</li>
-        <li>Beat the tree (shorter than par) · <strong>+50</strong></li>
-      </ul>
-      <p class="game-daily-note">Cut −10 · Ask −10 · Dig out −50 · Freeze 100 · Archive day 75</p>
-      <p class="game-daily-note">Credit packs — coming soon · Redeem Play Points — later</p>
-    </div>`);
-    sheet.querySelector('.game-credit-sheet-balance strong').textContent = balance;
-    sheet.querySelector('[aria-label="Close"]').addEventListener('click', () => sheet.remove());
-    card.querySelector('.game-daily-econ').after(sheet);
-  }
-
-  function paintDailyBoard(card, completed, gaveUpInfo) {
-    const run = dailyRun;
-    if (!run) return;
-    const q = (sel) => card.querySelector(sel);
-    q('.game-daily-date').textContent = run.chain_date || '';
-    const pair = q('.game-daily-pair');
-    pair.innerHTML = '';
-    const mk = (t, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = t; return s; };
-    pair.appendChild(mk(run.start_band.name));
-    pair.appendChild(mk('→', 'game-daily-arrow'));
-    pair.appendChild(mk(run.target.name));
-
-    const econLine = q('.game-daily-econ');
-    econLine.innerHTML = '';
-    econLine.appendChild(mk(`Par ${run.par} · Streak ${run.streak} · `));
-    const creditBtn = el('<button type="button" class="game-credit-btn"></button>');
-    creditBtn.textContent = `${run.credits} credits`;
-    creditBtn.setAttribute('aria-label', 'Your credit balance — how credits work');
-    creditBtn.addEventListener('click', () => toggleCreditSheet(card));
-    econLine.appendChild(creditBtn);
-    if (run.freeze_count) econLine.appendChild(mk(` · ❄ ${run.freeze_count}`));
-    if (run.best_hops != null) econLine.appendChild(mk(` · Best today: ${run.best_hops}`));
-
-    const picksRow = q('.game-daily-picks');
-    picksRow.innerHTML = '';
-    for (const p of run.picks) {
-      const wrap = document.createElement('span');
-      wrap.innerHTML = pickSvg(p.color, 'game-daily-pick');
-      wrap.title = `${p.name} — ${p.kind === 'optimal' ? 'optimal' : p.kind === 'deadend' ? 'dead end' : 'valid'}`;
-      picksRow.appendChild(wrap);
-    }
-
-    // Your chain, in words — no hover needed (mobile has none).
-    const trailNames = [run.start_band.name, ...(run.picks || []).map((p) => p.name)];
-    q('.game-daily-trail').textContent = trailNames.join(' → ');
-
-    const note = q('.game-daily-note');
-    const tools = q('.game-daily-tools');
-    const optsBox = q('.game-daily-options');
-    const finish = q('.game-daily-finish');
-    optsBox.innerHTML = '';
-    tools.innerHTML = '';
-    finish.innerHTML = '';
-    dailyRevealArmed = false;
-
-    if (run.status === 'given_up') {
-      paintDailyGiveUp(card, gaveUpInfo);
-      return;
-    }
-
-    if (completed || run.status === 'complete') {
-      const c = completed || {};
-      let line;
-      if (c.beat_tree) {
-        line = `You beat the tree in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} — par was ${c.old_par}.`;
-      } else {
-        line = `Connected in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} (par ${run.par}).`;
-        if (run.hops_used === run.par) line += ' The tree nods.';
-        if (run.best_hops != null && run.best_hops < run.hops_used) {
-          line += ` Best today: ${run.best_hops}.`;
-        }
-      }
-      q('.game-daily-current').textContent = line;
-      paintDailyShare(card, c);
-      const again = el('<button type="button" class="tool-chip">Play again</button>');
-      again.addEventListener('click', () => dailyReplay(card));
-      finish.appendChild(again);
-      return;
-    }
-
-    const cur = q('.game-daily-current');
-    cur.innerHTML = '';
-    cur.appendChild(mk('Now at: '));
-    const strong = document.createElement('strong');
-    strong.textContent = run.current_band.name;
-    cur.appendChild(strong);
-
-    for (const o of dailyOptions) {
-      const btn = el('<button type="button" class="game-daily-option"></button>');
-      btn.textContent = o.name;
-      btn.dataset.optionId = o.id;
-      btn.addEventListener('click', () => dailyPick(card, o.id, btn));
-      optsBox.appendChild(btn);
-    }
-
-    const hintsLeft = run.hints_total - run.hints_used;
-    if (hintsLeft > 0) {
-      const elim = el('<button type="button" class="tool-chip">Cut one option (−10)</button>');
-      elim.addEventListener('click', () => dailyHint(card, 'eliminate'));
-      const peek = el('<button type="button" class="tool-chip">Ask the tree (−10)</button>');
-      peek.addEventListener('click', () => {
-        dailyRevealArmed = true;
-        note.textContent = 'Tap a band to check whether it\u2019s on the optimal path. Helpers never solve — this only narrows.';
-      });
-      tools.appendChild(elim);
-      tools.appendChild(peek);
-      note.textContent = `${hintsLeft} hint${hintsLeft === 1 ? '' : 's'} left today.`;
-    } else {
-      note.textContent = 'No hints left today.';
-    }
-
-    const last = run.picks[run.picks.length - 1];
-    if (last && last.kind === 'deadend') {
-      const esc = el('<button type="button" class="tool-chip"></button>');
-      // Bail-out: when a session legend is actually in the room (the server
-      // checked the graph), the escape wears his name. Same price, same
-      // effect — and yes, it's a Freese/Freeze pun.
-      esc.textContent = run.bailout
-        ? `${run.bailout} bails you out (−50)`
-        : 'Dig out of the dead end (−50)';
-      esc.addEventListener('click', () => dailyEscape(card));
-      tools.appendChild(esc);
-      note.textContent = `Lost in space. ${note.textContent}`;
-    }
-
-    const econ = el('<button type="button" class="tool-chip">Freeze my streak (100)</button>');
-    econ.addEventListener('click', () => dailyBuyFreeze(card));
-    tools.appendChild(econ);
-
-    const giveup = el('<button type="button" class="tool-chip">Show me the chain</button>');
-    giveup.addEventListener('click', () => {
-      note.innerHTML = '';
-      note.appendChild(mk('Today ends and the tree reveals the path. '));
-      const yes = el('<button type="button" class="tool-chip">Show me</button>');
-      const no = el('<button type="button" class="tool-chip">Keep playing</button>');
-      yes.addEventListener('click', () => dailyGiveUp(card));
-      no.addEventListener('click', () => paintDailyBoard(card));
-      note.appendChild(yes);
-      note.appendChild(mk(' '));
-      note.appendChild(no);
-    });
-    tools.appendChild(giveup);
-  }
-
-  async function dailyGiveUp(card) {
-    const note = card.querySelector('.game-daily-note');
-    note.textContent = 'The tree is revealing the path…';
-    try {
-      const data = await dailyFetch('/api/game-daily/play', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'giveup' }),
-      });
-      dailyRun = data.run;
-      dailyOptions = [];
-      paintDailyBoard(card, null, data.gave_up);
-    } catch (err) {
-      note.textContent = (err && err.message) || 'Could not show the chain.';
-    }
-  }
-
-  async function dailyReplay(card) {
-    const note = card.querySelector('.game-daily-note');
-    note.textContent = 'Dealing a fresh run…';
-    try {
-      const data = await dailyFetch('/api/game-daily/play', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'start', replay: true }),
-      });
-      dailyRun = data.run;
-      dailyOptions = data.options || [];
-      paintDailyBoard(card);
-    } catch (err) {
-      note.textContent = (err && err.message) || 'Could not start a replay.';
-    }
-  }
-
-  async function dailyPick(card, optionId, btn) {
-    const note = card.querySelector('.game-daily-note');
-    if (dailyRevealArmed && btn) {
-      // Peek: reveal whether this band is on the optimal path, no pick made.
-      dailyRevealArmed = false;
-      btn.disabled = true;
-      try {
-        const data = await dailyFetch('/api/game-daily/play', {
-          method: 'POST',
-          body: JSON.stringify({ action: 'hint', type: 'reveal', option_id: optionId }),
-        });
-        dailyRun = data.run;
-        dailyOptions = data.options || [];
-        paintDailyBoard(card);
-        const yes = data.hint && data.hint.on_optimal_path;
-        note.textContent = yes
-          ? `${data.hint.option.name} is on the optimal path.`
-          : `${data.hint.option.name} is not on the optimal path — scenic route at best.`;
-      } catch (err) {
-        btn.disabled = false;
-        note.textContent = err.message;
-      }
-      return;
-    }
-    card.querySelectorAll('.game-daily-option').forEach((b) => { b.disabled = true; });
-    try {
-      const data = await dailyFetch('/api/game-daily/play', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'pick', option_id: optionId }),
-      });
-      dailyRun = data.run;
-      dailyOptions = data.options || [];
-      if (data.completed) {
-        paintDailyBoard(card, data.completed);
-      } else {
-        paintDailyBoard(card);
-        if (data.picked && data.picked.deadend) {
-          card.querySelector('.game-daily-note').textContent = 'Lost in space.';
-        }
-      }
-    } catch (err) {
-      note.textContent = err.message;
-      card.querySelectorAll('.game-daily-option').forEach((b) => { b.disabled = false; });
-    }
-  }
-
-  async function dailyHint(card, type) {
-    const note = card.querySelector('.game-daily-note');
-    try {
-      const data = await dailyFetch('/api/game-daily/play', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'hint', type }),
-      });
-      dailyRun = data.run;
-      dailyOptions = data.options || [];
-      paintDailyBoard(card);
-      if (data.hint && data.hint.eliminated) {
-        card.querySelector('.game-daily-note').textContent =
-          `${data.hint.eliminated.name} is out — not the way through.`;
-      }
-    } catch (err) {
-      note.textContent = err.message;
-    }
-  }
-
-  async function dailyEscape(card) {
-    const note = card.querySelector('.game-daily-note');
-    const who = dailyRun && dailyRun.bailout;
-    try {
-      const data = await dailyFetch('/api/game-daily/play', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'escape' }),
-      });
-      dailyRun = data.run;
-      dailyOptions = data.options || [];
-      paintDailyBoard(card);
-      card.querySelector('.game-daily-note').textContent = who
-        ? `${who.split(' ').pop()} got you out of the black hole.`
-        : `Dug out — ${data.escaped.name} is off your trail.`;
-    } catch (err) {
-      note.textContent = err.message;
-    }
-  }
-
-  async function dailyBuyFreeze(card) {
-    const note = card.querySelector('.game-daily-note');
-    try {
-      const data = await dailyFetch('/api/game-credits', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'buy_freeze' }),
-      });
-      dailyRun = { ...dailyRun, credits: data.credits, freeze_count: data.freeze_count, streak: data.streak };
-      paintDailyBoard(card);
-      card.querySelector('.game-daily-note').textContent =
-        'Freeze stocked — it auto-burns if you miss exactly one day.';
-    } catch (err) {
-      note.textContent = err.message;
-    }
-  }
-
-  function paintDailyGiveUp(card, gaveUp) {
-    const run = dailyRun;
-    card.querySelector('.game-daily-current').textContent = 'The tree wins today.';
-    const finish = card.querySelector('.game-daily-finish');
-    const rev = el('<div class="game-daily-reveal"></div>');
-    rev.appendChild(mk('The tree reveals the path: '));
-    const strong = document.createElement('strong');
-    strong.textContent = (run.reveal_path || []).map((b) => b.name).join(' → ');
-    rev.appendChild(strong);
-    finish.appendChild(rev);
-
-    const hops = run.hops_used;
-    const par = run.par;
-    const shareText = (gaveUp && gaveUp.share_text) ||
-      `Six Degrees Daily Chain — ${run.chain_date}\nThe tree beat me today — par was ${par}, and I was ${hops} hops deep.\nsixdegreesofrock.com/game`;
-    const share = el(`<div class="game-daily-share">
-      <p class="game-daily-share-line"></p>
-      <div class="game-result-actions"><button type="button" class="tool-chip" data-share>Share image</button><button type="button" class="tool-chip" data-copy>Copy share text</button></div>
-    </div>`);
-    share.querySelector('.game-daily-share-line').textContent =
-      `The tree beat me today — par was ${par}, and I was ${hops} hop${hops === 1 ? '' : 's'} deep.`;
-    const copyBtn = share.querySelector('[data-copy]');
-    copyBtn.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(shareText);
-        copyBtn.textContent = 'Copied';
-        setTimeout(() => { copyBtn.textContent = 'Copy share text'; }, 2000);
-      } catch {
-        copyBtn.textContent = 'Copy failed — long-press to copy';
-      }
-    });
-    const shareBtn = share.querySelector('[data-share]');
-    shareBtn.addEventListener('click', () => shareDailyCard(shareBtn, {
-      mode: 'lost',
-      date: run.chain_date,
-      startName: run.start_band.name,
-      targetName: run.target.name,
-      hops, par, streak: run.streak,
-      picks: run.picks || [],
-      text: shareText,
-    }));
-    finish.appendChild(share);
-  }
-
-  function paintDailyShare(card, completed) {
-    const finish = card.querySelector('.game-daily-finish');
-    const picks = completed.picks && completed.picks.length ? completed.picks : dailyRun.picks;
-    const share = el(`<div class="game-daily-share">
-      <div class="game-daily-share-picks"></div>
-      <p class="game-daily-share-line"></p>
-      <p class="game-daily-note"></p>
-      <div class="game-result-actions"><button type="button" class="tool-chip" data-share>Share image</button><button type="button" class="tool-chip" data-copy>Copy share text</button></div>
-    </div>`);
-    const row = share.querySelector('.game-daily-share-picks');
-    for (const p of picks) {
-      const wrap = document.createElement('span');
-      wrap.innerHTML = pickSvg(p.color, 'game-daily-share-pick');
-      wrap.title = p.name;
-      row.appendChild(wrap);
-    }
-    const hops = completed.hops_used != null ? completed.hops_used : dailyRun.hops_used;
-    const par = dailyRun.par;
-    const streak = completed.streak != null ? completed.streak : dailyRun.streak;
-    share.querySelector('.game-daily-share-line').textContent = completed.beat_tree
-      ? `I BEAT THE TREE in ${hops} hops (par was ${completed.old_par}). Streak ${streak}.`
-      : `I connected the constellation in ${hops} hops (par ${par}). Streak ${streak}.`;
-    share.querySelector('.game-daily-note').textContent =
-      'Gold is optimal, robin\u2019s egg is valid, black is lost in space.';
-    const copyBtn = share.querySelector('[data-copy]');
-    const shareText = completed.share_text ||
-      `Daily Chain ${dailyRun.chain_date} — ${hops} hops (par ${par}), streak ${streak}. Play: https://sixdegreesofrock.com/game/`;
-    copyBtn.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(shareText);
-        copyBtn.textContent = 'Copied';
-        setTimeout(() => { copyBtn.textContent = 'Copy share text'; }, 2000);
-      } catch {
-        copyBtn.textContent = 'Copy failed — long-press to copy';
-      }
-    });
-    const shareBtn = share.querySelector('[data-share]');
-    shareBtn.addEventListener('click', () => shareDailyCard(shareBtn, {
-      mode: 'win',
-      date: dailyRun.chain_date,
-      startName: dailyRun.start_band.name,
-      targetName: dailyRun.target.name,
-      hops, par, streak,
-      picks,
-      text: shareText,
-    }));
-    if (completed.freeze_used) {
-      const fz = document.createElement('p');
-      fz.className = 'game-daily-note';
-      fz.textContent = 'A Seattle Freeze bridged your missed day — streak intact.';
-      share.appendChild(fz);
-    }
-    finish.appendChild(share);
-  }
-
-  // Post-mortem: par path in gold vs your route in blue, for archive days you
-  // actually played. The server enforces the two-day gate; this just decides
-  // whether to offer the button.
-  function pmEligible(dateStr) {
-    const day = new Date(String(dateStr) + 'T12:00:00');
-    if (Number.isNaN(day.getTime())) return false;
-    return Math.floor((Date.now() - day.getTime()) / 86400000) >= 2;
-  }
-  async function togglePostMortem(row, date) {
-    let box = row.querySelector('.game-daily-postmortem');
-    if (box) { box.remove(); return; }
-    box = el('<div class="game-daily-postmortem"><p class="game-daily-note">Loading…</p></div>');
-    row.appendChild(box);
-    try {
-      const data = await dailyFetch(`/api/game-daily/postmortem?date=${encodeURIComponent(date)}`);
-      box.innerHTML = '';
-      const parP = el('<p></p>');
-      parP.appendChild(mk('Par · '));
-      const parSpan = document.createElement('span');
-      parSpan.className = 'pm-par';
-      parSpan.textContent = (data.par_path || []).join(' → ');
-      parP.appendChild(parSpan);
-      const youP = el('<p></p>');
-      youP.appendChild(mk(`You · ${data.your_hops} hop${data.your_hops === 1 ? '' : 's'} · `));
-      const youSpan = document.createElement('span');
-      youSpan.className = 'pm-you';
-      youSpan.textContent = (data.your_path || []).join(' → ');
-      youP.appendChild(youSpan);
-      const meta = el('<p class="game-daily-note"></p>');
-      meta.textContent = data.outcome === 'complete'
-        ? `Completed in ${data.your_hops} vs par ${data.par}.`
-        : `Gave up ${data.your_hops} deep — the tree's answer is the gold route.`;
-      box.appendChild(parP);
-      box.appendChild(youP);
-      box.appendChild(meta);
-    } catch (err) {
-      box.innerHTML = '';
-      const p = el('<p class="game-daily-note"></p>');
-      p.textContent = err.message;
-      box.appendChild(p);
-    }
-  }
-
-  function wireDailyArchive(card) {
-    const details = card.querySelector('.game-daily-archive');
-    const list = card.querySelector('.game-daily-archive-list');
-    let loaded = false;
-    details.addEventListener('toggle', async () => {
-      if (!details.open || loaded) return;
-      loaded = true;
-      list.innerHTML = '<p class="game-daily-note">Loading…</p>';
-      try {
-        const data = await dailyFetch('/api/game-daily/archive');
-        list.innerHTML = '';
-        if (!data.days.length) {
-          list.innerHTML = '<p class="game-daily-note">No past days yet — the archive starts tomorrow.</p>';
-          return;
-        }
-        for (const d of data.days) {
-          const row = el(`<div class="game-daily-archive-row">
-            <span class="game-daily-archive-date"></span>
-            <span class="game-daily-archive-pair"></span>
-            <span class="game-daily-archive-act"></span>
-          </div>`);
-          row.querySelector('.game-daily-archive-date').textContent = d.date;
-          row.querySelector('.game-daily-archive-pair').textContent =
-            `${d.band_a} → ${d.band_b}${d.completed ? ' ✓' : ''}`;
-          const act = row.querySelector('.game-daily-archive-act');
-          if (d.played && pmEligible(d.date)) {
-            const pm = el('<button type="button" class="tool-chip">Post-mortem</button>');
-            pm.addEventListener('click', () => togglePostMortem(row, d.date));
-            act.appendChild(pm);
-          }
-          if (d.completed || d.unlocked) {
-            const play = el('<button type="button" class="tool-chip">Play</button>');
-            play.addEventListener('click', () => renderDailyBoard({ date: d.date }));
-            act.appendChild(play);
-          } else {
-            const unlock = el('<button type="button" class="tool-chip">Unlock (75)</button>');
-            unlock.addEventListener('click', async () => {
-              try {
-                await dailyFetch('/api/game-daily/archive', {
-                  method: 'POST',
-                  body: JSON.stringify({ date: d.date }),
-                });
-                renderDailyBoard({ date: d.date });
-              } catch (err) {
-                card.querySelector('.game-daily-note').textContent = err.message;
-              }
-            });
-            act.appendChild(unlock);
-          }
-          list.appendChild(row);
-        }
-      } catch (err) {
-        list.innerHTML = `<p class="game-daily-note">${err.message}</p>`;
-        loaded = false;
-      }
-    });
-  }
-
-  // Resume a daily run interrupted by sign-in (same pattern as challenges).
-  (function resumePendingDaily() {
-    let pending = null;
-    try { pending = sessionStorage.getItem('sdr_pending_daily'); } catch {}
-    if (!pending || !isSignedIn()) return;
-    try { sessionStorage.removeItem('sdr_pending_daily'); } catch {}
-    openModal();
-    const dailyInput = [...document.querySelectorAll('input[name="game-mode"]')].find((i) => i.value === 'daily');
-    if (dailyInput && !dailyInput.disabled) {
-      dailyInput.checked = true;
-      syncModeUI();
-    }
-  })();
 
   // --- autocomplete ---
   function wireAutocomplete(input, key) {
@@ -1375,13 +436,11 @@ function initGameUI() {
     inviteDialogStylesDone = true;
     const st = document.createElement('style');
     st.textContent = `
-      .game-invite-dialog{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);padding:12px}
-      .game-invite-dialog-card{background:#141414;border:1px solid #2a2a2a;border-radius:12px;max-width:420px;width:100%;max-height:92vh;overflow:auto;padding:14px}
-      .game-invite-dialog-card .game-result-meta{margin-bottom:6px}
-      .game-invite-matchup{font-size:.95rem;font-weight:600;margin:0 0 8px}
-      .game-invite-link-label{display:block;font-size:.78rem;color:#999;margin-bottom:8px}
-      .game-invite-link{display:block;width:100%;margin-top:4px;padding:8px;font-size:.82rem;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:8px;color:#eee}
-      .game-invite-dialog-card .game-result-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+      .game-invite-dialog{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);padding:16px}
+      .game-invite-dialog-card{background:#141414;border:1px solid #2a2a2a;border-radius:12px;max-width:420px;width:100%;padding:20px}
+      .game-invite-matchup{font-size:1.05rem;font-weight:600;margin:0 0 12px}
+      .game-invite-link-label{display:block;font-size:.8rem;color:#999;margin-bottom:12px}
+      .game-invite-link{display:block;width:100%;margin-top:6px;padding:10px;font-size:.85rem;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:8px;color:#eee}
     `;
     document.head.appendChild(st);
   }
@@ -1421,21 +480,12 @@ function initGameUI() {
         : 'Copy failed — long-press the link to copy it.';
     });
     dlg.querySelector('[data-share]').addEventListener('click', async () => {
-      const shareData = { title: 'Six Degrees of Rock — head-to-head', text: shareText, url: inviteUrl };
-      const canNativeShare = typeof navigator.share === 'function' &&
-        (typeof navigator.canShare !== 'function' || navigator.canShare(shareData));
-      if (canNativeShare) {
-        try {
-          await navigator.share(shareData);
-          return;
-        } catch (err) {
-          if (err && err.name === 'AbortError') return; // user dismissed the sheet
-        }
+      if (navigator.share) {
+        await navigator.share({ title: 'Six Degrees of Rock — head-to-head', text: shareText, url: inviteUrl }).catch(() => {});
+      } else {
+        const okCopy = await navigator.clipboard.writeText(`${shareText} ${inviteUrl}`).then(() => true).catch(() => false);
+        statusLine.textContent = okCopy ? 'Invite link copied — send it to your opponent.' : inviteUrl;
       }
-      const okCopy = await navigator.clipboard.writeText(`${shareText} ${inviteUrl}`).then(() => true).catch(() => false);
-      statusLine.textContent = okCopy
-        ? 'Link copied — paste it to your opponent.'
-        : 'Copy failed — long-press the link above to copy it.';
     });
     document.body.appendChild(dlg);
     setTimeout(selectLink, 60);
@@ -1443,18 +493,13 @@ function initGameUI() {
 
   // POST /api/game-challenge and show the invite dialog. Shared by the
   // challenge button and one-tap rematches.
-  async function createCasualChallenge(bandA, inReplyTo) {
-    // Battle name first: the picker shows inline only when the player
-    // doesn't have one yet.
-    await withHandle(async () => {
+  async function createCasualChallenge(bandA) {
     statusLine.textContent = 'Making your invite…';
     try {
-      const reqBody = { band_a: bandA };
-      if (inReplyTo) reqBody.in_reply_to = inReplyTo;
       const res = await fetch('/api/game-challenge', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
-        body: JSON.stringify(reqBody),
+        body: JSON.stringify({ band_a: bandA }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok || !data.inviteUrl) throw new Error((data && data.error) || 'request failed');
@@ -1469,7 +514,6 @@ function initGameUI() {
     } catch (err) {
       statusLine.textContent = (err && err.message) || 'Could not make the invite. Check your connection and try again.';
     }
-    });
   }
 
   function setHeadToHead(a, b, g) {
@@ -1503,14 +547,11 @@ function initGameUI() {
       await createMatch(currentFormat(), selected.a);
       return;
     }
-    const replyTo = pendingReplyTo;
-    pendingReplyTo = null;
-    await createCasualChallenge(selected.a, replyTo);
+    await createCasualChallenge(selected.a);
   });
 
   // POST /api/game-match and show the invite dialog.
   async function createMatch(format, bandA) {
-    await withHandle(async () => {
     statusLine.textContent = 'Starting your match…';
     try {
       const res = await fetch('/api/game-match', {
@@ -1532,7 +573,6 @@ function initGameUI() {
     } catch (err) {
       statusLine.textContent = (err && err.message) || 'Could not start the match. Check your connection and try again.';
     }
-    });
   }
 
   function isArenaPage() {
@@ -1547,38 +587,6 @@ function initGameUI() {
       if (!res.ok || !data.ok) return false;
       return (data.sent || []).some((c) => c.token === token);
     } catch { return false; }
-  }
-
-  // "Already claimed" card: a spectator opened an invite/match link whose
-  // opponent slot is taken. Shows who claimed it and offers a fresh start —
-  // the link is stripped from the URL so a reload doesn't reopen it.
-  function renderClaimedCard({ claimedBy, kind, token, g }) {
-    const card = el(`<div class="game-result-card">
-      <div class="game-result-meta"><span class="game-hops">Already claimed</span></div>
-      <p class="game-invite-text"></p>
-      <div class="game-result-actions"><button type="button" class="game-run-btn" data-start>Start your own</button></div>
-    </div>`);
-    card.querySelector('.game-invite-text').textContent =
-      `${claimedBy || 'Someone'} already claimed this one — it's taken. Start your own and put them on notice.`;
-    card.querySelector('[data-start]').addEventListener('click', () => {
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('invite');
-        url.searchParams.delete('match');
-        window.history.replaceState(null, '', url.pathname + url.search);
-      } catch {}
-      if (g) setHeadToHead(null, null, g);
-      fieldA.disabled = false;
-      if (acceptBtn) acceptBtn.style.display = 'none';
-      runBtn.style.display = '';
-      syncModeUI();
-      statusLine.textContent = 'Pick a band, then Challenge a friend.';
-      modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setTimeout(() => fieldA.focus(), 300);
-    });
-    result.innerHTML = '';
-    result.appendChild(card);
-    statusLine.textContent = '';
   }
 
   async function handleInvite(token) {
@@ -1596,15 +604,8 @@ function initGameUI() {
     const g = await loadGraph().catch(() => null);
     const nameA = bandName(g, data.band_a);
 
-    // Answered already — the two players can reveal it. A spectator who
-    // opened a claimed link (e.g. a feed-shared invite) gets the claimed
-    // message and a nudge to start their own instead.
+    // Answered already — either player (or anyone with the link) can reveal it.
     if (data.status === 'answered' && data.band_b) {
-      const viewerIsPlayer = data.you_are === 'challenger' || data.you_are === 'invitee';
-      if (!viewerIsPlayer) {
-        renderClaimedCard({ claimedBy: data.invitee_handle, kind: 'challenge', token, g });
-        return;
-      }
       if (g) { setHeadToHead(data.band_a, data.band_b, g); renderMatchup(g, data.band_a, data.band_b); }
       else { statusLine.textContent = 'Could not load the tree. Check your connection and try again.'; }
       return;
@@ -1618,9 +619,7 @@ function initGameUI() {
         <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to accept</button></div>
       </div>`);
       card.querySelector('.game-invite-text').textContent =
-        `${data.challenger_handle || 'Someone'} picked ${nameA}. ` +
-        `You pick a band to stump them \u2014 the tree links bands through shared members ` +
-        `and reveals the shortest chain. Sign in to play.`;
+        `${data.challenger_name || 'Someone'} picked ${nameA} and wants to stump you. Sign in to pick your band.`;
       card.querySelector('[data-signin]').addEventListener('click', () => {
         if (isArenaPage()) {
           // The arena has no signup UI of its own — bounce to the main page
@@ -1647,14 +646,12 @@ function initGameUI() {
       card.querySelector('.game-invite-text').textContent =
         `You picked ${nameA}. Your opponent hasn't answered yet — the moment they do, it shows up under Your challenges.`;
       card.querySelector('[data-copy]').addEventListener('click', async () => {
-        // Pretty URL: the card unfurls with challenger + band in texts.
-        const url = `${window.location.origin}/invite/${encodeURIComponent(token)}`;
+        const url = `${window.location.origin}/game/?invite=${encodeURIComponent(token)}`;
         const okCopy = await navigator.clipboard.writeText(url).then(() => true).catch(() => false);
         statusLine.textContent = okCopy ? 'Invite link copied.' : url;
       });
       result.innerHTML = '';
       result.appendChild(card);
-      setModePickerVisible(false);
       return;
     }
 
@@ -1668,14 +665,7 @@ function initGameUI() {
     }
     runBtn.style.display = 'none';
     if (challengeBtn) challengeBtn.style.display = 'none';
-    // The front-door explainer (Paul, 2026-10-01): plain-rules, no hype.
-    showHowto(
-      `${data.challenger_handle || 'Your challenger'} picked ${nameA}. ` +
-      `You pick a band \u2014 one you think the tree can't connect to ${nameA}. ` +
-      `Bands link through shared members; the tree reveals the shortest chain. Stump them.`
-    );
-    statusLine.textContent = 'Now pick yours.';
-    setModePickerVisible(false);
+    statusLine.textContent = `${data.challenger_name || 'Your challenger'} picked ${nameA}. Now pick yours — try to stump them.`;
     setTimeout(() => fieldB.focus(), 60);
   }
 
@@ -1689,46 +679,15 @@ function initGameUI() {
         body: JSON.stringify({ token, band_b: selected.b }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) {
-        const err = new Error((data && data.error) || 'request failed');
-        err.status = res.status;
-        err.claimedBy = data.claimed_by;
-        throw err;
-      }
+      if (!res.ok || !data.ok) throw new Error((data && data.error) || 'request failed');
       statusLine.textContent = '';
       runBtn.style.display = '';
       if (acceptBtn) acceptBtn.style.display = 'none';
       fieldA.disabled = false;
-      showHowto('');
-      setModePickerVisible(true);
       const g = await loadGraph();
       renderMatchup(g, data.band_a, data.band_b);
-      // Turn handoff (Paul, 2026-10-01: "it's not clear that it's now my
-      // turn"). After the reveal, a Challenge-back button joins the result
-      // actions and the status line names whose turn it is.
-      const connectBtn = result.querySelector('[data-connect]');
-      if (connectBtn) connectBtn.addEventListener('click', () => {
-        const actions = result.querySelector('.game-result-actions');
-        if (!actions || actions.querySelector('[data-challenge-back]')) return;
-        const backBtn = el('<button type="button" class="tool-chip" data-challenge-back>Challenge back</button>');
-        backBtn.addEventListener('click', () => {
-          setHeadToHead(null, null, g);
-          pendingReplyTo = token;
-          statusLine.textContent = 'Your turn to deal — pick your band, then Challenge a friend.';
-          modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          setTimeout(() => fieldA.focus(), 300);
-        });
-        actions.appendChild(backBtn);
-        statusLine.textContent = `It's your turn — challenge ${data.challenger_handle || 'them'} back.`;
-      }, { once: true });
       loadChallenges();
     } catch (err) {
-      // 409: someone else claimed the open challenge first (feed-shared
-      // link, two tappers). Show the claimed message, not an error.
-      if (err && err.status === 409) {
-        renderClaimedCard({ claimedBy: err.claimedBy, kind: 'challenge', token, g });
-        return;
-      }
       statusLine.textContent = (err && err.message) || 'Could not save your pick. Try again.';
     }
   }
@@ -1760,9 +719,9 @@ function initGameUI() {
   }
 
   function opponentName(m, myId) {
-    if (myId && m.challenger_id === myId) return m.invitee_handle || 'Your opponent';
-    if (myId && m.invitee_id === myId) return m.challenger_handle || 'Your opponent';
-    return m.challenger_handle || 'Your challenger';
+    if (myId && m.challenger_id === myId) return m.invitee_name || 'Your opponent';
+    if (myId && m.invitee_id === myId) return m.challenger_name || 'Your opponent';
+    return m.challenger_name || 'Your challenger';
   }
 
   function scoreLine(m, myId) {
@@ -1809,7 +768,7 @@ function initGameUI() {
       card.querySelector('.game-hops').textContent = `${formatLabelFor(m.format)} match`;
       const servedBand = m.pending && m.pending.band_a ? bandName(g, m.pending.band_a) : 'their band';
       card.querySelector('.game-invite-text').textContent =
-        `${m.challenger_handle || 'Someone'} started a match and served ${servedBand}. Sign in to pick your band and defend.`;
+        `${m.challenger_name || 'Someone'} started a match and served ${servedBand}. Sign in to pick your band and defend.`;
       card.querySelector('[data-signin]').addEventListener('click', () => {
         if (isArenaPage()) {
           window.location.href = '/?match=' + encodeURIComponent(token);
@@ -1821,13 +780,6 @@ function initGameUI() {
       });
       result.innerHTML = '';
       result.appendChild(card);
-      return;
-    }
-
-    // Spectator of a claimed match (feed-shared link, someone else took the
-    // opponent slot): the claimed message, not the match view.
-    if (m.invitee_id && m.you_are === 'spectator') {
-      renderClaimedCard({ claimedBy: m.invitee_handle, kind: 'match', token, g });
       return;
     }
 
@@ -1889,21 +841,11 @@ function initGameUI() {
             body: JSON.stringify({ token, band_b: selected.b, hops: path.hops }),
           });
           const data = await res.json().catch(() => ({}));
-          if (!res.ok || !data.ok) {
-            const err = new Error((data && data.error) || 'request failed');
-            err.status = res.status;
-            err.claimedBy = data.claimed_by;
-            throw err;
-          }
+          if (!res.ok || !data.ok) throw new Error((data && data.error) || 'request failed');
           statusLine.textContent = '';
           renderMatchView(data.match, g, token);
           loadMatches();
         } catch (err) {
-          // 409: someone else defended first and claimed the open match.
-          if (err && err.status === 409) {
-            renderClaimedCard({ claimedBy: err.claimedBy, kind: 'match', token, g });
-            return;
-          }
           statusLine.textContent = (err && err.message) || 'Could not save your defend. Try again.';
         }
       });
@@ -1965,7 +907,7 @@ function initGameUI() {
     for (const m of items) {
       const myWins = (m.challenger_id === myId) ? m.challenger_round_wins : m.invitee_round_wins;
       const opWins = (m.challenger_id === myId) ? m.invitee_round_wins : m.challenger_round_wins;
-      const opp = (m.challenger_id === myId) ? (m.opponent_handle || 'Your opponent') : (m.opponent_handle || 'Your challenger');
+      const opp = (m.challenger_id === myId) ? (m.opponent_name || 'Your opponent') : (m.opponent_name || 'Your challenger');
       const turnLabel = m.status === 'complete' ? 'Final'
         : m.pending_kind === 'serve' && m.pending_server_id === myId ? 'Your serve'
         : m.pending_kind === 'defend' && m.pending_server_id !== myId ? 'Your turn to defend'
@@ -1993,28 +935,6 @@ function initGameUI() {
       data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error();
     } catch { return; }
-    // Battle-name row: shows your handle and offers a change. The picker
-    // itself is the same inline card used on first create.
-    const handleRow = wrap && wrap.querySelector('[data-handle-row]');
-    if (handleRow) {
-      const h = await loadMyHandle();
-      if (h) {
-        handleRow.hidden = false;
-        handleRow.querySelector('[data-handle-name]').textContent = h;
-        handleRow.querySelector('[data-change-handle]').onclick = () => {
-          showHandlePicker({
-            title: 'Change your battle name',
-            subtitle: 'Opponents see this on challenges and matches — not your real name.',
-            cta: 'Save',
-            onSaved: (saved) => {
-              handleRow.querySelector('[data-handle-name]').textContent = saved;
-              result.innerHTML = '';
-              statusLine.textContent = 'Battle name updated.';
-            },
-          });
-        };
-      } else { handleRow.hidden = true; }
-    }
     const g = await loadGraph().catch(() => null);
     list.innerHTML = '';
     let count = 0;
@@ -2041,16 +961,12 @@ function initGameUI() {
       modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
     const copyInvite = (token) => async () => {
-      // Pretty invite URL: /invite/<token> serves the challenge card (dynamic
-      // og: tags) and hands the recipient off to /game/?invite=. (2026-10-01:
-      // the old /game/?invite= link unfurled as a generic webpage share.)
-      const url = `${window.location.origin}/invite/${encodeURIComponent(token)}`;
+      const url = `${window.location.origin}/game/?invite=${encodeURIComponent(token)}`;
       const okCopy = await navigator.clipboard.writeText(url).then(() => true).catch(() => false);
       statusLine.textContent = okCopy ? 'Invite link copied.' : url;
     };
-    const challengeBack = (replyToToken) => () => {
+    const challengeBack = () => {
       setHeadToHead(null, null, g);
-      pendingReplyTo = replyToToken || null;
       statusLine.textContent = 'Your turn to deal — pick your band, then Challenge a friend.';
       modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
       setTimeout(() => fieldA.focus(), 300);
@@ -2074,20 +990,14 @@ function initGameUI() {
       if (c.status === 'open') {
         row(`You picked ${bandName(g, c.band_a)} — waiting on your opponent.`, [['Copy invite link', copyInvite(c.token)]]);
       } else if (c.band_b) {
-        row(`${c.invitee_handle || 'Your opponent'} answered: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
+        row(`${c.invitee_name || 'Your opponent'} answered: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
           [['See the chain', seeChain(c.band_a, c.band_b)], ['Rematch', rematch(c.band_a)]]);
       }
     }
     for (const c of data.received || []) {
       if (c.band_b) {
-        row(`${c.challenger_handle || 'Someone'} challenged you: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
-          [['See the chain', seeChain(c.band_a, c.band_b)], ['Challenge back', challengeBack(c.token)], ['Rematch', rematch(c.band_b)]]);
-      } else if (c.status === 'open') {
-        // Incoming unanswered challenge (reply-stamped via in_reply_to).
-        // Aaron's copy call (2026-10-01): make it unmistakable whose turn
-        // it is and what they answered with.
-        row(`${c.challenger_handle || 'Someone'} challenged you back — he answered with ${bandName(g, c.band_a)}.`,
-          [['Accept', () => { window.location.href = `/game/?invite=${encodeURIComponent(c.token)}`; }]]);
+        row(`${c.challenger_name || 'Someone'} challenged you: ${bandName(g, c.band_a)} vs ${bandName(g, c.band_b)}.`,
+          [['See the chain', seeChain(c.band_a, c.band_b)], ['Challenge back', challengeBack], ['Rematch', rematch(c.band_b)]]);
       }
     }
     if (wrap) wrap.hidden = count === 0;
@@ -2195,13 +1105,7 @@ function initGameUI() {
       } catch (_) { /* plain link fallback below */ }
       statusLine.textContent = '';
       if (navigator.share) {
-        try {
-          await navigator.share({ title: 'Six Degrees of Rock', text: shareText, url: shareUrl });
-        } catch (err) {
-          if (!err || err.name !== 'AbortError') {
-            statusLine.textContent = 'Share failed — copy the link from the card instead.';
-          }
-        }
+        navigator.share({ title: 'Six Degrees of Rock', text: shareText, url: shareUrl }).catch(() => {});
       } else if (navigator.clipboard) {
         navigator.clipboard.writeText(`${shareText} ${shareUrl}`).then(() => {
           statusLine.textContent = 'Copied — paste it anywhere to brag.';
