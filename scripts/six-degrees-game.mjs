@@ -2257,17 +2257,29 @@ if (isBrowser) {
   }
 }
 
-// Defensive re-sync for the page-load UI bug: initGameUI() ends with a
-// syncModeUI() call, but if anything earlier in init throws, the "Challenge a
-// friend" button and the match-format picker stay hidden until the user
-// switches modes. Re-dispatching 'change' on the checked mode radio re-runs
-// the existing mode-change handler (which calls syncModeUI()). Harmless when
-// init already completed — it simply re-syncs to the same state.
-if (isBrowser) {
+// V2 defensive re-sync: directly set button visibility on window.load,
+// bypassing the event system entirely. The v1 fix dispatched a synthetic
+// 'change' event, but if initGameUI() threw before attaching listeners,
+// the event had no handler. This version manipulates the DOM directly.
+if (typeof window !== 'undefined') {
   window.addEventListener('load', () => {
     try {
+      const isArena = /(^|\/)game\/?$/.test(window.location.pathname);
       const checked = document.querySelector('input[name="game-mode"]:checked');
-      if (checked) checked.dispatchEvent(new Event('change', { bubbles: true }));
-    } catch (_) { /* never break page load for a UI re-sync */ }
+      const mode = (checked || {}).value || 'head-to-head';
+      if (mode === 'head-to-head') {
+        const btn = document.getElementById('game-challenge-btn');
+        if (btn) btn.style.display = '';
+        if (isArena) {
+          const wrap = document.getElementById('game-format-wrap');
+          if (wrap) wrap.style.display = '';
+          // Update button text to match format
+          const fmt = document.getElementById('game-match-format');
+          if (btn && fmt && fmt.value !== 'quick') {
+            btn.textContent = 'Start match';
+          }
+        }
+      }
+    } catch (_) { /* never break page load */ }
   });
 }
