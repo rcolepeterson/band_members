@@ -169,7 +169,7 @@ function fakeRow(over = {}) {
 }
 
 test('matchState reports a pending serve', () => {
-  const s = matchState(fakeRow(), 'rawker1', 'rawker2');
+  const s = matchState(fakeRow(), 'Aaron', 'Paul');
   assert.equal(s.pending.kind, 'serve');
   assert.equal(s.pending.server_id, 'i1');
   assert.equal(s.pending.band_a, null);
@@ -177,7 +177,7 @@ test('matchState reports a pending serve', () => {
 });
 
 test('matchState reports a pending defend', () => {
-  const s = matchState(fakeRow({ pending_band_a: 'Metallica', pending_server_id: 'c1' }), 'rawker1', 'rawker2');
+  const s = matchState(fakeRow({ pending_band_a: 'Metallica', pending_server_id: 'c1' }), 'Aaron', 'Paul');
   assert.equal(s.pending.kind, 'defend');
   assert.equal(s.pending.band_a, 'Metallica');
 });
@@ -186,13 +186,13 @@ test('matchState reports the winner when complete', () => {
   const s = matchState(fakeRow({
     status: 'complete', challenger_round_wins: 3, invitee_round_wins: 1,
     pending_server_id: null,
-  }), 'rawker1', 'rawker2');
+  }), 'Aaron', 'Paul');
   assert.equal(s.pending, null);
   assert.equal(s.winner_id, 'c1');
 });
 
 test('matchState passes plays through', () => {
-  const s = matchState(fakeRow(), 'rawker1', 'rawker2');
+  const s = matchState(fakeRow(), 'Aaron', 'Paul');
   assert.equal(s.plays.length, 1);
   assert.equal(s.plays[0].hops, 4);
 });
