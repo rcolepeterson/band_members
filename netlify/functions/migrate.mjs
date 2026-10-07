@@ -895,6 +895,45 @@ export default async (req) => {
     `;
     results.push('index duplicate_flags_resolved_at_idx ready');
 
+    // game_analytics_events table --------------------------------------------
+    // Anonymous + signed-in game engagement tracking (Cole's request, Oct 2026).
+    // Fire-and-forget events from the game client: game_started, move_made,
+    // hint_clicked, game_completed. The ops board aggregates these into
+    // Games Started per User, Win/Loss/Abandon Rate, Hint Clicks, and
+    // Average Moves per Game.
+    //
+    // Privacy: user_id is NULL for anonymous players. session_id is a
+    // client-generated UUID per game — no cross-session tracking for anon.
+    await sql`
+      create table if not exists game_analytics_events (
+        id uuid primary key default gen_random_uuid(),
+        user_id uuid references users(id) on delete set null,
+        session_id text not null,
+        event_type text not null,
+        game_mode text,
+        band_a text,
+        band_b text,
+        result text,
+        moves_count integer,
+        hints_used integer,
+        duration_seconds integer,
+        created_at timestamptz not null default now()
+      )
+    `;
+    results.push('table game_analytics_events ready');
+
+    await sql`
+      create index if not exists game_analytics_events_type_date_idx
+      on game_analytics_events (event_type, created_at)
+    `;
+    results.push('index game_analytics_events_type_date_idx ready');
+
+    await sql`
+      create index if not exists game_analytics_events_session_idx
+      on game_analytics_events (session_id, event_type)
+    `;
+    results.push('index game_analytics_events_session_idx ready');
+
     return ok({ steps: results });
   } catch (err) {
     console.error('migrate failed', err);
