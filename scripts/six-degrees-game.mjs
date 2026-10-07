@@ -133,6 +133,47 @@ function el(html) {
   return t.content.firstElementChild;
 }
 
+// ---------------------------------------------------------------------------
+// Game analytics (fire-and-forget)
+//
+// WHY: Cole asked for engagement metrics (Oct 2026): games started per user,
+// win/loss/abandon rate, hint clicks, avg moves per game. The ops board
+// aggregates these from the game_analytics_events table.
+//
+// HOW: trackGameEvent() POSTs to /api/analytics/game-event with keepalive so
+// it survives page navigation. Never awaited, never retried — if it fails,
+// gameplay continues silently. No PII: the server resolves user_id from the
+// bearer token if present, NULL otherwise.
+// ---------------------------------------------------------------------------
+
+function newGameSessionId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for older browsers
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+function trackGameEvent(payload) {
+  if (!isBrowser) return;
+  try {
+    fetch('/api/analytics/game-event', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).catch(() => {
+      // Silent: analytics must never break gameplay
+    });
+  } catch {
+    // fetch itself threw (very old browser) — ignore
+  }
+}
+
 function initGameUI() {
   const modal = document.getElementById('game-modal');
   if (!modal) return;
@@ -681,6 +722,12 @@ function initGameUI() {
   let dailyOptions = [];    // public options: [{id, name}]
   let dailyRevealArmed = false;
 
+  // Analytics session state (per game, reset on each start)
+  let analyticsSessionId = null;
+  let analyticsGameStartTime = null;
+  let analyticsMoveCount = 0;
+  let analyticsHintCount = 0;
+
   async function dailyFetch(path, opts = {}) {
     const res = await fetch(path, {
       ...opts,
@@ -764,6 +811,18 @@ function initGameUI() {
       });
       dailyRun = data.run;
       dailyOptions = data.options || [];
+      // Analytics: new game session
+      analyticsSessionId = newGameSessionId();
+      analyticsGameStartTime = Date.now();
+      analyticsMoveCount = 0;
+      analyticsHintCount = 0;
+      trackGameEvent({
+        session_id: analyticsSessionId,
+        event_type: 'game_started',
+        game_mode: 'daily_chain',
+        band_a: dailyRun && dailyRun.start_band ? dailyRun.start_band.name : null,
+        band_b: dailyRun && dailyRun.target ? dailyRun.target.name : null,
+      });
       paintDailyBoard(card);
     } catch (err) {
       const note = card.querySelector('.game-daily-note');
@@ -942,6 +1001,22 @@ function initGameUI() {
       });
       dailyRun = data.run;
       dailyOptions = [];
+      // Analytics: game completed (abandon — player gave up)
+      if (analyticsSessionId) {
+        const durationSeconds = analyticsGameStartTime
+          ? Math.round((Date.now() - analyticsGameStartTime) / 1000)
+          : null;
+        trackGameEvent({
+          session_id: analyticsSessionId,
+          event_type: 'game_completed',
+          game_mode: 'daily_chain',
+          result: 'abandon',
+          moves_count: analyticsMoveCount,
+          hints_used: analyticsHintCount,
+          duration_seconds: durationSeconds,
+        });
+        analyticsSessionId = null; // session over
+      }
       paintDailyBoard(card, null, data.gave_up);
     } catch (err) {
       note.textContent = (err && err.message) || 'Could not show the chain.';
@@ -958,6 +1033,18 @@ function initGameUI() {
       });
       dailyRun = data.run;
       dailyOptions = data.options || [];
+      // Analytics: new game session (replay)
+      analyticsSessionId = newGameSessionId();
+      analyticsGameStartTime = Date.now();
+      analyticsMoveCount = 0;
+      analyticsHintCount = 0;
+      trackGameEvent({
+        session_id: analyticsSessionId,
+        event_type: 'game_started',
+        game_mode: 'daily_chain',
+        band_a: dailyRun && dailyRun.start_band ? dailyRun.start_band.name : null,
+        band_b: dailyRun && dailyRun.target ? dailyRun.target.name : null,
+      });
       paintDailyBoard(card);
     } catch (err) {
       note.textContent = (err && err.message) || 'Could not start a replay.';
@@ -977,6 +1064,15 @@ function initGameUI() {
         });
         dailyRun = data.run;
         dailyOptions = data.options || [];
+        // Analytics: hint used (peek/reveal)
+        if (analyticsSessionId) {
+          analyticsHintCount++;
+          trackGameEvent({
+            session_id: analyticsSessionId,
+            event_type: 'hint_clicked',
+            game_mode: 'daily_chain',
+          });
+        }
         paintDailyBoard(card);
         const yes = data.hint && data.hint.on_optimal_path;
         note.textContent = yes
@@ -996,7 +1092,33 @@ function initGameUI() {
       });
       dailyRun = data.run;
       dailyOptions = data.options || [];
+      // Analytics: move made
+      if (analyticsSessionId) {
+        analyticsMoveCount++;
+        trackGameEvent({
+          session_id: analyticsSessionId,
+          event_type: 'move_made',
+          game_mode: 'daily_chain',
+          move_number: analyticsMoveCount,
+        });
+      }
       if (data.completed) {
+        // Analytics: game completed (win)
+        if (analyticsSessionId) {
+          const durationSeconds = analyticsGameStartTime
+            ? Math.round((Date.now() - analyticsGameStartTime) / 1000)
+            : null;
+          trackGameEvent({
+            session_id: analyticsSessionId,
+            event_type: 'game_completed',
+            game_mode: 'daily_chain',
+            result: 'win',
+            moves_count: analyticsMoveCount,
+            hints_used: analyticsHintCount,
+            duration_seconds: durationSeconds,
+          });
+          analyticsSessionId = null; // session over
+        }
         paintDailyBoard(card, data.completed);
       } else {
         paintDailyBoard(card);
@@ -1019,6 +1141,15 @@ function initGameUI() {
       });
       dailyRun = data.run;
       dailyOptions = data.options || [];
+      // Analytics: hint used (eliminate)
+      if (analyticsSessionId) {
+        analyticsHintCount++;
+        trackGameEvent({
+          session_id: analyticsSessionId,
+          event_type: 'hint_clicked',
+          game_mode: 'daily_chain',
+        });
+      }
       paintDailyBoard(card);
       if (data.hint && data.hint.eliminated) {
         card.querySelector('.game-daily-note').textContent =
