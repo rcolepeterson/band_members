@@ -82,6 +82,13 @@
       display:inline-flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);
       border:1px solid var(--color-border);border-radius:var(--radius-full)}
     .arena-back:hover{color:var(--color-text);border-color:rgba(82,174,182,.45)}
+    .arena-player{font-size:var(--text-sm);color:var(--color-text-muted);
+      display:inline-flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);
+      border:1px solid var(--color-divider);border-radius:var(--radius-full);
+      max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .arena-player strong{color:var(--color-primary);font-weight:600}
+    .arena-player[data-action]{cursor:pointer}
+    .arena-player[data-action]:hover{color:var(--color-text);border-color:rgba(82,174,182,.45)}
 
     .arena-main{position:relative;max-width:880px;margin:0 auto;padding:var(--space-10) var(--space-4) var(--space-16)}
     .arena-hero{text-align:center;margin-bottom:var(--space-8)}
@@ -258,6 +265,7 @@
       <div class="arena-header-inner">
         <a class="arena-wordmark" href="/">Six Degrees of Rock</a>
         <div class="arena-header-actions">
+          <span class="arena-player" id="arena-player" hidden></span>
           <button class="arena-back" id="send-feedback-btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="feedback-popover">Send feedback</button>
           <a class="arena-back" href="/">&larr; Back to the tree</a>
         </div>
