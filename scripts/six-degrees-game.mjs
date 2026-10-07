@@ -2098,7 +2098,55 @@ function initGameUI() {
   if (inviteToken) handleInvite(inviteToken);
   if (matchToken) handleMatch(matchToken);
   loadChallenges();
-  if (isArenaPage()) loadMatches();
+  if (isArenaPage()) { loadMatches(); renderArenaPlayerBadge(); }
+
+  // --- arena player badge ----------------------------------------------------
+  // Shows who you're playing as in the arena header — critical when one
+  // person has multiple accounts (email, Google, Instagram all land on
+  // different rows). Updates once the handle resolves.
+  async function renderArenaPlayerBadge() {
+    const badge = document.getElementById('arena-player');
+    if (!badge) return;
+    try {
+      if (!isSignedIn()) {
+        badge.hidden = false;
+        badge.removeAttribute('data-action');
+        badge.innerHTML = '';
+        const link = document.createElement('a');
+        link.href = '/';
+        link.textContent = 'Sign in to play';
+        link.style.color = 'inherit';
+        link.style.textDecoration = 'none';
+        badge.appendChild(link);
+        return;
+      }
+      const h = await loadMyHandle();
+      badge.hidden = false;
+      badge.innerHTML = '';
+      if (h) {
+        badge.removeAttribute('data-action');
+        badge.appendChild(document.createTextNode('Playing as '));
+        const strong = document.createElement('strong');
+        strong.textContent = h;
+        badge.appendChild(strong);
+      } else {
+        // Signed in but no battle name yet — tap to pick one.
+        badge.setAttribute('data-action', 'pick-handle');
+        badge.textContent = 'Pick your battle name';
+        badge.onclick = () => {
+          showHandlePicker({
+            title: 'Pick your battle name',
+            subtitle: 'This is the name opponents see on challenges and matches — not your real name.',
+            cta: 'Save',
+            onSaved: () => { myHandleCache = null; renderArenaPlayerBadge(); },
+          });
+        };
+      }
+    } catch (_) {
+      // Never break the arena for a badge — hide it quietly.
+      badge.hidden = true;
+    }
+  }
 
   // Resume a challenge interrupted by sign-in. OAuth does a full-page
   // redirect, so the modal state is gone on return — the pick was stashed in
