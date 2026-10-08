@@ -477,6 +477,19 @@ function initGameUI() {
       };
       descEl.textContent = descs[mode] || '';
     }
+    // Mode-specific subtitle (Aaron, 2026-10-07: "Name two bands" is wrong on Daily).
+    // Placed here (before challenge queue loading) so a throw in loadChallenges()
+    // can't block the subtitle update.
+    try {
+      const sub = document.querySelector('.game-modal-sub');
+      const subtitles = {
+        daily: 'One fresh chain every day — same for everyone. Connect the bands, beat par, build your streak.',
+        solo: 'Practice mode. Pick a band, we deal the opponent, you find the chain.',
+        'head-to-head': 'Challenge a friend. You pick a band, they pick theirs, the tree decides.',
+        chaos: 'Two random bands. Hit Connect and watch the tree work.',
+      };
+      if (sub && subtitles[mode]) sub.textContent = subtitles[mode];
+    } catch {}
     // Any mode change exits the invite accept context.
     showHowto('');
     setModePickerVisible(true);
@@ -496,15 +509,6 @@ function initGameUI() {
       loadMatches();
     }
     // Daily Chain gets its own panel — no band fields, no run button.
-    // Mode-specific subtitle (Aaron, 2026-10-07: "Name two bands" is wrong on Daily).
-    const sub = document.querySelector('.game-modal-sub');
-    const subtitles = {
-      daily: 'One fresh chain every day — same for everyone. Connect the bands, beat par, build your streak.',
-      solo: 'Practice mode. Pick a band, we deal the opponent, you find the chain.',
-      'head-to-head': 'Challenge a friend. You pick a band, they pick theirs, the tree decides.',
-      chaos: 'Two random bands. Hit Connect and watch the tree work.',
-    };
-    if (sub && subtitles[mode]) sub.textContent = subtitles[mode];
 
     if (mode === 'daily') {
       document.getElementById('game-field-a-wrap').style.display = 'none';
@@ -3032,17 +3036,6 @@ function initGameUI() {
           const signedIn = isSignedIn();
           if (!signedIn) {
             topLine.innerHTML = '<span style="opacity:.7">Sign in to play</span>';
-            // Retry in 2s — auth token may not be in localStorage yet on
-            // initial page load (Aaron, 2026-10-07).
-            setTimeout(() => {
-              if (topLine.dataset.seq !== String(seq)) return;
-              try {
-                const raw = localStorage.getItem('bmft-user');
-                if (raw && JSON.parse(raw).token) {
-                  paintTopLine();
-                }
-              } catch {}
-            }, 2000);
             return;
           }
           if (!h && credits != null) {
