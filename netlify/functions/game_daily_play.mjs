@@ -46,6 +46,7 @@ import {
   ARCHIVE_COST,
   scoreRun,
   bfsPath,
+  chainConnections,
 } from './_daily.mjs';
 import { loadBandGraph, ensureChain } from './game_daily.mjs';
 
@@ -71,7 +72,7 @@ function publicPicks(picks) {
 }
 
 async function runState(sql, run, chain, me) {
-  const { adj, meta, famous } = await loadBandGraph(sql);
+  const { adj, meta, famous, bandMembers, memberNames } = await loadBandGraph(sql);
   const cur = meta.get(run.current_band_id) || {};
   const tgt = meta.get(chain.band_b) || {};
   const comps = await sql`select chain_date from daily_completions where user_id = ${me.id}`;
@@ -87,6 +88,20 @@ async function runState(sql, run, chain, me) {
     const ids = bfsPath(adj, chain.band_a, chain.band_b, famous) || [];
     reveal_path = ids.map((id) => ({ id, name: (meta.get(id) || {}).name || 'Band' }));
   }
+  // Who links each pair in your chain (and in the revealed answer):
+  // { "aId|bId": ["Tom Morello", ...] }. Dead ends aren't links.
+  const chainIds = [chain.band_a, ...(run.picks || []).filter((p) => p.kind !== 'deadend').map((p) => p.band_id)];
+  const connections = bandMembers ? {
+    ...chainConnections(bandMembers, memberNames, chainIds),
+    ...(reveal_path ? chainConnections(bandMembers, memberNames, reveal_path.map((b) => b.id)) : {}),
+  } : {};
+  // Live distance to the target (the chain row's blanks and the
+  // "+N extra moves" note use it; solo already sent this).
+  let dist_to_target = null;
+  try {
+    const d = bfsDist(adj, chain.band_b).get(run.current_band_id);
+    if (d !== undefined) dist_to_target = d;
+  } catch {}
   // Bail-out: if the last hop died and a session legend is in the room (a
   // member of the band you're stuck at), the escape wears his name. Freese
   // first — it's his joke — Aronoff as backup. Same price, same effect.
@@ -116,6 +131,8 @@ async function runState(sql, run, chain, me) {
     best_hops: replayRows[0].best,
     replays_done: Number(replayRows[0].done || 0),
     reveal_path,
+    connections,
+    dist_to_target,
     current_band: { id: run.current_band_id, name: cur.name || 'Band' },
     target: { id: chain.band_b, name: tgt.name || 'Band' },
     start_band: { id: chain.band_a, name: (meta.get(chain.band_a) || {}).name || 'Band' },

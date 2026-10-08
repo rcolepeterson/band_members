@@ -24,6 +24,7 @@ import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
 import {
   pacificDate,
   buildBandAdj,
+  buildBandMembers,
   pickDailyPair,
   currentStreak,
   MIN_HOPS,
@@ -41,16 +42,20 @@ let graphCache = null;
 
 export async function loadBandGraph(sql) {
   if (graphCache) return graphCache;
-  const [memberships, bands] = await Promise.all([
+  const [memberships, bands, members] = await Promise.all([
     sql`select band_id, member_id from memberships where relation = 'member_of'`,
     sql`select id, name, genre, years_active from bands`,
+    // Musician names, so the board can say WHO links two bands.
+    sql`select id, name from band_members`,
   ]);
   const { adj, degree } = buildBandAdj(memberships);
+  const bandMembers = buildBandMembers(memberships);
+  const memberNames = new Map((members || []).map((m) => [m.id, m.name]));
   const meta = new Map(bands.map((b) => [b.id, { name: b.name, genre: b.genre, years_active: b.years_active }]));
   const bandIds = bands.map((b) => b.id).filter((id) => adj.has(id));
   const famous = famousIdsFrom(meta, adj);
   const headliners = famousIdsFrom(meta, adj, HEADLINER_BANDS);
-  graphCache = { adj, degree, meta, bandIds, famous, headliners };
+  graphCache = { adj, degree, meta, bandIds, famous, headliners, bandMembers, memberNames };
   return graphCache;
 }
 

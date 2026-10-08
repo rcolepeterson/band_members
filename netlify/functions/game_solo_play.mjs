@@ -44,6 +44,7 @@ import {
   hintsFor,
   scoreRun,
   bfsPath,
+  chainConnections,
   pickDailyPair,
   MIN_HOPS,
   HINT_COST,
@@ -101,7 +102,7 @@ function publicPicks(picks) {
 }
 
 async function runState(sql, run, me) {
-  const { adj, meta, famous } = await loadBandGraph(sql);
+  const { adj, meta, famous, bandMembers, memberNames } = await loadBandGraph(sql);
   const cur = meta.get(run.current_band_id) || {};
   const tgt = meta.get(run.band_b) || {};
   const fresh = await findUserByToken(sql, me.token).catch(() => me);
@@ -118,6 +119,12 @@ async function runState(sql, run, me) {
     const ids = bfsPath(adj, run.band_a, run.band_b, famous) || [];
     reveal_path = ids.map((id) => ({ id, name: (meta.get(id) || {}).name || 'Band' }));
   }
+  // Who links each pair in your chain and in the revealed answer.
+  const chainIds = [run.band_a, ...(run.picks || []).filter((p) => p.kind !== 'deadend').map((p) => p.band_id)];
+  const connections = bandMembers ? {
+    ...chainConnections(bandMembers, memberNames, chainIds),
+    ...(reveal_path ? chainConnections(bandMembers, memberNames, reveal_path.map((b) => b.id)) : {}),
+  } : {};
   // Bail-out: if the last hop died and a session legend is in the room (a
   // member of the band you're stuck at), the escape wears his name. Freese
   // first — it's his joke — Aronoff as backup. Same price, same effect.
@@ -143,6 +150,7 @@ async function runState(sql, run, me) {
     status: run.status,
     bailout,
     reveal_path,
+    connections,
     current_band: { id: run.current_band_id, name: cur.name || 'Band' },
     target: { id: run.band_b, name: tgt.name || 'Band' },
     start_band: { id: run.band_a, name: (meta.get(run.band_a) || {}).name || 'Band' },
