@@ -183,19 +183,21 @@ export function fmtElapsed(seconds) {
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
 }
 
-// Spoiler-free share text. The start and target are the same for everyone;
-// every move is one square, so "Moves: 5" shows five squares (Cole,
-// 2026-10-08: 4 squares for "5 hops" read as a miscount).
+// Spoiler-free share text, Wordle-style (Cole, 2026-10-08): no slogan,
+// just the score, the squares and the link.
+//   Six Degrees of Rock #17 🎸 5/4 (29s)      (X/4 on a loss)
+//   Rage Against the Machine ➡️ 🟩🟥🟨🟩🟩 ➡️ Pearl Jam
+//   sixdegreesofrock.com/game
+// One square per move, so the squares always match the score.
 export function dailyShareResultText({ date, start, target, picks = [], moves = picks.length, par, won, seconds = null }) {
-  const squares = picks.map((p) => dailyPickSquare(p.kind)).join('');
-  const chain = [start, ...(squares ? [squares] : []), won ? target : `❌ ${target}`].join(' ➡️ ');
   const num = dailyPuzzleNumber(date);
   const time = fmtElapsed(seconds);
+  const score = `${won ? moves : 'X'}/${par}`;
+  const squares = picks.map((p) => dailyPickSquare(p.kind)).join('');
   return [
-    `Six Degrees of Rock 🎸${num ? ` #${num}` : ''}`,
-    chain,
-    `Moves: ${moves}/${par}${time ? ` ⏱️ ${time}` : ''}`,
-    `${won ? 'Can you beat my chain?' : 'Can you crack it?'} https://sixdegreesofrock.com/game`,
+    `Six Degrees of Rock${num ? ` #${num}` : ''} 🎸 ${score}${time ? ` (${time})` : ''}`,
+    [start, ...(squares ? [squares] : []), target].join(' ➡️ '),
+    'sixdegreesofrock.com/game',
   ].join('\n');
 }
 
