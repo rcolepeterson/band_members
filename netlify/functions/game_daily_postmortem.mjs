@@ -101,14 +101,15 @@ export default async (req) => {
 
   let adj;
   let meta;
+  let famous = null;
   try {
-    ({ adj, meta } = await loadBandGraph(sql));
+    ({ adj, meta, famous } = await loadBandGraph(sql));
   } catch (error) {
     console.error('game-daily-postmortem: graph load failed', error && error.message);
     return serverError('could not load that day');
   }
   const startName = (meta.get(chain.band_a) || {}).name || 'Band';
-  const parIds = bfsPath(adj, chain.band_a, chain.band_b) || [];
+  const parIds = bfsPath(adj, chain.band_a, chain.band_b, famous) || [];
   const par_path = parIds.map((id) => (meta.get(id) || {}).name || 'Band');
   const your_path = [startName, ...((run.picks || []).map((p) => p.name || 'Band'))];
 

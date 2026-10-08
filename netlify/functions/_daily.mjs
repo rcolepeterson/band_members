@@ -147,15 +147,21 @@ function pairKey(a, b) {
 
 // Shortest path (array of node ids) from fromId to targetId, or null when
 // disconnected. Walks the distance field downhill from the start.
-export function bfsPath(adj, fromId, targetId) {
+// preferWithin (optional Set): among equally short routes, take one through
+// those bands when it exists, so the revealed answer reads Audioslave →
+// Temple of the Dog rather than Supergroup B → Eddie Vedder and the Earthlings.
+export function bfsPath(adj, fromId, targetId, preferWithin = null) {
   if (fromId === targetId) return [fromId];
   const dist = bfsDist(adj, targetId);
   if (!dist.has(fromId)) return null;
+  const pdist = preferWithin ? bfsDist(adj, targetId, preferWithin) : null;
   const path = [fromId];
   let cur = fromId;
   while (cur !== targetId) {
     const d = dist.get(cur);
-    const next = (adj.get(cur) || []).find((nb) => dist.get(nb) === d - 1);
+    const nbs = [...(adj.get(cur) || [])];
+    const next = (pdist && nbs.find((nb) => dist.get(nb) === d - 1 && pdist.get(nb) === d - 1))
+      ?? nbs.find((nb) => dist.get(nb) === d - 1);
     if (next == null) return null;
     path.push(next);
     cur = next;

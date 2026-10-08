@@ -133,3 +133,13 @@ test('practice mode (?practice=1) is a removable test hook on the Solo endpoint'
   // Daily calls still name the daily endpoint, so the daily is untouched without the flag.
   assert.equal((src.match(/dailyFetch\(practicePath\('\/api\/game-daily\/play'\)/g) || []).length, 7);
 });
+
+test('giving up is not a hint: separate link, one confirm, honest copy', () => {
+  const paint = src.slice(src.indexOf('function paintDailyBoard('), src.indexOf('function confirmDailyGiveUp('));
+  const hintsAt = paint.indexOf("q('.sd-hints > summary')");
+  assert.ok(!paint.slice(hintsAt).includes("tools.appendChild(giveup)"), 'give-up is not in the hints drawer');
+  assert.ok(src.includes('Give up &amp; reveal the chain'), 'quiet give-up link under the board');
+  assert.ok(src.includes('<h2>Give up and reveal the chain?</h2>'), 'single confirm modal');
+  assert.ok(!src.includes('Today ends and the tree reveals the path'), 'cryptic copy gone');
+  assert.ok(src.includes('<div class="sd-reveal-chain"></div>'), 'answer drawn as a chain on the board');
+});

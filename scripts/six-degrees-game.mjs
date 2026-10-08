@@ -853,6 +853,12 @@ function initGameUI() {
       .sd-secondary{display:block;width:100%;min-height:46px;margin-top:10px;border-radius:999px;border:1px solid var(--color-border);background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer}
       .sd-guest{margin-top:16px;text-align:center;font-size:.88rem;color:var(--color-text-muted)}
       .sd-linkbtn{background:none;border:none;padding:0;font:inherit;color:var(--color-primary);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+      .sd-giveup{display:block;margin:14px auto 0;font-size:.85rem;color:var(--color-text-muted)}
+      .sd-giveup:hover{color:var(--color-text)}
+      .sd-danger{border-color:color-mix(in srgb,var(--sd-bad) 70%,transparent);color:#f6cdc8}
+      .sd-danger:hover{background:color-mix(in srgb,var(--sd-bad) 18%,transparent)}
+      .sd-reveal-label{text-align:center;font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--color-text-muted);margin:12px 0 4px}
+      .sd-reveal-chain{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:0 0 10px}
       .sd-mode-list{display:grid;gap:8px;margin-top:14px}
       .sd-mode{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;padding:12px 14px;border:1px solid var(--color-border);border-radius:14px;background:transparent;color:inherit;font:inherit;cursor:pointer}
       .sd-mode strong{font-size:1rem}
@@ -1723,19 +1729,37 @@ function initGameUI() {
       tools.appendChild(esc);
     }
 
-    const giveup = el('<button type="button" class="tool-chip">Show me the chain</button>');
-    giveup.addEventListener('click', () => {
-      note.innerHTML = '';
-      note.appendChild(mk('Today ends and the tree reveals the path. '));
-      const yes = el('<button type="button" class="tool-chip">Show me</button>');
-      const no = el('<button type="button" class="tool-chip">Keep playing</button>');
-      yes.addEventListener('click', () => dailyGiveUp(card));
-      no.addEventListener('click', () => paintDailyBoard(card));
-      note.appendChild(yes);
-      note.appendChild(mk(' '));
-      note.appendChild(no);
+    // Hints only help you keep playing; nothing to offer means no drawer.
+    q('.sd-hints').hidden = !tools.children.length;
+
+    // Giving up is not a hint (Cole, 2026-10-08): a quiet link under the
+    // board, confirmed once in a modal that says plainly what it costs.
+    const giveup = el('<button type="button" class="sd-linkbtn sd-giveup">Give up &amp; reveal the chain</button>');
+    giveup.addEventListener('click', () => confirmDailyGiveUp(card));
+    finish.appendChild(giveup);
+  }
+
+  function confirmDailyGiveUp(card) {
+    const run = dailyRun;
+    openSdModal((c) => {
+      c.appendChild(el('<h2>Give up and reveal the chain?</h2>'));
+      const body = el('<p class="sd-modal-sub"></p>');
+      if (practiceMode) {
+        body.textContent = 'This ends this practice puzzle and shows the shortest chain. It doesn\u2019t count toward anything.';
+      } else if (run && run.streak > 0) {
+        body.textContent = `This ends today\u2019s game and shows the shortest chain. Today won\u2019t count, so your ${run.streak}-day streak resets`
+          + (run.freeze_count ? ' (your streak freeze covers one missed day).' : '.');
+      } else {
+        body.textContent = 'This ends today\u2019s game and shows the shortest chain. You can\u2019t play today\u2019s chain again.';
+      }
+      c.appendChild(body);
+      const keep = el('<button type="button" class="sd-primary" style="margin-top:14px">Keep playing</button>');
+      keep.addEventListener('click', closeSdModal);
+      const quit = el('<button type="button" class="sd-secondary sd-danger">Give up &amp; show the chain</button>');
+      quit.addEventListener('click', () => { closeSdModal(); dailyGiveUp(card); });
+      c.appendChild(keep);
+      c.appendChild(quit);
     });
-    tools.appendChild(giveup);
   }
 
   // In-run actions name the run's day. Without it the server assumes today,
@@ -1985,22 +2009,38 @@ function initGameUI() {
   function paintDailyGiveUp(card) {
     const run = dailyRun;
     const finish = card.querySelector('.game-daily-finish');
-    finish.appendChild(el('<p class="sd-finish-line">The tree wins today.</p>'));
+    // Your own row is worth keeping only if you actually picked something.
+    card.querySelector('.game-chain-pills').style.display = run.picks && run.picks.length ? '' : 'none';
+    finish.appendChild(el(`<p class="sd-finish-line">${practiceMode ? 'The tree wins this one.' : 'The tree wins today.'}</p>`));
+    // The answer, drawn the way the game draws chains: green links in a row.
     if (run.reveal_path && run.reveal_path.length) {
-      const rev = el('<p class="sd-reveal">The chain: <strong></strong></p>');
-      rev.querySelector('strong').textContent = run.reveal_path.map((b) => b.name).join(' → ');
-      finish.appendChild(rev);
+      finish.appendChild(el('<p class="sd-reveal-label">The shortest chain</p>'));
+      const row = el('<div class="sd-reveal-chain"></div>');
+      run.reveal_path.forEach((b, i) => {
+        if (i) row.appendChild(el('<span class="sd-link" aria-hidden="true">→</span>'));
+        const pill = el(`<span class="game-chain-pill ${i === 0 || i === run.reveal_path.length - 1 ? 'game-chain-anchor' : 'game-chain-filled game-chain-good'}"></span>`);
+        pill.textContent = b.name;
+        row.appendChild(pill);
+      });
+      finish.appendChild(row);
     }
     const actions = el('<div class="sd-finish-actions"></div>');
     const results = el('<button type="button" class="tool-chip">See results</button>');
     results.addEventListener('click', () => openDailyResults({ won: false }));
     actions.appendChild(results);
+    const again = el('<button type="button" class="tool-chip"></button>');
     if (practiceMode) {
-      const again = el('<button type="button" class="tool-chip">New puzzle</button>');
+      again.textContent = 'New puzzle';
       again.addEventListener('click', () => dailyReplay(card));
-      actions.appendChild(again);
+    } else {
+      again.textContent = 'Play a practice puzzle';
+      again.addEventListener('click', () => { window.location.href = '/game/?practice=1'; });
     }
+    actions.appendChild(again);
     finish.appendChild(actions);
+    if (!practiceMode) {
+      finish.appendChild(el('<p class="sd-modal-sub" style="text-align:center;font-size:.85rem;margin:6px 0 0">A new chain drops at midnight Pacific.</p>'));
+    }
   }
 
   // Post-mortem: par path in gold vs your route in blue, for archive days you
