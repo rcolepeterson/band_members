@@ -249,3 +249,9 @@ test('results: vertical chain list, one pick per move, no duplicate hops stat', 
   assert.ok(!rows.includes("'Hops'"), 'hops stat dropped (the headline says it)');
   assert.ok(src.includes('.sd-modal-close:focus:not(:focus-visible){outline:none;box-shadow:none}'));
 });
+
+test('game-over board shows one chain, the answer, top to bottom', () => {
+  const giveup = src.slice(src.indexOf('function paintDailyGiveUp('), src.indexOf('function paintDailyGiveUp(') + 1500);
+  assert.ok(giveup.includes("card.querySelector('.game-chain-pills').style.display = 'none';"), 'your row is hidden on a loss');
+  assert.ok(giveup.includes('finish.appendChild(chainListEl(run.reveal_path.map('), 'answer is the vertical list');
+});
