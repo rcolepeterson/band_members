@@ -134,12 +134,16 @@ async function dealOptions(sql, run, chain, excludeExtra = []) {
   const { adj, degree, meta, famous } = await loadBandGraph(sql);
   const dist = bfsDist(adj, chain.band_b);
   const deadPicked = (run.picks || []).filter((p) => p.kind === 'deadend').map((p) => p.band_id);
+  // Never offer a step backwards: the start band and every band already in
+  // your chain are off the slate (Cole, 2026-10-08: Rage → Audioslave
+  // offered Rage again).
+  const visited = [chain.band_a, ...(run.picks || []).filter((p) => p.kind !== 'deadend').map((p) => p.band_id)];
   const dugOut = run.escaped || [];
   const opts = optionsFor({
     adj, dist, degree, meta,
     currentId: run.current_band_id,
     // Target excluded — auto-finish completes when adjacent (Aaron, 2026-10-07).
-    excludeIds: new Set([...deadPicked, ...dugOut, ...excludeExtra, chain.band_b]),
+    excludeIds: new Set([...deadPicked, ...visited, ...dugOut, ...excludeExtra, chain.band_b]),
     trapExcludeIds: new Set([chain.band_b]),
     // Bands people know go on the slate first (Cole/Paul, 2026-10-08).
     preferIds: famous,

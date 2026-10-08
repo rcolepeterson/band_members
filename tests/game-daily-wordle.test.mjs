@@ -117,3 +117,11 @@ test('out of moves: the board paints no choices, only the reveal', () => {
   assert.ok(at < options, 'and it returns before the choice buttons are drawn');
   assert.match(src.slice(at, at + 700), /return;/);
 });
+
+test('the last move stays on the board in words until the next tap', () => {
+  assert.ok(src.includes('<p class="sd-result" aria-live="polite" hidden></p>'), 'result line in the board');
+  assert.match(src, /dailyLastMove = data\.completed \? null : \{ kind, name: pickedName, from: fromName \}/);
+  assert.ok(src.includes('is a dead end: no shared member with ${from}. −1 move.'));
+  assert.match(src, /sdToastTimer = setTimeout\(\(\) => t\.classList\.remove\('is-on'\), 3000\)/, 'toast lasts 3s');
+  assert.ok(src.includes("t.onclick = () => { clearTimeout(sdToastTimer); t.classList.remove('is-on'); };"), 'tap dismisses');
+});
