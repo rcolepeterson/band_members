@@ -46,7 +46,7 @@ import {
   scoreRun,
   bfsPath,
 } from './_daily.mjs';
-import { loadBandGraph, ensureChain } from './game_daily.mjs';
+import { loadBandGraph } from './game_daily.mjs';
 
 async function spendCredits(sql, userId, amount) {
   const rows = await sql`
@@ -148,8 +148,6 @@ export default async (req) => {
   if (req.method !== 'POST') return methodNotAllowed();
   if (!isDbConfigured()) return dbUnavailable();
   const sql = getSql();
-  const me = await findUserByToken(sql, extractBearerToken(req));
-  if (!me) return unauthorized('sign in to play the daily chain');
 
   let body;
   try {
@@ -157,6 +155,31 @@ export default async (req) => {
   } catch (_) {
     return badRequest('expected a JSON body');
   }
+
+  // Guest play (2026-10-08): no bearer token? Check for guest_session_id.
+  // Guests play free; credits tracked against the guest user row.
+  let me = await findUserByToken(sql, extractBearerToken(req));
+  if (!me) {
+    const guestSessionId = body && body.guest_session_id;
+    if (guestSessionId && typeof guestSessionId === 'string' && guestSessionId.length >= 8 && guestSessionId.length <= 64) {
+      const existing = await sql`
+        select * from users where guest_session_id = ${guestSessionId} limit 1
+      `.catch(() => []);
+      if (existing && existing[0]) {
+        me = existing[0];
+      } else {
+        // Create a guest user row. Credits start at 50 (same as new users).
+        const rows = await sql`
+          insert into users (is_guest, guest_session_id, credits)
+          values (true, ${guestSessionId}, 50)
+          returning *
+        `.catch(() => []);
+        if (rows && rows[0]) me = rows[0];
+      }
+    }
+  }
+  if (!me) return unauthorized('sign in to play the daily chain');
+
   const action = body && body.action;
 
   const budget = await consume({
@@ -188,10 +211,8 @@ export default async (req) => {
   if (action === 'start') {
     const date = validChainDate(body.date) || pacificDate();
     if (date > pacificDate()) return badRequest('that day hasn\u2019t happened yet');
-    // Today deals on demand (idempotent); past days only exist if they were dealt.
-    const chain = date === pacificDate()
-      ? await ensureChain(sql, date)
-      : (await sql`select date, band_a, band_b, optimal_hops from daily_chains where date = ${date} limit 1`)[0];
+    const chains = await sql`select date, band_a, band_b, optimal_hops from daily_chains where date = ${date} limit 1`;
+    const chain = chains && chains[0];
     if (!chain) return notFound('no chain for that day');
 
     if (date !== pacificDate()) {
