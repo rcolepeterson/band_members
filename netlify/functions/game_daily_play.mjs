@@ -170,11 +170,13 @@ export default async (req) => {
         me = existing[0];
       } else {
         // Create a guest user row. Credits start at 50 (same as new users).
-        // Token is required (NOT NULL) — generate one, though guests don't use it.
+        // Token, email, name are NOT NULL — generate placeholders for guests.
         const guestToken = generateToken();
+        const guestEmail = `guest_${guestSessionId}@guest.local`;
+        const guestName = 'Guest';
         const rows = await sql`
-          insert into users (is_guest, guest_session_id, credits, token)
-          values (true, ${guestSessionId}, 50, ${guestToken})
+          insert into users (is_guest, guest_session_id, credits, token, email, name)
+          values (true, ${guestSessionId}, 50, ${guestToken}, ${guestEmail}, ${guestName})
           returning *
         `.catch(() => []);
         if (rows && rows[0]) me = rows[0];
