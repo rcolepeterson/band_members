@@ -5,7 +5,7 @@
 //   Last 90 days of chains, newest first.
 //
 // POST /api/game-daily/archive (auth) — body { date }
-//   Spends ARCHIVE_COST credits to unlock a past day. Playing it to
+//   Unlocks a past day (free since 2026-10-08; it used to cost ARCHIVE_COST credits). Playing it to
 //   completion backfills the ledger and repairs the streak.
 //   -> { ok, date, credits } | 403 { error, archive_cost }
 
@@ -97,15 +97,12 @@ export default async (req) => {
       const fresh = await findUserByToken(sql, me.token).catch(() => me);
       return ok({ date, credits: fresh.credits ?? 50, already: true });
     }
-    const paid = await sql`
-      update users set credits = credits - ${ARCHIVE_COST}
-       where id = ${me.id} and credits >= ${ARCHIVE_COST}
-      returning credits`;
-    if (!paid || !paid[0]) return forbidden('not enough credits', { archive_cost: ARCHIVE_COST });
+    // Past days are free to play (Cole, 2026-10-08: no credits for launch).
+    // The unlock row still records it, so the play rules are unchanged.
     await sql`
       insert into daily_unlocks (user_id, chain_date) values (${me.id}, ${date})
       on conflict do nothing`;
-    return ok({ date, credits: paid[0].credits });
+    return ok({ date, credits: me.credits ?? 50 });
   }
 
   return methodNotAllowed();
