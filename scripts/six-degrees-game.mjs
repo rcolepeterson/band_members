@@ -822,7 +822,11 @@ function initGameUI() {
       .sd-drawer .game-daily-tools{margin:2px 0 8px}
       .sd-drawer .game-daily-econ{margin:2px 0 8px}
       .sd-toast{position:fixed;left:50%;top:84px;transform:translate(-50%,-8px);z-index:1100;max-width:calc(100vw - 32px);padding:10px 16px;border-radius:12px;background:#f2f6f9;color:#0f1319;font-weight:700;font-size:.95rem;box-shadow:0 10px 30px rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;text-align:center}
-      .sd-toast.is-on{opacity:1;transform:translate(-50%,0)}
+      .sd-toast.is-on{opacity:1;transform:translate(-50%,0);pointer-events:auto;cursor:pointer}
+      .sd-result{text-align:center;font-size:.95rem;line-height:1.45;padding:9px 14px;margin:8px 0 0;border-radius:12px;border:1px solid transparent}
+      .sd-result.is-good{border-color:color-mix(in srgb,var(--sd-good) 60%,transparent);background:color-mix(in srgb,var(--sd-good) 14%,transparent);color:#cdeedb}
+      .sd-result.is-ok{border-color:color-mix(in srgb,var(--sd-ok) 60%,transparent);background:color-mix(in srgb,var(--sd-ok) 14%,transparent);color:#f1e3b4}
+      .sd-result.is-bad{border-color:color-mix(in srgb,var(--sd-bad) 60%,transparent);background:color-mix(in srgb,var(--sd-bad) 14%,transparent);color:#f6cdc8}
       .sd-toast.is-bad{background:var(--sd-bad);color:#fff}
       .sd-toast.is-good{background:var(--sd-good);color:#fff}
       .sd-modal{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -1006,6 +1010,9 @@ function initGameUI() {
   let dailyRun = null;      // last run state from the server
   let dailyOptions = [];    // public options: [{id, name}]
   let dailyRevealArmed = false;
+  // The last move's result, shown on the board until the next tap
+  // (Cole, 2026-10-08: the toast vanished before anyone could read it).
+  let dailyLastMove = null; // { kind, name, from }
 
   // Solo Run v2 (Oct 2026): the guessing game. Same server-dealt options as
   // the daily chain, but the tree deals a fresh pair every run (or honors
@@ -1120,6 +1127,7 @@ function initGameUI() {
 
   async function renderDailyBoard({ loading = false, date } = {}) {
     result.innerHTML = '';
+    dailyLastMove = null;
     // Wordle-simple layout (Cole, 2026-10-08): goal, chain, question, four
     // big buttons. Hints, streak/credits and past days live in drawers.
     const card = el(`<div class="game-result-card game-daily sd-board">
@@ -1134,6 +1142,7 @@ function initGameUI() {
         <p class="sd-goal-meta"></p>
       </div>
       <div class="game-chain-pills"></div>
+      <p class="sd-result" aria-live="polite" hidden></p>
       <p class="game-daily-current sd-prompt"></p>
       <div class="game-daily-options"></div>
       <p class="game-daily-note" role="status"></p>
@@ -1205,7 +1214,8 @@ function initGameUI() {
     void t.offsetWidth; // restart the fade when toasts arrive back to back
     t.classList.add('is-on');
     clearTimeout(sdToastTimer);
-    sdToastTimer = setTimeout(() => t.classList.remove('is-on'), 1900);
+    sdToastTimer = setTimeout(() => t.classList.remove('is-on'), 3000);
+    t.onclick = () => { clearTimeout(sdToastTimer); t.classList.remove('is-on'); };
   }
 
   function reducedMotion() {
@@ -1395,6 +1405,12 @@ function initGameUI() {
     });
   }
 
+  function dailyMoveText({ kind, name, from }) {
+    if (kind === 'deadend') return `✗ ${name} is a dead end: no shared member with ${from}. −1 move.`;
+    if (kind === 'optimal') return `✓ ${name} connects. You\u2019re on the shortest path.`;
+    return `✓ ${name} connects, but it\u2019s the long way round.`;
+  }
+
   // The newest link lands in the chain with a little pop.
   function popNewestPill(card) {
     const filled = card.querySelectorAll('.game-chain-filled');
@@ -1570,6 +1586,16 @@ function initGameUI() {
     paintPlayerLine(card, run);
     dailyClockMark(run);
 
+    // What your last tap did, in words, until the next tap.
+    const resultLine = q('.sd-result');
+    const showResult = !!(active && dailyLastMove);
+    resultLine.hidden = !showResult;
+    if (showResult) {
+      const k = dailyLastMove.kind;
+      resultLine.className = 'sd-result is-' + (k === 'deadend' ? 'bad' : k === 'optimal' ? 'good' : 'ok');
+      resultLine.textContent = dailyMoveText(dailyLastMove);
+    }
+
     const note = q('.game-daily-note');
     const tools = q('.sd-hints .game-daily-tools');
     const optsBox = q('.game-daily-options');
@@ -1728,6 +1754,7 @@ function initGameUI() {
   async function dailyReplay(card) {
     const note = card.querySelector('.game-daily-note');
     note.textContent = 'Dealing a fresh run…';
+    dailyLastMove = null;
     try {
       const data = await dailyFetch('/api/game-daily/play', {
         method: 'POST',
@@ -1787,6 +1814,8 @@ function initGameUI() {
       return;
     }
     const optsBox = card.querySelector('.game-daily-options');
+    const fromName = dailyRun && dailyRun.current_band ? dailyRun.current_band.name : '';
+    const pickedName = btn ? btn.textContent : '';
     optsBox.classList.add('is-busy');
     if (btn) btn.classList.add('is-pending');
     card.querySelectorAll('.game-daily-option').forEach((b) => { b.disabled = true; });
@@ -1812,6 +1841,7 @@ function initGameUI() {
       const picks = dailyRun.picks || [];
       const kind = (data.picked && data.picked.kind) || (picks.length ? picks[picks.length - 1].kind : null);
       if (btn) btn.classList.add(kind === 'deadend' ? 'is-bad' : kind === 'optimal' ? 'is-good' : 'is-ok');
+      dailyLastMove = data.completed ? null : { kind, name: pickedName, from: fromName };
       if (!data.completed) {
         showToast(
           kind === 'deadend' ? '✗ Dead end. No shared member. −1 move'
@@ -1820,7 +1850,7 @@ function initGameUI() {
           kind === 'deadend' ? 'bad' : 'good',
         );
       }
-      await pause(kind === 'deadend' ? 700 : 450);
+      await pause(kind === 'deadend' ? 1000 : 800);
       if (data.completed) {
         // Analytics: game completed (win)
         if (analyticsSessionId) {
