@@ -243,7 +243,7 @@ test('rawk, not Wordle: guitar picks on screen, line icons instead of emoji', ()
 
 test('results: vertical chain list, one pick per move, no duplicate hops stat', () => {
   assert.ok(src.includes('c.appendChild(chainListEl([start, ...mine], run.connections || {}));'));
-  assert.match(src, /function chainListEl\(nodes, connections = \{\}\) \{[\s\S]{0,500}via\.textContent = fmtMembersLong\(names\);/);
+  assert.match(src, /function chainListEl\(nodes, connections = \{\}\) \{[\s\S]{0,800}querySelector\('\.sd-chain-via-names'\)\.textContent = fmtMembersLong\(names\);/);
   assert.ok(src.includes('for (const p of picks) {'), 'every move gets a pick');
   const rows = src.slice(src.indexOf('const statRows = ['), src.indexOf('const statRows = [') + 200);
   assert.ok(!rows.includes("'Hops'"), 'hops stat dropped (the headline says it)');
@@ -254,4 +254,12 @@ test('game-over board shows one chain, the answer, top to bottom', () => {
   const giveup = src.slice(src.indexOf('function paintDailyGiveUp('), src.indexOf('function paintDailyGiveUp(') + 1500);
   assert.ok(giveup.includes("card.querySelector('.game-chain-pills').style.display = 'none';"), 'your row is hidden on a loss');
   assert.ok(giveup.includes('finish.appendChild(chainListEl(run.reveal_path.map('), 'answer is the vertical list');
+});
+
+test('chain timeline: one rail, dots, names aligned; finished boards collapse empty areas', () => {
+  assert.ok(src.includes('.sd-chain-list::before{'), 'continuous rail');
+  assert.ok(src.includes('<span class="sd-chain-dot" aria-hidden="true"></span>'));
+  assert.ok(src.includes('.sd-chain-via{padding-left:26px;'), 'via lines align with band names (12px dot + 14px gap)');
+  assert.ok(src.includes("card.classList.toggle('is-over', !active);"));
+  assert.ok(src.includes('.sd-board.is-over .sd-prompt:empty'));
 });

@@ -836,13 +836,18 @@ function initGameUI() {
       .sd-modal h2 .sd-ico-text,.sd-gameover-title .sd-ico-text{gap:.35em}
       .sd-result-pick{width:18px;height:21px;vertical-align:-4px;margin:0 2px}
       .tool-chip .sd-ico{margin-right:4px}
-      .sd-chain-list{list-style:none;margin:6px auto 12px;padding:0;display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:fit-content;max-width:100%}
-      .sd-chain-list li{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
-      .sd-chain-step{position:relative;padding-left:22px}
-      .sd-chain-step::before{content:'';position:absolute;left:8px;top:-6px;bottom:50%;width:10px;border-left:1.5px solid var(--color-divider);border-bottom:1.5px solid var(--color-divider);border-bottom-left-radius:6px}
-      .sd-chain-list .game-chain-pill{max-width:none}
-      .sd-chain-via{font-size:.8rem;font-weight:600;color:var(--color-text);background:rgba(143,232,246,.08);border:1px solid rgba(143,232,246,.22);border-radius:999px;padding:2px 10px;line-height:1.35}
-      .sd-chain-via::after{content:' →';color:var(--color-text-muted);font-weight:400}
+      /* Chain timeline: a 2px rail through the dot centers (dot 12px wide,
+         so its center is 6px in), band pills 14px right of the dots, and
+         "via" lines indented to the same 26px so everything lines up. */
+      .sd-chain-list{position:relative;list-style:none;margin:8px auto 14px;padding:0;display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:fit-content;max-width:100%;text-align:left}
+      .sd-chain-list::before{content:'';position:absolute;left:5px;top:16px;bottom:16px;width:2px;border-radius:2px;background:rgba(143,232,246,.22)}
+      .sd-chain-node{display:flex;align-items:center;gap:14px;position:relative}
+      .sd-chain-dot{flex:none;width:12px;height:12px;border-radius:50%;background:var(--color-bg);border:2px solid var(--sd-good);position:relative;z-index:1}
+      .sd-chain-node.is-anchor .sd-chain-dot{border-color:var(--color-primary);background:var(--color-primary)}
+      .sd-chain-list .game-chain-pill{max-width:none;margin:0}
+      .sd-chain-via{padding-left:26px;font-size:.82rem;line-height:1.35;max-width:100%}
+      .sd-chain-via-label{color:var(--color-text-faint);font-weight:500}
+      .sd-chain-via-names{color:var(--color-text);font-weight:600}
       .sd-stat strong{display:flex;align-items:center;justify-content:center;gap:.2em;min-height:1.15em}
       .sd-stat strong .sd-ico{width:.7em;height:.7em}
       .sd-modal-close:focus:not(:focus-visible){outline:none;box-shadow:none}
@@ -913,6 +918,9 @@ function initGameUI() {
       .sd-danger{border-color:color-mix(in srgb,var(--sd-bad) 70%,transparent);color:#f6cdc8}
       .sd-danger:hover{background:color-mix(in srgb,var(--sd-bad) 18%,transparent)}
       .sd-gameover{text-align:center;margin:14px 0 6px}
+      /* Finished boards: the question, choices and note areas are empty;
+         don't let their margins push the game-over block down. */
+      .sd-board.is-over .sd-prompt:empty,.sd-board.is-over .game-daily-options:empty,.sd-board.is-over .game-daily-note:empty{display:none}
       .sd-gameover-title{font-family:var(--font-display);font-size:clamp(1.5rem,1.1rem + 1.6vw,2rem);font-weight:700;letter-spacing:.02em;margin:0;line-height:1.15}
       .sd-gameover-sub{color:var(--color-text-muted);font-size:1rem;margin:4px 0 0}
       .sd-reveal-label{text-align:center;font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--color-text-muted);margin:12px 0 4px}
@@ -1643,17 +1651,20 @@ function initGameUI() {
   //   [Rage Against the Machine]
   //     └ Brad Wilk, Tim Commerford and Tom Morello → [Audioslave]
   function chainListEl(nodes, connections = {}) {
+    // A timeline: one continuous rail, a dot per band, every band name on
+    // the same left edge, and "via <musicians>" between two bands lined up
+    // with the names (Cole, 2026-10-08: make it look pro).
     const list = el('<ol class="sd-chain-list"></ol>');
     nodes.forEach((n, i) => {
-      const li = el(`<li class="${i ? 'sd-chain-step' : 'sd-chain-start'}"></li>`);
       if (i) {
         const names = connections[`${nodes[i - 1].id}|${n.id}`];
         if (names && names.length) {
-          const via = el('<span class="sd-chain-via"></span>');
-          via.textContent = fmtMembersLong(names);
-          li.appendChild(via);
+          const via = el('<li class="sd-chain-via"><span class="sd-chain-via-label">via</span> <span class="sd-chain-via-names"></span></li>');
+          via.querySelector('.sd-chain-via-names').textContent = fmtMembersLong(names);
+          list.appendChild(via);
         }
       }
+      const li = el(`<li class="sd-chain-node${n.anchor ? ' is-anchor' : ''}"><span class="sd-chain-dot" aria-hidden="true"></span></li>`);
       const cls = n.anchor ? 'game-chain-anchor' : n.kind === 'optimal' ? 'game-chain-filled game-chain-good' : 'game-chain-filled game-chain-ok';
       const pill = el(`<span class="game-chain-pill ${cls}"></span>`);
       pill.textContent = n.name;
@@ -1805,6 +1816,7 @@ function initGameUI() {
     const q = (sel) => card.querySelector(sel);
     const mk = (t, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = t; return s; };
     const active = run.status === 'active';
+    card.classList.toggle('is-over', !active);
     q('.game-daily-date').textContent = practiceMode ? 'New puzzle every time' : fmtChainDate(run.chain_date);
 
     // The goal, big: Start → Target, then par and moves left.
