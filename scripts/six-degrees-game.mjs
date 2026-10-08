@@ -110,6 +110,12 @@ export function nudgeShouldShow({ plays, done, signedIn } = {}) {
 // Daily Chain — Wordle-style rules and sharing (pure, unit-tested)
 // ---------------------------------------------------------------------------
 
+// The header's "🎮 Ways to play" switcher (Solo / Challenge / Explore /
+// Stakes). Off for launch so first-time visitors land on the Daily Chain and
+// nothing else (Cole, 2026-10-08). Everything behind it — the sheet, the
+// radios, every mode — still works; flip to true to bring it back.
+export const SHOW_MODE_SWITCHER = false;
+
 // Moves you get beyond par before the tree wins. Client-side rule: running
 // out calls the existing `giveup` action, so the server stays authoritative.
 export const DAILY_EXTRA_MOVES = 3;
@@ -298,7 +304,7 @@ function initGameUI() {
     if (picker) picker.style.display = v ? '' : 'none';
     // The header's 🎮 switcher stands in for the tucked-away pills.
     const btn = document.getElementById('game-modes-btn');
-    if (btn) btn.style.display = v ? '' : 'none';
+    if (btn) btn.style.display = v && SHOW_MODE_SWITCHER ? '' : 'none';
   }
 
   const selected = { a: null, b: null };
@@ -699,7 +705,10 @@ function initGameUI() {
     });
   }
   const modesBtn = document.getElementById('game-modes-btn');
-  if (modesBtn) modesBtn.addEventListener('click', openModesSheet);
+  if (modesBtn) {
+    modesBtn.addEventListener('click', openModesSheet);
+    if (!SHOW_MODE_SWITCHER) modesBtn.style.display = 'none';
+  }
   // The format picker re-labels the challenge button (quick vs match).
   // Direct getElementById→addEventListener pair (kept adjacent) so
   // tests/mobile-toolbar-parity.test.mjs sees the dedicated handler —

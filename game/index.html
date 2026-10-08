@@ -320,7 +320,8 @@
             <div class="game-modal-title" id="game-modal-title"><span aria-hidden="true">6&deg;</span> Six Degrees game</div>
             <div class="game-head-right">
               <div class="game-player-line game-player-line-top" id="game-player-line-top"></div>
-              <button type="button" class="game-modes-btn" id="game-modes-btn" aria-haspopup="dialog" aria-label="Ways to play: Daily">
+              <!-- Shown only when SHOW_MODE_SWITCHER is true (scripts/six-degrees-game.mjs). -->
+              <button type="button" class="game-modes-btn" id="game-modes-btn" aria-haspopup="dialog" aria-label="Ways to play: Daily" style="display:none">
                 <span aria-hidden="true">🎮</span> <span data-mode-label>Daily</span> <span aria-hidden="true">▾</span>
               </button>
             </div>

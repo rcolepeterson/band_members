@@ -102,3 +102,10 @@ test('results modal offers a share and a non-blocking guest sign-up nudge', () =
   assert.ok(src.includes('to save your streak and stats!'));
   assert.match(src, /if \(!isSignedIn\(\)\) \{\s*const nudge/);
 });
+
+test('mode switcher sits behind SHOW_MODE_SWITCHER (off for launch), logic kept', async () => {
+  const mod = await import('../scripts/six-degrees-game.mjs');
+  assert.equal(mod.SHOW_MODE_SWITCHER, false);
+  assert.ok(src.includes('function openModesSheet()'), 'sheet still exists');
+  assert.match(src, /btn\.style\.display = v && SHOW_MODE_SWITCHER \? '' : 'none'/, 'picker visibility respects the flag');
+});
