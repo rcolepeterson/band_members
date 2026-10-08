@@ -131,7 +131,7 @@ async function runState(sql, run, chain, me) {
 }
 
 async function dealOptions(sql, run, chain, excludeExtra = []) {
-  const { adj, degree, meta } = await loadBandGraph(sql);
+  const { adj, degree, meta, famous } = await loadBandGraph(sql);
   const dist = bfsDist(adj, chain.band_b);
   const deadPicked = (run.picks || []).filter((p) => p.kind === 'deadend').map((p) => p.band_id);
   const dugOut = run.escaped || [];
@@ -141,6 +141,9 @@ async function dealOptions(sql, run, chain, excludeExtra = []) {
     // Target excluded — auto-finish completes when adjacent (Aaron, 2026-10-07).
     excludeIds: new Set([...deadPicked, ...dugOut, ...excludeExtra, chain.band_b]),
     trapExcludeIds: new Set([chain.band_b]),
+    // Bands people know go on the slate first (Cole/Paul, 2026-10-08).
+    preferIds: famous,
+    preferDist: famous ? bfsDist(adj, chain.band_b, famous) : null,
   });
   return opts.map((o) => ({ band_id: o.band_id, name: (meta.get(o.band_id) || {}).name || 'Band', kind: o.kind }));
 }
