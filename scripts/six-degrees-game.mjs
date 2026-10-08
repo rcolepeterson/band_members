@@ -496,6 +496,16 @@ function initGameUI() {
       loadMatches();
     }
     // Daily Chain gets its own panel — no band fields, no run button.
+    // Mode-specific subtitle (Aaron, 2026-10-07: "Name two bands" is wrong on Daily).
+    const sub = document.querySelector('.game-modal-sub');
+    const subtitles = {
+      daily: 'One fresh chain every day — same for everyone. Connect the bands, beat par, build your streak.',
+      solo: 'Practice mode. Pick a band, we deal the opponent, you find the chain.',
+      'head-to-head': 'Challenge a friend. You pick a band, they pick theirs, the tree decides.',
+      chaos: 'Two random bands. Hit Connect and watch the tree work.',
+    };
+    if (sub && subtitles[mode]) sub.textContent = subtitles[mode];
+
     if (mode === 'daily') {
       document.getElementById('game-field-a-wrap').style.display = 'none';
       wrapB.style.display = 'none';
@@ -577,7 +587,7 @@ function initGameUI() {
       .game-player-line{font-size:.78rem;color:#8a8a8a;margin:0 0 2px}
       .game-chain-pills{display:flex;gap:6px;align-items:center;margin:10px 0;flex-wrap:wrap}
       .game-chain-pill{padding:6px 12px;border-radius:999px;font-size:.82rem;font-weight:600;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis}
-      .game-chain-anchor{border:1px solid rgba(212,175,55,.7);background:rgba(212,175,55,.14);color:#fff}
+      .game-chain-anchor{border:1px solid rgba(82,174,182,.7);background:rgba(82,174,182,.16);color:#fff}
       .game-chain-filled{border:1px solid rgba(82,174,182,.45);background:rgba(82,174,182,.08);color:#fff}
       .game-chain-deadend{border:1px solid rgba(200,90,90,.6);background:rgba(200,90,90,.1);color:#f0b0b0}
       .game-chain-blank{border:1px dashed rgba(255,255,255,.28);background:transparent;color:#777;min-width:44px;text-align:center}
@@ -1003,20 +1013,7 @@ function initGameUI() {
     }
 
     // Chain pills replace the old text trail (Aaron: the text was confusing).
-    // Per 2026-10-01 decision: never reveal the current day's answer — the
-    // full chain is only shown 2+ days later (anti answer-sharing).
-    const chainDate = run.chain_date ? new Date(run.chain_date + 'T12:00:00') : null;
-    const twoDaysAgo = new Date();
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-    const revealAllowed = !chainDate || chainDate <= twoDaysAgo;
-    if (revealAllowed) {
-      paintChainPills(card, run);
-    } else {
-      const box = card.querySelector('.game-chain-pills');
-      if (box) {
-        box.innerHTML = '<span style="color:#888;font-size:.85rem">Chain reveals in 2 days — no spoilers.</span>';
-      }
-    }
+    paintChainPills(card, run);
     paintPlayerLine(card, run);
 
     const note = q('.game-daily-note');
@@ -3019,11 +3016,23 @@ function initGameUI() {
     if (topLine) {
       const seq = 1;
       topLine.dataset.seq = String(seq);
-      topLine.textContent = 'credits';
-      loadMyHandle().then((h) => {
+      // Fetch handle and credits independently of game board rendering
+      // (Aaron, 2026-10-07: show on load, not just after nav).
+      Promise.all([
+        loadMyHandle().catch(() => ''),
+        fetch('/api/game-credits', {
+          headers: { authorization: 'Bearer ' + authToken() },
+        }).then((r) => r.json().catch(() => ({}))).catch(() => ({})),
+      ]).then(([h, credData]) => {
         if (topLine.dataset.seq !== String(seq)) return;
-        // Credits fill in once a run loads; handle shows immediately.
-        topLine.textContent = h ? 'Playing as ' + h : '';
+        const credits = credData && credData.ok && credData.credits != null ? credData.credits : null;
+        if (h && credits != null) {
+          topLine.textContent = 'Playing as ' + h + ' \u00b7 ' + credits + ' credits';
+        } else if (h) {
+          topLine.textContent = 'Playing as ' + h;
+        } else if (credits != null) {
+          topLine.textContent = credits + ' credits';
+        }
       });
     }
   } catch {}
