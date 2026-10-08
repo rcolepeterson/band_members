@@ -123,12 +123,15 @@ export function buildBandAdj(memberships) {
 }
 
 // BFS band-hop distances from targetId. Returns Map<bandId, hops>.
-export function bfsDist(adj, targetId) {
+// `within` (optional Set) restricts the walk to those bands — used to ask
+// "is there a shortest route through famous bands only?"
+export function bfsDist(adj, targetId, within = null) {
   const dist = new Map([[targetId, 0]]);
   const queue = [targetId];
   for (let i = 0; i < queue.length; i++) {
     const cur = queue[i];
     for (const nb of adj.get(cur) || []) {
+      if (within && !within.has(nb)) continue;
       if (!dist.has(nb)) {
         dist.set(nb, dist.get(cur) + 1);
         queue.push(nb);
@@ -162,7 +165,10 @@ export function bfsPath(adj, fromId, targetId) {
 
 // Seeded fair-pair deal: shortest path within [minHops, maxHops], skipping
 // any pair in excludeKeys. Returns { a, b, hops } or null.
-export function pickDailyPair({ bandIds, adj, seed, minHops = MIN_HOPS, maxHops = MAX_HOPS, excludeKeys = new Set(), maxTries = 400 }) {
+// requireWithin (optional Set): the pair only counts if a shortest route
+// runs entirely through that set — so a famous pair isn't joined by obscure
+// supergroups in the middle.
+export function pickDailyPair({ bandIds, adj, seed, minHops = MIN_HOPS, maxHops = MAX_HOPS, excludeKeys = new Set(), maxTries = 400, requireWithin = null }) {
   const rng = mulberry32(hashSeed(seed));
   const n = bandIds.length;
   if (n < 2) return null;
@@ -174,6 +180,7 @@ export function pickDailyPair({ bandIds, adj, seed, minHops = MIN_HOPS, maxHops 
     const dist = bfsDist(adj, b);
     const hops = dist.get(a);
     if (hops === undefined || hops < minHops || hops > maxHops) continue;
+    if (requireWithin && bfsDist(adj, b, requireWithin).get(a) !== hops) continue;
     return { a, b, hops };
   }
   return null;
@@ -191,7 +198,13 @@ export function pickDailyPair({ bandIds, adj, seed, minHops = MIN_HOPS, maxHops 
 // Returns [{ band_id, kind }] shuffled, length up to OPTIONS_PER_STEP.
 // When valid neighbors are scarce, extra dead ends fill the slate.
 
-export function optionsFor({ adj, dist, degree, meta, currentId, excludeIds = new Set(), trapExcludeIds = new Set(), rng = Math.random }) {
+// preferIds (optional Set): when given, the slate is built from those bands
+// first — famous right answers, famous long ways round, famous dead ends —
+// and unknown bands only fill in when no famous one fits.
+// preferDist (optional Map): distance to the target walking famous bands
+// only. A right answer that keeps that all-famous route alive beats one
+// that strands you among unknown bands on the next step.
+export function optionsFor({ adj, dist, degree, meta, currentId, excludeIds = new Set(), trapExcludeIds = new Set(), rng = Math.random, preferIds = null, preferDist = null }) {
   const d = dist.get(currentId);
   const neighbors = [...(adj.get(currentId) || [])].filter((id) => !excludeIds.has(id));
   const optimal = [];
@@ -220,9 +233,21 @@ export function optionsFor({ adj, dist, degree, meta, currentId, excludeIds = ne
       picked.push({ band_id: id, kind });
     }
   };
-  take(optimal, 'optimal');
-  take(solid, 'solid');
-  take(obscure, 'obscure');
+  if (preferIds) {
+    const known = (arr) => arr.filter((id) => preferIds.has(id));
+    // One right answer is enough: a known one that keeps the all-famous
+    // route going, else any known one, else whatever the tree has.
+    const pd = preferDist && preferDist.get(currentId);
+    const onRoute = pd ? known(optimal).filter((id) => preferDist.get(id) === pd - 1) : [];
+    const knownOptimal = known(optimal);
+    take(onRoute.length ? onRoute : knownOptimal.length ? knownOptimal : optimal, 'optimal');
+    take(known(solid), 'solid');
+    take(known(obscure), 'obscure');
+  } else {
+    take(optimal, 'optimal');
+    take(solid, 'solid');
+    take(obscure, 'obscure');
+  }
 
   // Dead ends: plausible but wrong — same genre, no shared member, not the
   // target, not already on the slate.
@@ -239,7 +264,16 @@ export function optionsFor({ adj, dist, degree, meta, currentId, excludeIds = ne
       if (m && cur && m.genre && cur.genre && m.genre === cur.genre) traps.push(id);
       else fallback.push(id);
     }
-    take(shuffle(traps).concat(shuffle(fallback)), 'deadend');
+    if (preferIds) {
+      // take() shuffles within a pool, so famous traps get their own calls.
+      const known = (arr) => arr.filter((id) => preferIds.has(id));
+      take(known(traps), 'deadend');
+      take(known(fallback), 'deadend');
+      take(traps, 'deadend');
+      take(fallback, 'deadend');
+    } else {
+      take(shuffle(traps).concat(shuffle(fallback)), 'deadend');
+    }
   }
   return shuffle(picked).slice(0, OPTIONS_PER_STEP);
 }
