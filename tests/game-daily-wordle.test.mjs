@@ -149,3 +149,30 @@ test('practice is permanent, for fun: no hints in the UI, no "remove this" comme
   assert.ok(src.includes('Practice mode: a permanent product feature, not a test hook'));
   assert.ok(!src.includes('TEMPORARY test hook'));
 });
+
+test('hops count links, moves count taps: dead ends cost a move but are not a hop', async () => {
+  const { dailyChainCounts } = await import('../scripts/six-degrees-game.mjs');
+  // Ramones → 4 bands → Megadeth with one dead end along the way: 5 hops, 6 moves.
+  const picks = [
+    { kind: 'optimal' }, { kind: 'deadend' }, { kind: 'solid' }, { kind: 'optimal' }, { kind: 'optimal' }, { kind: 'optimal' },
+  ];
+  assert.deepEqual(dailyChainCounts(picks), { hops: 5, deadEnds: 1, moves: 6 });
+  assert.deepEqual(dailyChainCounts([]), { hops: 0, deadEnds: 0, moves: 0 });
+  assert.ok(src.includes('`🎉 Chain completed in ${hopsWord}!`'), 'title uses hops, not moves');
+});
+
+test('results show your chain band by band; share text stays spoiler-free', () => {
+  assert.ok(src.includes("${won ? 'Your chain' : 'Your attempt'}"));
+  assert.ok(src.includes('c.appendChild(chainRowEl([start, ...mine]));'));
+});
+
+test('Ask the tree is obvious: drawer closes, choices glow, cancellable, answer on the board', () => {
+  assert.ok(src.includes("peek.addEventListener('click', () => armDailyAsk(card));"));
+  assert.match(src, /function armDailyAsk\(card\) \{[\s\S]{0,400}drawer\.open = false;[\s\S]{0,200}classList\.add\('is-asking'\)/);
+  assert.ok(src.includes('`🌳 The tree says ${data.hint.option.name} is on the shortest path.`'));
+  assert.ok(src.includes("optsBox.classList.remove('is-busy', 'is-asking');"));
+});
+
+test('a new board clears a leftover toast', () => {
+  assert.match(src, /async function renderDailyBoard[\s\S]{0,300}clearTimeout\(sdToastTimer\);\s*document\.querySelector\('\.sd-toast'\)\?\.classList\.remove\('is-on'\);/);
+});
