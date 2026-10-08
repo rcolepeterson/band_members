@@ -2474,8 +2474,6 @@ function initGameUI() {
   }
 
   // --- your challenges (the quiet status view; arena page only) ---------------
-  async function loadChallenges() {
-
   // --- structured match play ---------------------------------------------
   // A match is a series of serves. On your serve you pick band A; your
   // opponent defends by picking band B; the revealed chain's hop count is
@@ -2725,6 +2723,8 @@ function initGameUI() {
       list.appendChild(row);
     }
   }
+
+  async function loadChallenges() {
     const list = document.getElementById('game-challenges');
     if (!list) return;
     const wrap = list.closest('[data-challenges-wrap]');
