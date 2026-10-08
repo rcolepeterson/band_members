@@ -39,6 +39,38 @@ export function escapeHtml(raw) {
     .replace(/"/g, '&quot;');
 }
 
+// Challenge band refs are graph node ids, and the graph now keys bands by
+// database UUID. The browser resolves those against its loaded graph; this
+// card has no graph, so without a lookup the preview read
+// "a8c8d9e2-… vs ?" instead of "Sweet Water vs ?". Name-shaped refs (older
+// challenges) pass through untouched.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isUuidRef(ref) {
+  return typeof ref === 'string' && UUID_RE.test(ref);
+}
+
+// Fail-soft: a lookup miss or DB hiccup leaves the ref as-is, and
+// inviteCardCopy never prints a bare UUID (see displayBand).
+export async function resolveBandNames(sql, refs) {
+  const ids = [...new Set(refs.filter(isUuidRef))];
+  const names = new Map();
+  if (!ids.length) return names;
+  try {
+    const rows = await sql`select id, name from bands where id = any(${ids}::uuid[])`;
+    for (const r of rows || []) names.set(String(r.id).toLowerCase(), r.name);
+  } catch (_) {
+    // generic band label stands
+  }
+  return names;
+}
+
+// A UUID that didn't resolve reads worse than a placeholder.
+function displayBand(ref) {
+  if (!ref || isUuidRef(ref)) return 'a band';
+  return ref;
+}
+
 // Pure copy builder — unit-tested without a DB.
 // detail: { state: 'open'|'answered'|'expired'|'unknown', challenger, invitee, band_a, band_b }
 export function inviteCardCopy(detail) {
@@ -46,14 +78,14 @@ export function inviteCardCopy(detail) {
   if (d.state === 'open') {
     return {
       title: `${d.challenger || 'Someone'} challenged you to a Six Degrees showdown`,
-      description: `${d.band_a || '???'} vs ? \u2014 pick a band and try to stump them.`,
+      description: `${displayBand(d.band_a)} vs ? \u2014 pick a band and try to stump them.`,
     };
   }
   if (d.state === 'answered') {
     const vs = d.invitee ? `${d.challenger} vs ${d.invitee}` : `${d.challenger || 'Someone'}`;
     return {
       title: `${vs} \u2014 Six Degrees showdown`,
-      description: `${d.band_a || '???'} vs ${d.band_b || '???'} \u2014 see how the chain played out.`,
+      description: `${displayBand(d.band_a)} vs ${displayBand(d.band_b)} \u2014 see how the chain played out.`,
     };
   }
   if (d.state === 'expired') {
@@ -149,19 +181,21 @@ export default async (req) => {
       try {
         const { error, row } = await getChallengeDetail(sql, token);
         if (row) {
+          const names = await resolveBandNames(sql, [row.band_a, row.band_b]);
+          const nameOf = (ref) => (ref && names.get(String(ref).toLowerCase())) || ref;
           detail =
             row.status === 'answered'
               ? {
                   state: 'answered',
                   challenger: row.challenger_handle || 'Someone',
                   invitee: row.invitee_handle || null,
-                  band_a: row.band_a,
-                  band_b: row.band_b,
+                  band_a: nameOf(row.band_a),
+                  band_b: nameOf(row.band_b),
                 }
               : {
                   state: 'open',
                   challenger: row.challenger_handle || 'Someone',
-                  band_a: row.band_a,
+                  band_a: nameOf(row.band_a),
                 };
         } else if (error && error.status === 410) {
           detail = { state: 'expired' };

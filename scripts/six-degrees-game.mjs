@@ -1141,13 +1141,19 @@ function initGameUI() {
     tools.appendChild(giveup);
   }
 
+  // In-run actions name the run's day. Without it the server assumes today,
+  // so a past day opened from the archive would act on today's chain.
+  function dailyDate() {
+    return dailyRun && dailyRun.chain_date ? { date: dailyRun.chain_date } : {};
+  }
+
   async function dailyGiveUp(card) {
     const note = card.querySelector('.game-daily-note');
     note.textContent = 'The tree is revealing the path…';
     try {
       const data = await dailyFetch('/api/game-daily/play', {
         method: 'POST',
-        body: JSON.stringify({ action: 'giveup' }),
+        body: JSON.stringify({ action: 'giveup', ...dailyDate() }),
       });
       dailyRun = data.run;
       dailyOptions = [];
@@ -1210,7 +1216,7 @@ function initGameUI() {
       try {
         const data = await dailyFetch('/api/game-daily/play', {
           method: 'POST',
-          body: JSON.stringify({ action: 'hint', type: 'reveal', option_id: optionId }),
+          body: JSON.stringify({ action: 'hint', type: 'reveal', option_id: optionId, ...dailyDate() }),
         });
         dailyRun = data.run;
         dailyOptions = data.options || [];
@@ -1238,7 +1244,7 @@ function initGameUI() {
     try {
       const data = await dailyFetch('/api/game-daily/play', {
         method: 'POST',
-        body: JSON.stringify({ action: 'pick', option_id: optionId }),
+        body: JSON.stringify({ action: 'pick', option_id: optionId, ...dailyDate() }),
       });
       dailyRun = data.run;
       dailyOptions = data.options || [];
@@ -1287,7 +1293,7 @@ function initGameUI() {
     try {
       const data = await dailyFetch('/api/game-daily/play', {
         method: 'POST',
-        body: JSON.stringify({ action: 'hint', type }),
+        body: JSON.stringify({ action: 'hint', type, ...dailyDate() }),
       });
       dailyRun = data.run;
       dailyOptions = data.options || [];
@@ -1316,7 +1322,7 @@ function initGameUI() {
     try {
       const data = await dailyFetch('/api/game-daily/play', {
         method: 'POST',
-        body: JSON.stringify({ action: 'escape' }),
+        body: JSON.stringify({ action: 'escape', ...dailyDate() }),
       });
       dailyRun = data.run;
       dailyOptions = data.options || [];
