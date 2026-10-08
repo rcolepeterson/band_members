@@ -1867,8 +1867,12 @@ function initGameUI() {
       if (q.length < 2) { list.hidden = true; return; }
       try {
         const g = await loadGraph();
+        // Normalize umlauts/diacritics so "motley" finds "Mötley Crüe",
+        // "husker" finds "Hüsker Dü", etc.
+        const norm = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const nq = norm(q);
         items = [...g.bands.values()]
-          .filter((b) => b.name.toLowerCase().includes(q))
+          .filter((b) => norm(b.name).includes(nq))
           .slice(0, 8);
       } catch { items = []; }
       list.innerHTML = '';
