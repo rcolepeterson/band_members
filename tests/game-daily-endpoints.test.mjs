@@ -199,3 +199,9 @@ test('every in-run daily action names the run\'s day, not just start', () => {
     assert.ok(daily, `${action} should send dailyDate()`);
   }
 });
+
+test('the slate never offers a step backwards (start band or bands already in the chain)', () => {
+  const play = src('netlify/functions/game_daily_play.mjs');
+  assert.match(play, /const visited = \[chain\.band_a, \.\.\.\(run\.picks \|\| \[\]\)\.filter\(\(p\) => p\.kind !== 'deadend'\)\.map\(\(p\) => p\.band_id\)\]/);
+  assert.match(play, /excludeIds: new Set\(\[\.\.\.deadPicked, \.\.\.visited,/);
+});
