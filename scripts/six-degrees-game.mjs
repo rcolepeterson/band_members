@@ -3036,6 +3036,17 @@ function initGameUI() {
           const signedIn = isSignedIn();
           if (!signedIn) {
             topLine.innerHTML = '<span style="opacity:.7">Sign in to play</span>';
+            // Retry in 2s — auth token may not be in localStorage yet on
+            // initial page load (Aaron, 2026-10-07).
+            setTimeout(() => {
+              if (topLine.dataset.seq !== String(seq)) return;
+              try {
+                const raw = localStorage.getItem('bmft-user');
+                if (raw && JSON.parse(raw).token) {
+                  paintTopLine();
+                }
+              } catch {}
+            }, 2000);
             return;
           }
           if (!h && credits != null) {
