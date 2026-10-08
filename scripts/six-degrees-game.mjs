@@ -107,6 +107,55 @@ export function nudgeShouldShow({ plays, done, signedIn } = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Daily Chain — Wordle-style rules and sharing (pure, unit-tested)
+// ---------------------------------------------------------------------------
+
+// Moves you get beyond par before the tree wins. Client-side rule: running
+// out calls the existing `giveup` action, so the server stays authoritative.
+export const DAILY_EXTRA_MOVES = 3;
+export function dailyMoveLimit(par) {
+  return Math.max(1, Number(par) || 3) + DAILY_EXTRA_MOVES;
+}
+
+// "#9" in the share text: day one of the Daily Chain was 2026-09-30.
+export const DAILY_EPOCH = '2026-09-30';
+export function dailyPuzzleNumber(date) {
+  const day = (s) => Date.UTC(...String(s).split('-').map((n, i) => Number(n) - (i === 1 ? 1 : 0)));
+  const n = Math.round((day(date) - day(DAILY_EPOCH)) / 86400000) + 1;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// Wordle's tile colors, mapped onto a pick's kind.
+export function dailyPickSquare(kind) {
+  if (kind === 'optimal') return '🟩';
+  if (kind === 'deadend') return '🟥';
+  return '🟨';
+}
+
+export function fmtElapsed(seconds) {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
+  const s = Math.round(seconds);
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+}
+
+// Spoiler-free share text. The start and target are the same for everyone;
+// the bands in between are squares. On a win the last pick IS the target,
+// so it is drawn as the target, not as a square.
+export function dailyShareResultText({ date, start, target, picks = [], moves = picks.length, par, won, seconds = null }) {
+  const steps = won ? picks.slice(0, -1) : picks;
+  const chain = [start, ...steps.map((p) => dailyPickSquare(p.kind)), won ? target : `❌ ${target}`].join(' ➡️ ');
+  const num = dailyPuzzleNumber(date);
+  const time = fmtElapsed(seconds);
+  return [
+    `Six Degrees of Rock 🎸${num ? ` #${num}` : ''}`,
+    chain,
+    `Moves: ${moves}/${par}${time ? ` ⏱️ ${time}` : ''}`,
+    `${won ? 'Can you beat my chain?' : 'Can you crack it?'} https://sixdegreesofrock.com/game`,
+  ].join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Browser UI
 // ---------------------------------------------------------------------------
 
@@ -511,6 +560,9 @@ function initGameUI() {
         stakes: 'Put something on it. Winner takes the round.',
       };
       descEl.textContent = descs[mode] || '';
+      // Daily explains itself on the board (Cole, 2026-10-08: the same
+      // tagline was printed three times above the puzzle).
+      descEl.style.display = mode === 'daily' ? 'none' : '';
     }
     // Mode-specific subtitle (Aaron, 2026-10-07: "Name two bands" is wrong on Daily).
     // Placed here (before challenge queue loading) so a throw in loadChallenges()
@@ -524,6 +576,7 @@ function initGameUI() {
         chaos: 'Two random bands. Hit Connect and watch the tree work.',
       };
       if (sub && subtitles[mode]) sub.textContent = subtitles[mode];
+      if (sub) sub.style.display = mode === 'daily' ? 'none' : '';
     } catch {}
     // Any mode change exits the invite accept context.
     showHowto('');
@@ -557,8 +610,17 @@ function initGameUI() {
       fieldA.disabled = true;
       result.innerHTML = '';
       statusLine.textContent = '';
+      // Empty action row + status line left a gap above the board.
+      const actionsRow = document.querySelector('.game-actions');
+      if (actionsRow) actionsRow.style.display = 'none';
+      statusLine.style.display = 'none';
       renderDailyPanel();
       return;
+    }
+    {
+      const actionsRow = document.querySelector('.game-actions');
+      if (actionsRow) actionsRow.style.display = '';
+      statusLine.style.display = '';
     }
     fieldA.disabled = false;
     // Solo: only band A is picked; the graph supplies band B.
@@ -659,6 +721,85 @@ function initGameUI() {
       .game-daily-postmortem .pm-par{color:#d4a017}
       .game-daily-postmortem .pm-you{color:#7fc9c7}
       .game-daily-postmortem .pm-label{color:#999;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em}
+
+      /* --- Daily board, Wordle-simple (Cole, 2026-10-08) -------------------
+         One goal, one chain, one question, four big buttons. Everything else
+         (hints, streak, credits, past days) sits in quiet drawers below. */
+      .sd-board,.sd-modal,.sd-toast{--sd-good:#3fa36b;--sd-ok:#c9a83a;--sd-bad:#c8584f}
+      .sd-topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px}
+      .sd-topbar .game-daily-head{margin:0}
+      .sd-icon{flex:none;width:36px;height:36px;border-radius:999px;border:1px solid var(--color-border);background:transparent;color:inherit;font:inherit;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+      .sd-icon:hover{border-color:rgba(82,174,182,.8)}
+      .sd-board .game-player-line{display:none}
+      .sd-goal{text-align:center;margin:10px 0 4px}
+      .sd-goal-label{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--color-text-muted)}
+      .sd-goal .game-daily-pair{font-family:var(--font-display);font-size:clamp(1.3rem,1rem + 1.8vw,1.9rem);line-height:1.2;margin:6px 0 4px}
+      .sd-goal .game-daily-arrow{color:var(--accent);margin:0 .3em}
+      .sd-goal-meta{font-size:.9rem;color:var(--color-text-muted);margin:0}
+      .sd-goal-meta strong{color:var(--color-text)}
+      .sd-board .game-chain-pills{position:relative;flex-wrap:nowrap;overflow-x:auto;justify-content:safe center;padding:6px 6px 8px;margin:10px 0 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+      .sd-board .game-chain-pills::-webkit-scrollbar{display:none}
+      .sd-board .game-chain-pill{flex:none;max-width:150px}
+      .sd-link{flex:none;color:var(--color-text-faint);font-size:.8rem}
+      .game-chain-good{border-color:var(--sd-good);background:color-mix(in srgb,var(--sd-good) 22%,transparent)}
+      .game-chain-ok{border-color:var(--sd-ok);background:color-mix(in srgb,var(--sd-ok) 20%,transparent)}
+      .sd-board .game-chain-deadend,.sd-modal .game-chain-deadend{border-color:var(--sd-bad);background:color-mix(in srgb,var(--sd-bad) 18%,transparent);color:#f3c4bf;text-decoration:line-through;text-decoration-thickness:1px}
+      .game-chain-current{box-shadow:0 0 0 2px var(--color-bg),0 0 0 4px var(--color-primary)}
+      .sd-pop{animation:sd-pop .45s cubic-bezier(.2,1.4,.4,1)}
+      .sd-prompt{text-align:center;font-size:1.02rem;color:var(--color-text);margin:14px 0 10px;line-height:1.45}
+      .sd-prompt strong{color:var(--color-primary)}
+      .sd-board .game-daily-options{gap:10px;margin:0 0 6px}
+      .sd-board .game-daily-option{min-height:56px;padding:12px 16px;text-align:center;font-size:1.05rem;border-radius:14px;transition:transform .12s,background-color .15s,border-color .15s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+      .sd-board .game-daily-option:active{transform:scale(.98)}
+      .sd-board .game-daily-option:disabled{opacity:1;cursor:default}
+      .sd-board .game-daily-options.is-busy .game-daily-option:not(.is-pending){opacity:.45}
+      .sd-board .game-daily-option.is-pending{border-color:var(--color-primary)}
+      .game-daily-option.is-good{border-color:var(--sd-good);background:var(--sd-good);color:#fff}
+      .game-daily-option.is-ok{border-color:var(--sd-ok);background:var(--sd-ok);color:#16130a}
+      .game-daily-option.is-bad{border-color:var(--sd-bad);background:var(--sd-bad);color:#fff;animation:sd-shake .4s}
+      .sd-board .game-daily-note{text-align:center;min-height:1.2em}
+      .sd-finish-line{text-align:center;font-size:1.02rem;margin:14px 0 8px}
+      .sd-finish-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:6px 0}
+      .sd-drawers{display:flex;flex-direction:column;gap:2px;margin-top:14px;border-top:1px solid var(--color-divider);padding-top:6px}
+      .sd-drawer>summary,.sd-board .game-daily-archive>summary{cursor:pointer;font-size:.9rem;color:var(--color-text-muted);padding:8px 0;list-style-position:inside}
+      .sd-board .game-daily-archive{margin-top:0}
+      .sd-drawer .game-daily-tools{margin:2px 0 8px}
+      .sd-drawer .game-daily-econ{margin:2px 0 8px}
+      .sd-toast{position:fixed;left:50%;top:84px;transform:translate(-50%,-8px);z-index:1100;max-width:calc(100vw - 32px);padding:10px 16px;border-radius:12px;background:#f2f6f9;color:#0f1319;font-weight:700;font-size:.95rem;box-shadow:0 10px 30px rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;text-align:center}
+      .sd-toast.is-on{opacity:1;transform:translate(-50%,0)}
+      .sd-toast.is-bad{background:var(--sd-bad);color:#fff}
+      .sd-toast.is-good{background:var(--sd-good);color:#fff}
+      .sd-modal{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px}
+      .sd-modal-backdrop{position:absolute;inset:0;background:rgba(2,5,9,.74);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+      .sd-modal-card{position:relative;width:100%;max-width:420px;max-height:calc(100dvh - 32px);overflow:auto;background:#0b131c;border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:28px 20px 20px;box-shadow:var(--shadow-lg);animation:sd-rise .22s ease-out;color:var(--color-text)}
+      .sd-modal-close{position:absolute;top:10px;right:10px;width:40px;height:40px;border-radius:999px;border:none;background:transparent;color:var(--color-text-muted);font-size:1.3rem;cursor:pointer}
+      .sd-modal-close:hover{color:var(--color-text)}
+      .sd-modal h2{font-family:var(--font-display);font-size:1.55rem;line-height:1.2;margin:0 32px 6px 0}
+      .sd-modal p{margin:6px 0;line-height:1.5}
+      .sd-modal ul{margin:8px 0 12px 20px;padding:0;line-height:1.55}
+      .sd-modal-sub{color:var(--color-text-muted)}
+      .sd-howto-ex{display:flex;flex-direction:column;gap:12px;margin:14px 0;padding:14px 0;border-top:1px solid var(--color-divider);border-bottom:1px solid var(--color-divider)}
+      .sd-howto-ex .game-chain-pill{display:inline-block;margin-bottom:4px}
+      .sd-howto-ex p{margin:0;font-size:.9rem;color:var(--color-text-muted)}
+      .sd-result-chain{text-align:center;font-size:1rem;line-height:1.9;margin:14px 0 6px;word-break:break-word}
+      .sd-result-stats{display:flex;justify-content:center;gap:28px;margin:14px 0 18px}
+      .sd-stat{text-align:center}
+      .sd-stat strong{display:block;font-size:1.8rem;line-height:1.1}
+      .sd-stat span{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--color-text-muted)}
+      .sd-reveal{font-size:.9rem;color:var(--color-text-muted);text-align:center}
+      .sd-reveal strong{color:var(--color-text)}
+      .sd-primary{display:block;width:100%;min-height:52px;border-radius:999px;border:none;background:var(--color-primary);color:var(--color-text-inverse);font:inherit;font-weight:700;font-size:1.05rem;cursor:pointer}
+      .sd-primary:hover{background:var(--color-primary-hover)}
+      .sd-secondary{display:block;width:100%;min-height:46px;margin-top:10px;border-radius:999px;border:1px solid var(--color-border);background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer}
+      .sd-guest{margin-top:16px;text-align:center;font-size:.88rem;color:var(--color-text-muted)}
+      .sd-linkbtn{background:none;border:none;padding:0;font:inherit;color:var(--color-primary);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+      @keyframes sd-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+      @keyframes sd-pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
+      @keyframes sd-rise{0%{transform:translateY(12px);opacity:0}100%{transform:none;opacity:1}}
+      @media (prefers-reduced-motion:reduce){
+        .sd-pop,.game-daily-option.is-bad,.sd-modal-card{animation:none}
+        .sd-toast{transition:none}
+      }
     `;
     document.head.appendChild(st);
   }
@@ -916,23 +1057,34 @@ function initGameUI() {
 
   async function renderDailyBoard({ loading = false, date } = {}) {
     result.innerHTML = '';
-    const card = el(`<div class="game-result-card game-daily">
-      <div class="game-daily-head"><span class="game-hops">Daily Chain</span><span class="game-daily-date"></span></div>
+    // Wordle-simple layout (Cole, 2026-10-08): goal, chain, question, four
+    // big buttons. Hints, streak/credits and past days live in drawers.
+    const card = el(`<div class="game-result-card game-daily sd-board">
+      <div class="sd-topbar">
+        <div class="game-daily-head"><span class="game-hops">Daily Chain</span><span class="game-daily-date"></span></div>
+        <button type="button" class="sd-icon" data-howto aria-label="How to play">?</button>
+      </div>
       <div class="game-player-line"></div>
-      <p class="game-daily-pair"></p>
-      <p class="game-daily-econ"></p>
-      <div class="game-daily-picks" aria-label="Your picks"></div>
-      <div class="game-daily-current"></div>
+      <div class="sd-goal">
+        <div class="sd-goal-label">Connect</div>
+        <p class="game-daily-pair"></p>
+        <p class="sd-goal-meta"></p>
+      </div>
       <div class="game-chain-pills"></div>
+      <p class="game-daily-current sd-prompt"></p>
       <div class="game-daily-options"></div>
-      <div class="game-daily-tools"></div>
-      <p class="game-daily-note"></p>
+      <p class="game-daily-note" role="status"></p>
       <div class="game-daily-finish"></div>
-      <details class="game-daily-archive"><summary>Past days</summary><div class="game-daily-archive-list"></div></details>
+      <div class="sd-drawers">
+        <details class="sd-drawer sd-hints"><summary>💡 Get a hint</summary><div class="game-daily-tools"></div></details>
+        <details class="sd-drawer sd-stats"><summary>Streak &amp; credits</summary><p class="game-daily-econ"></p><div class="game-daily-tools sd-stats-actions"></div></details>
+        <details class="game-daily-archive"><summary>Past days</summary><div class="game-daily-archive-list"></div></details>
+      </div>
     </div>`);
     result.appendChild(card);
+    card.querySelector('[data-howto]').addEventListener('click', openHowToPlay);
     if (loading) {
-      card.querySelector('.game-daily-note').textContent = 'Dealing today\u2019s chain…';
+      card.querySelector('.game-daily-note').textContent = 'Dealing today’s chain…';
     }
     try {
       const data = await dailyFetch('/api/game-daily/play', {
@@ -953,7 +1105,14 @@ function initGameUI() {
         band_a: dailyRun && dailyRun.start_band ? dailyRun.start_band.name : null,
         band_b: dailyRun && dailyRun.target ? dailyRun.target.name : null,
       });
+      card.querySelector('.game-daily-note').textContent = '';
       paintDailyBoard(card);
+      // First visit: show the rules once, the way Wordle does.
+      if (dailyRun && dailyRun.status === 'active' && dailyRun.hops_used === 0) {
+        let seen = true;
+        try { seen = !!localStorage.getItem('sdr-howto-seen'); localStorage.setItem('sdr-howto-seen', '1'); } catch {}
+        if (!seen) openHowToPlay();
+      }
     } catch (err) {
       const note = card.querySelector('.game-daily-note');
       if (err && /locked/.test(err.message)) {
@@ -963,6 +1122,221 @@ function initGameUI() {
       }
     }
     wireDailyArchive(card);
+  }
+
+  // --- Wordle-simple board helpers (Cole, 2026-10-08) ------------------------
+
+  let sdToastTimer = null;
+  function showToast(text, tone) {
+    let t = document.querySelector('.sd-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.className = 'sd-toast';
+      t.setAttribute('role', 'status');
+      t.setAttribute('aria-live', 'polite');
+      document.body.appendChild(t);
+    }
+    t.textContent = text;
+    t.classList.remove('is-good', 'is-bad', 'is-on');
+    if (tone) t.classList.add('is-' + tone);
+    void t.offsetWidth; // restart the fade when toasts arrive back to back
+    t.classList.add('is-on');
+    clearTimeout(sdToastTimer);
+    sdToastTimer = setTimeout(() => t.classList.remove('is-on'), 1900);
+  }
+
+  function reducedMotion() {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+  }
+  function pause(ms) {
+    return new Promise((r) => setTimeout(r, reducedMotion() ? Math.min(ms, 150) : ms));
+  }
+
+  // One modal at a time. Escape, the ✕ and the backdrop all close it, and
+  // focus returns to whatever opened it.
+  function openSdModal(build) {
+    closeSdModal();
+    ensureDailyStyles();
+    const opener = document.activeElement;
+    const modal = el(`<div class="sd-modal" role="dialog" aria-modal="true">
+      <div class="sd-modal-backdrop" data-close></div>
+      <div class="sd-modal-card"><button type="button" class="sd-modal-close" data-close aria-label="Close">✕</button></div>
+    </div>`);
+    const body = modal.querySelector('.sd-modal-card');
+    build(body);
+    const h = body.querySelector('h2');
+    if (h) { h.id = 'sd-modal-title'; modal.setAttribute('aria-labelledby', 'sd-modal-title'); }
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    function close() {
+      modal.remove();
+      document.removeEventListener('keydown', onKey);
+      if (opener && typeof opener.focus === 'function' && document.contains(opener)) opener.focus();
+    }
+    modal.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', close));
+    document.addEventListener('keydown', onKey);
+    modal.sdClose = close;
+    document.body.appendChild(modal);
+    modal.querySelector('.sd-modal-close').focus();
+    return close;
+  }
+  function closeSdModal() {
+    const open = document.querySelector('.sd-modal');
+    if (open && open.sdClose) open.sdClose();
+  }
+
+  function openHowToPlay() {
+    openSdModal((c) => {
+      c.appendChild(el('<h2>How to play</h2>'));
+      c.appendChild(el('<p class="sd-modal-sub">Connect the two bands in as few moves as you can.</p>'));
+      const ul = el('<ul></ul>');
+      for (const line of [
+        'Each move, tap a band that shares a member with the band you’re on.',
+        `Par is the shortest possible chain. You get par + ${DAILY_EXTRA_MOVES} moves.`,
+        'Every band you tap fills the next slot in your chain.',
+      ]) {
+        const li = document.createElement('li');
+        li.textContent = line;
+        ul.appendChild(li);
+      }
+      c.appendChild(ul);
+      const ex = el('<div class="sd-howto-ex"><p><strong>Say you’re on Nirvana:</strong></p></div>');
+      for (const [cls, name, says] of [
+        ['game-chain-good', 'Foo Fighters', 'Green: shares a member and it’s on the shortest path.'],
+        ['game-chain-ok', 'Sweet 75', 'Yellow: shares a member, but it’s the long way round.'],
+        ['game-chain-deadend', 'Pearl Jam', 'Red: no shared member. A dead end, and it costs a move.'],
+      ]) {
+        const row = el(`<div><span class="game-chain-pill game-chain-filled ${cls}"></span><p></p></div>`);
+        row.querySelector('span').textContent = name;
+        row.querySelector('p').textContent = says;
+        ex.appendChild(row);
+      }
+      c.appendChild(ex);
+      c.appendChild(el('<p class="sd-modal-sub">A new chain every day at midnight Pacific. Same chain for everyone.</p>'));
+      const play = el('<button type="button" class="sd-primary" style="margin-top:14px">Play</button>');
+      play.addEventListener('click', closeSdModal);
+      c.appendChild(play);
+    });
+  }
+
+  // Timer for the share text: starts when a fresh run is first seen, stops
+  // when the results open. Lives in localStorage so a reload doesn't reset it.
+  function dailyClockKey(run) { return `sdr-daily-clock:${run.chain_date}:${run.run_number || 1}`; }
+  function dailyClockMark(run) {
+    if (!run || run.status !== 'active' || run.hops_used !== 0) return;
+    try {
+      const k = dailyClockKey(run);
+      if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now()));
+    } catch {}
+  }
+  function dailyElapsed(run) {
+    try {
+      const k = dailyClockKey(run);
+      const start = Number(localStorage.getItem(k));
+      if (!start) return null;
+      let end = Number(localStorage.getItem(k + ':end'));
+      if (!end) { end = Date.now(); localStorage.setItem(k + ':end', String(end)); }
+      return (end - start) / 1000;
+    } catch { return null; }
+  }
+
+  // Guests reach sign-up the same way the old daily gate did: the main page
+  // owns the sign-up flow, and sdr_pending_daily brings them back here.
+  function requestDailySignup() {
+    try { sessionStorage.setItem('sdr_pending_daily', '1'); } catch {}
+    if (isArenaPage()) window.location.href = '/';
+    else if (typeof window.openSignupPopover === 'function') window.openSignupPopover();
+    else document.getElementById('add-band-btn')?.click();
+  }
+
+  async function shareDailyText(btn, text) {
+    const label = btn.textContent;
+    // Phones get the share sheet; everywhere else copies, like Wordle.
+    let coarse = false;
+    try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch {}
+    if (coarse && navigator.share) {
+      try { await navigator.share({ text }); return; } catch (err) {
+        if (err && err.name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Copied results to clipboard', 'good');
+      btn.textContent = 'Copied!';
+    } catch {
+      btn.textContent = 'Copy failed. Long-press the chain to copy.';
+    }
+    setTimeout(() => { btn.textContent = label; }, 2200);
+  }
+
+  function openDailyResults({ won, completed = {} }) {
+    const run = dailyRun;
+    if (!run) return;
+    const picks = completed.picks && completed.picks.length ? completed.picks : (run.picks || []);
+    const hops = completed.hops_used != null ? completed.hops_used : run.hops_used;
+    const par = completed.beat_tree ? completed.old_par : run.par;
+    const streak = completed.streak != null ? completed.streak : run.streak;
+    const seconds = dailyElapsed(run);
+    const text = dailyShareResultText({
+      date: run.chain_date, start: run.start_band.name, target: run.target.name,
+      picks, moves: hops, par, won, seconds,
+    });
+    openSdModal((c) => {
+      const h = document.createElement('h2');
+      h.textContent = !won ? '💀 Dead end! The tree wins.'
+        : completed.beat_tree ? `🏆 You beat the tree in ${hops} hop${hops === 1 ? '' : 's'}!`
+        : `🎉 Chain completed in ${hops} hop${hops === 1 ? '' : 's'}!`;
+      c.appendChild(h);
+      const sub = el('<p class="sd-modal-sub"></p>');
+      sub.textContent = !won ? 'Here’s the chain the tree had in mind.'
+        : completed.beat_tree ? `Par was ${par}. You found a shorter chain than the tree.`
+        : hops === par ? 'Right on par. The tree nods.'
+        : `Par was ${par}. Come back tomorrow and beat it.`;
+      c.appendChild(sub);
+      const chainLine = el('<p class="sd-result-chain"></p>');
+      chainLine.textContent = text.split('\n')[1];
+      c.appendChild(chainLine);
+      if (!won && run.reveal_path && run.reveal_path.length) {
+        const rev = el('<p class="sd-reveal">The chain: <strong></strong></p>');
+        rev.querySelector('strong').textContent = run.reveal_path.map((b) => b.name).join(' → ');
+        c.appendChild(rev);
+      }
+      const stats = el('<div class="sd-result-stats"></div>');
+      const time = fmtElapsed(seconds);
+      for (const [num, label] of [[hops, 'Moves'], [par, 'Par'], [streak, 'Streak'], ...(time ? [[time, 'Time']] : [])]) {
+        const s = el('<div class="sd-stat"><strong></strong><span></span></div>');
+        s.querySelector('strong').textContent = String(num);
+        s.querySelector('span').textContent = label;
+        stats.appendChild(s);
+      }
+      c.appendChild(stats);
+      const shareBtn = el('<button type="button" class="sd-primary">Share result</button>');
+      shareBtn.addEventListener('click', () => shareDailyText(shareBtn, text));
+      c.appendChild(shareBtn);
+      const imgBtn = el('<button type="button" class="sd-secondary">Share image</button>');
+      imgBtn.addEventListener('click', () => shareDailyCard(imgBtn, {
+        mode: won ? 'win' : 'lost',
+        date: run.chain_date,
+        startName: run.start_band.name,
+        targetName: run.target.name,
+        hops, par, streak, picks, text,
+      }));
+      c.appendChild(imgBtn);
+      if (completed.freeze_used) {
+        c.appendChild(el('<p class="sd-modal-sub">A Seattle Freeze bridged your missed day. Streak intact.</p>'));
+      }
+      if (!isSignedIn()) {
+        const nudge = el('<p class="sd-guest"><button type="button" class="sd-linkbtn">Create a free account</button> to save your streak and stats!</p>');
+        nudge.querySelector('button').addEventListener('click', requestDailySignup);
+        c.appendChild(nudge);
+      }
+    });
+  }
+
+  // The newest link lands in the chain with a little pop.
+  function popNewestPill(card) {
+    const filled = card.querySelectorAll('.game-chain-filled');
+    const last = filled[filled.length - 1];
+    if (last) last.classList.add('sd-pop');
   }
 
   // Tappable credit balance: what you hold, how it's earned, what's coming.
@@ -1018,16 +1392,24 @@ function initGameUI() {
       if (title) s.title = title;
       return s;
     };
-    box.appendChild(mkPill(run.start_band.name, 'game-chain-anchor', 'Start band'));
+    const startPill = mkPill(run.start_band.name, 'game-chain-anchor', 'Start band');
+    box.appendChild(startPill);
+    // The band you're standing on gets a ring: the start, or your last
+    // pick that actually connected (dead ends leave you where you were).
+    const curId = run.current_band ? String(run.current_band.id) : null;
+    let currentPill = startPill;
     for (let i = 0; i < middle; i++) {
       if (i < picks.length) {
         const p = picks[i];
         const dead = p.kind === 'deadend';
-        box.appendChild(mkPill(
+        const pill = mkPill(
           p.name,
-          dead ? 'game-chain-filled game-chain-deadend' : 'game-chain-filled',
+          dead ? 'game-chain-filled game-chain-deadend'
+            : p.kind === 'optimal' ? 'game-chain-filled game-chain-good' : 'game-chain-filled game-chain-ok',
           p.kind === 'optimal' ? 'On the shortest path' : dead ? 'Dead end' : 'Connects, but not the shortest way'
-        ));
+        );
+        box.appendChild(pill);
+        if (!dead && curId && String(p.band_id) === curId) currentPill = pill;
       } else {
         box.appendChild(mkPill('?', 'game-chain-blank', 'A hop to find'));
       }
@@ -1037,6 +1419,24 @@ function initGameUI() {
     const reached = lastPick && lastPick.name === run.target.name;
     if (!reached) {
       box.appendChild(mkPill(run.target.name, 'game-chain-anchor', 'Target band'));
+    }
+    // Wordle-simple board: arrows between links, a ring on where you are,
+    // and the row scrolled so that ring is in view on a phone.
+    if (card.classList.contains('sd-board')) {
+      [...box.children].slice(1).forEach((pill) => {
+        const a = document.createElement('span');
+        a.className = 'sd-link';
+        a.setAttribute('aria-hidden', 'true');
+        a.textContent = '→';
+        box.insertBefore(a, pill);
+      });
+      if (active) {
+        currentPill.classList.add('game-chain-current');
+        currentPill.setAttribute('aria-current', 'step');
+        requestAnimationFrame(() => {
+          box.scrollLeft = currentPill.offsetLeft - box.clientWidth / 2 + currentPill.offsetWidth / 2;
+        });
+      }
     }
   }
 
@@ -1064,17 +1464,31 @@ function initGameUI() {
     const run = dailyRun;
     if (!run) return;
     const q = (sel) => card.querySelector(sel);
-    q('.game-daily-date').textContent = run.chain_date || '';
+    const mk = (t, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = t; return s; };
+    const active = run.status === 'active';
+    q('.game-daily-date').textContent = fmtChainDate(run.chain_date);
+
+    // The goal, big: Start → Target, then par and moves left.
     const pair = q('.game-daily-pair');
     pair.innerHTML = '';
-    const mk = (t, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = t; return s; };
     pair.appendChild(mk(run.start_band.name));
     pair.appendChild(mk('→', 'game-daily-arrow'));
     pair.appendChild(mk(run.target.name));
+    const meta = q('.sd-goal-meta');
+    meta.innerHTML = '';
+    meta.appendChild(mk(`Par ${run.par}`));
+    if (active) {
+      const left = Math.max(0, dailyMoveLimit(run.par) - run.hops_used);
+      meta.appendChild(mk(' · '));
+      const strong = document.createElement('strong');
+      strong.textContent = `${left} move${left === 1 ? '' : 's'} left`;
+      meta.appendChild(strong);
+    }
 
+    // Streak & credits drawer (out of the way, still one tap off).
     const econLine = q('.game-daily-econ');
     econLine.innerHTML = '';
-    econLine.appendChild(mk(`Par ${run.par} · Streak ${run.streak} · `));
+    econLine.appendChild(mk(`Streak ${run.streak} · `));
     const creditBtn = el('<button type="button" class="game-credit-btn"></button>');
     creditBtn.textContent = `${run.credits} credits`;
     creditBtn.setAttribute('aria-label', 'Your credit balance — how credits work');
@@ -1082,27 +1496,29 @@ function initGameUI() {
     econLine.appendChild(creditBtn);
     if (run.freeze_count) econLine.appendChild(mk(` · ❄ ${run.freeze_count}`));
     if (run.best_hops != null) econLine.appendChild(mk(` · Best today: ${run.best_hops}`));
-
-    const picksRow = q('.game-daily-picks');
-    picksRow.innerHTML = '';
-    for (const p of run.picks) {
-      const wrap = document.createElement('span');
-      wrap.innerHTML = pickSvg(p.color, 'game-daily-pick');
-      wrap.title = `${p.name} — ${p.kind === 'optimal' ? 'optimal' : p.kind === 'deadend' ? 'dead end' : 'valid'}`;
-      picksRow.appendChild(wrap);
-    }
+    const statsActions = q('.sd-stats-actions');
+    statsActions.innerHTML = '';
+    const econ = el('<button type="button" class="tool-chip">Freeze my streak (100)</button>');
+    econ.addEventListener('click', () => dailyBuyFreeze(card));
+    statsActions.appendChild(econ);
 
     // Chain pills replace the old text trail (Aaron: the text was confusing).
     paintChainPills(card, run);
     paintPlayerLine(card, run);
+    dailyClockMark(run);
 
     const note = q('.game-daily-note');
-    const tools = q('.game-daily-tools');
+    const tools = q('.sd-hints .game-daily-tools');
     const optsBox = q('.game-daily-options');
     const finish = q('.game-daily-finish');
+    const prompt = q('.sd-prompt');
     optsBox.innerHTML = '';
+    optsBox.classList.remove('is-busy');
     tools.innerHTML = '';
     finish.innerHTML = '';
+    prompt.innerHTML = '';
+    note.textContent = '';
+    q('.sd-hints').hidden = !active;
     dailyRevealArmed = false;
 
     if (run.status === 'given_up') {
@@ -1114,7 +1530,7 @@ function initGameUI() {
       const c = completed || {};
       let line;
       if (c.beat_tree) {
-        line = `You beat the tree in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} — par was ${c.old_par}.`;
+        line = `You beat the tree in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'}. Par was ${c.old_par}.`;
       } else {
         line = `Connected in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} (par ${run.par}).`;
         if (run.hops_used === run.par) line += ' The tree nods.';
@@ -1122,20 +1538,24 @@ function initGameUI() {
           line += ` Best today: ${run.best_hops}.`;
         }
       }
-      q('.game-daily-current').textContent = line;
-      paintDailyShare(card, c);
+      finish.appendChild(el('<p class="sd-finish-line"></p>')).textContent = line;
+      const actions = el('<div class="sd-finish-actions"></div>');
+      const results = el('<button type="button" class="tool-chip">See results</button>');
+      results.addEventListener('click', () => openDailyResults({ won: true, completed: c }));
       const again = el('<button type="button" class="tool-chip">Play again</button>');
       again.addEventListener('click', () => dailyReplay(card));
-      finish.appendChild(again);
+      actions.appendChild(results);
+      actions.appendChild(again);
+      finish.appendChild(actions);
       return;
     }
 
-    const cur = q('.game-daily-current');
-    cur.innerHTML = '';
-    cur.appendChild(mk('Now at: '));
+    // The question, in words: what to tap and why.
+    prompt.appendChild(mk('Who shares a band member with '));
     const strong = document.createElement('strong');
     strong.textContent = run.current_band.name;
-    cur.appendChild(strong);
+    prompt.appendChild(strong);
+    prompt.appendChild(mk('?'));
 
     for (const o of dailyOptions) {
       const btn = el('<button type="button" class="game-daily-option"></button>');
@@ -1146,19 +1566,19 @@ function initGameUI() {
     }
 
     const hintsLeft = run.hints_total - run.hints_used;
+    q('.sd-hints > summary').textContent = hintsLeft > 0
+      ? `💡 Get a hint (${hintsLeft} left)`
+      : '💡 Hints';
     if (hintsLeft > 0) {
       const elim = el('<button type="button" class="tool-chip">Cut one option (−10)</button>');
       elim.addEventListener('click', () => dailyHint(card, 'eliminate'));
       const peek = el('<button type="button" class="tool-chip">Ask the tree (−10)</button>');
       peek.addEventListener('click', () => {
         dailyRevealArmed = true;
-        note.textContent = 'Tap a band to check whether it\u2019s on the optimal path. Helpers never solve — this only narrows.';
+        note.textContent = 'Tap a band to check whether it’s on the shortest path.';
       });
       tools.appendChild(elim);
       tools.appendChild(peek);
-      note.textContent = `${hintsLeft} hint${hintsLeft === 1 ? '' : 's'} left today.`;
-    } else {
-      note.textContent = 'No hints left today.';
     }
 
     const last = run.picks[run.picks.length - 1];
@@ -1172,12 +1592,7 @@ function initGameUI() {
         : 'Dig out of the dead end (−50)';
       esc.addEventListener('click', () => dailyEscape(card));
       tools.appendChild(esc);
-      note.textContent = `Lost in space. ${note.textContent}`;
     }
-
-    const econ = el('<button type="button" class="tool-chip">Freeze my streak (100)</button>');
-    econ.addEventListener('click', () => dailyBuyFreeze(card));
-    tools.appendChild(econ);
 
     const giveup = el('<button type="button" class="tool-chip">Show me the chain</button>');
     giveup.addEventListener('click', () => {
@@ -1200,9 +1615,9 @@ function initGameUI() {
     return dailyRun && dailyRun.chain_date ? { date: dailyRun.chain_date } : {};
   }
 
-  async function dailyGiveUp(card) {
+  async function dailyGiveUp(card, { outOfMoves = false } = {}) {
     const note = card.querySelector('.game-daily-note');
-    note.textContent = 'The tree is revealing the path…';
+    note.textContent = outOfMoves ? 'Out of moves. The tree reveals the path…' : 'The tree is revealing the path…';
     try {
       const data = await dailyFetch('/api/game-daily/play', {
         method: 'POST',
@@ -1227,6 +1642,7 @@ function initGameUI() {
         analyticsSessionId = null; // session over
       }
       paintDailyBoard(card, null, data.gave_up);
+      openDailyResults({ won: false });
     } catch (err) {
       note.textContent = (err && err.message) || 'Could not show the chain.';
     }
@@ -1284,15 +1700,18 @@ function initGameUI() {
         }
         paintDailyBoard(card);
         const yes = data.hint && data.hint.on_optimal_path;
-        note.textContent = yes
-          ? `${data.hint.option.name} is on the optimal path.`
-          : `${data.hint.option.name} is not on the optimal path — scenic route at best.`;
+        card.querySelector('.game-daily-note').textContent = yes
+          ? `${data.hint.option.name} is on the shortest path.`
+          : `${data.hint.option.name} is not on the shortest path. Scenic route at best.`;
       } catch (err) {
         btn.disabled = false;
         note.textContent = err.message;
       }
       return;
     }
+    const optsBox = card.querySelector('.game-daily-options');
+    optsBox.classList.add('is-busy');
+    if (btn) btn.classList.add('is-pending');
     card.querySelectorAll('.game-daily-option').forEach((b) => { b.disabled = true; });
     try {
       const data = await dailyFetch('/api/game-daily/play', {
@@ -1311,6 +1730,20 @@ function initGameUI() {
           move_number: analyticsMoveCount,
         });
       }
+      // Feedback first: the tapped button turns green, yellow or red (and
+      // shakes on a dead end), then the board moves on.
+      const picks = dailyRun.picks || [];
+      const kind = (data.picked && data.picked.kind) || (picks.length ? picks[picks.length - 1].kind : null);
+      if (btn) btn.classList.add(kind === 'deadend' ? 'is-bad' : kind === 'optimal' ? 'is-good' : 'is-ok');
+      if (!data.completed) {
+        showToast(
+          kind === 'deadend' ? '✗ Dead end. No shared member. −1 move'
+            : kind === 'optimal' ? '✓ Connected. Shortest path!'
+            : '✓ Connected, but the long way round',
+          kind === 'deadend' ? 'bad' : 'good',
+        );
+      }
+      await pause(kind === 'deadend' ? 700 : 450);
       if (data.completed) {
         // Analytics: game completed (win)
         if (analyticsSessionId) {
@@ -1329,18 +1762,24 @@ function initGameUI() {
           analyticsSessionId = null; // session over
         }
         paintDailyBoard(card, data.completed);
-        // Guest win prompt (Cole, 2026-10-08): hook them after the win.
-        if (!isSignedIn()) {
-          showGuestWinPrompt(card);
-        }
+        popNewestPill(card);
+        // The results modal carries the guest sign-up nudge (Cole, 2026-10-08).
+        openDailyResults({ won: true, completed: data.completed });
       } else {
         paintDailyBoard(card);
-        if (data.picked && data.picked.deadend) {
-          card.querySelector('.game-daily-note').textContent = 'Lost in space.';
+        popNewestPill(card);
+        // Out of moves: the tree wins. Uses the existing giveup action, so
+        // the server still decides what a finished day means.
+        if (dailyRun.status === 'active' && dailyRun.hops_used >= dailyMoveLimit(dailyRun.par)) {
+          showToast('Out of moves. The tree wins today.', 'bad');
+          await pause(900);
+          await dailyGiveUp(card, { outOfMoves: true });
         }
       }
     } catch (err) {
       note.textContent = err.message;
+      optsBox.classList.remove('is-busy');
+      if (btn) btn.classList.remove('is-pending');
       card.querySelectorAll('.game-daily-option').forEach((b) => { b.disabled = false; });
     }
   }
@@ -1408,104 +1847,20 @@ function initGameUI() {
     }
   }
 
-  function paintDailyGiveUp(card, gaveUp) {
+  function paintDailyGiveUp(card) {
     const run = dailyRun;
-    const mk = (t, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = t; return s; };
-    card.querySelector('.game-daily-current').textContent = 'The tree wins today.';
     const finish = card.querySelector('.game-daily-finish');
-    const rev = el('<div class="game-daily-reveal"></div>');
-    rev.appendChild(mk('The tree reveals the path: '));
-    const strong = document.createElement('strong');
-    strong.textContent = (run.reveal_path || []).map((b) => b.name).join(' → ');
-    rev.appendChild(strong);
-    finish.appendChild(rev);
-
-    const hops = run.hops_used;
-    const par = run.par;
-    const shareText = (gaveUp && gaveUp.share_text) ||
-      `Six Degrees Daily Chain — ${run.chain_date}\nThe tree beat me today — par was ${par}, and I was ${hops} hops deep.\nsixdegreesofrock.com/game`;
-    const share = el(`<div class="game-daily-share">
-      <p class="game-daily-share-line"></p>
-      <div class="game-result-actions"><button type="button" class="tool-chip" data-share>Share image</button><button type="button" class="tool-chip" data-copy>Copy share text</button></div>
-    </div>`);
-    share.querySelector('.game-daily-share-line').textContent =
-      `The tree beat me today — par was ${par}, and I was ${hops} hop${hops === 1 ? '' : 's'} deep.`;
-    const copyBtn = share.querySelector('[data-copy]');
-    copyBtn.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(shareText);
-        copyBtn.textContent = 'Copied';
-        setTimeout(() => { copyBtn.textContent = 'Copy share text'; }, 2000);
-      } catch {
-        copyBtn.textContent = 'Copy failed — long-press to copy';
-      }
-    });
-    const shareBtn = share.querySelector('[data-share]');
-    shareBtn.addEventListener('click', () => shareDailyCard(shareBtn, {
-      mode: 'lost',
-      date: run.chain_date,
-      startName: run.start_band.name,
-      targetName: run.target.name,
-      hops, par, streak: run.streak,
-      picks: run.picks || [],
-      text: shareText,
-    }));
-    finish.appendChild(share);
-  }
-
-  function paintDailyShare(card, completed) {
-    const finish = card.querySelector('.game-daily-finish');
-    const picks = completed.picks && completed.picks.length ? completed.picks : dailyRun.picks;
-    const share = el(`<div class="game-daily-share">
-      <div class="game-daily-share-picks"></div>
-      <p class="game-daily-share-line"></p>
-      <p class="game-daily-note"></p>
-      <div class="game-result-actions"><button type="button" class="tool-chip" data-share>Share image</button><button type="button" class="tool-chip" data-copy>Copy share text</button></div>
-    </div>`);
-    const row = share.querySelector('.game-daily-share-picks');
-    for (const p of picks) {
-      const wrap = document.createElement('span');
-      wrap.innerHTML = pickSvg(p.color, 'game-daily-share-pick');
-      wrap.title = p.name;
-      row.appendChild(wrap);
+    finish.appendChild(el('<p class="sd-finish-line">The tree wins today.</p>'));
+    if (run.reveal_path && run.reveal_path.length) {
+      const rev = el('<p class="sd-reveal">The chain: <strong></strong></p>');
+      rev.querySelector('strong').textContent = run.reveal_path.map((b) => b.name).join(' → ');
+      finish.appendChild(rev);
     }
-    const hops = completed.hops_used != null ? completed.hops_used : dailyRun.hops_used;
-    const par = dailyRun.par;
-    const streak = completed.streak != null ? completed.streak : dailyRun.streak;
-    share.querySelector('.game-daily-share-line').textContent = completed.beat_tree
-      ? `I BEAT THE TREE in ${hops} hops (par was ${completed.old_par}). Streak ${streak}.`
-      : `I connected the constellation in ${hops} hops (par ${par}). Streak ${streak}.`;
-    share.querySelector('.game-daily-note').textContent =
-      'Gold is optimal, robin\u2019s egg is valid, black is lost in space.';
-    const copyBtn = share.querySelector('[data-copy]');
-    const shareText = completed.share_text ||
-      `Daily Chain ${dailyRun.chain_date} — ${hops} hops (par ${par}), streak ${streak}. Play: https://sixdegreesofrock.com/game/`;
-    copyBtn.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(shareText);
-        copyBtn.textContent = 'Copied';
-        setTimeout(() => { copyBtn.textContent = 'Copy share text'; }, 2000);
-      } catch {
-        copyBtn.textContent = 'Copy failed — long-press to copy';
-      }
-    });
-    const shareBtn = share.querySelector('[data-share]');
-    shareBtn.addEventListener('click', () => shareDailyCard(shareBtn, {
-      mode: 'win',
-      date: dailyRun.chain_date,
-      startName: dailyRun.start_band.name,
-      targetName: dailyRun.target.name,
-      hops, par, streak,
-      picks,
-      text: shareText,
-    }));
-    if (completed.freeze_used) {
-      const fz = document.createElement('p');
-      fz.className = 'game-daily-note';
-      fz.textContent = 'A Seattle Freeze bridged your missed day — streak intact.';
-      share.appendChild(fz);
-    }
-    finish.appendChild(share);
+    const actions = el('<div class="sd-finish-actions"></div>');
+    const results = el('<button type="button" class="tool-chip">See results</button>');
+    results.addEventListener('click', () => openDailyResults({ won: false }));
+    actions.appendChild(results);
+    finish.appendChild(actions);
   }
 
   // Post-mortem: par path in gold vs your route in blue, for archive days you
