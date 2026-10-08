@@ -577,7 +577,7 @@ function initGameUI() {
       .game-player-line{font-size:.78rem;color:#8a8a8a;margin:0 0 2px}
       .game-chain-pills{display:flex;gap:6px;align-items:center;margin:10px 0;flex-wrap:wrap}
       .game-chain-pill{padding:6px 12px;border-radius:999px;font-size:.82rem;font-weight:600;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis}
-      .game-chain-anchor{border:1px solid rgba(212,175,55,.7);background:rgba(212,175,55,.14);color:#fff}
+      .game-chain-anchor{border:1px solid rgba(82,174,182,.7);background:rgba(82,174,182,.16);color:#fff}
       .game-chain-filled{border:1px solid rgba(82,174,182,.45);background:rgba(82,174,182,.08);color:#fff}
       .game-chain-deadend{border:1px solid rgba(200,90,90,.6);background:rgba(200,90,90,.1);color:#f0b0b0}
       .game-chain-blank{border:1px dashed rgba(255,255,255,.28);background:transparent;color:#777;min-width:44px;text-align:center}
@@ -1982,6 +1982,29 @@ function initGameUI() {
     // a fresh run with your band; no pick resumes the live run (or the tree
     // deals both bands when there's nothing to resume).
     if (mode === 'solo') {
+      // If the user typed a band name but didn't pick from autocomplete, it's
+      // not in the graph — show No Rawk Found, don't silently deal a random
+      // pair (Aaron, 2026-10-07).
+      const typedA = (fieldA.value || '').trim();
+      if (typedA && !selected.a) {
+        statusLine.textContent = '';
+        result.innerHTML = '';
+        const card = el(`<div class="game-result-card game-daily">
+          <div class="game-daily-head"><span class="game-hops">No Rawk Found</span></div>
+          <p class="game-daily-note"></p>
+          <div style="margin-top:12px"><button class="game-btn game-btn-primary" type="button">Add "${typedA}" to the tree</button></div>
+        </div>`);
+        card.querySelector('.game-daily-note').textContent =
+          `"${typedA}" isn't in the tree yet.`;
+        const addBtn = card.querySelector('button');
+        if (addBtn) addBtn.addEventListener('click', () => {
+          // Close the game modal and open the Add Band flow.
+          try { document.getElementById('game-modal-close')?.click(); } catch {}
+          setTimeout(() => document.getElementById('add-band-btn')?.click(), 100);
+        });
+        result.appendChild(card);
+        return;
+      }
       await startSoloRun(selected.a ? { bandA: selected.a, fresh: true } : {});
       return;
     }
@@ -1991,6 +2014,29 @@ function initGameUI() {
       const g = await loadGraph();
       let a = selected.a;
       let b = selected.b;
+      // If the user typed a band name but didn't pick from autocomplete, it's
+      // not in the graph — show No Rawk Found (Aaron, 2026-10-07).
+      const typedA = (fieldA.value || '').trim();
+      const typedB = (fieldB.value || '').trim();
+      const missing = (typedA && !a) ? typedA : (typedB && !b) ? typedB : null;
+      if (missing) {
+        statusLine.textContent = '';
+        result.innerHTML = '';
+        const card = el(`<div class="game-result-card game-daily">
+          <div class="game-daily-head"><span class="game-hops">No Rawk Found</span></div>
+          <p class="game-daily-note"></p>
+          <div style="margin-top:12px"><button class="game-btn game-btn-primary" type="button">Add "${missing}" to the tree</button></div>
+        </div>`);
+        card.querySelector('.game-daily-note').textContent =
+          `"${missing}" isn't in the tree yet.`;
+        const addBtn = card.querySelector('button');
+        if (addBtn) addBtn.addEventListener('click', () => {
+          try { document.getElementById('game-modal-close')?.click(); } catch {}
+          setTimeout(() => document.getElementById('add-band-btn')?.click(), 100);
+        });
+        result.appendChild(card);
+        return;
+      }
       if (!a || !b) { statusLine.textContent = 'Pick both bands first.'; return; }
       if (a === b) { statusLine.textContent = 'Pick two different bands.'; return; }
       statusLine.textContent = '';
@@ -2144,6 +2190,12 @@ function initGameUI() {
       return;
     }
     if (currentMode() !== 'head-to-head') return;
+    const typedChallengeA = (fieldA.value || '').trim();
+    if (typedChallengeA && !selected.a) {
+      statusLine.textContent = `"${typedChallengeA}" isn't in the tree yet. Pick a band from the list, or add it from the main page.`;
+      fieldA.focus();
+      return;
+    }
     if (!selected.a) { statusLine.textContent = 'Pick your band first.'; fieldA.focus(); return; }
     // Arena page with a match format selected -> structured match.
     // Everywhere else -> the casual quick challenge.
