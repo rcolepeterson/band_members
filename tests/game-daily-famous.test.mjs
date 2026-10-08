@@ -91,3 +91,11 @@ test('bfsPath prefers an equally short famous route for the revealed answer', as
   const g2 = new Map([['A', ['x', 'B']], ['x', ['A', 'D']], ['D', ['x', 'C']], ['B', ['A', 'C']], ['C', ['B', 'D']]]);
   assert.deepEqual(bfsPath(g2, 'A', 'D', new Set(['A', 'B', 'C', 'D'])), ['A', 'x', 'D']);
 });
+
+test('practice runs pay no credits and refuse hints, enforced on the server', async () => {
+  const { readFileSync } = await import('node:fs');
+  const solo = readFileSync(new URL('../netlify/functions/game_solo_play.mjs', import.meta.url), 'utf8');
+  assert.match(solo, /function isPracticeRun\(run, headliners\)/);
+  assert.equal((solo.match(/const reward = isPracticeRun\(run, hl\) \? 0/g) || []).length, 2, 'both completion paths pay 0');
+  assert.equal((solo.match(/return badRequest\('no hints in practice'\)/g) || []).length, 2, 'hint and escape refused');
+});
