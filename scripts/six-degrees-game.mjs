@@ -578,8 +578,8 @@ function initGameUI() {
       .game-daily-reveal{font-size:.9rem;color:#bbb;margin:10px 0;line-height:1.7}
       .game-daily-reveal strong{color:#fff;font-weight:600}
       .game-daily-options{display:grid;gap:8px;margin:6px 0 10px}
-      .game-daily-option{text-align:left;padding:10px 12px;border:1px solid var(--color-border);border-radius:var(--radius-lg);background:transparent;color:inherit;font-size:.95rem;cursor:pointer}
-      .game-daily-option:hover{border-color:rgba(82,174,182,.6)}
+      .game-daily-option{text-align:left;padding:10px 12px;border:1px solid rgba(82,174,182,.45);border-radius:var(--radius-lg);background:rgba(82,174,182,.08);color:inherit;font-size:.95rem;font-weight:600;cursor:pointer}
+      .game-daily-option:hover{border-color:rgba(82,174,182,.8);background:rgba(82,174,182,.14)}
       .game-daily-option:disabled{opacity:.55;cursor:default}
       .game-daily-tools{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
       .game-daily-note{font-size:.8rem;color:#999;margin:6px 0}
