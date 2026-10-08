@@ -52,7 +52,11 @@ export function clearGraphCache() {
   graphCache = null;
 }
 
-async function ensureChain(sql, date) {
+// Exported so `start` in game_daily_play can deal today's pair too: a
+// signed-in player goes straight to `start` and never hits GET, so before
+// the day's first public preview there was no row and the board read
+// "no chain for that day".
+export async function ensureChain(sql, date) {
   const existing = await sql`select date, band_a, band_b, optimal_hops from daily_chains where date = ${date} limit 1`;
   if (existing && existing[0]) return existing[0];
 

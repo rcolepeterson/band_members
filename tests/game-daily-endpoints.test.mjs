@@ -183,3 +183,19 @@ test('client renders chain pills, a player line, and a show-me-the-chain button'
   assert.ok(body.includes('Show me the chain'));
   assert.ok(body.includes("action: 'giveup'"));
 });
+
+test('start deals today\'s chain on demand instead of 404ing before the first GET', () => {
+  const play = src('netlify/functions/game_daily_play.mjs');
+  assert.match(play, /import \{ loadBandGraph, ensureChain \} from '\.\/game_daily\.mjs'/);
+  assert.match(play, /date === pacificDate\(\)\s*\?\s*await ensureChain\(sql, date\)/);
+  assert.match(src('netlify/functions/game_daily.mjs'), /export async function ensureChain\(sql, date\)/);
+});
+
+test('every in-run daily action names the run\'s day, not just start', () => {
+  const client = src('scripts/six-degrees-game.mjs');
+  for (const action of ["action: 'giveup'", "action: 'pick', option_id: optionId", "action: 'escape'"]) {
+    const daily = client.split('/api/game-daily/play').slice(1).some((chunk) =>
+      chunk.slice(0, 200).includes(`{ ${action}, ...dailyDate() }`));
+    assert.ok(daily, `${action} should send dailyDate()`);
+  }
+});
