@@ -173,10 +173,13 @@ test('giveup marks the run given_up with no credit payout', () => {
   assert.ok(!giveupBlock.slice(0, nextAction).includes('credits = credits +'));
 });
 
-// The client shows the chain as text (mobile has no hover) and offers the reveal.
-test('client renders a text trail and a show-me-the-chain button', () => {
+// The client shows the chain as pills (Aaron: the text trail was confusing)
+// and offers the reveal, plus a persistent player/credits line.
+test('client renders chain pills, a player line, and a show-me-the-chain button', () => {
   const body = src('scripts/six-degrees-game.mjs');
-  assert.ok(body.includes('game-daily-trail'));
+  assert.ok(body.includes('game-chain-pills'));
+  assert.ok(body.includes('game-player-line'));
+  assert.ok(!body.includes('game-daily-trail'));
   assert.ok(body.includes('Show me the chain'));
   assert.ok(body.includes("action: 'giveup'"));
 });
