@@ -169,10 +169,10 @@ test('results show your chain band by band; share text stays spoiler-free', () =
   assert.ok(src.includes('c.appendChild(chainListEl([start, ...mine], run.connections || {}));'));
 });
 
-test('Ask the tree is obvious: drawer closes, choices glow, cancellable, answer on the board', () => {
+test('Check a band (formerly Ask the tree) is obvious: drawer closes, choices glow, cancellable, answer on the board', () => {
   assert.ok(src.includes("peek.addEventListener('click', () => armDailyAsk(card));"));
   assert.match(src, /function armDailyAsk\(card\) \{[\s\S]{0,400}drawer\.open = false;[\s\S]{0,200}classList\.add\('is-asking'\)/);
-  assert.ok(src.includes('`The tree says ${data.hint.option.name} is on the shortest path.`'));
+  assert.ok(src.includes('`${data.hint.option.name} is on the shortest path.`'));
   assert.ok(src.includes("optsBox.classList.remove('is-busy', 'is-asking');"));
 });
 
@@ -273,4 +273,17 @@ test('one share action, like Wordle: text only, no share image', () => {
   assert.ok(!src.includes('function drawDailyShareCard'), 'PNG card code removed');
   assert.ok(src.includes('shareDailyText(results, dailyResultShareText(true, c))'), 'board shares in one tap');
   assert.ok(src.includes('const text = dailyResultShareText(won, completed);'), 'modal uses the same text');
+});
+
+test('no "tree" jargon in game copy; the music map link comes after the game', () => {
+  const strings = src.split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n');
+  for (const phrase of ['Ask the tree', 'The tree says', 'beat the tree in', 'The tree wins', 'the tree reveals', 'Could not load the tree', "isn't in the tree"]) {
+    assert.ok(!strings.includes(phrase), `"${phrase}" removed`);
+  }
+  assert.ok(src.includes("a.href = '/?band=' + encodeURIComponent(run.start_band.name);"), 'map opens on today\'s start band');
+  assert.equal((src.match(/finish\.appendChild\(musicMapLinkEl\(run\)\);/g) || []).length, 2, 'win and loss boards');
+  assert.ok(src.includes('const mapLink = musicMapLinkEl(run);'), 'results modal');
+  const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'game/index.html'), 'utf8');
+  assert.ok(!html.includes('Back to the tree'), 'no exit button in the header');
+  assert.match(html, /<a class="arena-wordmark" href="\/">/, 'the wordmark still links home');
 });

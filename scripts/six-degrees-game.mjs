@@ -299,7 +299,7 @@ function initGameUI() {
       statusLine.textContent = '';
       renderMatchup(g, pair.a, pair.b);
     } catch {
-      statusLine.textContent = 'Could not load the tree. Check your connection and try again.';
+      statusLine.textContent = 'Could not load the band data. Check your connection and try again.';
     }
   });
   const runBtn = document.getElementById('game-run');
@@ -544,7 +544,7 @@ function initGameUI() {
       }
     } catch {}
     loadGraph().catch(() => {
-      statusLine.textContent = 'Could not load the tree. Check your connection and try again.';
+      statusLine.textContent = 'Could not load the band data. Check your connection and try again.';
     });
     setTimeout(() => fieldA.focus(), 50);
   }
@@ -612,8 +612,8 @@ function initGameUI() {
       const subtitles = {
         daily: 'One fresh chain every day — same for everyone. Connect the bands, beat par, build your streak.',
         solo: 'Practice mode. Pick a band, we deal the opponent, you find the chain.',
-        'head-to-head': 'Challenge a friend. You pick a band, they pick theirs, the tree decides.',
-        chaos: 'Two random bands. Hit Connect and watch the tree work.',
+        'head-to-head': 'Challenge a friend. You pick a band, they pick theirs, the shortest chain decides.',
+        chaos: 'Two random bands. Hit Connect and see how they link.',
       };
       if (sub && subtitles[mode]) sub.textContent = subtitles[mode];
       if (sub) sub.style.display = mode === 'daily' ? 'none' : '';
@@ -854,6 +854,9 @@ function initGameUI() {
       .sd-stat strong .sd-ico{width:.7em;height:.7em}
       .sd-modal-close:focus:not(:focus-visible){outline:none;box-shadow:none}
       .sd-modal-close:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px}
+      .sd-map-link{display:flex;align-items:center;justify-content:center;gap:8px;margin:12px auto 0;width:fit-content;max-width:100%;font-size:.9rem;font-weight:600;color:var(--color-primary);text-decoration:none;text-align:center}
+      .sd-map-link:hover span{text-decoration:underline;text-underline-offset:3px}
+      .sd-map-link--modal{margin-top:14px}
       .sd-misses{text-align:center;font-size:.82rem;color:#f0b8b2;margin:-4px 0 8px}
       .sd-via-name{font-size:.68rem;font-style:italic;color:var(--color-text-muted);white-space:normal}
       .game-chain-good{border-color:var(--sd-good);background:color-mix(in srgb,var(--sd-good) 22%,transparent)}
@@ -964,6 +967,7 @@ function initGameUI() {
     share: '<path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>',
     trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4"/><path d="M16 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4"/><path d="M8 21h8"/><path d="M10 17h4"/>',
     tree: '<path d="M12 21v-5"/><path d="M8 16h8a4 4 0 0 0 1-7.9A5 5 0 0 0 7 8.1 4 4 0 0 0 8 16z"/>',
+    map: '<path d="M3 6.5l6-3 6 3 6-3v14l-6 3-6-3-6 3z"/><path d="M9 3.5v14"/><path d="M15 6.5v14"/>',
   };
   function lineIcon(name) {
     return `<svg class="sd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LINE_ICONS[name] || ''}</svg>`;
@@ -1383,7 +1387,7 @@ function initGameUI() {
       const h = document.createElement('h2');
       const hopsWord = `${counts.hops} hop${counts.hops === 1 ? '' : 's'}`;
       h.appendChild(iconText(won ? lineIcon('trophy') : pickIcon(), !won ? dailyGameOverText(run).title
-        : completed.beat_tree ? `You beat the tree in ${hopsWord}!`
+        : completed.beat_tree ? `You beat the shortest path in ${hopsWord}!`
         : `Chain completed in ${hopsWord}!`));
       c.appendChild(h);
       const sub = el('<p class="sd-modal-sub"></p>');
@@ -1451,6 +1455,9 @@ function initGameUI() {
       const shareBtn = el('<button type="button" class="sd-primary">Share result</button>');
       shareBtn.addEventListener('click', () => shareDailyText(shareBtn, text));
       c.appendChild(shareBtn);
+      const mapLink = musicMapLinkEl(run);
+      mapLink.classList.add('sd-map-link--modal');
+      c.appendChild(mapLink);
       if (completed.freeze_used) {
         c.appendChild(el('<p class="sd-modal-sub">A Seattle Freeze bridged your missed day. Streak intact.</p>'));
       }
@@ -1558,6 +1565,17 @@ function initGameUI() {
     return list;
   }
 
+  // After a game: the hook into the main site (Cole, 2026-10-08). The
+  // header no longer has "Back to the tree" (a new player has no idea what
+  // "the tree" is); the invitation comes once they're done, centered on
+  // today's starting band (the map takes one ?band= anchor).
+  function musicMapLinkEl(run) {
+    const a = el(`<a class="sd-map-link">${lineIcon('map')}<span></span></a>`);
+    a.href = '/?band=' + encodeURIComponent(run.start_band.name);
+    a.querySelector('span').textContent = `Explore ${run.start_band.name} on the music map →`;
+    return a;
+  }
+
   // The newest link lands in the chain with a little pop.
   function popNewestPill(card) {
     const filled = card.querySelectorAll('.game-chain-filled');
@@ -1579,7 +1597,7 @@ function initGameUI() {
         <li>Finish the daily chain · <strong>+20</strong></li>
         <li>Match par · <strong>+10</strong></li>
         <li>Replay and beat your best · <strong>+5</strong> per hop</li>
-        <li>Beat the tree (shorter than par) · <strong>+50</strong></li>
+        <li>Beat the shortest path · <strong>+50</strong></li>
       </ul>
       <p class="game-daily-note">Cut −10 · Ask −10 · Dig out −50 · Freeze 100 · Archive day 75</p>
       <p class="game-daily-note">Credit packs — coming soon · Redeem Play Points — later</p>
@@ -1783,6 +1801,7 @@ function initGameUI() {
       actions.appendChild(again);
       finish.appendChild(actions);
       if (!practiceMode) finish.appendChild(nextChainCountdownEl());
+      finish.appendChild(musicMapLinkEl(run));
       return;
     }
 
@@ -1823,7 +1842,7 @@ function initGameUI() {
       : 'No hints left today'));
     const elim = el('<button type="button" class="tool-chip">Cut one option</button>');
     elim.addEventListener('click', () => dailyHint(card, 'eliminate'));
-    const peek = el('<button type="button" class="tool-chip">Ask the tree</button>');
+    const peek = el('<button type="button" class="tool-chip">Check a band</button>');
     peek.addEventListener('click', () => armDailyAsk(card));
     elim.disabled = peek.disabled = hintsLeft === 0;
     tools.appendChild(elim);
@@ -1848,11 +1867,11 @@ function initGameUI() {
     if (drawer) drawer.open = false;
     card.querySelector('.game-daily-options').classList.add('is-asking');
     const prompt = card.querySelector('.sd-prompt');
-    prompt.textContent = 'Ask the tree: tap a band to check if it\u2019s on the shortest path. ';
+    prompt.textContent = 'Check a band: tap one to see if it\u2019s on the shortest path. ';
     const cancel = el('<button type="button" class="sd-linkbtn">Cancel</button>');
     cancel.addEventListener('click', () => paintDailyBoard(card));
     prompt.appendChild(cancel);
-    showToast('Tap a band to ask the tree');
+    showToast('Tap a band to check it');
     try { prompt.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' }); } catch {}
   }
 
@@ -1888,7 +1907,7 @@ function initGameUI() {
 
   async function dailyGiveUp(card, { outOfMoves = false } = {}) {
     const note = card.querySelector('.game-daily-note');
-    note.textContent = outOfMoves ? 'Out of moves. The tree reveals the path…' : 'The tree is revealing the path…';
+    note.textContent = outOfMoves ? 'Out of moves. Revealing the shortest chain…' : 'Revealing the shortest chain…';
     try {
       const data = await dailyFetch(practicePath('/api/game-daily/play'), {
         method: 'POST',
@@ -1974,8 +1993,8 @@ function initGameUI() {
         paintDailyBoard(card);
         const yes = data.hint && data.hint.on_optimal_path;
         const answer = yes
-          ? `The tree says ${data.hint.option.name} is on the shortest path.`
-          : `The tree says ${data.hint.option.name} is not on the shortest path.`;
+          ? `${data.hint.option.name} is on the shortest path.`
+          : `${data.hint.option.name} is not on the shortest path.`;
         const line = card.querySelector('.sd-result');
         line.hidden = false;
         line.className = 'sd-result is-' + (yes ? 'good' : 'ok');
@@ -2135,6 +2154,7 @@ function initGameUI() {
     if (!practiceMode) {
       finish.appendChild(nextChainCountdownEl());
     }
+    finish.appendChild(musicMapLinkEl(run));
   }
 
   // Post-mortem: par path in gold vs your route in blue, for archive days you
@@ -2168,7 +2188,7 @@ function initGameUI() {
       const meta = el('<p class="game-daily-note"></p>');
       meta.textContent = data.outcome === 'complete'
         ? `Completed in ${data.your_hops} vs a shortest path of ${data.par}.`
-        : `Gave up ${data.your_hops} deep — the tree's answer is the gold route.`;
+        : `Gave up ${data.your_hops} deep — the shortest chain is in gold.`;
       box.appendChild(parP);
       box.appendChild(youP);
       box.appendChild(meta);
@@ -2249,7 +2269,7 @@ function initGameUI() {
     result.innerHTML = '';
     const card = el(`<div class="game-result-card game-daily">
       <div class="game-daily-head"><span class="game-hops">Solo Run</span></div>
-      <p class="game-daily-note">Pick a band — or let the tree deal both — then guess the chain link by link, just like the Daily Chain. Free to play; sign in to keep your credits.</p>
+      <p class="game-daily-note">Pick a band (or let us deal both), then find the chain link by link, just like the Daily Chain.</p>
       <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to play</button></div>
     </div>`);
     result.appendChild(card);
@@ -2394,7 +2414,7 @@ function initGameUI() {
     if (completed || run.status === 'complete') {
       const c = completed || {};
       let line = `Connected in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} (par ${run.par}).`;
-      if (c.optimal) line += ' The tree nods.';
+      if (c.optimal) line += ' You matched the shortest path!';
       if (c.credits_earned) line += ` +${c.credits_earned} credits.`;
       q('.game-daily-current').textContent = line;
       const again = el('<button type="button" class="tool-chip">New matchup</button>');
@@ -2422,7 +2442,7 @@ function initGameUI() {
     if (hintsLeft > 0) {
       const elim = el('<button type="button" class="tool-chip">Cut one option (−10)</button>');
       elim.addEventListener('click', () => soloHint(card, 'eliminate'));
-      const peek = el('<button type="button" class="tool-chip">Ask the tree (−10)</button>');
+      const peek = el('<button type="button" class="tool-chip">Check a band</button>');
       peek.addEventListener('click', () => {
         soloRevealArmed = true;
         note.textContent = 'Tap a band to check whether it\u2019s on the optimal path. Helpers never solve — this only narrows.';
@@ -2454,7 +2474,7 @@ function initGameUI() {
     const giveup = el('<button type="button" class="tool-chip">Show me the chain</button>');
     giveup.addEventListener('click', () => {
       note.innerHTML = '';
-      note.appendChild(mk('This run ends and the tree reveals the path. '));
+      note.appendChild(mk('This run ends and the shortest chain is revealed. '));
       const yes = el('<button type="button" class="tool-chip">Show me</button>');
       const no = el('<button type="button" class="tool-chip">Keep playing</button>');
       yes.addEventListener('click', () => soloGiveUp(card));
@@ -2469,10 +2489,10 @@ function initGameUI() {
   function paintSoloGiveUp(card, gaveUp) {
     const run = soloRun;
     const mk = (t, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = t; return s; };
-    card.querySelector('.game-daily-current').textContent = 'The tree wins this one.';
+    card.querySelector('.game-daily-current').textContent = 'Show\u2019s over!';
     const finish = card.querySelector('.game-daily-finish');
     const rev = el('<div class="game-daily-reveal"></div>');
-    rev.appendChild(mk('The tree reveals the path: '));
+    rev.appendChild(mk('The shortest chain: '));
     const strong = document.createElement('strong');
     strong.textContent = (run.reveal_path || []).map((b) => b.name).join(' → ');
     rev.appendChild(strong);
@@ -2617,7 +2637,7 @@ function initGameUI() {
 
   async function soloGiveUp(card) {
     const note = card.querySelector('.game-daily-note');
-    note.textContent = 'The tree is revealing the path…';
+    note.textContent = 'Revealing the shortest chain…';
     try {
       const data = await dailyFetch('/api/game-solo/play', {
         method: 'POST',
@@ -2725,10 +2745,10 @@ function initGameUI() {
         const card = el(`<div class="game-result-card game-daily">
           <div class="game-daily-head"><span class="game-hops">No Rawk Found</span></div>
           <p class="game-daily-note"></p>
-          <div style="margin-top:12px"><button class="game-btn game-btn-primary" type="button">Add "${typedA}" to the tree</button></div>
+          <div style="margin-top:12px"><button class="game-btn game-btn-primary" type="button">Add "${typedA}" to the map</button></div>
         </div>`);
         card.querySelector('.game-daily-note').textContent =
-          `"${typedA}" isn't in the tree yet.`;
+          `"${typedA}" isn't on the map yet.`;
         const addBtn = card.querySelector('button');
         if (addBtn) addBtn.addEventListener('click', () => {
           // Close the game modal and open the Add Band flow.
@@ -2758,10 +2778,10 @@ function initGameUI() {
         const card = el(`<div class="game-result-card game-daily">
           <div class="game-daily-head"><span class="game-hops">No Rawk Found</span></div>
           <p class="game-daily-note"></p>
-          <div style="margin-top:12px"><button class="game-btn game-btn-primary" type="button">Add "${missing}" to the tree</button></div>
+          <div style="margin-top:12px"><button class="game-btn game-btn-primary" type="button">Add "${missing}" to the map</button></div>
         </div>`);
         card.querySelector('.game-daily-note').textContent =
-          `"${missing}" isn't in the tree yet.`;
+          `"${missing}" isn't on the map yet.`;
         const addBtn = card.querySelector('button');
         if (addBtn) addBtn.addEventListener('click', () => {
           try { document.getElementById('game-modal-close')?.click(); } catch {}
@@ -2777,7 +2797,7 @@ function initGameUI() {
       // The chain only runs when they hit Connect.
       renderMatchup(g, a, b);
     } catch {
-      statusLine.textContent = 'Could not load the tree. Check your connection and try again.';
+      statusLine.textContent = 'Could not load the band data. Check your connection and try again.';
     }
   });
 
@@ -2925,7 +2945,7 @@ function initGameUI() {
     if (currentMode() !== 'head-to-head') return;
     const typedChallengeA = (fieldA.value || '').trim();
     if (typedChallengeA && !selected.a) {
-      statusLine.textContent = `"${typedChallengeA}" isn't in the tree yet. Pick a band from the list, or add it from the main page.`;
+      statusLine.textContent = `"${typedChallengeA}" isn't on the map yet. Pick a band from the list, or add it from the main page.`;
       fieldA.focus();
       return;
     }
@@ -3039,7 +3059,7 @@ function initGameUI() {
         return;
       }
       if (g) { setHeadToHead(data.band_a, data.band_b, g); renderMatchup(g, data.band_a, data.band_b); }
-      else { statusLine.textContent = 'Could not load the tree. Check your connection and try again.'; }
+      else { statusLine.textContent = 'Could not load the band data. Check your connection and try again.'; }
       return;
     }
 
@@ -3052,7 +3072,7 @@ function initGameUI() {
       </div>`);
       card.querySelector('.game-invite-text').textContent =
         `${data.challenger_handle || 'Someone'} picked ${nameA}. ` +
-        `You pick a band to stump them \u2014 the tree links bands through shared members ` +
+        `You pick a band to stump them \u2014 bands link through shared members ` +
         `and reveals the shortest chain. Sign in to play.`;
       card.querySelector('[data-signin]').addEventListener('click', () => {
         if (isArenaPage()) {
@@ -3107,8 +3127,8 @@ function initGameUI() {
     // The front-door explainer (Paul, 2026-10-01): plain-rules, no hype.
     showHowto(
       `${data.challenger_handle || 'Your challenger'} picked ${nameA}. ` +
-      `You pick a band \u2014 one you think the tree can't connect to ${nameA}. ` +
-      `Bands link through shared members; the tree reveals the shortest chain. Stump them.`
+      `You pick a band \u2014 one you think can't be connected to ${nameA}. ` +
+      `Bands link through shared members; the shortest chain is revealed at the end. Stump them.`
     );
     statusLine.textContent = 'Now pick yours.';
     setModePickerVisible(false);
@@ -3230,7 +3250,7 @@ function initGameUI() {
     }
     statusLine.textContent = '';
     const g = await loadGraph().catch(() => null);
-    if (!g) { statusLine.textContent = 'Could not load the tree. Check your connection and try again.'; return; }
+    if (!g) { statusLine.textContent = 'Could not load the band data. Check your connection and try again.'; return; }
 
     // Logged out: lure them in. The arena has no signup UI, so bounce to the
     // main page with the match link intact (same pattern as invites).
@@ -3473,7 +3493,7 @@ function initGameUI() {
 
     const seeChain = (a, b) => async () => {
       const gg = g || await loadGraph().catch(() => null);
-      if (!gg) { statusLine.textContent = 'Could not load the tree. Check your connection and try again.'; return; }
+      if (!gg) { statusLine.textContent = 'Could not load the band data. Check your connection and try again.'; return; }
       setHeadToHead(a, b, gg);
       renderMatchup(gg, a, b);
       modal.scrollIntoView({ behavior: 'smooth', block: 'start' });
