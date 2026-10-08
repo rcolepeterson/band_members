@@ -420,8 +420,6 @@ function initGameUI() {
   function openModal() {
     modal.hidden = false;
     document.body.classList.add('game-modal-open');
-    // Refresh the player line every time the modal opens (auth may have changed).
-    try { if (typeof initPlayerLine === 'function') initPlayerLine(); } catch {}
     loadGraph().catch(() => {
       statusLine.textContent = 'Could not load the tree. Check your connection and try again.';
     });
@@ -3014,64 +3012,74 @@ function initGameUI() {
   syncModeUI();
   // Paint the top player line on load (before any game card renders).
   try {
-  } catch {}
-}
-
-// Standalone player line init — runs independently of initGameUI() so a
-// throw in the main init can't block it (Aaron, 2026-10-07).
-function initPlayerLine() {
-  try {
     const topLine = document.getElementById('game-player-line-top');
-    if (!topLine) return;
-    const seq = (parseInt(topLine.dataset.seq || '0', 10) + 1);
-    topLine.dataset.seq = String(seq);
-    const paintTopLine = () => {
-      Promise.all([
-        (typeof loadMyHandle === 'function' ? loadMyHandle() : Promise.resolve('')).catch(() => ''),
-        fetch('/api/game-credits', {
-          headers: { authorization: 'Bearer ' + (typeof authToken === 'function' ? authToken() : '') },
-        }).then((r) => r.json().catch(() => ({}))).catch(() => ({})),
-      ]).then(([h, credData]) => {
-        if (topLine.dataset.seq !== String(seq)) return;
-        const credits = credData && credData.ok && credData.credits != null ? credData.credits : null;
-        const signedIn = typeof isSignedIn === 'function' ? isSignedIn() : !!h;
-        if (!signedIn) {
-          topLine.innerHTML = '<span style="opacity:.7">Sign in to play</span>';
-          return;
-        }
-        if (!h && credits != null) {
-          topLine.innerHTML = '';
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.style.cssText = 'background:none;border:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline';
-          btn.textContent = 'Choose your battle name';
-          btn.addEventListener('click', () => {
-            if (typeof showHandlePicker === 'function') {
-              showHandlePicker({ title: 'Choose your battle name', onSaved: paintTopLine });
-            }
-          });
-          topLine.appendChild(btn);
-          topLine.appendChild(document.createTextNode(' \u00b7 ' + credits + ' credits'));
-        } else if (h && credits != null) {
-          topLine.textContent = 'Playing as ' + h + ' \u00b7 ' + credits + ' credits';
-        } else if (h) {
-          topLine.textContent = 'Playing as ' + h;
-        } else if (credits != null) {
-          topLine.textContent = credits + ' credits';
-        }
-      });
-    };
-    paintTopLine();
-    window.addEventListener('sdr-auth-changed', paintTopLine);
+    if (topLine) {
+      const seq = 1;
+      topLine.dataset.seq = String(seq);
+      // Fetch handle and credits independently of game board rendering
+      // (Aaron, 2026-10-07: show on load, not just after nav).
+      // If no handle yet, prompt to choose one (Aaron, 2026-10-07).
+      // New players start with 50 credits (DB default).
+      const paintTopLine = () => {
+        Promise.all([
+          loadMyHandle().catch(() => ''),
+          fetch('/api/game-credits', {
+            headers: { authorization: 'Bearer ' + authToken() },
+          }).then((r) => r.json().catch(() => ({}))).catch(() => ({})),
+        ]).then(([h, credData]) => {
+          if (topLine.dataset.seq !== String(seq)) return;
+          const credits = credData && credData.ok && credData.credits != null ? credData.credits : null;
+          const signedIn = isSignedIn();
+          if (!signedIn) {
+            topLine.innerHTML = '<span style="opacity:.7">Sign in to play</span>';
+            // Retry in 2s — auth token may not be in localStorage yet on
+            // initial page load (Aaron, 2026-10-07).
+            setTimeout(() => {
+              if (topLine.dataset.seq !== String(seq)) return;
+              try {
+                const raw = localStorage.getItem('bmft-user');
+                if (raw && JSON.parse(raw).token) {
+                  paintTopLine();
+                }
+              } catch {}
+            }, 2000);
+            return;
+          }
+          if (!h && credits != null) {
+            // No battle name yet — prompt to choose one.
+            topLine.innerHTML = '';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.style.cssText = 'background:none;border:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline';
+            btn.textContent = 'Choose your battle name';
+            btn.addEventListener('click', () => {
+              if (typeof showHandlePicker === 'function') {
+                showHandlePicker({ title: 'Choose your battle name', onSaved: paintTopLine });
+              }
+            });
+            topLine.appendChild(btn);
+            topLine.appendChild(document.createTextNode(' \u00b7 ' + credits + ' credits'));
+          } else if (h && credits != null) {
+            topLine.textContent = 'Playing as ' + h + ' \u00b7 ' + credits + ' credits';
+          } else if (h) {
+            topLine.textContent = 'Playing as ' + h;
+          } else if (credits != null) {
+            topLine.textContent = credits + ' credits';
+          }
+        });
+      };
+      paintTopLine();
+      // Re-paint when auth state changes (e.g., after sign-in).
+      window.addEventListener('sdr-auth-changed', paintTopLine);
+    }
   } catch {}
 }
 
 if (isBrowser) {
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => { try { initGameUI(); } catch {} try { initPlayerLine(); } catch {} });
+    document.addEventListener('DOMContentLoaded', initGameUI);
   } else {
-    try { initGameUI(); } catch {}
-    try { initPlayerLine(); } catch {}
+    initGameUI();
   }
 }
 
