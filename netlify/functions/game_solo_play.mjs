@@ -190,9 +190,11 @@ export default async (req) => {
         me = existing[0];
       } else {
         const guestToken = generateToken();
+        const guestEmail = `guest_${guestSessionId}@guest.local`;
+        const guestName = 'Guest';
         const rows = await sql`
-          insert into users (is_guest, guest_session_id, credits, token)
-          values (true, ${guestSessionId}, 50, ${guestToken})
+          insert into users (is_guest, guest_session_id, credits, token, email, name)
+          values (true, ${guestSessionId}, 50, ${guestToken}, ${guestEmail}, ${guestName})
           returning *
         `.catch(() => []);
         if (rows && rows[0]) me = rows[0];
