@@ -952,18 +952,22 @@ function initGameUI() {
 
   // Persistent player line: "Playing as X · N credits". Credits update on
   // every repaint; the handle fills in async (cached after first load).
+  // Also paints the prominent top line under the game title (Aaron, 2026-10-07).
   function paintPlayerLine(card, run) {
-    const line = card.querySelector('.game-player-line');
-    if (!line) return;
     const credits = run && run.credits != null ? run.credits : 0;
-    const seq = (parseInt(line.dataset.seq || '0', 10) + 1);
-    line.dataset.seq = String(seq);
-    line.textContent = credits + ' credits';
-    loadMyHandle().then((h) => {
-      if (line.dataset.seq !== String(seq)) return; // a newer paint won
-      line.textContent = h ? 'Playing as ' + h + ' \u00b7 ' + credits + ' credits'
-                           : credits + ' credits';
-    });
+    const paintOne = (line) => {
+      if (!line) return;
+      const seq = (parseInt(line.dataset.seq || '0', 10) + 1);
+      line.dataset.seq = String(seq);
+      line.textContent = credits + ' credits';
+      loadMyHandle().then((h) => {
+        if (line.dataset.seq !== String(seq)) return; // a newer paint won
+        line.textContent = h ? 'Playing as ' + h + ' \u00b7 ' + credits + ' credits'
+                             : credits + ' credits';
+      });
+    };
+    paintOne(card.querySelector('.game-player-line'));
+    paintOne(document.getElementById('game-player-line-top'));
   }
 
   function paintDailyBoard(card, completed, gaveUpInfo) {
@@ -2944,6 +2948,20 @@ function initGameUI() {
   }
 
   syncModeUI();
+  // Paint the top player line on load (before any game card renders).
+  try {
+    const topLine = document.getElementById('game-player-line-top');
+    if (topLine) {
+      const seq = 1;
+      topLine.dataset.seq = String(seq);
+      topLine.textContent = 'credits';
+      loadMyHandle().then((h) => {
+        if (topLine.dataset.seq !== String(seq)) return;
+        // Credits fill in once a run loads; handle shows immediately.
+        topLine.textContent = h ? 'Playing as ' + h : '';
+      });
+    }
+  } catch {}
 }
 
 if (isBrowser) {
