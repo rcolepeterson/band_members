@@ -3018,22 +3018,48 @@ function initGameUI() {
       topLine.dataset.seq = String(seq);
       // Fetch handle and credits independently of game board rendering
       // (Aaron, 2026-10-07: show on load, not just after nav).
-      Promise.all([
-        loadMyHandle().catch(() => ''),
-        fetch('/api/game-credits', {
-          headers: { authorization: 'Bearer ' + authToken() },
-        }).then((r) => r.json().catch(() => ({}))).catch(() => ({})),
-      ]).then(([h, credData]) => {
-        if (topLine.dataset.seq !== String(seq)) return;
-        const credits = credData && credData.ok && credData.credits != null ? credData.credits : null;
-        if (h && credits != null) {
-          topLine.textContent = 'Playing as ' + h + ' \u00b7 ' + credits + ' credits';
-        } else if (h) {
-          topLine.textContent = 'Playing as ' + h;
-        } else if (credits != null) {
-          topLine.textContent = credits + ' credits';
-        }
-      });
+      // If no handle yet, prompt to choose one (Aaron, 2026-10-07).
+      // New players start with 50 credits (DB default).
+      const paintTopLine = () => {
+        Promise.all([
+          loadMyHandle().catch(() => ''),
+          fetch('/api/game-credits', {
+            headers: { authorization: 'Bearer ' + authToken() },
+          }).then((r) => r.json().catch(() => ({}))).catch(() => ({})),
+        ]).then(([h, credData]) => {
+          if (topLine.dataset.seq !== String(seq)) return;
+          const credits = credData && credData.ok && credData.credits != null ? credData.credits : null;
+          const signedIn = isSignedIn();
+          if (!signedIn) {
+            topLine.innerHTML = '<span style="opacity:.7">Sign in to play</span>';
+            return;
+          }
+          if (!h && credits != null) {
+            // No battle name yet — prompt to choose one.
+            topLine.innerHTML = '';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.style.cssText = 'background:none;border:none;padding:0;font:inherit;color:inherit;cursor:pointer;text-decoration:underline';
+            btn.textContent = 'Choose your battle name';
+            btn.addEventListener('click', () => {
+              if (typeof showHandlePicker === 'function') {
+                showHandlePicker({ title: 'Choose your battle name', onSaved: paintTopLine });
+              }
+            });
+            topLine.appendChild(btn);
+            topLine.appendChild(document.createTextNode(' \u00b7 ' + credits + ' credits'));
+          } else if (h && credits != null) {
+            topLine.textContent = 'Playing as ' + h + ' \u00b7 ' + credits + ' credits';
+          } else if (h) {
+            topLine.textContent = 'Playing as ' + h;
+          } else if (credits != null) {
+            topLine.textContent = credits + ' credits';
+          }
+        });
+      };
+      paintTopLine();
+      // Re-paint when auth state changes (e.g., after sign-in).
+      window.addEventListener('sdr-auth-changed', paintTopLine);
     }
   } catch {}
 }
