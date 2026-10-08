@@ -984,131 +984,11 @@ function initGameUI() {
       `fill="${hex}" stroke="${stroke}" stroke-width="1"/></svg>`;
   }
 
-  // --- Daily Chain share card: a real drawn image with actual guitar picks ---
-  const SHARE_W = 1080, SHARE_H = 1350;
-  function drawPickCanvas(ctx, cx, cy, s, color) {
-    // Same teardrop as pickSvg, translated to absolute canvas path commands.
-    const hex = DAILY_PICK_HEX[color] || DAILY_PICK_HEX.black;
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.scale(s / 24, s / 28);
-    ctx.beginPath();
-    ctx.moveTo(12, 2.5);
-    ctx.bezierCurveTo(6.8, 2.5, 2.5, 6.5, 2.5, 11.8);
-    ctx.bezierCurveTo(2.5, 17.8, 7.7, 23.4, 11.1, 26);
-    ctx.bezierCurveTo(11.6, 26.4, 12.4, 26.4, 12.9, 26);
-    ctx.bezierCurveTo(16.3, 23.4, 21.5, 17.8, 21.5, 11.8);
-    ctx.bezierCurveTo(21.5, 6.5, 17.2, 2.5, 12, 2.5);
-    ctx.closePath();
-    ctx.fillStyle = hex;
-    ctx.fill();
-    ctx.strokeStyle = color === 'black' ? '#555' : 'rgba(0,0,0,.25)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.restore();
-  }
   function fmtChainDate(ds) {
     const parts = String(ds || '').split('-').map(Number);
     if (parts.length < 3) return String(ds || '');
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${months[parts[1] - 1] || ''} ${parts[2]}, ${parts[0]}`;
-  }
-  function drawDailyShareCard(data) {
-    // data: { mode:'win'|'lost', date, startName, targetName, hops, par, streak, picks:[{color}] }
-    const c = document.createElement('canvas');
-    c.width = SHARE_W; c.height = SHARE_H;
-    const ctx = c.getContext('2d');
-    const gold = '#d4a017', robin = '#7fc9c7', gray = '#9aa0ae';
-    // Arena background.
-    const bg = ctx.createLinearGradient(0, 0, 0, SHARE_H);
-    bg.addColorStop(0, '#10131a');
-    bg.addColorStop(1, '#1b212e');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, SHARE_W, SHARE_H);
-    const glow = ctx.createRadialGradient(SHARE_W / 2, 300, 60, SHARE_W / 2, 300, 640);
-    glow.addColorStop(0, 'rgba(212,160,23,.10)');
-    glow.addColorStop(1, 'rgba(212,160,23,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, SHARE_W, SHARE_H);
-    const center = (text, y, font, fill) => {
-      ctx.font = font; ctx.fillStyle = fill; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(text, SHARE_W / 2, y, SHARE_W - 120);
-    };
-    const FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-    try { ctx.letterSpacing = '8px'; } catch {}
-    center('SIX DEGREES OF RAWK', 118, `600 42px ${FONT}`, gold);
-    try { ctx.letterSpacing = '2px'; } catch {}
-    center(`Daily Chain · ${fmtChainDate(data.date)}`, 172, `400 30px ${FONT}`, gray);
-    center(data.mode === 'win' ? 'I connected the constellation' : 'Show\u2019s over',
-      232, `600 36px ${FONT}`, data.mode === 'win' ? gold : gray);
-    // Stats.
-    const stats = [
-      [String(data.hops), 'HOPS'],
-      [String(data.par), 'PAR'],
-      [String(data.streak), 'STREAK'],
-    ];
-    stats.forEach(([num, label], i) => {
-      const x = SHARE_W / 2 + (i - 1) * 280;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = `700 84px ${FONT}`; ctx.fillStyle = i === 1 ? robin : '#f2f3f5';
-      ctx.fillText(num, x, 330);
-      try { ctx.letterSpacing = '5px'; } catch {}
-      ctx.font = `400 26px ${FONT}`; ctx.fillStyle = gray;
-      ctx.fillText(label, x, 392);
-      try { ctx.letterSpacing = '2px'; } catch {}
-    });
-    center(`${data.startName}  →  ${data.targetName}`, 452, `400 30px ${FONT}`, gray);
-    // Pick grid — real picks, flowing rows.
-    const picks = data.picks || [];
-    const MAX_DRAW = 60;
-    const shown = picks.slice(0, MAX_DRAW);
-    const perRow = 10, s = 64, pitch = 88;
-    const rows = Math.ceil(shown.length / perRow);
-    const top = 540;
-    shown.forEach((p, i) => {
-      const r = Math.floor(i / perRow), k = i % perRow;
-      const inRow = Math.min(perRow, shown.length - r * perRow);
-      const x0 = SHARE_W / 2 - ((inRow - 1) * pitch) / 2;
-      drawPickCanvas(ctx, x0 + k * pitch, top + r * pitch, s, p.color);
-    });
-    let legendY = top + rows * pitch + 24;
-    if (picks.length > MAX_DRAW) {
-      center(`+${picks.length - MAX_DRAW} more`, legendY - 34, `400 28px ${FONT}`, gray);
-    }
-    center('Green is the shortest path · yellow the long way · red a dead end',
-      legendY, `400 26px ${FONT}`, gray);
-    // Footer.
-    center('sixdegreesofrock.com/game', SHARE_H - 110, `600 34px ${FONT}`, gold);
-    try { ctx.letterSpacing = '4px'; } catch {}
-    center('DAILY CHAIN', SHARE_H - 62, `400 24px ${FONT}`, '#5b616e');
-    try { ctx.letterSpacing = '0px'; } catch {}
-    return c;
-  }
-  async function shareDailyCard(btn, data) {
-    const canvas = drawDailyShareCard(data);
-    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
-    if (!blob) { btn.textContent = 'Could not draw the card'; return; }
-    const file = new File([blob], `daily-chain-${data.date}.png`, { type: 'image/png' });
-    // Native image share where supported (phones).
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: 'Daily Chain', text: data.text });
-        btn.textContent = 'Shared';
-        setTimeout(() => { btn.textContent = 'Share image'; }, 2500);
-        return;
-      } catch (err) {
-        if (err && err.name === 'AbortError') return; // user dismissed — leave it
-      }
-    }
-    // Fallback: download the PNG and copy the text.
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = file.name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 8000);
-    try { await navigator.clipboard.writeText(data.text); } catch {}
-    btn.textContent = 'Image downloaded · text copied';
-    setTimeout(() => { btn.textContent = 'Share image'; }, 4000);
   }
 
   let dailyRun = null;      // last run state from the server
@@ -1473,6 +1353,21 @@ function initGameUI() {
     setTimeout(() => { btn.textContent = label; }, 2200);
   }
 
+  // The share text for the current run: one source for the results modal
+  // and the board's Share result button.
+  function dailyResultShareText(won, completed = {}) {
+    const run = dailyRun;
+    const picks = completed.picks && completed.picks.length ? completed.picks : (run.picks || []);
+    return dailyShareResultText({
+      date: run.chain_date, start: run.start_band.name, target: run.target.name,
+      picks,
+      moves: completed.hops_used != null ? completed.hops_used : run.hops_used,
+      par: completed.beat_tree ? completed.old_par : run.par,
+      won,
+      seconds: dailyElapsed(run),
+    });
+  }
+
   function openDailyResults({ won, completed = {} }) {
     const run = dailyRun;
     if (!run) return;
@@ -1482,10 +1377,7 @@ function initGameUI() {
     const par = completed.beat_tree ? completed.old_par : run.par;
     const streak = practiceMode ? null : completed.streak != null ? completed.streak : run.streak;
     const seconds = dailyElapsed(run);
-    const text = dailyShareResultText({
-      date: run.chain_date, start: run.start_band.name, target: run.target.name,
-      picks, moves: hops, par, won, seconds,
-    });
+    const text = dailyResultShareText(won, completed);
     openSdModal((c) => {
       const h = document.createElement('h2');
       const hopsWord = `${counts.hops} hop${counts.hops === 1 ? '' : 's'}`;
@@ -1558,15 +1450,6 @@ function initGameUI() {
       const shareBtn = el('<button type="button" class="sd-primary">Share result</button>');
       shareBtn.addEventListener('click', () => shareDailyText(shareBtn, text));
       c.appendChild(shareBtn);
-      const imgBtn = el('<button type="button" class="sd-secondary">Share image</button>');
-      imgBtn.addEventListener('click', () => shareDailyCard(imgBtn, {
-        mode: won ? 'win' : 'lost',
-        date: run.chain_date,
-        startName: run.start_band.name,
-        targetName: run.target.name,
-        hops, par, streak, picks, text,
-      }));
-      c.appendChild(imgBtn);
       if (completed.freeze_used) {
         c.appendChild(el('<p class="sd-modal-sub">A Seattle Freeze bridged your missed day. Streak intact.</p>'));
       }
@@ -1889,8 +1772,9 @@ function initGameUI() {
       }
       finish.appendChild(el('<p class="sd-finish-line"></p>')).textContent = line;
       const actions = el('<div class="sd-finish-actions"></div>');
-      const results = el(`<button type="button" class="tool-chip">${lineIcon('share')} Share score</button>`);
-      results.addEventListener('click', () => openDailyResults({ won: true, completed: c }));
+      // One tap shares, like Wordle (the results modal opened on its own at the finish).
+      const results = el(`<button type="button" class="tool-chip">${lineIcon('share')} Share result</button>`);
+      results.addEventListener('click', () => shareDailyText(results, dailyResultShareText(true, c)));
       const again = el('<button type="button" class="tool-chip"></button>');
       again.textContent = practiceMode ? 'New puzzle' : 'Play again';
       again.addEventListener('click', () => dailyReplay(card));
@@ -2219,7 +2103,7 @@ function initGameUI() {
     const finish = card.querySelector('.game-daily-finish');
     // One chain on this screen: the answer. Your own row ended with the
     // target bubble, so on a loss it read as if you'd connected (Cole,
-    // 2026-10-08). Your attempt, dead ends and all, is in Share score.
+    // 2026-10-08). Your attempt, dead ends and all, is in the results modal.
     card.querySelector('.game-chain-pills').style.display = 'none';
     const over = dailyGameOverText(run);
     const head = el('<div class="sd-gameover"><p class="sd-gameover-title"></p><p class="sd-gameover-sub"></p></div>');
@@ -2234,8 +2118,8 @@ function initGameUI() {
       })), run.connections || {}));
     }
     const actions = el('<div class="sd-finish-actions"></div>');
-    const results = el(`<button type="button" class="tool-chip">${lineIcon('share')} Share score</button>`);
-    results.addEventListener('click', () => openDailyResults({ won: false }));
+    const results = el(`<button type="button" class="tool-chip">${lineIcon('share')} Share result</button>`);
+    results.addEventListener('click', () => shareDailyText(results, dailyResultShareText(false)));
     actions.appendChild(results);
     const again = el('<button type="button" class="tool-chip"></button>');
     if (practiceMode) {
