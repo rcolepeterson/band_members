@@ -150,8 +150,9 @@ async function dealOptions(sql, run) {
   const opts = optionsFor({
     adj, dist, degree, meta,
     currentId: run.current_band_id,
-    excludeIds: new Set([...deadPicked, ...dugOut]),
-    // The target is never a trap — reaching it always ends the run.
+    // Target excluded from options — auto-finish completes the chain when
+    // adjacent (Aaron, 2026-10-07: no need to tap the final band).
+    excludeIds: new Set([...deadPicked, ...dugOut, run.band_b]),
     trapExcludeIds: new Set([run.band_b]),
   });
   return opts.map((o) => ({ band_id: o.band_id, name: (meta.get(o.band_id) || {}).name || 'Band', kind: o.kind }));
@@ -275,6 +276,39 @@ export default async (req) => {
     }
 
     // Mid-run: advance (or burn) and deal fresh options.
+    // Auto-finish (Aaron, 2026-10-07): if the new position is adjacent to
+    // the target, the chain completes itself — no need to tap the target.
+    const { adj: adjCheck } = await loadBandGraph(sql);
+    const neighbors = adjCheck.get(newCurrent) || new Set();
+    if (neighbors.has(run.band_b) && String(newCurrent) !== String(run.band_b)) {
+      const targetName = (await loadBandGraph(sql).then(({ meta }) => meta.get(run.band_b) || {}).catch(() => ({}))).name || 'Target';
+      const finalPicks = [...picks, { band_id: run.band_b, name: targetName, kind: 'optimal' }];
+      const finalHops = hopsUsed + 1;
+      const { reward } = scoreRun({ isFirst: true, hopsUsed: finalHops, par: run.optimal_hops, prevBest: null });
+      await sql`
+        update solo_runs set status = 'complete', hops_used = ${finalHops},
+               picks = ${JSON.stringify(finalPicks)}::jsonb, current_options = '[]'::jsonb,
+               completed_at = now()
+         where id = ${run.id}`;
+      if (reward > 0) {
+        await sql`update users set credits = credits + ${reward} where id = ${me.id}`;
+      }
+      const fresh = await findUserByToken(sql, me.token).catch(() => me);
+      const doneRun = { ...run, status: 'complete', hops_used: finalHops, picks: finalPicks };
+      return ok({
+        run: await runState(sql, doneRun, { ...me, credits: fresh.credits }),
+        completed: {
+          hops_used: finalHops,
+          par: run.optimal_hops,
+          optimal: finalHops === run.optimal_hops,
+          credits_earned: reward,
+          credits: fresh.credits ?? 50,
+          picks: publicPicks(finalPicks),
+          auto_finished: true,
+        },
+      });
+    }
+
     const next = { ...run, current_band_id: newCurrent, hops_used: hopsUsed, picks };
     const opts = await dealOptions(sql, next);
     const upd = await sql`
