@@ -11,6 +11,8 @@ import {
   escapeHtml,
   inviteCardCopy,
   inviteCardHtml,
+  isUuidRef,
+  resolveBandNames,
 } from '../netlify/functions/game_invite_card.mjs';
 
 test('escapeHtml neutralizes markup and quotes', () => {
@@ -89,4 +91,46 @@ test('hostile band names cannot break out of the card markup', () => {
   const html = inviteCardHtml({ token: evil, title: evil, description: evil });
   assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
   assert.match(html, /&lt;script&gt;/);
+});
+
+const SWEET_WATER = 'a8c8d9e2-806d-4241-8b3a-4ce70f61f083';
+
+test('isUuidRef tells database ids from band names', () => {
+  assert.equal(isUuidRef(SWEET_WATER), true);
+  assert.equal(isUuidRef(SWEET_WATER.toUpperCase()), true);
+  assert.equal(isUuidRef('Sweet Water'), false);
+  assert.equal(isUuidRef(null), false);
+});
+
+test('resolveBandNames looks up only UUID refs, once each', async () => {
+  const calls = [];
+  const sql = async (strings, ids) => {
+    calls.push(ids);
+    return [{ id: SWEET_WATER, name: 'Sweet Water' }];
+  };
+  const names = await resolveBandNames(sql, [SWEET_WATER, 'Zeke', SWEET_WATER, null]);
+  assert.equal(names.get(SWEET_WATER), 'Sweet Water');
+  assert.deepEqual(calls, [[SWEET_WATER]]);
+});
+
+test('resolveBandNames skips the DB when there is nothing to resolve', async () => {
+  const sql = async () => { throw new Error('should not query'); };
+  const names = await resolveBandNames(sql, ['Zeke', null]);
+  assert.equal(names.size, 0);
+});
+
+test('resolveBandNames fails soft when the lookup throws', async () => {
+  const sql = async () => { throw new Error('db down'); };
+  const names = await resolveBandNames(sql, [SWEET_WATER]);
+  assert.equal(names.size, 0);
+});
+
+test('an unresolved UUID never reaches the preview text', () => {
+  const open = inviteCardCopy({ state: 'open', challenger: 'colebert', band_a: SWEET_WATER });
+  assert.doesNotMatch(open.description, /[0-9a-f]{8}-/);
+  assert.match(open.description, /^a band vs \?/);
+  const answered = inviteCardCopy({
+    state: 'answered', challenger: 'colebert', invitee: 'aaron', band_a: 'Sweet Water', band_b: SWEET_WATER,
+  });
+  assert.match(answered.description, /^Sweet Water vs a band/);
 });
