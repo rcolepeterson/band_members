@@ -113,7 +113,7 @@
     .game-modal-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.04em}
     .game-modal-sub{color:var(--color-text-muted);font-size:var(--text-sm);margin:0 0 var(--space-4)}
     /* Mode tabs: compact horizontal tab bar. Daily is the front door;
-       Solo / Versus / Explore live behind the tabs. The per-mode
+       Solo / Challenge / Explore live behind the tabs. The per-mode
        description lives in .game-mode-desc below, updated by JS. */
     .game-modes{display:flex;gap:var(--space-2);margin-bottom:var(--space-2);
       overflow-x:auto;padding-bottom:var(--space-1);scrollbar-width:none}
@@ -314,9 +314,9 @@
           <!--
             Mode tabs. Daily Chain is the front door (checked by default) —
             Cole's 2-second rule: land, see the puzzle, start tapping.
-            Solo / Versus / Explore live behind the tabs.
+            Solo / Challenge / Explore live behind the tabs.
             Internal mode values stay as-is; only user-facing labels changed
-            (head-to-head → Versus, chaos → Explore).
+            (head-to-head → Challenge, chaos → Explore).
           -->
           <div class="game-modes" role="radiogroup" aria-label="Ways to play">
             <label class="game-mode">
@@ -329,7 +329,7 @@
             </label>
             <label class="game-mode">
               <input type="radio" name="game-mode" value="head-to-head" />
-              <span><strong>Versus</strong><span>Challenge a friend. You pick, they pick, tree settles it.</span></span>
+              <span><strong>Challenge</strong><span>Challenge a friend. You pick, they pick, tree settles it.</span></span>
             </label>
             <label class="game-mode">
               <input type="radio" name="game-mode" value="chaos" />
