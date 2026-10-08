@@ -19,11 +19,12 @@ const read = (p) => readFileSync(join(root, p), 'utf8');
 const rootHtml = read('index.html');
 const gameHtml = read('game/index.html');
 
-test('mode-card radios have an explicit size on the game page', () => {
+test('mode-tab radios are visually hidden but accessible on the game page', () => {
+  // Tabs (not cards): the radio is visually hidden, the label is the tab.
   const m = gameHtml.match(/\.game-mode input\{([^}]*)\}/);
   assert.ok(m, 'game/index.html: .game-mode input rule exists');
-  assert.match(m[1], /width:\s*18px/, 'radio width pinned');
-  assert.match(m[1], /height:\s*18px/, 'radio height pinned');
+  assert.match(m[1], /position:\s*absolute/, 'radio taken out of flow');
+  assert.match(m[1], /opacity:\s*0/, 'radio visually hidden');
 });
 
 test('game action row wraps and pills keep their text on one line', () => {
@@ -68,16 +69,17 @@ test('game page re-declares Boska with font-display:block', () => {
   assert.match(read('vendor/fonts.css'), /font-display:\s*swap/, 'vendored fonts.css untouched');
 });
 
-test('mode-card text wrapper shrinks inside the flex row (iPhone Safari)', () => {
-  // Paul's iPhone Safari report: blank mode cards + text spilling off the
-  // right edge. The label is display:flex and the text <span> is a flex
-  // item — with the default min-width:auto it refuses to shrink, so long
-  // text blows the card out. min-width:0 lets it shrink; overflow-wrap
-  // breaks long words instead of spilling.
-  const m = gameHtml.match(/\.game-mode>span\{([^}]*)\}/);
-  assert.ok(m, '.game-mode>span rule exists');
-  assert.match(m[1], /min-width:\s*0/, 'text wrapper may shrink');
-  assert.match(m[1], /overflow-wrap:\s*anywhere/, 'long words break instead of spilling');
+test('mode tabs never wrap their labels (pill row)', () => {
+  // Tab bar: labels are short mode names that must stay on one line.
+  const m = gameHtml.match(/\.game-mode\{([^}]*)\}/);
+  assert.ok(m, '.game-mode rule exists');
+  assert.match(m[1], /white-space:\s*nowrap/, 'tab labels never wrap');
+});
+test('mode-tab descriptions are hidden; the active one shows in .game-mode-desc', () => {
+  // Descriptions live in the label markup for accessibility but are hidden
+  // in tab mode; JS mirrors the active tab's description into #game-mode-desc.
+  assert.match(gameHtml, /\.game-mode>span>span\{[^}]*display:\s*none/, 'per-tab description spans hidden');
+  assert.ok(gameHtml.includes('id="game-mode-desc"'), '#game-mode-desc element exists');
 });
 
 // --- Single game surface (no burger-modal game) ---
