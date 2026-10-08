@@ -420,6 +420,8 @@ function initGameUI() {
   function openModal() {
     modal.hidden = false;
     document.body.classList.add('game-modal-open');
+    // Refresh the player line every time the modal opens (auth may have changed).
+    try { if (typeof initPlayerLine === 'function') initPlayerLine(); } catch {}
     loadGraph().catch(() => {
       statusLine.textContent = 'Could not load the tree. Check your connection and try again.';
     });
