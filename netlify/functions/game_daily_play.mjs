@@ -26,6 +26,7 @@ import {
   methodNotAllowed,
   extractBearerToken,
   findUserByToken,
+  generateToken,
 } from './_db.mjs';
 import { ensureHandle } from './me_handle.mjs';
 import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
@@ -169,9 +170,11 @@ export default async (req) => {
         me = existing[0];
       } else {
         // Create a guest user row. Credits start at 50 (same as new users).
+        // Token is required (NOT NULL) — generate one, though guests don't use it.
+        const guestToken = generateToken();
         const rows = await sql`
-          insert into users (is_guest, guest_session_id, credits)
-          values (true, ${guestSessionId}, 50)
+          insert into users (is_guest, guest_session_id, credits, token)
+          values (true, ${guestSessionId}, 50, ${guestToken})
           returning *
         `.catch(() => []);
         if (rows && rows[0]) me = rows[0];
