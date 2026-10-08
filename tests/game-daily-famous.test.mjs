@@ -77,3 +77,17 @@ test('solo can deal a famous pair and plays it famous-first (practice mode)', as
   assert.match(solo, /preferIds: famousRun \? famous : null/);
   assert.match(solo, /excludeIds: new Set\(\[\.\.\.deadPicked, \.\.\.visited,/);
 });
+
+test('bfsPath prefers an equally short famous route for the revealed answer', async () => {
+  const { bfsPath } = await import('../netlify/functions/_daily.mjs');
+  // A-x-y-D and A-B-C-D are both 3 hops; x comes first in A's neighbor order.
+  const g = new Map([
+    ['A', ['x', 'B']], ['x', ['A', 'y']], ['y', ['x', 'D']], ['D', ['y', 'C']],
+    ['B', ['A', 'C']], ['C', ['B', 'D']],
+  ]);
+  assert.deepEqual(bfsPath(g, 'A', 'D'), ['A', 'x', 'y', 'D'], 'unchanged without a preference');
+  assert.deepEqual(bfsPath(g, 'A', 'D', new Set(['A', 'B', 'C', 'D'])), ['A', 'B', 'C', 'D']);
+  // A preference never makes the route longer.
+  const g2 = new Map([['A', ['x', 'B']], ['x', ['A', 'D']], ['D', ['x', 'C']], ['B', ['A', 'C']], ['C', ['B', 'D']]]);
+  assert.deepEqual(bfsPath(g2, 'A', 'D', new Set(['A', 'B', 'C', 'D'])), ['A', 'x', 'D']);
+});

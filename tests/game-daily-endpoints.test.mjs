@@ -166,7 +166,8 @@ test('giveup marks the run given_up with no credit payout', () => {
   const body = src('netlify/functions/game_daily_play.mjs');
   assert.ok(body.includes("action === 'giveup'"));
   assert.ok(body.includes("status = 'given_up'"));
-  assert.ok(body.includes('bfsPath(adj, chain.band_a, chain.band_b)'));
+  // Reveals the shortest path (preferring a famous route when one is as short).
+  assert.ok(body.includes('bfsPath(adj, chain.band_a, chain.band_b'));
   // The giveup block must not award credits.
   const giveupBlock = body.slice(body.indexOf("action === 'giveup'"));
   const nextAction = giveupBlock.indexOf("return badRequest('unknown action')");

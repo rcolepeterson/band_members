@@ -71,7 +71,7 @@ function publicPicks(picks) {
 }
 
 async function runState(sql, run, chain, me) {
-  const { adj, meta } = await loadBandGraph(sql);
+  const { adj, meta, famous } = await loadBandGraph(sql);
   const cur = meta.get(run.current_band_id) || {};
   const tgt = meta.get(chain.band_b) || {};
   const comps = await sql`select chain_date from daily_completions where user_id = ${me.id}`;
@@ -84,7 +84,7 @@ async function runState(sql, run, chain, me) {
   // After a give-up the tree's answer is recomputed live — no stored copy.
   let reveal_path = null;
   if (run.status === 'given_up') {
-    const ids = bfsPath(adj, chain.band_a, chain.band_b) || [];
+    const ids = bfsPath(adj, chain.band_a, chain.band_b, famous) || [];
     reveal_path = ids.map((id) => ({ id, name: (meta.get(id) || {}).name || 'Band' }));
   }
   // Bail-out: if the last hop died and a session legend is in the room (a
@@ -483,8 +483,8 @@ export default async (req) => {
   if (action === 'giveup') {
     const { run, chain, error } = await getActiveRun();
     if (error) return error;
-    const { adj, meta } = await loadBandGraph(sql);
-    const ids = bfsPath(adj, chain.band_a, chain.band_b) || [];
+    const { adj, meta, famous } = await loadBandGraph(sql);
+    const ids = bfsPath(adj, chain.band_a, chain.band_b, famous) || [];
     const path = ids.map((id) => ({ id, name: (meta.get(id) || {}).name || 'Band' }));
     const handle = await ensureHandle(sql, me).catch(() => null);
     await sql`
