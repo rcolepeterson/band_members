@@ -187,3 +187,10 @@ test('no credits anywhere on the daily board: free hints, streak in the header',
   assert.ok(!daily.includes('Freeze my streak (100)') && !daily.includes('(−50)') && !daily.includes('Unlock (75)'));
   assert.ok(src.includes("`🔥 ${run.streak}-day streak`"));
 });
+
+test("game over says Show's over, and the subtext matches how you lost", () => {
+  assert.match(src, /function dailyGameOverText\(run\) \{[\s\S]{0,300}sub: ranOut \? 'You ran out of moves\.' : 'You gave up on this one\.'/);
+  const daily = src.slice(src.indexOf('async function renderDailyBoard('), src.indexOf('function renderSoloBoard('));
+  assert.ok(!daily.includes('The tree wins'), 'no "the tree wins" copy on the daily screens');
+  assert.ok(src.includes('<div class="sd-gameover"><p class="sd-gameover-title"></p><p class="sd-gameover-sub"></p></div>'));
+});
