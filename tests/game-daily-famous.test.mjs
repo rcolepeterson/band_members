@@ -68,3 +68,12 @@ test('headliners are a subset of the famous list, and names resolve case-insensi
   const a = new Map([['1', new Set(['2'])], ['2', new Set(['1'])]]);
   assert.deepEqual([...famousIdsFrom(m, a)], ['1'], 'Pearl Jam has no links here, so it is skipped');
 });
+
+test('solo can deal a famous pair and plays it famous-first (practice mode)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const solo = readFileSync(new URL('../netlify/functions/game_solo_play.mjs', import.meta.url), 'utf8');
+  assert.match(solo, /body\.famous === true && !bandA/);
+  assert.match(solo, /requireWithin: famous/);
+  assert.match(solo, /preferIds: famousRun \? famous : null/);
+  assert.match(solo, /excludeIds: new Set\(\[\.\.\.deadPicked, \.\.\.visited,/);
+});

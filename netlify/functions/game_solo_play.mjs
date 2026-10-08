@@ -1,7 +1,9 @@
 // Solo Run gameplay (v2 — a real game, not a reveal).
 //
 // POST /api/game-solo/play (auth) — body { action, ... }:
-//   start   { band_a?, fresh? }  — begin a solo run (or resume the active one);
+//   start   { band_a?, fresh?, famous? } — begin a solo run (or resume the active one);
+//                                 famous:true deals a headliner pair with an
+//                                 all-famous route (the /game?practice=1 test mode);
 //                                 band_a = UUID of the player's chosen start band;
 //                                 omit it and the tree deals both bands.
 //                                 fresh:true abandons any active run and deals new.
@@ -41,6 +43,8 @@ import {
   hintsFor,
   scoreRun,
   bfsPath,
+  pickDailyPair,
+  MIN_HOPS,
   HINT_COST,
   ESCAPE_COST,
   COMPLETION_REWARD,
@@ -152,16 +156,23 @@ async function runState(sql, run, me) {
 }
 
 async function dealOptions(sql, run) {
-  const { adj, degree, meta } = await loadBandGraph(sql);
+  const { adj, degree, meta, famous, headliners } = await loadBandGraph(sql);
   const dist = bfsDist(adj, run.band_b);
   const deadPicked = (run.picks || []).filter((p) => p.kind === 'deadend').map((p) => p.band_id);
+  // No step backwards: the start and every band already in the chain.
+  const visited = [run.band_a, ...(run.picks || []).filter((p) => p.kind !== 'deadend').map((p) => p.band_id)];
+  // A headliner pair (practice mode deals these) plays like the daily:
+  // famous bands first on the slate. Read off the run, so no schema change.
+  const famousRun = !!(headliners && famous && headliners.has(run.band_a) && headliners.has(run.band_b));
   const dugOut = run.escaped || [];
   const opts = optionsFor({
     adj, dist, degree, meta,
     currentId: run.current_band_id,
-    excludeIds: new Set([...deadPicked, ...dugOut, run.band_b]),
+    excludeIds: new Set([...deadPicked, ...visited, ...dugOut, run.band_b]),
     // The target is never a trap — reaching it always ends the run.
     trapExcludeIds: new Set([run.band_b]),
+    preferIds: famousRun ? famous : null,
+    preferDist: famousRun ? bfsDist(adj, run.band_b, famous) : null,
   });
   return opts.map((o) => ({ band_id: o.band_id, name: (meta.get(o.band_id) || {}).name || 'Band', kind: o.kind }));
 }
@@ -246,7 +257,16 @@ export default async (req) => {
       if (!check || !check[0]) return badRequest('unknown band');
       bandA = check[0].id;
     }
-    const pair = pickSoloPair({ adj, bandIds, bandA });
+    const { famous, headliners } = await loadBandGraph(sql);
+    let pair = null;
+    if (body.famous === true && !bandA && headliners && headliners.size > 1) {
+      const p = pickDailyPair({
+        bandIds: [...headliners], adj, seed: generateToken(),
+        minHops: MIN_HOPS, maxHops: 4, requireWithin: famous,
+      });
+      if (p) pair = { band_a: p.a, band_b: p.b, optimal_hops: p.hops };
+    }
+    if (!pair) pair = pickSoloPair({ adj, bandIds, bandA });
     if (!pair) return serverError('could not deal a pair — the tree is too small here');
     const created = await sql`
       insert into solo_runs (user_id, band_a, band_b, optimal_hops, current_band_id)
