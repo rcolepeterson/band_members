@@ -2205,8 +2205,10 @@ function initGameUI() {
   function paintDailyGiveUp(card) {
     const run = dailyRun;
     const finish = card.querySelector('.game-daily-finish');
-    // Your own row is worth keeping only if you actually picked something.
-    card.querySelector('.game-chain-pills').style.display = run.picks && run.picks.length ? '' : 'none';
+    // One chain on this screen: the answer. Your own row ended with the
+    // target bubble, so on a loss it read as if you'd connected (Cole,
+    // 2026-10-08). Your attempt, dead ends and all, is in Share score.
+    card.querySelector('.game-chain-pills').style.display = 'none';
     const over = dailyGameOverText(run);
     const head = el('<div class="sd-gameover"><p class="sd-gameover-title"></p><p class="sd-gameover-sub"></p></div>');
     head.querySelector('.sd-gameover-title').appendChild(iconText(pickIcon(), over.title));
@@ -2215,7 +2217,7 @@ function initGameUI() {
     // The answer, drawn the way the game draws chains: green links in a row.
     if (run.reveal_path && run.reveal_path.length) {
       finish.appendChild(el('<p class="sd-reveal-label">The shortest chain</p>'));
-      finish.appendChild(chainRowEl(run.reveal_path.map((b, i, a) => ({
+      finish.appendChild(chainListEl(run.reveal_path.map((b, i, a) => ({
         id: b.id, name: b.name, kind: 'optimal', anchor: i === 0 || i === a.length - 1,
       })), run.connections || {}));
     }
