@@ -280,6 +280,18 @@ function initGameUI() {
     } catch { return ''; }
   }
 
+  // Guest session ID (2026-10-08): persistent anonymous ID for guests.
+  function getGuestSessionId() {
+    try {
+      let id = localStorage.getItem('sdr-guest-session');
+      if (!id) {
+        id = 'g_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
+        localStorage.setItem('sdr-guest-session', id);
+      }
+      return id;
+    } catch { return 'g_fallback_' + Date.now(); }
+  }
+
   function myUserId() {
     try {
       const raw = localStorage.getItem('bmft-user');
@@ -805,8 +817,18 @@ function initGameUI() {
   let analyticsHintCount = 0;
 
   async function dailyFetch(path, opts = {}) {
+    // Guest play: inject guest_session_id into JSON bodies when not signed in.
+    let body = opts.body;
+    if (body && typeof body === 'string' && !isSignedIn()) {
+      try {
+        const parsed = JSON.parse(body);
+        parsed.guest_session_id = getGuestSessionId();
+        body = JSON.stringify(parsed);
+      } catch {}
+    }
     const res = await fetch(path, {
       ...opts,
+      body,
       headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken(), ...(opts.headers || {}) },
     });
     const data = await res.json().catch(() => ({}));
@@ -818,11 +840,42 @@ function initGameUI() {
 
   function renderDailyPanel() {
     ensureDailyStyles();
-    if (!isSignedIn()) {
-      renderDailyGate();
-      return;
-    }
+    // Guest play (2026-10-08): no sign-in gate. Guests play free;
+    // backend creates a guest user row from guest_session_id.
     renderDailyBoard({ loading: true });
+  }
+
+  // Guest win prompt (Cole, 2026-10-08): "You won! Create a free account
+  // to save your stats and daily streak." Shown after a guest completes a game.
+  function showGuestWinPrompt(card) {
+    try {
+      if (!card || card.querySelector('[data-guest-win-prompt]')) return;
+      const prompt = el(`<div data-guest-win-prompt style="
+        margin-top:16px;padding:16px;border-radius:12px;
+        background:linear-gradient(135deg,rgba(45,212,191,.15),rgba(45,212,191,.05));
+        border:1px solid rgba(45,212,191,.3);text-align:center;">
+        <p style="margin:0 0 8px;font-weight:700;font-size:1.1rem;">You won! 🎉</p>
+        <p style="margin:0 0 12px;color:var(--color-text-muted);">
+          Create a free account to save your stats and daily streak.
+        </p>
+        <button type="button" data-guest-signup
+          style="background:var(--color-accent);color:#000;border:none;
+          padding:10px 24px;border-radius:8px;font-weight:700;cursor:pointer;">
+          Create free account
+        </button>
+      </div>`);
+      card.appendChild(prompt);
+      const btn = prompt.querySelector('[data-guest-signup]');
+      if (btn) {
+        btn.addEventListener('click', () => {
+          if (typeof showSignInModal === 'function') {
+            showSignInModal();
+          } else {
+            window.dispatchEvent(new CustomEvent('sdr-guest-signup-request'));
+          }
+        });
+      }
+    } catch {}
   }
 
   // Logged-out: the pair is the lure, playing needs sign-in.
@@ -1276,6 +1329,10 @@ function initGameUI() {
           analyticsSessionId = null; // session over
         }
         paintDailyBoard(card, data.completed);
+        // Guest win prompt (Cole, 2026-10-08): hook them after the win.
+        if (!isSignedIn()) {
+          showGuestWinPrompt(card);
+        }
       } else {
         paintDailyBoard(card);
         if (data.picked && data.picked.deadend) {
@@ -1596,7 +1653,7 @@ function initGameUI() {
 
   async function startSoloRun({ bandA = null, fresh = false } = {}) {
     ensureDailyStyles();
-    if (!isSignedIn()) { renderSoloGate(); return; }
+    // Guest play (2026-10-08): no sign-in gate for Solo either.
     result.innerHTML = '';
     statusLine.textContent = 'Dealing your run…';
     try {
@@ -1866,6 +1923,10 @@ function initGameUI() {
           analyticsSessionId = null; // session over
         }
         paintSoloBoard(card, data.completed);
+        // Guest win prompt (Cole, 2026-10-08).
+        if (!isSignedIn()) {
+          showGuestWinPrompt(card);
+        }
       } else {
         paintSoloBoard(card);
         if (data.picked && data.picked.deadend) {
