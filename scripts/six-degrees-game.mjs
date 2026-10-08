@@ -910,7 +910,17 @@ function initGameUI() {
     const par = run.par || 3;
     const picks = run.picks || [];
     const extra = picks.filter((p) => p.kind && p.kind !== 'optimal' && p.kind !== 'deadend').length;
-    const middle = Math.max(par - 1 + extra, picks.length);
+    let middle = Math.max(par - 1 + extra, picks.length);
+    // While the game is active, always show at least one blank pill for the
+    // next hop to find (Aaron, 2026-10-07).
+    const active = run.status !== 'complete' && run.status !== 'given_up';
+    if (active && middle <= picks.length) middle = picks.length + 1;
+    // Live distance: if you've wandered, blanks grow to show the true
+    // remaining hops (Aaron, 2026-10-07). The backend sends dist_to_target.
+    if (active && run.dist_to_target != null && run.dist_to_target > 0) {
+      const need = picks.length + run.dist_to_target;
+      if (need > middle) middle = need;
+    }
     const mkPill = (text, cls, title) => {
       const s = document.createElement('span');
       s.className = 'game-chain-pill ' + cls;
@@ -932,7 +942,12 @@ function initGameUI() {
         box.appendChild(mkPill('?', 'game-chain-blank', 'A hop to find'));
       }
     }
-    box.appendChild(mkPill(run.target.name, 'game-chain-anchor', 'Target band'));
+    // Don't duplicate the target pill if the last pick already reached it.
+    const lastPick = picks[picks.length - 1];
+    const reached = lastPick && lastPick.name === run.target.name;
+    if (!reached) {
+      box.appendChild(mkPill(run.target.name, 'game-chain-anchor', 'Target band'));
+    }
   }
 
   // Persistent player line: "Playing as X · N credits". Credits update on
