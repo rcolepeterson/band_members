@@ -46,7 +46,7 @@ import {
   scoreRun,
   bfsPath,
 } from './_daily.mjs';
-import { loadBandGraph } from './game_daily.mjs';
+import { loadBandGraph, ensureChain } from './game_daily.mjs';
 
 async function spendCredits(sql, userId, amount) {
   const rows = await sql`
@@ -188,8 +188,10 @@ export default async (req) => {
   if (action === 'start') {
     const date = validChainDate(body.date) || pacificDate();
     if (date > pacificDate()) return badRequest('that day hasn\u2019t happened yet');
-    const chains = await sql`select date, band_a, band_b, optimal_hops from daily_chains where date = ${date} limit 1`;
-    const chain = chains && chains[0];
+    // Today deals on demand (idempotent); past days only exist if they were dealt.
+    const chain = date === pacificDate()
+      ? await ensureChain(sql, date)
+      : (await sql`select date, band_a, band_b, optimal_hops from daily_chains where date = ${date} limit 1`)[0];
     if (!chain) return notFound('no chain for that day');
 
     if (date !== pacificDate()) {
