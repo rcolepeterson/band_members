@@ -138,6 +138,14 @@ export function dailyPickSquare(kind) {
   return '🟨';
 }
 
+// A dead end costs a move but isn't a link in the chain, so "hops" (links
+// you built) and "moves" (taps you spent) differ by the dead ends. Reporting
+// moves as hops read as an off-by-one (Ramones → 4 bands → Megadeth "6 hops").
+export function dailyChainCounts(picks = []) {
+  const deadEnds = picks.filter((p) => p.kind === 'deadend').length;
+  return { hops: picks.length - deadEnds, deadEnds, moves: picks.length };
+}
+
 export function fmtElapsed(seconds) {
   if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
   const s = Math.round(seconds);
@@ -853,6 +861,8 @@ function initGameUI() {
       .sd-secondary{display:block;width:100%;min-height:46px;margin-top:10px;border-radius:999px;border:1px solid var(--color-border);background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer}
       .sd-guest{margin-top:16px;text-align:center;font-size:.88rem;color:var(--color-text-muted)}
       .sd-linkbtn{background:none;border:none;padding:0;font:inherit;color:var(--color-primary);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+      .sd-board .game-daily-options.is-asking .game-daily-option{border-color:var(--color-primary);box-shadow:inset 0 0 0 1px var(--color-primary);animation:sd-glow 1.1s ease-in-out infinite alternate}
+      @keyframes sd-glow{from{background:rgba(143,232,246,.06)}to{background:rgba(143,232,246,.16)}}
       .sd-giveup{display:block;margin:14px auto 0;font-size:.85rem;color:var(--color-text-muted)}
       .sd-giveup:hover{color:var(--color-text)}
       .sd-danger{border-color:color-mix(in srgb,var(--sd-bad) 70%,transparent);color:#f6cdc8}
@@ -870,7 +880,7 @@ function initGameUI() {
       @keyframes sd-pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
       @keyframes sd-rise{0%{transform:translateY(12px);opacity:0}100%{transform:none;opacity:1}}
       @media (prefers-reduced-motion:reduce){
-        .sd-pop,.game-daily-option.is-bad,.sd-modal-card{animation:none}
+        .sd-pop,.game-daily-option.is-bad,.sd-modal-card,.sd-board .game-daily-options.is-asking .game-daily-option{animation:none}
         .sd-toast{transition:none}
       }
     `;
@@ -1148,6 +1158,9 @@ function initGameUI() {
   async function renderDailyBoard({ loading = false, date } = {}) {
     result.innerHTML = '';
     dailyLastMove = null;
+    // A toast from the last puzzle must not narrate the new one.
+    clearTimeout(sdToastTimer);
+    document.querySelector('.sd-toast')?.classList.remove('is-on');
     // Wordle-simple layout (Cole, 2026-10-08): goal, chain, question, four
     // big buttons. Hints, streak/credits and past days live in drawers.
     const card = el(`<div class="game-result-card game-daily sd-board">
@@ -1376,7 +1389,8 @@ function initGameUI() {
     const run = dailyRun;
     if (!run) return;
     const picks = completed.picks && completed.picks.length ? completed.picks : (run.picks || []);
-    const hops = completed.hops_used != null ? completed.hops_used : run.hops_used;
+    const hops = completed.hops_used != null ? completed.hops_used : run.hops_used; // moves spent
+    const counts = dailyChainCounts(picks);
     const par = completed.beat_tree ? completed.old_par : run.par;
     const streak = practiceMode ? null : completed.streak != null ? completed.streak : run.streak;
     const seconds = dailyElapsed(run);
@@ -1386,27 +1400,48 @@ function initGameUI() {
     });
     openSdModal((c) => {
       const h = document.createElement('h2');
+      const hopsWord = `${counts.hops} hop${counts.hops === 1 ? '' : 's'}`;
       h.textContent = !won ? '💀 Dead end! The tree wins.'
-        : completed.beat_tree ? `🏆 You beat the tree in ${hops} hop${hops === 1 ? '' : 's'}!`
-        : `🎉 Chain completed in ${hops} hop${hops === 1 ? '' : 's'}!`;
+        : completed.beat_tree ? `🏆 You beat the tree in ${hopsWord}!`
+        : `🎉 Chain completed in ${hopsWord}!`;
       c.appendChild(h);
       const sub = el('<p class="sd-modal-sub"></p>');
-      sub.textContent = !won ? 'Here’s the chain the tree had in mind.'
-        : completed.beat_tree ? `Par was ${par}. You found a shorter chain than the tree.`
-        : hops === par ? 'Right on par. The tree nods.'
-        : `Par was ${par}. Come back tomorrow and beat it.`;
+      const missNote = counts.deadEnds
+        ? ` ${hops} moves, including ${counts.deadEnds} dead end${counts.deadEnds === 1 ? '' : 's'}.`
+        : '';
+      sub.textContent = !won ? 'Here\u2019s the chain the tree had in mind.'
+        : completed.beat_tree ? `Par was ${par}. You found a shorter chain than the tree.${missNote}`
+        : hops === par ? `Right on par. The tree nods.${missNote}`
+        : `Par was ${par}.${missNote}`;
       c.appendChild(sub);
+      // Your chain, band by band (Cole, 2026-10-08): the share TEXT stays
+      // spoiler-free, but the player gets to see exactly what they built.
+      const start = { name: run.start_band.name, anchor: true };
+      const mine = picks.map((p) => ({ name: p.name, kind: p.kind }));
+      if (won && mine.length) mine[mine.length - 1].anchor = true; // the last pick is the target
+      if (mine.length || won) {
+        c.appendChild(el(`<p class="sd-reveal-label">${won ? 'Your chain' : 'Your attempt'}</p>`));
+        c.appendChild(chainRowEl([start, ...mine]));
+      }
+      if (!won && run.reveal_path && run.reveal_path.length) {
+        c.appendChild(el('<p class="sd-reveal-label">The shortest chain</p>'));
+        c.appendChild(chainRowEl(run.reveal_path.map((b, i, a) => ({
+          name: b.name, kind: 'optimal', anchor: i === 0 || i === a.length - 1,
+        }))));
+      }
       const chainLine = el('<p class="sd-result-chain"></p>');
       chainLine.textContent = text.split('\n')[1];
       c.appendChild(chainLine);
-      if (!won && run.reveal_path && run.reveal_path.length) {
-        const rev = el('<p class="sd-reveal">The chain: <strong></strong></p>');
-        rev.querySelector('strong').textContent = run.reveal_path.map((b) => b.name).join(' → ');
-        c.appendChild(rev);
-      }
       const stats = el('<div class="sd-result-stats"></div>');
       const time = fmtElapsed(seconds);
-      for (const [num, label] of [[hops, 'Moves'], [par, 'Par'], ...(streak != null ? [[streak, 'Streak']] : []), ...(time ? [[time, 'Time']] : [])]) {
+      const statRows = [
+        ...(won ? [[counts.hops, 'Hops']] : []),
+        [hops, 'Moves'],
+        [par, 'Par'],
+        ...(streak != null ? [[streak, 'Streak']] : []),
+        ...(time ? [[time, 'Time']] : []),
+      ];
+      for (const [num, label] of statRows) {
         const s = el('<div class="sd-stat"><strong></strong><span></span></div>');
         s.querySelector('strong').textContent = String(num);
         s.querySelector('span').textContent = label;
@@ -1440,6 +1475,23 @@ function initGameUI() {
     if (kind === 'deadend') return `✗ ${name} is a dead end: no shared member with ${from}. −1 move.`;
     if (kind === 'optimal') return `✓ ${name} connects. You\u2019re on the shortest path.`;
     return `✓ ${name} connects, but it\u2019s the long way round.`;
+  }
+
+  // A chain drawn as pills: [start] → link → link → [target]. Links are
+  // colored by kind; dead ends are crossed out but kept, so your own chain
+  // shows where you went wrong.
+  function chainRowEl(nodes) {
+    const row = el('<div class="sd-reveal-chain"></div>');
+    nodes.forEach((n, i) => {
+      if (i) row.appendChild(el('<span class="sd-link" aria-hidden="true">→</span>'));
+      const cls = n.anchor ? 'game-chain-anchor'
+        : n.kind === 'deadend' ? 'game-chain-filled game-chain-deadend'
+        : n.kind === 'optimal' ? 'game-chain-filled game-chain-good' : 'game-chain-filled game-chain-ok';
+      const pill = el(`<span class="game-chain-pill ${cls}"></span>`);
+      pill.textContent = n.name;
+      row.appendChild(pill);
+    });
+    return row;
   }
 
   // The newest link lands in the chain with a little pop.
@@ -1634,7 +1686,7 @@ function initGameUI() {
     const finish = q('.game-daily-finish');
     const prompt = q('.sd-prompt');
     optsBox.innerHTML = '';
-    optsBox.classList.remove('is-busy');
+    optsBox.classList.remove('is-busy', 'is-asking');
     tools.innerHTML = '';
     finish.innerHTML = '';
     prompt.innerHTML = '';
@@ -1650,10 +1702,13 @@ function initGameUI() {
     if (completed || run.status === 'complete') {
       const c = completed || {};
       let line;
+      const ct = dailyChainCounts(run.picks || []);
+      const hopsWord = `${ct.hops} hop${ct.hops === 1 ? '' : 's'}`;
+      const miss = ct.deadEnds ? ` ${run.hops_used} moves with ${ct.deadEnds} dead end${ct.deadEnds === 1 ? '' : 's'}.` : '';
       if (c.beat_tree) {
-        line = `You beat the tree in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'}. Par was ${c.old_par}.`;
+        line = `You beat the tree in ${hopsWord}. Par was ${c.old_par}.${miss}`;
       } else {
-        line = `Connected in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} (par ${run.par}).`;
+        line = `Connected in ${hopsWord} (par ${run.par}).${miss}`;
         if (run.hops_used === run.par) line += ' The tree nods.';
         if (run.best_hops != null && run.best_hops < run.hops_used) {
           line += ` Best today: ${run.best_hops}.`;
@@ -1709,10 +1764,7 @@ function initGameUI() {
       const elim = el('<button type="button" class="tool-chip">Cut one option (−10)</button>');
       elim.addEventListener('click', () => dailyHint(card, 'eliminate'));
       const peek = el('<button type="button" class="tool-chip">Ask the tree (−10)</button>');
-      peek.addEventListener('click', () => {
-        dailyRevealArmed = true;
-        note.textContent = 'Tap a band to check whether it’s on the shortest path.';
-      });
+      peek.addEventListener('click', () => armDailyAsk(card));
       tools.appendChild(elim);
       tools.appendChild(peek);
     }
@@ -1739,6 +1791,23 @@ function initGameUI() {
     const giveup = el('<button type="button" class="sd-linkbtn sd-giveup">Give up &amp; reveal the chain</button>');
     giveup.addEventListener('click', () => confirmDailyGiveUp(card));
     finish.appendChild(giveup);
+  }
+
+  // "Ask the tree" arms a check; nothing is charged until you tap a band.
+  // It used to only print a line below the fold, so it looked like the
+  // button did nothing (Cole's bug list, 2026-10-08).
+  function armDailyAsk(card) {
+    dailyRevealArmed = true;
+    const drawer = card.querySelector('.sd-hints');
+    if (drawer) drawer.open = false;
+    card.querySelector('.game-daily-options').classList.add('is-asking');
+    const prompt = card.querySelector('.sd-prompt');
+    prompt.textContent = 'Ask the tree: tap a band to check if it\u2019s on the shortest path (−10). ';
+    const cancel = el('<button type="button" class="sd-linkbtn">Cancel</button>');
+    cancel.addEventListener('click', () => paintDailyBoard(card));
+    prompt.appendChild(cancel);
+    showToast('Tap a band to ask the tree');
+    try { prompt.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' }); } catch {}
   }
 
   function confirmDailyGiveUp(card) {
@@ -1858,9 +1927,14 @@ function initGameUI() {
         }
         paintDailyBoard(card);
         const yes = data.hint && data.hint.on_optimal_path;
-        card.querySelector('.game-daily-note').textContent = yes
-          ? `${data.hint.option.name} is on the shortest path.`
-          : `${data.hint.option.name} is not on the shortest path. Scenic route at best.`;
+        const answer = yes
+          ? `🌳 The tree says ${data.hint.option.name} is on the shortest path.`
+          : `🌳 The tree says ${data.hint.option.name} is not on the shortest path.`;
+        const line = card.querySelector('.sd-result');
+        line.hidden = false;
+        line.className = 'sd-result is-' + (yes ? 'good' : 'ok');
+        line.textContent = answer;
+        showToast(answer, yes ? 'good' : null);
       } catch (err) {
         btn.disabled = false;
         note.textContent = err.message;
@@ -2017,14 +2091,9 @@ function initGameUI() {
     // The answer, drawn the way the game draws chains: green links in a row.
     if (run.reveal_path && run.reveal_path.length) {
       finish.appendChild(el('<p class="sd-reveal-label">The shortest chain</p>'));
-      const row = el('<div class="sd-reveal-chain"></div>');
-      run.reveal_path.forEach((b, i) => {
-        if (i) row.appendChild(el('<span class="sd-link" aria-hidden="true">→</span>'));
-        const pill = el(`<span class="game-chain-pill ${i === 0 || i === run.reveal_path.length - 1 ? 'game-chain-anchor' : 'game-chain-filled game-chain-good'}"></span>`);
-        pill.textContent = b.name;
-        row.appendChild(pill);
-      });
-      finish.appendChild(row);
+      finish.appendChild(chainRowEl(run.reveal_path.map((b, i, a) => ({
+        name: b.name, kind: 'optimal', anchor: i === 0 || i === a.length - 1,
+      }))));
     }
     const actions = el('<div class="sd-finish-actions"></div>');
     const results = el('<button type="button" class="tool-chip">See results</button>');
