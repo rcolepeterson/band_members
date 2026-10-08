@@ -146,6 +146,23 @@ export function dailyChainCounts(picks = []) {
   return { hops: picks.length - deadEnds, deadEnds, moves: picks.length };
 }
 
+// Seconds until the next daily chain: midnight in America/Los_Angeles, which
+// is when pacificDate() rolls over on the server. A countdown is right in
+// every timezone, unlike "midnight Pacific" or "midnight local" copy.
+export function secondsToNextChain(now = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(now).map((p) => [p.type, p.value]));
+  const h = Number(parts.hour) % 24; // some engines print midnight as "24"
+  return 86400 - (h * 3600 + Number(parts.minute) * 60 + Number(parts.second));
+}
+
+export function fmtCountdown(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+}
+
 export function fmtElapsed(seconds) {
   if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
   const s = Math.round(seconds);
@@ -794,6 +811,11 @@ function initGameUI() {
       .sd-board .game-chain-pills{position:relative;flex-wrap:nowrap;overflow-x:auto;justify-content:safe center;padding:6px 6px 8px;margin:10px 0 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
       .sd-board .game-chain-pills::-webkit-scrollbar{display:none}
       .sd-board .game-chain-pill{flex:none;max-width:150px}
+      /* Full band names, never "The Flowers of Ro…" (Cole, 2026-10-08):
+         long names wrap to a second line inside the pill. */
+      .sd-board .game-chain-pill,.sd-modal .game-chain-pill{white-space:normal;overflow:visible;text-overflow:clip;text-align:center;line-height:1.25;border-radius:14px;overflow-wrap:break-word}
+      .sd-countdown{text-align:center;font-size:.85rem;color:var(--color-text-muted);margin:8px 0 0}
+      .sd-countdown strong{color:var(--color-text);font-variant-numeric:tabular-nums;letter-spacing:.04em}
       .sd-link{flex:none;color:var(--color-text-faint);font-size:.8rem}
       .game-chain-good{border-color:var(--sd-good);background:color-mix(in srgb,var(--sd-good) 22%,transparent)}
       .game-chain-ok{border-color:var(--sd-ok);background:color-mix(in srgb,var(--sd-ok) 20%,transparent)}
@@ -1300,7 +1322,7 @@ function initGameUI() {
       const ul = el('<ul></ul>');
       for (const line of [
         'Each move, tap a band that shares a member with the band you’re on.',
-        `Par is the shortest possible chain. You get par + ${DAILY_EXTRA_MOVES} moves.`,
+        `"Shortest path" is the fewest hops it can be done in. You get ${DAILY_EXTRA_MOVES} extra moves on top.`,
         'Every band you tap fills the next slot in your chain.',
       ]) {
         const li = document.createElement('li');
@@ -1320,7 +1342,7 @@ function initGameUI() {
         ex.appendChild(row);
       }
       c.appendChild(ex);
-      c.appendChild(el('<p class="sd-modal-sub">A new chain every day at midnight Pacific. Same chain for everyone.</p>'));
+      c.appendChild(el('<p class="sd-modal-sub">A new chain every day. Same chain for everyone.</p>'));
       const play = el('<button type="button" class="sd-primary" style="margin-top:14px">Play</button>');
       play.addEventListener('click', closeSdModal);
       c.appendChild(play);
@@ -1404,9 +1426,9 @@ function initGameUI() {
         ? ` ${hops} moves, including ${counts.deadEnds} dead end${counts.deadEnds === 1 ? '' : 's'}.`
         : '';
       sub.textContent = !won ? `${dailyGameOverText(run).sub} Here\u2019s the shortest chain.`
-        : completed.beat_tree ? `Par was ${par}. You found a shorter chain than the tree.${missNote}`
-        : hops === par ? `Right on par. The tree nods.${missNote}`
-        : `Par was ${par}.${missNote}`;
+        : completed.beat_tree ? `The shortest path was ${par} hops. You found an even shorter one!${missNote}`
+        : hops === par ? `You matched the shortest path!${missNote}`
+        : `The shortest path is ${par} hops.${missNote}`;
       c.appendChild(sub);
       // Your chain, band by band (Cole, 2026-10-08): the share TEXT stays
       // spoiler-free, but the player gets to see exactly what they built.
@@ -1431,7 +1453,7 @@ function initGameUI() {
       const statRows = [
         ...(won ? [[counts.hops, 'Hops']] : []),
         [hops, 'Moves'],
-        [par, 'Par'],
+        [par, 'Shortest'],
         ...(streak != null ? [[streak, 'Streak']] : []),
         ...(time ? [[time, 'Time']] : []),
       ];
@@ -1497,6 +1519,20 @@ function initGameUI() {
       title: '🎸 Show\u2019s over!',
       sub: ranOut ? 'You ran out of moves.' : 'You gave up on this one.',
     };
+  }
+
+  // "Next chain in 03:12:45", ticking. Stops itself once removed from the page.
+  function nextChainCountdownEl() {
+    const p = el('<p class="sd-countdown">Next daily chain in <strong></strong></p>');
+    const out = p.querySelector('strong');
+    const tick = () => {
+      if (!p.isConnected && timer) { clearInterval(timer); return; }
+      out.textContent = fmtCountdown(secondsToNextChain());
+    };
+    let timer = null;
+    tick();
+    timer = setInterval(tick, 1000);
+    return p;
   }
 
   // The newest link lands in the chain with a little pop.
@@ -1643,7 +1679,7 @@ function initGameUI() {
     pair.appendChild(mk(run.target.name));
     const meta = q('.sd-goal-meta');
     meta.innerHTML = '';
-    meta.appendChild(mk(`Par ${run.par}`));
+    meta.appendChild(mk(`Shortest path: ${run.par} hops`));
     if (active) {
       const left = Math.max(0, dailyMoveLimit(run.par) - run.hops_used);
       meta.appendChild(mk(' · '));
@@ -1695,17 +1731,17 @@ function initGameUI() {
       const hopsWord = `${ct.hops} hop${ct.hops === 1 ? '' : 's'}`;
       const miss = ct.deadEnds ? ` ${run.hops_used} moves with ${ct.deadEnds} dead end${ct.deadEnds === 1 ? '' : 's'}.` : '';
       if (c.beat_tree) {
-        line = `You beat the tree in ${hopsWord}. Par was ${c.old_par}.${miss}`;
+        line = `You beat the shortest path: ${hopsWord} (it was ${c.old_par}).${miss}`;
       } else {
-        line = `Connected in ${hopsWord} (par ${run.par}).${miss}`;
-        if (run.hops_used === run.par) line += ' The tree nods.';
+        line = `Connected in ${hopsWord} (shortest path: ${run.par}).${miss}`;
+        if (run.hops_used === run.par) line += ' You matched it!';
         if (run.best_hops != null && run.best_hops < run.hops_used) {
           line += ` Best today: ${run.best_hops}.`;
         }
       }
       finish.appendChild(el('<p class="sd-finish-line"></p>')).textContent = line;
       const actions = el('<div class="sd-finish-actions"></div>');
-      const results = el('<button type="button" class="tool-chip">See results</button>');
+      const results = el('<button type="button" class="tool-chip">Share score 📤</button>');
       results.addEventListener('click', () => openDailyResults({ won: true, completed: c }));
       const again = el('<button type="button" class="tool-chip"></button>');
       again.textContent = practiceMode ? 'New puzzle' : 'Play again';
@@ -1713,6 +1749,7 @@ function initGameUI() {
       actions.appendChild(results);
       actions.appendChild(again);
       finish.appendChild(actions);
+      if (!practiceMode) finish.appendChild(nextChainCountdownEl());
       return;
     }
 
@@ -2041,7 +2078,7 @@ function initGameUI() {
       }))));
     }
     const actions = el('<div class="sd-finish-actions"></div>');
-    const results = el('<button type="button" class="tool-chip">See results</button>');
+    const results = el('<button type="button" class="tool-chip">Share score 📤</button>');
     results.addEventListener('click', () => openDailyResults({ won: false }));
     actions.appendChild(results);
     const again = el('<button type="button" class="tool-chip"></button>');
@@ -2055,7 +2092,7 @@ function initGameUI() {
     actions.appendChild(again);
     finish.appendChild(actions);
     if (!practiceMode) {
-      finish.appendChild(el('<p class="sd-modal-sub" style="text-align:center;font-size:.85rem;margin:6px 0 0">A new chain drops at midnight Pacific.</p>'));
+      finish.appendChild(nextChainCountdownEl());
     }
   }
 
@@ -2076,7 +2113,7 @@ function initGameUI() {
       const data = await dailyFetch(`/api/game-daily/postmortem?date=${encodeURIComponent(date)}`);
       box.innerHTML = '';
       const parP = el('<p></p>');
-      parP.appendChild(mk('Par · '));
+      parP.appendChild(mk('Shortest path · '));
       const parSpan = document.createElement('span');
       parSpan.className = 'pm-par';
       parSpan.textContent = (data.par_path || []).join(' → ');
@@ -2089,7 +2126,7 @@ function initGameUI() {
       youP.appendChild(youSpan);
       const meta = el('<p class="game-daily-note"></p>');
       meta.textContent = data.outcome === 'complete'
-        ? `Completed in ${data.your_hops} vs par ${data.par}.`
+        ? `Completed in ${data.your_hops} vs a shortest path of ${data.par}.`
         : `Gave up ${data.your_hops} deep — the tree's answer is the gold route.`;
       box.appendChild(parP);
       box.appendChild(youP);

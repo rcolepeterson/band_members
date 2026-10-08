@@ -194,3 +194,23 @@ test("game over says Show's over, and the subtext matches how you lost", () => {
   assert.ok(!daily.includes('The tree wins'), 'no "the tree wins" copy on the daily screens');
   assert.ok(src.includes('<div class="sd-gameover"><p class="sd-gameover-title"></p><p class="sd-gameover-sub"></p></div>'));
 });
+
+test('countdown to the next chain is measured to midnight Pacific, shown as HH:MM:SS', async () => {
+  const { secondsToNextChain, fmtCountdown } = await import('../scripts/six-degrees-game.mjs');
+  // 07:00Z on Oct 8 is exactly midnight PDT: a full day to the next chain.
+  assert.equal(secondsToNextChain(new Date('2026-10-08T07:00:00Z')), 86400);
+  assert.equal(secondsToNextChain(new Date('2026-10-08T06:59:59Z')), 1);
+  // 3pm PDT → 9 hours left, wherever the player is.
+  assert.equal(secondsToNextChain(new Date('2026-10-08T22:00:00Z')), 9 * 3600);
+  assert.equal(fmtCountdown(3725), '01:02:05');
+  assert.equal(fmtCountdown(-4), '00:00:00');
+  assert.ok(!src.includes('A new chain drops at midnight Pacific.'));
+});
+
+test('plain English: "Shortest path", "Share score", full band names', () => {
+  assert.ok(src.includes('`Shortest path: ${run.par} hops`'));
+  assert.ok(src.includes("[par, 'Shortest'],"));
+  assert.equal((src.match(/Share score 📤/g) || []).length, 2);
+  assert.ok(!src.includes('>See results<'));
+  assert.match(src, /\.sd-board \.game-chain-pill,\.sd-modal \.game-chain-pill\{white-space:normal;overflow:visible;text-overflow:clip/);
+});
