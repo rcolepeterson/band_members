@@ -62,14 +62,14 @@ test('a win names start and target, one square per move, no band spoilers', () =
   });
   // Wordle-style: score line, squares, link. No slogan.
   assert.equal(text, [
-    'Six Degrees of Rock #9 🎸 4/4 (28s)',
+    'Six Degrees of Rock #9 🎸 4/4', // no timer
     'Nirvana ➡️ 🟩🟥🟨🟩 ➡️ Metallica', // one square per move
     'sixdegreesofrock.com/game',
   ].join('\n'));
   for (const spoiler of ['Foo Fighters', 'Pearl Jam', 'Probot']) assert.ok(!text.includes(spoiler));
 });
 
-test('a loss scores X, like Wordle, and leaves the time off when unknown', () => {
+test('a loss scores X, like Wordle', () => {
   const text = dailyShareResultText({
     date: '2026-10-08', start: 'Nirvana', target: 'Metallica',
     picks: [{ kind: 'deadend' }, { kind: 'solid' }], moves: 2, par: 4, won: false,
