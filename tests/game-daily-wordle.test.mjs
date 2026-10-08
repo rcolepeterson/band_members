@@ -126,7 +126,7 @@ test('the last move stays on the board in words until the next tap', () => {
   assert.ok(src.includes("t.onclick = () => { clearTimeout(sdToastTimer); t.classList.remove('is-on'); };"), 'tap dismisses');
 });
 
-test('practice mode (?practice=1) is a removable test hook on the Solo endpoint', () => {
+test('practice mode (?practice=1) runs on the Solo endpoint, for fun only', () => {
   assert.ok(src.includes("new URLSearchParams(window.location.search).get('practice') === '1'"));
   assert.ok(src.includes("return practiceMode ? '/api/game-solo/play' : dailyPath;"));
   assert.ok(src.includes("{ action: 'start', fresh: true, famous: true }"), 'fresh famous pair each start');
@@ -142,4 +142,10 @@ test('giving up is not a hint: separate link, one confirm, honest copy', () => {
   assert.ok(src.includes('<h2>Give up and reveal the chain?</h2>'), 'single confirm modal');
   assert.ok(!src.includes('Today ends and the tree reveals the path'), 'cryptic copy gone');
   assert.ok(src.includes('<div class="sd-reveal-chain"></div>'), 'answer drawn as a chain on the board');
+});
+
+test('practice is permanent, for fun: no hints in the UI, no "remove this" comments', () => {
+  assert.ok(src.includes("q('.sd-hints').hidden = practiceMode || !tools.children.length;"));
+  assert.ok(src.includes('Practice mode: a permanent product feature, not a test hook'));
+  assert.ok(!src.includes('TEMPORARY test hook'));
 });

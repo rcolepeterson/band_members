@@ -3,7 +3,8 @@
 // POST /api/game-solo/play (auth) — body { action, ... }:
 //   start   { band_a?, fresh?, famous? } — begin a solo run (or resume the active one);
 //                                 famous:true deals a headliner pair with an
-//                                 all-famous route (the /game?practice=1 test mode);
+//                                 all-famous route (Practice mode, /game?practice=1:
+//                                 a permanent for-fun mode, no credits, no hints);
 //                                 band_a = UUID of the player's chosen start band;
 //                                 omit it and the tree deals both bands.
 //                                 fresh:true abandons any active run and deals new.
@@ -155,15 +156,23 @@ async function runState(sql, run, me) {
   };
 }
 
+// Practice mode (/game?practice=1) is a permanent, for-fun mode (Cole,
+// 2026-10-08): it's the only thing that deals two headliners, so a run with
+// headliner ends IS a practice run. No schema flag needed. Practice pays no
+// credits and offers no hints; the Daily Chain is where credits, streaks
+// and hints live.
+function isPracticeRun(run, headliners) {
+  return !!(headliners && headliners.has(run.band_a) && headliners.has(run.band_b));
+}
+
 async function dealOptions(sql, run) {
   const { adj, degree, meta, famous, headliners } = await loadBandGraph(sql);
   const dist = bfsDist(adj, run.band_b);
   const deadPicked = (run.picks || []).filter((p) => p.kind === 'deadend').map((p) => p.band_id);
   // No step backwards: the start and every band already in the chain.
   const visited = [run.band_a, ...(run.picks || []).filter((p) => p.kind !== 'deadend').map((p) => p.band_id)];
-  // A headliner pair (practice mode deals these) plays like the daily:
-  // famous bands first on the slate. Read off the run, so no schema change.
-  const famousRun = !!(headliners && famous && headliners.has(run.band_a) && headliners.has(run.band_b));
+  // Practice plays like the daily: famous bands first on the slate.
+  const famousRun = !!famous && isPracticeRun(run, headliners);
   const dugOut = run.escaped || [];
   const opts = optionsFor({
     adj, dist, degree, meta,
@@ -303,7 +312,9 @@ export default async (req) => {
 
     if (String(chosen.band_id) === String(run.band_b)) {
       // Reached the target — score the run. Solo economy: finish + par bonus.
-      const { reward } = scoreRun({ isFirst: true, hopsUsed, par: run.optimal_hops, prevBest: null });
+      const { headliners: hl } = await loadBandGraph(sql);
+      const reward = isPracticeRun(run, hl) ? 0
+        : scoreRun({ isFirst: true, hopsUsed, par: run.optimal_hops, prevBest: null }).reward;
       await sql`
         update solo_runs set status = 'complete', hops_used = ${hopsUsed},
                picks = ${JSON.stringify(picks)}::jsonb, current_options = '[]'::jsonb,
@@ -336,7 +347,9 @@ export default async (req) => {
       const targetName = (await loadBandGraph(sql).then(({ meta }) => meta.get(run.band_b) || {}).catch(() => ({}))).name || 'Target';
       const finalPicks = [...picks, { band_id: run.band_b, name: targetName, kind: 'optimal' }];
       const finalHops = hopsUsed + 1;
-      const { reward } = scoreRun({ isFirst: true, hopsUsed: finalHops, par: run.optimal_hops, prevBest: null });
+      const { headliners: hl } = await loadBandGraph(sql);
+      const reward = isPracticeRun(run, hl) ? 0
+        : scoreRun({ isFirst: true, hopsUsed: finalHops, par: run.optimal_hops, prevBest: null }).reward;
       await sql`
         update solo_runs set status = 'complete', hops_used = ${finalHops},
                picks = ${JSON.stringify(finalPicks)}::jsonb, current_options = '[]'::jsonb,
@@ -381,6 +394,7 @@ export default async (req) => {
   if (action === 'hint') {
     const { run, error } = await needActive();
     if (error) return error;
+    if (isPracticeRun(run, (await loadBandGraph(sql)).headliners)) return badRequest('no hints in practice');
     const total = hintsFor(run.optimal_hops);
     if (run.hints_used >= total) return badRequest('no hints left this run');
     const type = body.type === 'reveal' ? 'reveal' : 'eliminate';
@@ -425,6 +439,7 @@ export default async (req) => {
   if (action === 'escape') {
     const { run, error } = await needActive();
     if (error) return error;
+    if (isPracticeRun(run, (await loadBandGraph(sql)).headliners)) return badRequest('no hints in practice');
     const picks = [...(run.picks || [])];
     const last = picks[picks.length - 1];
     const escaped = run.escaped || [];

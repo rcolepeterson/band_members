@@ -1020,11 +1020,12 @@ function initGameUI() {
   // (Cole, 2026-10-08: the toast vanished before anyone could read it).
   let dailyLastMove = null; // { kind, name, from }
 
-  // Practice mode, a TEMPORARY test hook (Cole, 2026-10-08; no real users
-  // yet). /game?practice=1 plays the same board against the Solo endpoint
-  // with a fresh famous pair every time: no daily, no streak, replay at will.
-  // Remove this block, practicePath(), and the `practiceMode` checks below
-  // (plus `famous` in game_solo_play.mjs) when testing is done.
+  // Practice mode: a permanent product feature, not a test hook (Cole,
+  // 2026-10-08). /game?practice=1 plays the same board against the Solo
+  // endpoint with a fresh famous pair every time, and the daily's reveal
+  // screen links here so players can keep playing. It's purely for fun:
+  // no streak, no credits earned, no hints. The Daily Chain is where
+  // credits, streaks and hints live. game_solo_play.mjs enforces this too.
   const practiceMode = (() => {
     try { return isArenaPage() && new URLSearchParams(window.location.search).get('practice') === '1'; }
     catch { return false; }
@@ -1178,7 +1179,7 @@ function initGameUI() {
       card.querySelector('.game-hops').textContent = 'Practice';
       card.querySelector('.sd-stats').hidden = true;
       card.querySelector('.game-daily-archive').hidden = true;
-      const back = el('<p class="game-daily-note" style="text-align:center;margin:10px 0 0">Practice doesn\u2019t count. <a href="/game">Play today\u2019s Daily Chain</a></p>');
+      const back = el('<p class="game-daily-note" style="text-align:center;margin:10px 0 0">Just for fun: no streaks, credits or hints. <a href="/game">Play today\u2019s Daily Chain</a></p>');
       card.querySelector('.sd-drawers').after(back);
     }
     if (loading) {
@@ -1730,7 +1731,8 @@ function initGameUI() {
     }
 
     // Hints only help you keep playing; nothing to offer means no drawer.
-    q('.sd-hints').hidden = !tools.children.length;
+    // Practice is for fun: no hints, no credits (Cole, 2026-10-08).
+    q('.sd-hints').hidden = practiceMode || !tools.children.length;
 
     // Giving up is not a hint (Cole, 2026-10-08): a quiet link under the
     // board, confirmed once in a modal that says plainly what it costs.
