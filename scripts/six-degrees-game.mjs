@@ -482,8 +482,8 @@ function initGameUI() {
     setModePickerVisible(true);
     // ...and abandons any armed challenge-back reply.
     pendingReplyTo = null;
-    // The challenges/matches queues live under the Versus tab only — the
-    // Daily front door stays clean (just the puzzle). Switching to Versus
+    // The challenges/matches queues live under the Challenge tab only — the
+    // Daily front door stays clean (just the puzzle). Switching to Challenge
     // refreshes the queues; switching away hides them.
     const versusActive = mode === 'head-to-head';
     const chWrap = document.querySelector('[data-challenges-wrap]');
@@ -1986,7 +1986,7 @@ function initGameUI() {
         : 'Copy failed — long-press the link to copy it.';
     });
     dlg.querySelector('[data-share]').addEventListener('click', async () => {
-      const shareData = { title: 'Six Degrees of Rock — Versus', text: shareText, url: inviteUrl };
+      const shareData = { title: 'Six Degrees of Rock — Challenge', text: shareText, url: inviteUrl };
       const canNativeShare = typeof navigator.share === 'function' &&
         (typeof navigator.canShare !== 'function' || navigator.canShare(shareData));
       if (canNativeShare) {
@@ -2028,7 +2028,7 @@ function initGameUI() {
       showInviteDialog({
         matchup: `${bandName(g, bandA)} vs ?`,
         inviteUrl: data.inviteUrl,
-        shareText: `Versus: I picked ${bandName(g, bandA)}. Think you can stump me?`,
+        shareText: `Challenge: I picked ${bandName(g, bandA)}. Think you can stump me?`,
       });
       loadChallenges();
     } catch (err) {
@@ -2178,7 +2178,7 @@ function initGameUI() {
     if (!isSignedIn()) {
       // The lure before the gate: who challenged you, and with what.
       const card = el(`<div class="game-result-card">
-        <div class="game-result-meta"><span class="game-hops">Versus challenge</span></div>
+        <div class="game-result-meta"><span class="game-hops">Challenge</span></div>
         <p class="game-invite-text"></p>
         <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to accept</button></div>
       </div>`);
@@ -2527,7 +2527,7 @@ function initGameUI() {
     const items = [...(data.sent || []).map((m) => ({ ...m, mine: true })),
                    ...(data.received || []).map((m) => ({ ...m, mine: false }))];
     if (!items.length) { wrap.hidden = true; return; }
-    // Queues live under the Versus tab — never un-hide from another mode.
+    // Queues live under the Challenge tab — never un-hide from another mode.
     if (currentMode() !== 'head-to-head') { wrap.hidden = true; return; }
     wrap.hidden = false;
     list.innerHTML = '';
