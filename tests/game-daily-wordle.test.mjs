@@ -109,3 +109,11 @@ test('mode switcher sits behind SHOW_MODE_SWITCHER (off for launch), logic kept'
   assert.ok(src.includes('function openModesSheet()'), 'sheet still exists');
   assert.match(src, /btn\.style\.display = v && SHOW_MODE_SWITCHER \? '' : 'none'/, 'picker visibility respects the flag');
 });
+
+test('out of moves: the board paints no choices, only the reveal', () => {
+  const at = src.indexOf('if (run.hops_used >= dailyMoveLimit(run.par)) {');
+  const options = src.indexOf('for (const o of dailyOptions) {', src.indexOf('function paintDailyBoard('));
+  assert.ok(at !== -1, 'out-of-moves branch exists in paintDailyBoard');
+  assert.ok(at < options, 'and it returns before the choice buttons are drawn');
+  assert.match(src.slice(at, at + 700), /return;/);
+});

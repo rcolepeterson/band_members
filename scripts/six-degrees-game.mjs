@@ -1613,6 +1613,20 @@ function initGameUI() {
       return;
     }
 
+    // Out of moves: no more choices on the board. dailyPick asks the tree
+    // for the answer right away; this also covers a reload or a failed
+    // giveup, which used to leave live buttons at "0 moves left".
+    if (run.hops_used >= dailyMoveLimit(run.par)) {
+      q('.sd-hints').hidden = true;
+      prompt.textContent = 'Out of moves. The tree wins today.';
+      const actions = el('<div class="sd-finish-actions"></div>');
+      const reveal = el('<button type="button" class="tool-chip">Show me the chain</button>');
+      reveal.addEventListener('click', () => dailyGiveUp(card, { outOfMoves: true }));
+      actions.appendChild(reveal);
+      finish.appendChild(actions);
+      return;
+    }
+
     // The question, in words: what to tap and why.
     prompt.appendChild(mk('Who shares a band member with '));
     const strong = document.createElement('strong');
