@@ -112,16 +112,24 @@
     .game-modal-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);margin-bottom:var(--space-1)}
     .game-modal-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.04em}
     .game-modal-sub{color:var(--color-text-muted);font-size:var(--text-sm);margin:0 0 var(--space-4)}
-    .game-modes{display:grid;gap:var(--space-2);margin-bottom:var(--space-4)}
-    .game-mode{display:flex;gap:var(--space-2);align-items:flex-start;border:1px solid var(--color-border);
-      border-radius:var(--radius-lg);padding:var(--space-2) var(--space-3);cursor:pointer;background:rgba(255,255,255,.015)}
-    .game-mode:has(input:checked){border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.06)}
-    .game-mode>span{min-width:0;overflow-wrap:anywhere}
-    .game-mode input{margin-top:2px;accent-color:var(--color-primary);width:18px;height:18px;flex:none}
-    .game-mode strong{display:block;font-size:var(--text-sm)}
-    .game-mode span{color:var(--color-text-muted);font-size:var(--text-xs)}
+    /* Mode tabs: compact horizontal tab bar. Daily is the front door;
+       Solo / Versus / Explore live behind the tabs. The per-mode
+       description lives in .game-mode-desc below, updated by JS. */
+    .game-modes{display:flex;gap:var(--space-2);margin-bottom:var(--space-2);
+      overflow-x:auto;padding-bottom:var(--space-1);scrollbar-width:none}
+    .game-modes::-webkit-scrollbar{display:none}
+    .game-mode{flex:1 0 auto;display:flex;align-items:center;justify-content:center;
+      border:1px solid var(--color-border);border-radius:var(--radius-full);
+      padding:var(--space-2) var(--space-4);cursor:pointer;background:rgba(255,255,255,.015);
+      white-space:nowrap;position:relative}
+    .game-mode:has(input:checked){border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.12)}
+    .game-mode:has(input:checked) strong{color:var(--color-text)}
+    .game-mode input{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px}
+    .game-mode strong{display:block;font-size:var(--text-sm);font-weight:600;color:var(--color-text-muted)}
+    .game-mode>span>span{display:none}
     .game-mode-locked{opacity:.55;cursor:not-allowed}
-    .game-mode-locked strong{display:flex;align-items:center;gap:var(--space-2)}
+    .game-mode-desc{font-size:var(--text-xs);color:var(--color-text-muted);margin:0 0 var(--space-4);
+      min-height:1.4em;text-align:center}
     .game-field{margin-bottom:var(--space-3);position:relative}
     .game-field label{display:block;font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;
       color:var(--color-text-muted);margin-bottom:var(--space-1)}
@@ -235,10 +243,10 @@
       .arena-sub{font-size:13px}
       .game-modal-title{font-size:1rem}
       .game-modal-sub{font-size:13px;margin-bottom:var(--space-3)}
-      .game-modes{margin-bottom:var(--space-3)}
-      .game-mode{padding:var(--space-2) var(--space-3);gap:var(--space-2)}
+      .game-modes{margin-bottom:var(--space-2)}
+      .game-mode{padding:var(--space-2) var(--space-3)}
       .game-mode strong{font-size:13px}
-      .game-mode > span > span{font-size:12px}
+      .game-mode-desc{font-size:12px}
       .game-field input{min-height:44px;font-size:14px}
       .game-run-btn{min-height:48px}
     }
@@ -275,8 +283,8 @@
     <main class="arena-main">
       <div class="arena-hero">
         <div class="arena-degree" aria-hidden="true">6&deg;</div>
-        <div class="arena-eyebrow">The game</div>
-        <p class="arena-sub">The rock family tree, playable. Pick your matchup, run the chain, and find out how deep the threads go.</p>
+        <div class="arena-eyebrow">The daily game</div>
+        <p class="arena-sub">One fresh chain every day &mdash; same for everyone. Connect the bands, beat par, build your streak.</p>
       </div>
 
       <section class="arena-challenges" data-challenges-wrap hidden>
@@ -303,28 +311,36 @@
             <div class="game-modal-title" id="game-modal-title"><span aria-hidden="true">6&deg;</span> Six Degrees game</div>
           </div>
           <p class="game-modal-sub">Name two bands. If the tree connects them, you brag. If it breaks, the tree wins.</p>
-          <div class="game-modes" role="radiogroup" aria-label="How to play">
+          <!--
+            Mode tabs. Daily Chain is the front door (checked by default) —
+            Cole's 2-second rule: land, see the puzzle, start tapping.
+            Solo / Versus / Explore live behind the tabs.
+            Internal mode values stay as-is; only user-facing labels changed
+            (head-to-head → Versus, chaos → Explore).
+          -->
+          <div class="game-modes" role="radiogroup" aria-label="Ways to play">
             <label class="game-mode">
-              <input type="radio" name="game-mode" value="head-to-head" checked />
-              <span><strong>Head-to-head</strong><span>You pick a band, your opponent picks the second one — trying to stump you. Then reverse.</span></span>
+              <input type="radio" name="game-mode" value="daily" checked />
+              <span><strong>Daily</strong><span>One fresh matchup every day. Same chain for everyone.</span></span>
             </label>
             <label class="game-mode">
               <input type="radio" name="game-mode" value="solo" />
-              <span><strong>Solo vs. the graph</strong><span>You pick one band. The graph deals you a fair opponent.</span></span>
+              <span><strong>Solo</strong><span>Practice mode. Pick a band, we deal the opponent, you find the chain.</span></span>
+            </label>
+            <label class="game-mode">
+              <input type="radio" name="game-mode" value="head-to-head" />
+              <span><strong>Versus</strong><span>Challenge a friend. You pick, they pick, tree settles it.</span></span>
             </label>
             <label class="game-mode">
               <input type="radio" name="game-mode" value="chaos" />
-              <span><strong>Chaos</strong><span>The graph picks both bands. Highest stakes.</span></span>
-            </label>
-            <label class="game-mode">
-              <input type="radio" name="game-mode" value="daily" />
-              <span><strong>Daily Chain</strong><span>One fresh matchup every day. Same chain for everyone.</span></span>
+              <span><strong>Explore</strong><span>Feeling lucky? We deal two random bands and show you the connection.</span></span>
             </label>
             <label class="game-mode game-mode-locked" aria-disabled="true">
               <input type="radio" name="game-mode" value="stakes" disabled />
               <span><strong>Stakes</strong><span>Put something on it. Winner takes the round.</span></span>
             </label>
           </div>
+          <p class="game-mode-desc" id="game-mode-desc" aria-live="polite"></p>
           <div class="game-field" id="game-field-a-wrap">
             <label for="game-band-a">Band one</label>
             <input id="game-band-a" type="text" placeholder="Start typing a band name&hellip;" autocomplete="off" />
