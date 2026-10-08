@@ -125,3 +125,11 @@ test('the last move stays on the board in words until the next tap', () => {
   assert.match(src, /sdToastTimer = setTimeout\(\(\) => t\.classList\.remove\('is-on'\), 3000\)/, 'toast lasts 3s');
   assert.ok(src.includes("t.onclick = () => { clearTimeout(sdToastTimer); t.classList.remove('is-on'); };"), 'tap dismisses');
 });
+
+test('practice mode (?practice=1) is a removable test hook on the Solo endpoint', () => {
+  assert.ok(src.includes("new URLSearchParams(window.location.search).get('practice') === '1'"));
+  assert.ok(src.includes("return practiceMode ? '/api/game-solo/play' : dailyPath;"));
+  assert.ok(src.includes("{ action: 'start', fresh: true, famous: true }"), 'fresh famous pair each start');
+  // Daily calls still name the daily endpoint, so the daily is untouched without the flag.
+  assert.equal((src.match(/dailyFetch\(practicePath\('\/api\/game-daily\/play'\)/g) || []).length, 7);
+});

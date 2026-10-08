@@ -1014,6 +1014,19 @@ function initGameUI() {
   // (Cole, 2026-10-08: the toast vanished before anyone could read it).
   let dailyLastMove = null; // { kind, name, from }
 
+  // Practice mode, a TEMPORARY test hook (Cole, 2026-10-08; no real users
+  // yet). /game?practice=1 plays the same board against the Solo endpoint
+  // with a fresh famous pair every time: no daily, no streak, replay at will.
+  // Remove this block, practicePath(), and the `practiceMode` checks below
+  // (plus `famous` in game_solo_play.mjs) when testing is done.
+  const practiceMode = (() => {
+    try { return isArenaPage() && new URLSearchParams(window.location.search).get('practice') === '1'; }
+    catch { return false; }
+  })();
+  function practicePath(dailyPath) {
+    return practiceMode ? '/api/game-solo/play' : dailyPath;
+  }
+
   // Solo Run v2 (Oct 2026): the guessing game. Same server-dealt options as
   // the daily chain, but the tree deals a fresh pair every run (or honors
   // the player's band-A pick) — no date lock, no streaks.
@@ -1155,13 +1168,22 @@ function initGameUI() {
     </div>`);
     result.appendChild(card);
     card.querySelector('[data-howto]').addEventListener('click', openHowToPlay);
+    if (practiceMode) {
+      card.querySelector('.game-hops').textContent = 'Practice';
+      card.querySelector('.sd-stats').hidden = true;
+      card.querySelector('.game-daily-archive').hidden = true;
+      const back = el('<p class="game-daily-note" style="text-align:center;margin:10px 0 0">Practice doesn\u2019t count. <a href="/game">Play today\u2019s Daily Chain</a></p>');
+      card.querySelector('.sd-drawers').after(back);
+    }
     if (loading) {
       card.querySelector('.game-daily-note').textContent = 'Dealing today’s chain…';
     }
     try {
-      const data = await dailyFetch('/api/game-daily/play', {
+      const data = await dailyFetch(practicePath('/api/game-daily/play'), {
         method: 'POST',
-        body: JSON.stringify({ action: 'start', ...(date ? { date } : {}) }),
+        body: JSON.stringify(practiceMode
+          ? { action: 'start', fresh: true, famous: true }
+          : { action: 'start', ...(date ? { date } : {}) }),
       });
       dailyRun = data.run;
       dailyOptions = data.options || [];
@@ -1173,7 +1195,7 @@ function initGameUI() {
       trackGameEvent({
         session_id: analyticsSessionId,
         event_type: 'game_started',
-        game_mode: 'daily_chain',
+        game_mode: practiceMode ? 'practice' : 'daily_chain',
         band_a: dailyRun && dailyRun.start_band ? dailyRun.start_band.name : null,
         band_b: dailyRun && dailyRun.target ? dailyRun.target.name : null,
       });
@@ -1293,7 +1315,9 @@ function initGameUI() {
 
   // Timer for the share text: starts when a fresh run is first seen, stops
   // when the results open. Lives in localStorage so a reload doesn't reset it.
-  function dailyClockKey(run) { return `sdr-daily-clock:${run.chain_date}:${run.run_number || 1}`; }
+  function dailyClockKey(run) {
+    return practiceMode ? `sdr-practice-clock:${run.id}` : `sdr-daily-clock:${run.chain_date}:${run.run_number || 1}`;
+  }
   function dailyClockMark(run) {
     if (!run || run.status !== 'active' || run.hops_used !== 0) return;
     try {
@@ -1347,7 +1371,7 @@ function initGameUI() {
     const picks = completed.picks && completed.picks.length ? completed.picks : (run.picks || []);
     const hops = completed.hops_used != null ? completed.hops_used : run.hops_used;
     const par = completed.beat_tree ? completed.old_par : run.par;
-    const streak = completed.streak != null ? completed.streak : run.streak;
+    const streak = practiceMode ? null : completed.streak != null ? completed.streak : run.streak;
     const seconds = dailyElapsed(run);
     const text = dailyShareResultText({
       date: run.chain_date, start: run.start_band.name, target: run.target.name,
@@ -1375,7 +1399,7 @@ function initGameUI() {
       }
       const stats = el('<div class="sd-result-stats"></div>');
       const time = fmtElapsed(seconds);
-      for (const [num, label] of [[hops, 'Moves'], [par, 'Par'], [streak, 'Streak'], ...(time ? [[time, 'Time']] : [])]) {
+      for (const [num, label] of [[hops, 'Moves'], [par, 'Par'], ...(streak != null ? [[streak, 'Streak']] : []), ...(time ? [[time, 'Time']] : [])]) {
         const s = el('<div class="sd-stat"><strong></strong><span></span></div>');
         s.querySelector('strong').textContent = String(num);
         s.querySelector('span').textContent = label;
@@ -1545,7 +1569,7 @@ function initGameUI() {
     const q = (sel) => card.querySelector(sel);
     const mk = (t, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = t; return s; };
     const active = run.status === 'active';
-    q('.game-daily-date').textContent = fmtChainDate(run.chain_date);
+    q('.game-daily-date').textContent = practiceMode ? 'New puzzle every time' : fmtChainDate(run.chain_date);
 
     // The goal, big: Start → Target, then par and moves left.
     const pair = q('.game-daily-pair');
@@ -1577,6 +1601,7 @@ function initGameUI() {
     if (run.best_hops != null) econLine.appendChild(mk(` · Best today: ${run.best_hops}`));
     const statsActions = q('.sd-stats-actions');
     statsActions.innerHTML = '';
+    if (practiceMode) statsActions.hidden = true;
     const econ = el('<button type="button" class="tool-chip">Freeze my streak (100)</button>');
     econ.addEventListener('click', () => dailyBuyFreeze(card));
     statsActions.appendChild(econ);
@@ -1631,7 +1656,8 @@ function initGameUI() {
       const actions = el('<div class="sd-finish-actions"></div>');
       const results = el('<button type="button" class="tool-chip">See results</button>');
       results.addEventListener('click', () => openDailyResults({ won: true, completed: c }));
-      const again = el('<button type="button" class="tool-chip">Play again</button>');
+      const again = el('<button type="button" class="tool-chip"></button>');
+      again.textContent = practiceMode ? 'New puzzle' : 'Play again';
       again.addEventListener('click', () => dailyReplay(card));
       actions.appendChild(results);
       actions.appendChild(again);
@@ -1715,6 +1741,7 @@ function initGameUI() {
   // In-run actions name the run's day. Without it the server assumes today,
   // so a past day opened from the archive would act on today's chain.
   function dailyDate() {
+    if (practiceMode) return {};
     return dailyRun && dailyRun.chain_date ? { date: dailyRun.chain_date } : {};
   }
 
@@ -1722,7 +1749,7 @@ function initGameUI() {
     const note = card.querySelector('.game-daily-note');
     note.textContent = outOfMoves ? 'Out of moves. The tree reveals the path…' : 'The tree is revealing the path…';
     try {
-      const data = await dailyFetch('/api/game-daily/play', {
+      const data = await dailyFetch(practicePath('/api/game-daily/play'), {
         method: 'POST',
         body: JSON.stringify({ action: 'giveup', ...dailyDate() }),
       });
@@ -1736,7 +1763,7 @@ function initGameUI() {
         trackGameEvent({
           session_id: analyticsSessionId,
           event_type: 'game_completed',
-          game_mode: 'daily_chain',
+          game_mode: practiceMode ? 'practice' : 'daily_chain',
           result: 'abandon',
           moves_count: analyticsMoveCount,
           hints_used: analyticsHintCount,
@@ -1752,11 +1779,12 @@ function initGameUI() {
   }
 
   async function dailyReplay(card) {
+    if (practiceMode) { renderDailyBoard({ loading: true }); return; }
     const note = card.querySelector('.game-daily-note');
     note.textContent = 'Dealing a fresh run…';
     dailyLastMove = null;
     try {
-      const data = await dailyFetch('/api/game-daily/play', {
+      const data = await dailyFetch(practicePath('/api/game-daily/play'), {
         method: 'POST',
         body: JSON.stringify({ action: 'start', replay: true }),
       });
@@ -1770,7 +1798,7 @@ function initGameUI() {
       trackGameEvent({
         session_id: analyticsSessionId,
         event_type: 'game_started',
-        game_mode: 'daily_chain',
+        game_mode: practiceMode ? 'practice' : 'daily_chain',
         band_a: dailyRun && dailyRun.start_band ? dailyRun.start_band.name : null,
         band_b: dailyRun && dailyRun.target ? dailyRun.target.name : null,
       });
@@ -1787,7 +1815,7 @@ function initGameUI() {
       dailyRevealArmed = false;
       btn.disabled = true;
       try {
-        const data = await dailyFetch('/api/game-daily/play', {
+        const data = await dailyFetch(practicePath('/api/game-daily/play'), {
           method: 'POST',
           body: JSON.stringify({ action: 'hint', type: 'reveal', option_id: optionId, ...dailyDate() }),
         });
@@ -1799,7 +1827,7 @@ function initGameUI() {
           trackGameEvent({
             session_id: analyticsSessionId,
             event_type: 'hint_clicked',
-            game_mode: 'daily_chain',
+            game_mode: practiceMode ? 'practice' : 'daily_chain',
           });
         }
         paintDailyBoard(card);
@@ -1820,7 +1848,7 @@ function initGameUI() {
     if (btn) btn.classList.add('is-pending');
     card.querySelectorAll('.game-daily-option').forEach((b) => { b.disabled = true; });
     try {
-      const data = await dailyFetch('/api/game-daily/play', {
+      const data = await dailyFetch(practicePath('/api/game-daily/play'), {
         method: 'POST',
         body: JSON.stringify({ action: 'pick', option_id: optionId, ...dailyDate() }),
       });
@@ -1832,7 +1860,7 @@ function initGameUI() {
         trackGameEvent({
           session_id: analyticsSessionId,
           event_type: 'move_made',
-          game_mode: 'daily_chain',
+          game_mode: practiceMode ? 'practice' : 'daily_chain',
           move_number: analyticsMoveCount,
         });
       }
@@ -1860,7 +1888,7 @@ function initGameUI() {
           trackGameEvent({
             session_id: analyticsSessionId,
             event_type: 'game_completed',
-            game_mode: 'daily_chain',
+            game_mode: practiceMode ? 'practice' : 'daily_chain',
             result: 'win',
             moves_count: analyticsMoveCount,
             hints_used: analyticsHintCount,
@@ -1894,7 +1922,7 @@ function initGameUI() {
   async function dailyHint(card, type) {
     const note = card.querySelector('.game-daily-note');
     try {
-      const data = await dailyFetch('/api/game-daily/play', {
+      const data = await dailyFetch(practicePath('/api/game-daily/play'), {
         method: 'POST',
         body: JSON.stringify({ action: 'hint', type, ...dailyDate() }),
       });
@@ -1906,7 +1934,7 @@ function initGameUI() {
         trackGameEvent({
           session_id: analyticsSessionId,
           event_type: 'hint_clicked',
-          game_mode: 'daily_chain',
+          game_mode: practiceMode ? 'practice' : 'daily_chain',
         });
       }
       paintDailyBoard(card);
@@ -1923,7 +1951,7 @@ function initGameUI() {
     const note = card.querySelector('.game-daily-note');
     const who = dailyRun && dailyRun.bailout;
     try {
-      const data = await dailyFetch('/api/game-daily/play', {
+      const data = await dailyFetch(practicePath('/api/game-daily/play'), {
         method: 'POST',
         body: JSON.stringify({ action: 'escape', ...dailyDate() }),
       });
@@ -1967,6 +1995,11 @@ function initGameUI() {
     const results = el('<button type="button" class="tool-chip">See results</button>');
     results.addEventListener('click', () => openDailyResults({ won: false }));
     actions.appendChild(results);
+    if (practiceMode) {
+      const again = el('<button type="button" class="tool-chip">New puzzle</button>');
+      again.addEventListener('click', () => dailyReplay(card));
+      actions.appendChild(again);
+    }
     finish.appendChild(actions);
   }
 
