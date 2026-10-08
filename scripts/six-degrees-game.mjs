@@ -459,16 +459,42 @@ function initGameUI() {
   } catch (_) {}
 
   function currentMode() {
-    return (modeInputs.find((i) => i.checked) || {}).value || 'head-to-head';
+    return (modeInputs.find((i) => i.checked) || {}).value || 'daily';
   }
 
   function syncModeUI() {
     const mode = currentMode();
+    // Tab bar description: one line under the tabs naming what this mode does.
+    // (Full descriptions live in the label markup for accessibility.)
+    const descEl = document.getElementById('game-mode-desc');
+    if (descEl) {
+      const descs = {
+        daily: 'One fresh matchup every day. Same chain for everyone.',
+        solo: 'Practice mode. Pick a band, we deal the opponent, you find the chain.',
+        'head-to-head': 'Challenge a friend. You pick, they pick, tree settles it.',
+        chaos: 'Feeling lucky? We deal two random bands and show you the connection.',
+        stakes: 'Put something on it. Winner takes the round.',
+      };
+      descEl.textContent = descs[mode] || '';
+    }
     // Any mode change exits the invite accept context.
     showHowto('');
     setModePickerVisible(true);
     // ...and abandons any armed challenge-back reply.
     pendingReplyTo = null;
+    // The challenges/matches queues live under the Versus tab only — the
+    // Daily front door stays clean (just the puzzle). Switching to Versus
+    // refreshes the queues; switching away hides them.
+    const versusActive = mode === 'head-to-head';
+    const chWrap = document.querySelector('[data-challenges-wrap]');
+    const mWrap = document.querySelector('[data-matches-wrap]');
+    if (!versusActive) {
+      if (chWrap) chWrap.hidden = true;
+      if (mWrap) mWrap.hidden = true;
+    } else {
+      loadChallenges();
+      loadMatches();
+    }
     // Daily Chain gets its own panel — no band fields, no run button.
     if (mode === 'daily') {
       document.getElementById('game-field-a-wrap').style.display = 'none';
@@ -722,6 +748,13 @@ function initGameUI() {
   let dailyOptions = [];    // public options: [{id, name}]
   let dailyRevealArmed = false;
 
+  // Solo Run v2 (Oct 2026): the guessing game. Same server-dealt options as
+  // the daily chain, but the tree deals a fresh pair every run (or honors
+  // the player's band-A pick) — no date lock, no streaks.
+  let soloRun = null;
+  let soloOptions = [];
+  let soloRevealArmed = false;
+
   // Analytics session state (per game, reset on each start)
   let analyticsSessionId = null;
   let analyticsGameStartTime = null;
@@ -836,10 +869,12 @@ function initGameUI() {
   }
 
   // Tappable credit balance: what you hold, how it's earned, what's coming.
-  function toggleCreditSheet(card) {
+  // Takes the run so the solo board can reuse it (defaults to the daily run).
+  function toggleCreditSheet(card, run) {
     const open = card.querySelector('.game-credit-sheet');
     if (open) { open.remove(); return; }
-    const balance = (dailyRun && dailyRun.credits != null) ? dailyRun.credits : 0;
+    const r = run || dailyRun;
+    const balance = (r && r.credits != null) ? r.credits : 0;
     const sheet = el(`<div class="game-credit-sheet">
       <div class="game-credit-sheet-head"><strong>Credits</strong><button type="button" aria-label="Close">✕</button></div>
       <p class="game-credit-sheet-balance">Balance: <strong></strong></p>
@@ -1197,6 +1232,7 @@ function initGameUI() {
 
   function paintDailyGiveUp(card, gaveUp) {
     const run = dailyRun;
+    const mk = (t, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = t; return s; };
     card.querySelector('.game-daily-current').textContent = 'The tree wins today.';
     const finish = card.querySelector('.game-daily-finish');
     const rev = el('<div class="game-daily-reveal"></div>');
@@ -1395,6 +1431,410 @@ function initGameUI() {
     });
   }
 
+  // --- Solo Run v2 ---------------------------------------------------------
+  // The guessing game (Oct 2026): the tree deals a pair — or honors the
+  // player's band-A pick and supplies band B — and the player builds the
+  // chain link-by-link from multiple-choice options, Daily Chain style.
+  // Free to start; hints and blackhole escapes cost credits.
+
+  function renderSoloGate() {
+    ensureDailyStyles();
+    result.innerHTML = '';
+    const card = el(`<div class="game-result-card game-daily">
+      <div class="game-daily-head"><span class="game-hops">Solo Run</span></div>
+      <p class="game-daily-note">Pick a band — or let the tree deal both — then guess the chain link by link, just like the Daily Chain. Free to play; sign in to keep your credits.</p>
+      <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to play</button></div>
+    </div>`);
+    result.appendChild(card);
+    card.querySelector('[data-signin]').addEventListener('click', () => {
+      if (isArenaPage()) {
+        try { sessionStorage.setItem('sdr_pending_solo', '1'); } catch {}
+        window.location.href = '/';
+      } else if (typeof window.openSignupPopover === 'function') {
+        try { sessionStorage.setItem('sdr_pending_solo', '1'); } catch {}
+        window.openSignupPopover();
+      } else {
+        document.getElementById('add-band-btn')?.click();
+      }
+    });
+  }
+
+  // Resume a solo run interrupted by sign-in (same pattern as daily).
+  (function resumePendingSolo() {
+    let pending = null;
+    try { pending = sessionStorage.getItem('sdr_pending_solo'); } catch {}
+    if (!pending || !isSignedIn()) return;
+    try { sessionStorage.removeItem('sdr_pending_solo'); } catch {}
+    openModal();
+    const soloInput = [...document.querySelectorAll('input[name="game-mode"]')].find((i) => i.value === 'solo');
+    if (soloInput && !soloInput.disabled) {
+      soloInput.checked = true;
+      syncModeUI();
+    }
+  })();
+
+  async function startSoloRun({ bandA = null, fresh = false } = {}) {
+    ensureDailyStyles();
+    if (!isSignedIn()) { renderSoloGate(); return; }
+    result.innerHTML = '';
+    statusLine.textContent = 'Dealing your run…';
+    try {
+      const data = await dailyFetch('/api/game-solo/play', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'start',
+          ...(bandA ? { band_a: bandA } : {}),
+          ...(fresh ? { fresh: true } : {}),
+        }),
+      });
+      soloRun = data.run;
+      soloOptions = data.options || [];
+      // Analytics: new solo session (a resume is the same game, not a new one)
+      if (!data.resumed) {
+        analyticsSessionId = newGameSessionId();
+        analyticsGameStartTime = Date.now();
+        analyticsMoveCount = 0;
+        analyticsHintCount = 0;
+        trackGameEvent({
+          session_id: analyticsSessionId,
+          event_type: 'game_started',
+          game_mode: 'solo',
+          band_a: soloRun && soloRun.start_band ? soloRun.start_band.name : null,
+          band_b: soloRun && soloRun.target ? soloRun.target.name : null,
+        });
+      }
+      statusLine.textContent = '';
+      renderSoloBoard();
+    } catch (err) {
+      statusLine.textContent = '';
+      result.innerHTML = '';
+      const card = el(`<div class="game-result-card game-daily">
+        <div class="game-daily-head"><span class="game-hops">Solo Run</span></div>
+        <p class="game-daily-note"></p>
+      </div>`);
+      card.querySelector('.game-daily-note').textContent = (err && err.message) || 'Could not start a solo run.';
+      result.appendChild(card);
+    }
+  }
+
+  function renderSoloBoard() {
+    ensureDailyStyles();
+    result.innerHTML = '';
+    const card = el(`<div class="game-result-card game-daily">
+      <div class="game-daily-head"><span class="game-hops">Solo Run</span><span class="game-daily-date"></span></div>
+      <p class="game-daily-pair"></p>
+      <p class="game-daily-econ"></p>
+      <div class="game-daily-picks" aria-label="Your picks"></div>
+      <div class="game-daily-current"></div>
+      <div class="game-daily-trail"></div>
+      <div class="game-daily-options"></div>
+      <div class="game-daily-tools"></div>
+      <p class="game-daily-note"></p>
+      <div class="game-daily-finish"></div>
+    </div>`);
+    result.appendChild(card);
+    paintSoloBoard(card);
+  }
+
+  function paintSoloBoard(card, completed, gaveUpInfo) {
+    const run = soloRun;
+    if (!run) return;
+    const q = (sel) => card.querySelector(sel);
+    const mk = (t, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = t; return s; };
+    const pair = q('.game-daily-pair');
+    pair.innerHTML = '';
+    pair.appendChild(mk(run.start_band.name));
+    pair.appendChild(mk('→', 'game-daily-arrow'));
+    pair.appendChild(mk(run.target.name));
+
+    const econLine = q('.game-daily-econ');
+    econLine.innerHTML = '';
+    econLine.appendChild(mk(`Par ${run.par} · `));
+    const creditBtn = el('<button type="button" class="game-credit-btn"></button>');
+    creditBtn.textContent = `${run.credits} credits`;
+    creditBtn.setAttribute('aria-label', 'Your credit balance — how credits work');
+    creditBtn.addEventListener('click', () => toggleCreditSheet(card, run));
+    econLine.appendChild(creditBtn);
+
+    const picksRow = q('.game-daily-picks');
+    picksRow.innerHTML = '';
+    for (const p of run.picks) {
+      const wrap = document.createElement('span');
+      wrap.innerHTML = pickSvg(p.color, 'game-daily-pick');
+      wrap.title = `${p.name} — ${p.kind === 'optimal' ? 'optimal' : p.kind === 'deadend' ? 'dead end' : 'valid'}`;
+      picksRow.appendChild(wrap);
+    }
+
+    // Your chain, in words — no hover needed (mobile has none).
+    const trailNames = [run.start_band.name, ...(run.picks || []).map((p) => p.name)];
+    q('.game-daily-trail').textContent = trailNames.join(' → ');
+
+    const note = q('.game-daily-note');
+    const tools = q('.game-daily-tools');
+    const optsBox = q('.game-daily-options');
+    const finish = q('.game-daily-finish');
+    optsBox.innerHTML = '';
+    tools.innerHTML = '';
+    finish.innerHTML = '';
+    soloRevealArmed = false;
+
+    if (run.status === 'given_up') {
+      paintSoloGiveUp(card, gaveUpInfo);
+      return;
+    }
+
+    if (completed || run.status === 'complete') {
+      const c = completed || {};
+      let line = `Connected in ${run.hops_used} hop${run.hops_used === 1 ? '' : 's'} (par ${run.par}).`;
+      if (c.optimal) line += ' The tree nods.';
+      if (c.credits_earned) line += ` +${c.credits_earned} credits.`;
+      q('.game-daily-current').textContent = line;
+      const again = el('<button type="button" class="tool-chip">New matchup</button>');
+      again.addEventListener('click', () => startSoloRun({ fresh: true }));
+      finish.appendChild(again);
+      return;
+    }
+
+    const cur = q('.game-daily-current');
+    cur.innerHTML = '';
+    cur.appendChild(mk('Now at: '));
+    const strong = document.createElement('strong');
+    strong.textContent = run.current_band.name;
+    cur.appendChild(strong);
+
+    for (const o of soloOptions) {
+      const btn = el('<button type="button" class="game-daily-option"></button>');
+      btn.textContent = o.name;
+      btn.dataset.optionId = o.id;
+      btn.addEventListener('click', () => soloPick(card, o.id, btn));
+      optsBox.appendChild(btn);
+    }
+
+    const hintsLeft = run.hints_total - run.hints_used;
+    if (hintsLeft > 0) {
+      const elim = el('<button type="button" class="tool-chip">Cut one option (−10)</button>');
+      elim.addEventListener('click', () => soloHint(card, 'eliminate'));
+      const peek = el('<button type="button" class="tool-chip">Ask the tree (−10)</button>');
+      peek.addEventListener('click', () => {
+        soloRevealArmed = true;
+        note.textContent = 'Tap a band to check whether it\u2019s on the optimal path. Helpers never solve — this only narrows.';
+      });
+      tools.appendChild(elim);
+      tools.appendChild(peek);
+      note.textContent = `${hintsLeft} hint${hintsLeft === 1 ? '' : 's'} left this run.`;
+    } else {
+      note.textContent = 'No hints left this run.';
+    }
+
+    const last = run.picks[run.picks.length - 1];
+    if (last && last.kind === 'deadend') {
+      const esc = el('<button type="button" class="tool-chip"></button>');
+      // Same bail-out joke as the daily: a session legend in the room wears
+      // the escape's name. Same price, same effect.
+      esc.textContent = run.bailout
+        ? `${run.bailout} bails you out (−50)`
+        : 'Dig out of the dead end (−50)';
+      esc.addEventListener('click', () => soloEscape(card));
+      tools.appendChild(esc);
+      note.textContent = `Lost in space. ${note.textContent}`;
+    }
+
+    const freshBtn = el('<button type="button" class="tool-chip">New matchup</button>');
+    freshBtn.addEventListener('click', () => startSoloRun({ fresh: true }));
+    tools.appendChild(freshBtn);
+
+    const giveup = el('<button type="button" class="tool-chip">Show me the chain</button>');
+    giveup.addEventListener('click', () => {
+      note.innerHTML = '';
+      note.appendChild(mk('This run ends and the tree reveals the path. '));
+      const yes = el('<button type="button" class="tool-chip">Show me</button>');
+      const no = el('<button type="button" class="tool-chip">Keep playing</button>');
+      yes.addEventListener('click', () => soloGiveUp(card));
+      no.addEventListener('click', () => paintSoloBoard(card));
+      note.appendChild(yes);
+      note.appendChild(mk(' '));
+      note.appendChild(no);
+    });
+    tools.appendChild(giveup);
+  }
+
+  function paintSoloGiveUp(card, gaveUp) {
+    const run = soloRun;
+    const mk = (t, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = t; return s; };
+    card.querySelector('.game-daily-current').textContent = 'The tree wins this one.';
+    const finish = card.querySelector('.game-daily-finish');
+    const rev = el('<div class="game-daily-reveal"></div>');
+    rev.appendChild(mk('The tree reveals the path: '));
+    const strong = document.createElement('strong');
+    strong.textContent = (run.reveal_path || []).map((b) => b.name).join(' → ');
+    rev.appendChild(strong);
+    finish.appendChild(rev);
+
+    const again = el('<button type="button" class="tool-chip">New matchup</button>');
+    again.addEventListener('click', () => startSoloRun({ fresh: true }));
+    finish.appendChild(again);
+  }
+
+  async function soloPick(card, optionId, btn) {
+    const note = card.querySelector('.game-daily-note');
+    if (soloRevealArmed && btn) {
+      // Peek: reveal whether this band is on the optimal path, no pick made.
+      soloRevealArmed = false;
+      btn.disabled = true;
+      try {
+        const data = await dailyFetch('/api/game-solo/play', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'hint', type: 'reveal', option_id: optionId }),
+        });
+        soloRun = data.run;
+        soloOptions = data.options || [];
+        // Analytics: hint used (peek/reveal)
+        if (analyticsSessionId) {
+          analyticsHintCount++;
+          trackGameEvent({
+            session_id: analyticsSessionId,
+            event_type: 'hint_clicked',
+            game_mode: 'solo',
+          });
+        }
+        paintSoloBoard(card);
+        const yes = data.hint && data.hint.on_optimal_path;
+        note.textContent = yes
+          ? `${data.hint.option.name} is on the optimal path.`
+          : `${data.hint.option.name} is not on the optimal path — scenic route at best.`;
+      } catch (err) {
+        btn.disabled = false;
+        note.textContent = err.message;
+      }
+      return;
+    }
+    card.querySelectorAll('.game-daily-option').forEach((b) => { b.disabled = true; });
+    try {
+      const data = await dailyFetch('/api/game-solo/play', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'pick', option_id: optionId }),
+      });
+      soloRun = data.run;
+      soloOptions = data.options || [];
+      // Analytics: move made
+      if (analyticsSessionId) {
+        analyticsMoveCount++;
+        trackGameEvent({
+          session_id: analyticsSessionId,
+          event_type: 'move_made',
+          game_mode: 'solo',
+          move_number: analyticsMoveCount,
+        });
+      }
+      if (data.completed) {
+        // Analytics: game completed (win)
+        if (analyticsSessionId) {
+          const durationSeconds = analyticsGameStartTime
+            ? Math.round((Date.now() - analyticsGameStartTime) / 1000)
+            : null;
+          trackGameEvent({
+            session_id: analyticsSessionId,
+            event_type: 'game_completed',
+            game_mode: 'solo',
+            result: 'win',
+            moves_count: analyticsMoveCount,
+            hints_used: analyticsHintCount,
+            duration_seconds: durationSeconds,
+          });
+          analyticsSessionId = null; // session over
+        }
+        paintSoloBoard(card, data.completed);
+      } else {
+        paintSoloBoard(card);
+        if (data.picked && data.picked.deadend) {
+          card.querySelector('.game-daily-note').textContent = 'Lost in space.';
+        }
+      }
+    } catch (err) {
+      note.textContent = err.message;
+      card.querySelectorAll('.game-daily-option').forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  async function soloHint(card, type) {
+    const note = card.querySelector('.game-daily-note');
+    try {
+      const data = await dailyFetch('/api/game-solo/play', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'hint', type }),
+      });
+      soloRun = data.run;
+      soloOptions = data.options || [];
+      // Analytics: hint used (eliminate)
+      if (analyticsSessionId) {
+        analyticsHintCount++;
+        trackGameEvent({
+          session_id: analyticsSessionId,
+          event_type: 'hint_clicked',
+          game_mode: 'solo',
+        });
+      }
+      paintSoloBoard(card);
+      if (data.hint && data.hint.eliminated) {
+        card.querySelector('.game-daily-note').textContent =
+          `${data.hint.eliminated.name} is out — not the way through.`;
+      }
+    } catch (err) {
+      note.textContent = err.message;
+    }
+  }
+
+  async function soloEscape(card) {
+    const note = card.querySelector('.game-daily-note');
+    const who = soloRun && soloRun.bailout;
+    try {
+      const data = await dailyFetch('/api/game-solo/play', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'escape' }),
+      });
+      soloRun = data.run;
+      soloOptions = data.options || [];
+      paintSoloBoard(card);
+      card.querySelector('.game-daily-note').textContent = who
+        ? `${who.split(' ').pop()} got you out of the black hole.`
+        : `Dug out — ${data.escaped.name} is off your trail.`;
+    } catch (err) {
+      note.textContent = err.message;
+    }
+  }
+
+  async function soloGiveUp(card) {
+    const note = card.querySelector('.game-daily-note');
+    note.textContent = 'The tree is revealing the path…';
+    try {
+      const data = await dailyFetch('/api/game-solo/play', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'giveup' }),
+      });
+      soloRun = data.run;
+      soloOptions = [];
+      // Analytics: game completed (abandon — player gave up)
+      if (analyticsSessionId) {
+        const durationSeconds = analyticsGameStartTime
+          ? Math.round((Date.now() - analyticsGameStartTime) / 1000)
+          : null;
+        trackGameEvent({
+          session_id: analyticsSessionId,
+          event_type: 'game_completed',
+          game_mode: 'solo',
+          result: 'abandon',
+          moves_count: analyticsMoveCount,
+          hints_used: analyticsHintCount,
+          duration_seconds: durationSeconds,
+        });
+        analyticsSessionId = null; // session over
+      }
+      paintSoloBoard(card, null, data.gave_up);
+    } catch (err) {
+      note.textContent = (err && err.message) || 'Could not show the chain.';
+    }
+  }
+
   // Resume a daily run interrupted by sign-in (same pattern as challenges).
   (function resumePendingDaily() {
     let pending = null;
@@ -1455,27 +1895,19 @@ function initGameUI() {
 
   runBtn.addEventListener('click', async () => {
     const mode = currentMode();
+    // Solo v2 is server-dealt — no client graph needed. A band-A pick deals
+    // a fresh run with your band; no pick resumes the live run (or the tree
+    // deals both bands when there's nothing to resume).
+    if (mode === 'solo') {
+      await startSoloRun(selected.a ? { bandA: selected.a, fresh: true } : {});
+      return;
+    }
     result.innerHTML = '';
     statusLine.textContent = 'Running the chain…';
     try {
       const g = await loadGraph();
       let a = selected.a;
       let b = selected.b;
-      if (mode === 'solo') {
-        if (!a) { statusLine.textContent = 'Pick a band first.'; return; }
-        // Graph picks a fair opponent: reachable in 3–5 hops.
-        let pair = null;
-        for (let i = 0; i < 60 && !pair; i++) {
-          const cand = randomBand(g);
-          if (cand === a) continue;
-          const p = shortestPath(g, a, cand);
-          const hops = bandHops(p);
-          if (p && hops >= 3 && hops <= 5) pair = { b: cand, path: p };
-        }
-        if (!pair) { statusLine.textContent = 'No rawk found.'; return; }
-        b = pair.b;
-        selected.b = b;
-      }
       if (!a || !b) { statusLine.textContent = 'Pick both bands first.'; return; }
       if (a === b) { statusLine.textContent = 'Pick two different bands.'; return; }
       statusLine.textContent = '';
@@ -1554,7 +1986,7 @@ function initGameUI() {
         : 'Copy failed — long-press the link to copy it.';
     });
     dlg.querySelector('[data-share]').addEventListener('click', async () => {
-      const shareData = { title: 'Six Degrees of Rock — head-to-head', text: shareText, url: inviteUrl };
+      const shareData = { title: 'Six Degrees of Rock — Versus', text: shareText, url: inviteUrl };
       const canNativeShare = typeof navigator.share === 'function' &&
         (typeof navigator.canShare !== 'function' || navigator.canShare(shareData));
       if (canNativeShare) {
@@ -1596,7 +2028,7 @@ function initGameUI() {
       showInviteDialog({
         matchup: `${bandName(g, bandA)} vs ?`,
         inviteUrl: data.inviteUrl,
-        shareText: `Head-to-head: I picked ${bandName(g, bandA)}. Think you can stump me?`,
+        shareText: `Versus: I picked ${bandName(g, bandA)}. Think you can stump me?`,
       });
       loadChallenges();
     } catch (err) {
@@ -1746,7 +2178,7 @@ function initGameUI() {
     if (!isSignedIn()) {
       // The lure before the gate: who challenged you, and with what.
       const card = el(`<div class="game-result-card">
-        <div class="game-result-meta"><span class="game-hops">Head-to-head challenge</span></div>
+        <div class="game-result-meta"><span class="game-hops">Versus challenge</span></div>
         <p class="game-invite-text"></p>
         <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to accept</button></div>
       </div>`);
@@ -1795,6 +2227,9 @@ function initGameUI() {
     // open picks), you pick band B.
     setHeadToHead(data.band_a, null, g);
     fieldA.disabled = true;
+    // setHeadToHead -> syncModeUI hides the band B field in head-to-head
+    // mode, but the accept view NEEDS it (you pick band B here). Re-show it.
+    wrapB.style.display = '';
     if (acceptBtn) {
       acceptBtn.style.display = '';
       acceptBtn.onclick = () => acceptChallenge(token);
@@ -2092,6 +2527,8 @@ function initGameUI() {
     const items = [...(data.sent || []).map((m) => ({ ...m, mine: true })),
                    ...(data.received || []).map((m) => ({ ...m, mine: false }))];
     if (!items.length) { wrap.hidden = true; return; }
+    // Queues live under the Versus tab — never un-hide from another mode.
+    if (currentMode() !== 'head-to-head') { wrap.hidden = true; return; }
     wrap.hidden = false;
     list.innerHTML = '';
     const myId = myUserId();
@@ -2223,7 +2660,7 @@ function initGameUI() {
           [['Accept', () => { window.location.href = `/game/?invite=${encodeURIComponent(c.token)}`; }]]);
       }
     }
-    if (wrap) wrap.hidden = count === 0;
+    if (wrap) wrap.hidden = count === 0 || currentMode() !== 'head-to-head';
   }
 
   if (inviteToken) handleInvite(inviteToken);
@@ -2447,7 +2884,7 @@ if (typeof window !== 'undefined') {
     try {
       const isArena = /(^|\/)game\/?$/.test(window.location.pathname);
       const checked = document.querySelector('input[name="game-mode"]:checked');
-      const mode = (checked || {}).value || 'head-to-head';
+      const mode = (checked || {}).value || 'daily';
       if (mode === 'head-to-head') {
         const btn = document.getElementById('game-challenge-btn');
         if (btn) btn.style.display = '';
