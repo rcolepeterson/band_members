@@ -966,6 +966,18 @@ export default async (req) => {
     `;
     results.push('index game_analytics_events_session_idx ready');
 
+    // Guest play support (Aaron/Cole, 2026-10-08): guests play free without
+    // sign-up; credits tracked against a guest session, migrated on signup.
+    await sql`alter table users add column if not exists is_guest boolean not null default false`;
+    results.push('column users.is_guest ready');
+    await sql`alter table users add column if not exists guest_session_id text`;
+    results.push('column users.guest_session_id ready');
+    await sql`
+      create unique index if not exists users_guest_session_id_idx
+      on users (guest_session_id) where guest_session_id is not null
+    `;
+    results.push('index users_guest_session_id_idx ready');
+
     return ok({ steps: results });
   } catch (err) {
     console.error('migrate failed', err);
