@@ -184,18 +184,18 @@ export function fmtElapsed(seconds) {
 }
 
 // Spoiler-free share text, Wordle-style (Cole, 2026-10-08): no slogan,
-// just the score, the squares and the link.
-//   Six Degrees of Rock #17 🎸 5/4 (29s)      (X/4 on a loss)
+// no timer (the clock counted idle hours, e.g. "194m"), just the score,
+// the squares and the link.
+//   Six Degrees of Rock #17 🎸 5/4      (X/4 on a loss)
 //   Rage Against the Machine ➡️ 🟩🟥🟨🟩🟩 ➡️ Pearl Jam
 //   sixdegreesofrock.com/game
 // One square per move, so the squares always match the score.
-export function dailyShareResultText({ date, start, target, picks = [], moves = picks.length, par, won, seconds = null }) {
+export function dailyShareResultText({ date, start, target, picks = [], moves = picks.length, par, won }) {
   const num = dailyPuzzleNumber(date);
-  const time = fmtElapsed(seconds);
   const score = `${won ? moves : 'X'}/${par}`;
   const squares = picks.map((p) => dailyPickSquare(p.kind)).join('');
   return [
-    `Six Degrees of Rock${num ? ` #${num}` : ''} 🎸 ${score}${time ? ` (${time})` : ''}`,
+    `Six Degrees of Rock${num ? ` #${num}` : ''} 🎸 ${score}`,
     [start, ...(squares ? [squares] : []), target].join(' ➡️ '),
     'sixdegreesofrock.com/game',
   ].join('\n');
@@ -1366,7 +1366,6 @@ function initGameUI() {
       moves: completed.hops_used != null ? completed.hops_used : run.hops_used,
       par: completed.beat_tree ? completed.old_par : run.par,
       won,
-      seconds: dailyElapsed(run),
     });
   }
 
