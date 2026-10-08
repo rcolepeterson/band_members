@@ -111,6 +111,7 @@
       background:linear-gradient(90deg, transparent, rgba(143,232,246,.5), transparent);pointer-events:none}
     .game-modal-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);margin-bottom:var(--space-1)}
     .game-modal-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.04em}
+    .game-player-line-top{font-size:1.25rem;font-weight:700;margin-top:4px;color:var(--color-text)}
     .game-modal-sub{color:var(--color-text-muted);font-size:var(--text-sm);margin:0 0 var(--space-4)}
     /* Mode tabs: compact horizontal tab bar. Daily is the front door;
        Solo / Challenge / Explore live behind the tabs. The per-mode
@@ -309,6 +310,7 @@
         <div class="game-modal-card">
           <div class="game-modal-head">
             <div class="game-modal-title" id="game-modal-title"><span aria-hidden="true">6&deg;</span> Six Degrees game</div>
+            <div class="game-player-line game-player-line-top" id="game-player-line-top"></div>
           </div>
           <p class="game-modal-sub">Name two bands. If the tree connects them, you brag. If it breaks, the tree wins.</p>
           <!--
