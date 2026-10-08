@@ -169,8 +169,6 @@ export default async (req) => {
   if (req.method !== 'POST') return methodNotAllowed();
   if (!isDbConfigured()) return dbUnavailable();
   const sql = getSql();
-  const me = await findUserByToken(sql, extractBearerToken(req));
-  if (!me) return unauthorized('sign in to play solo');
 
   let body;
   try {
@@ -178,6 +176,29 @@ export default async (req) => {
   } catch (_) {
     return badRequest('expected a JSON body');
   }
+
+  // Guest play (2026-10-08): no bearer token? Check for guest_session_id.
+  let me = await findUserByToken(sql, extractBearerToken(req));
+  if (!me) {
+    const guestSessionId = body && body.guest_session_id;
+    if (guestSessionId && typeof guestSessionId === 'string' && guestSessionId.length >= 8 && guestSessionId.length <= 64) {
+      const existing = await sql`
+        select * from users where guest_session_id = ${guestSessionId} limit 1
+      `.catch(() => []);
+      if (existing && existing[0]) {
+        me = existing[0];
+      } else {
+        const rows = await sql`
+          insert into users (is_guest, guest_session_id, credits)
+          values (true, ${guestSessionId}, 50)
+          returning *
+        `.catch(() => []);
+        if (rows && rows[0]) me = rows[0];
+      }
+    }
+  }
+  if (!me) return unauthorized('sign in to play solo');
+
   const action = body && body.action;
 
   const budget = await consume({
