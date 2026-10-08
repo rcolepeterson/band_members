@@ -158,7 +158,7 @@ test('hops count links, moves count taps: dead ends cost a move but are not a ho
   ];
   assert.deepEqual(dailyChainCounts(picks), { hops: 5, deadEnds: 1, moves: 6 });
   assert.deepEqual(dailyChainCounts([]), { hops: 0, deadEnds: 0, moves: 0 });
-  assert.ok(src.includes('`🎉 Chain completed in ${hopsWord}!`'), 'title uses hops, not moves');
+  assert.ok(src.includes(': `Chain completed in ${hopsWord}!`'), 'title uses hops, not moves');
 });
 
 test('results show your chain band by band; share text stays spoiler-free', () => {
@@ -169,7 +169,7 @@ test('results show your chain band by band; share text stays spoiler-free', () =
 test('Ask the tree is obvious: drawer closes, choices glow, cancellable, answer on the board', () => {
   assert.ok(src.includes("peek.addEventListener('click', () => armDailyAsk(card));"));
   assert.match(src, /function armDailyAsk\(card\) \{[\s\S]{0,400}drawer\.open = false;[\s\S]{0,200}classList\.add\('is-asking'\)/);
-  assert.ok(src.includes('`🌳 The tree says ${data.hint.option.name} is on the shortest path.`'));
+  assert.ok(src.includes('`The tree says ${data.hint.option.name} is on the shortest path.`'));
   assert.ok(src.includes("optsBox.classList.remove('is-busy', 'is-asking');"));
 });
 
@@ -180,12 +180,12 @@ test('a new board clears a leftover toast', () => {
 test('no credits anywhere on the daily board: free hints, streak in the header', () => {
   const board = src.slice(src.indexOf('function paintDailyBoard('), src.indexOf('function armDailyAsk('));
   assert.ok(!/credits/.test(board.replace(/\/\/.*$/gm, '')), 'no credit UI in the board painter');
-  assert.ok(board.includes('`💡 Get a hint (${hintsLeft} left today)`'));
+  assert.ok(board.includes('`Get a hint (${hintsLeft} left today)`'));
   assert.ok(board.includes('elim.disabled = peek.disabled = hintsLeft === 0;'), 'gray out at zero');
   // (The old Solo board, unreachable while SHOW_MODE_SWITCHER is false, still has its own.)
   const daily = src.slice(src.indexOf('async function renderDailyBoard('), src.indexOf('function renderSoloBoard('));
   assert.ok(!daily.includes('Freeze my streak (100)') && !daily.includes('(−50)') && !daily.includes('Unlock (75)'));
-  assert.ok(src.includes("`🔥 ${run.streak}-day streak`"));
+  assert.ok(src.includes("`${run.streak}-day streak`") && src.includes("iconText(lineIcon('flame'), streak)"));
 });
 
 test("game over says Show's over, and the subtext matches how you lost", () => {
@@ -210,7 +210,7 @@ test('countdown to the next chain is measured to midnight Pacific, shown as HH:M
 test('plain English: "Shortest path", "Share score", full band names', () => {
   assert.ok(src.includes('`Shortest path: ${run.par} hops`'));
   assert.ok(src.includes("[par, 'Shortest'],"));
-  assert.equal((src.match(/Share score 📤/g) || []).length, 2);
+  assert.equal((src.match(/\$\{lineIcon\('share'\)\} Share score/g) || []).length, 2);
   assert.ok(!src.includes('>See results<'));
   assert.match(src, /\.sd-board \.game-chain-pill,\.sd-modal \.game-chain-pill\{white-space:normal;overflow:visible;text-overflow:clip/);
 });
@@ -228,4 +228,15 @@ test('musician names: compact on the chain row, full in sentences', async () => 
 test('long-way-round copy names the exact extra moves', () => {
   assert.ok(src.includes('`✓ Valid connection! But a shorter route exists${cost}.${via}`'));
   assert.ok(src.includes('const extra = distBefore != null && distAfter != null ? distAfter + 1 - distBefore : null;'));
+});
+
+test('rawk, not Wordle: guitar picks on screen, line icons instead of emoji', () => {
+  // On-screen emoji are gone from the daily screens (share text keeps its emoji).
+  const daily = src.slice(src.indexOf('async function renderDailyBoard('), src.indexOf('function renderSoloBoard('));
+  for (const e of ['💡', '🔥', '🎉', '🏆', '💀', '🌳', '📤']) assert.ok(!daily.includes(e), `${e} removed from the daily screens`);
+  // The results score line is drawn as picks, colored like the board.
+  assert.ok(src.includes("w.innerHTML = pickSvg(pickColor(p.kind), 'sd-result-pick');"));
+  assert.ok(src.includes("const DAILY_PICK_HEX = { gold: '#3fa36b', robin: '#c9a83a', black: '#c8584f' };"));
+  // Icons are drawn like the main site's: no fill, currentColor stroke 1.8, round caps.
+  assert.match(src, /class="sd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1\.8" stroke-linecap="round"/);
 });

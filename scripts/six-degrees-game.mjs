@@ -831,6 +831,11 @@ function initGameUI() {
       .sd-countdown strong{color:var(--color-text);font-variant-numeric:tabular-nums;letter-spacing:.04em}
       .sd-link{flex:none;color:var(--color-text-faint);font-size:.8rem}
       .sd-via{display:inline-flex;flex-direction:column;align-items:center;gap:1px;line-height:1.1;max-width:110px;text-align:center}
+      .sd-ico{width:1.05em;height:1.05em;flex:none;vertical-align:-0.18em}
+      .sd-ico-text{display:inline-flex;align-items:center;gap:.4em}
+      .sd-modal h2 .sd-ico-text,.sd-gameover-title .sd-ico-text{gap:.35em}
+      .sd-result-pick{width:18px;height:21px;vertical-align:-4px;margin:0 2px}
+      .tool-chip .sd-ico{margin-right:4px}
       .sd-misses{text-align:center;font-size:.82rem;color:#f0b8b2;margin:-4px 0 8px}
       .sd-via-name{font-size:.68rem;font-style:italic;color:var(--color-text-muted);white-space:normal}
       .game-chain-good{border-color:var(--sd-good);background:color-mix(in srgb,var(--sd-good) 22%,transparent)}
@@ -879,10 +884,10 @@ function initGameUI() {
       .sd-howto-ex .game-chain-pill{display:inline-block;margin-bottom:4px}
       .sd-howto-ex p{margin:0;font-size:.9rem;color:var(--color-text-muted)}
       .sd-result-chain{text-align:center;font-size:1rem;line-height:1.9;margin:14px 0 6px;word-break:break-word}
-      .sd-result-stats{display:flex;justify-content:center;gap:28px;margin:14px 0 18px}
+      .sd-result-stats{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 24px;margin:14px 0 18px}
       .sd-stat{text-align:center}
       .sd-stat strong{display:block;font-size:1.8rem;line-height:1.1}
-      .sd-stat span{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--color-text-muted)}
+      .sd-stat > span{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--color-text-muted)}
       .sd-reveal{font-size:.9rem;color:var(--color-text-muted);text-align:center}
       .sd-reveal strong{color:var(--color-text)}
       .sd-primary{display:block;width:100%;min-height:52px;border-radius:999px;border:none;background:var(--color-primary);color:var(--color-text-inverse);font:inherit;font-weight:700;font-size:1.05rem;cursor:pointer}
@@ -919,7 +924,39 @@ function initGameUI() {
     document.head.appendChild(st);
   }
 
-  const DAILY_PICK_HEX = { gold: '#d4a017', robin: '#7fc9c7', black: '#2a2a2a' };
+  // Pick colors follow the board's traffic lights (Cole, 2026-10-08): green
+  // is the shortest path, yellow the long way round, red a dead end. The
+  // server still names them gold/robin/black; only the paint changed.
+  const DAILY_PICK_HEX = { gold: '#3fa36b', robin: '#c9a83a', black: '#c8584f' };
+  // Same mapping as the server's pickColor(kind).
+  function pickColor(kind) {
+    if (kind === 'optimal') return 'gold';
+    if (kind === 'deadend') return 'black';
+    return 'robin';
+  }
+
+  // Line icons drawn like the main site's header/menu icons, replacing the
+  // emoji the team found "cutesy" (2026-10-08). Emoji stay in share text.
+  const LINE_ICONS = {
+    hint: '<path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
+    flame: '<path d="M12 3c.6 3 3.6 4.6 3.6 8.6a3.6 3.6 0 0 1-7.2 0c0-1.4.6-2.4 1.4-3.2.2 1.4 1 2.1 1.8 2.1 0-2.9-1.2-5.2.4-7.5z"/><path d="M6.4 13.5A5.6 5.6 0 0 0 12 21a5.6 5.6 0 0 0 5.6-5.6"/>',
+    share: '<path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>',
+    trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4"/><path d="M16 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4"/><path d="M8 21h8"/><path d="M10 17h4"/>',
+    tree: '<path d="M12 21v-5"/><path d="M8 16h8a4 4 0 0 0 1-7.9A5 5 0 0 0 7 8.1 4 4 0 0 0 8 16z"/>',
+  };
+  function lineIcon(name) {
+    return `<svg class="sd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LINE_ICONS[name] || ''}</svg>`;
+  }
+  // The guitar pick, outlined, as an icon (the game-over headline).
+  function pickIcon() {
+    return '<svg class="sd-ico" viewBox="0 0 24 28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c-5.2 0-9.5 4-9.5 9.3 0 6 5.2 11.6 8.6 14.2.5.4 1.3.4 1.8 0 3.4-2.6 8.6-8.2 8.6-14.2C21.5 6.5 17.2 2.5 12 2.5z"/></svg>';
+  }
+  // Icon + text, built safely (text never parsed as HTML).
+  function iconText(iconHtml, text) {
+    const span = el(`<span class="sd-ico-text">${iconHtml}<span></span></span>`);
+    span.lastChild.textContent = text;
+    return span;
+  }
   function pickSvg(color, cls) {
     const hex = DAILY_PICK_HEX[color] || DAILY_PICK_HEX.black;
     const stroke = color === 'black' ? '#555' : 'rgba(0,0,0,.25)';
@@ -1019,7 +1056,7 @@ function initGameUI() {
     if (picks.length > MAX_DRAW) {
       center(`+${picks.length - MAX_DRAW} more`, legendY - 34, `400 28px ${FONT}`, gray);
     }
-    center('Gold is optimal · robin\u2019s egg is valid · black is lost in space',
+    center('Green is the shortest path · yellow the long way · red a dead end',
       legendY, `400 26px ${FONT}`, gray);
     // Footer.
     center('sixdegreesofrock.com/game', SHARE_H - 110, `600 34px ${FONT}`, gold);
@@ -1213,7 +1250,7 @@ function initGameUI() {
       <p class="game-daily-note" role="status"></p>
       <div class="game-daily-finish"></div>
       <div class="sd-drawers">
-        <details class="sd-drawer sd-hints"><summary>💡 Get a hint</summary><div class="game-daily-tools"></div></details>
+        <details class="sd-drawer sd-hints"><summary>Get a hint</summary><div class="game-daily-tools"></div></details>
         <details class="sd-drawer sd-stats" hidden><summary>Stats</summary><p class="game-daily-econ"></p><div class="game-daily-tools sd-stats-actions"></div></details>
         <details class="game-daily-archive"><summary>Past days</summary><div class="game-daily-archive-list"></div></details>
       </div>
@@ -1433,9 +1470,9 @@ function initGameUI() {
     openSdModal((c) => {
       const h = document.createElement('h2');
       const hopsWord = `${counts.hops} hop${counts.hops === 1 ? '' : 's'}`;
-      h.textContent = !won ? dailyGameOverText(run).title
-        : completed.beat_tree ? `🏆 You beat the tree in ${hopsWord}!`
-        : `🎉 Chain completed in ${hopsWord}!`;
+      h.appendChild(iconText(won ? lineIcon('trophy') : pickIcon(), !won ? dailyGameOverText(run).title
+        : completed.beat_tree ? `You beat the tree in ${hopsWord}!`
+        : `Chain completed in ${hopsWord}!`));
       c.appendChild(h);
       const sub = el('<p class="sd-modal-sub"></p>');
       const missNote = counts.deadEnds
@@ -1469,8 +1506,17 @@ function initGameUI() {
           id: b.id, name: b.name, kind: 'optimal', anchor: i === 0 || i === a.length - 1,
         })), run.connections || {}));
       }
+      // The score line in guitar picks (the copied share text keeps emoji
+      // squares, since chat apps have no pick emoji).
       const chainLine = el('<p class="sd-result-chain"></p>');
-      chainLine.textContent = text.split('\n')[1];
+      const steps = won ? picks.slice(0, -1) : picks;
+      chainLine.appendChild(document.createTextNode(run.start_band.name + ' '));
+      for (const p of steps) {
+        const w = document.createElement('span');
+        w.innerHTML = pickSvg(pickColor(p.kind), 'sd-result-pick');
+        chainLine.appendChild(w.firstChild);
+      }
+      chainLine.appendChild(document.createTextNode(' ' + (won ? '' : '✗ ') + run.target.name));
       c.appendChild(chainLine);
       const stats = el('<div class="sd-result-stats"></div>');
       const time = fmtElapsed(seconds);
@@ -1481,10 +1527,11 @@ function initGameUI() {
         ...(streak != null ? [[streak, 'Streak']] : []),
         ...(time ? [[time, 'Time']] : []),
       ];
-      for (const [num, label] of statRows.map(([n, l]) => (l === 'Streak' ? [`🔥 ${n}`, l] : [n, l]))) {
+      for (const [num, label] of statRows) {
         const s = el('<div class="sd-stat"><strong></strong><span></span></div>');
-        s.querySelector('strong').textContent = String(num);
-        s.querySelector('span').textContent = label;
+        if (label === 'Streak') s.querySelector('strong').appendChild(iconText(lineIcon('flame'), String(num)));
+        else s.querySelector('strong').textContent = String(num);
+        s.querySelector(':scope > span').textContent = label; // not the icon's inner span
         stats.appendChild(s);
       }
       c.appendChild(stats);
@@ -1559,7 +1606,7 @@ function initGameUI() {
   function dailyGameOverText(run) {
     const ranOut = run && run.hops_used >= dailyMoveLimit(run.par);
     return {
-      title: '🎸 Show\u2019s over!',
+      title: 'Show\u2019s over!',
       sub: ranOut ? 'You ran out of moves.' : 'You gave up on this one.',
     };
   }
@@ -1694,20 +1741,20 @@ function initGameUI() {
     }
   }
 
-  // Persistent player line: "Playing as X · 🔥 3-day streak". (Credits were
+  // Persistent player line: "Playing as X · [flame] 3-day streak". (Credits were
   // removed for launch, 2026-10-08.) The streak updates on
   // every repaint; the handle fills in async (cached after first load).
   // Also paints the prominent top line under the game title (Aaron, 2026-10-07).
   function paintPlayerLine(card, run) {
-    const streak = !practiceMode && run && run.streak > 0 ? `🔥 ${run.streak}-day streak` : '';
+    const streak = !practiceMode && run && run.streak > 0 ? `${run.streak}-day streak` : '';
     const paintOne = (line) => {
       if (!line) return;
       const seq = (parseInt(line.dataset.seq || '0', 10) + 1);
       line.dataset.seq = String(seq);
-      line.textContent = streak;
+      line.replaceChildren(streak ? iconText(lineIcon('flame'), streak) : '');
       loadMyHandle().then((h) => {
         if (line.dataset.seq !== String(seq)) return; // a newer paint won
-        line.textContent = h ? 'Playing as ' + h + (streak ? ' \u00b7 ' + streak : '') : streak;
+        line.replaceChildren(...(h ? ['Playing as ' + h] : []), ...(h && streak ? [' \u00b7 '] : []), ...(streak ? [iconText(lineIcon('flame'), streak)] : []));
       });
     };
     paintOne(card.querySelector('.game-player-line'));
@@ -1792,7 +1839,7 @@ function initGameUI() {
       }
       finish.appendChild(el('<p class="sd-finish-line"></p>')).textContent = line;
       const actions = el('<div class="sd-finish-actions"></div>');
-      const results = el('<button type="button" class="tool-chip">Share score 📤</button>');
+      const results = el(`<button type="button" class="tool-chip">${lineIcon('share')} Share score</button>`);
       results.addEventListener('click', () => openDailyResults({ won: true, completed: c }));
       const again = el('<button type="button" class="tool-chip"></button>');
       again.textContent = practiceMode ? 'New puzzle' : 'Play again';
@@ -1836,9 +1883,9 @@ function initGameUI() {
     // Free hints (no credits, 2026-10-08): the per-game budget is the limit
     // (1 at par 3, 2 at par 4). At zero the buttons stay, grayed out.
     const hintsLeft = Math.max(0, run.hints_total - run.hints_used);
-    q('.sd-hints > summary').textContent = hintsLeft > 0
-      ? `💡 Get a hint (${hintsLeft} left today)`
-      : '💡 No hints left today';
+    q('.sd-hints > summary').replaceChildren(iconText(lineIcon('hint'), hintsLeft > 0
+      ? `Get a hint (${hintsLeft} left today)`
+      : 'No hints left today'));
     const elim = el('<button type="button" class="tool-chip">Cut one option</button>');
     elim.addEventListener('click', () => dailyHint(card, 'eliminate'));
     const peek = el('<button type="button" class="tool-chip">Ask the tree</button>');
@@ -1992,12 +2039,12 @@ function initGameUI() {
         paintDailyBoard(card);
         const yes = data.hint && data.hint.on_optimal_path;
         const answer = yes
-          ? `🌳 The tree says ${data.hint.option.name} is on the shortest path.`
-          : `🌳 The tree says ${data.hint.option.name} is not on the shortest path.`;
+          ? `The tree says ${data.hint.option.name} is on the shortest path.`
+          : `The tree says ${data.hint.option.name} is not on the shortest path.`;
         const line = card.querySelector('.sd-result');
         line.hidden = false;
         line.className = 'sd-result is-' + (yes ? 'good' : 'ok');
-        line.textContent = answer;
+        line.replaceChildren(iconText(lineIcon('tree'), answer));
         showToast(answer, yes ? 'good' : null);
       } catch (err) {
         btn.disabled = false;
@@ -2076,7 +2123,7 @@ function initGameUI() {
         // Out of moves: show's over. Uses the existing giveup action, so
         // the server still decides what a finished day means.
         if (dailyRun.status === 'active' && dailyRun.hops_used >= dailyMoveLimit(dailyRun.par)) {
-          showToast('🎸 Show\u2019s over! You ran out of moves.', 'bad');
+          showToast('Show\u2019s over! You ran out of moves.', 'bad');
           await pause(900);
           await dailyGiveUp(card, { outOfMoves: true });
         }
@@ -2124,7 +2171,7 @@ function initGameUI() {
     card.querySelector('.game-chain-pills').style.display = run.picks && run.picks.length ? '' : 'none';
     const over = dailyGameOverText(run);
     const head = el('<div class="sd-gameover"><p class="sd-gameover-title"></p><p class="sd-gameover-sub"></p></div>');
-    head.querySelector('.sd-gameover-title').textContent = over.title;
+    head.querySelector('.sd-gameover-title').appendChild(iconText(pickIcon(), over.title));
     head.querySelector('.sd-gameover-sub').textContent = over.sub;
     finish.appendChild(head);
     // The answer, drawn the way the game draws chains: green links in a row.
@@ -2135,7 +2182,7 @@ function initGameUI() {
       })), run.connections || {}));
     }
     const actions = el('<div class="sd-finish-actions"></div>');
-    const results = el('<button type="button" class="tool-chip">Share score 📤</button>');
+    const results = el(`<button type="button" class="tool-chip">${lineIcon('share')} Share score</button>`);
     results.addEventListener('click', () => openDailyResults({ won: false }));
     actions.appendChild(results);
     const again = el('<button type="button" class="tool-chip"></button>');
