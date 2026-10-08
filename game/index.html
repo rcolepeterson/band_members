@@ -119,6 +119,15 @@
     .game-modes{display:flex;gap:var(--space-2);margin-bottom:var(--space-2);
       overflow-x:auto;padding-bottom:var(--space-1);scrollbar-width:none}
     .game-modes::-webkit-scrollbar{display:none}
+    .game-modes.is-tucked{display:none!important}
+    .game-head-right{display:flex;align-items:center;gap:var(--space-2);min-width:0;flex:none}
+    .game-head-right .game-player-line-top{white-space:nowrap;margin-top:0}
+    .game-modal-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+    .game-modes-btn{flex:none;display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 var(--space-3);
+      border:1px solid var(--color-border);border-radius:var(--radius-full);background:rgba(255,255,255,.02);
+      color:var(--color-text);font:inherit;font-size:var(--text-xs);font-weight:600;cursor:pointer;white-space:nowrap;
+      transition:border-color var(--transition-interactive)}
+    .game-modes-btn:hover{border-color:rgba(143,232,246,.55)}
     .game-mode{flex:1 0 auto;display:flex;align-items:center;justify-content:center;
       border:1px solid var(--color-border);border-radius:var(--radius-full);
       padding:var(--space-2) var(--space-4);cursor:pointer;background:rgba(255,255,255,.015);
@@ -309,7 +318,12 @@
         <div class="game-modal-card">
           <div class="game-modal-head">
             <div class="game-modal-title" id="game-modal-title"><span aria-hidden="true">6&deg;</span> Six Degrees game</div>
-            <div class="game-player-line game-player-line-top" id="game-player-line-top"></div>
+            <div class="game-head-right">
+              <div class="game-player-line game-player-line-top" id="game-player-line-top"></div>
+              <button type="button" class="game-modes-btn" id="game-modes-btn" aria-haspopup="dialog" aria-label="Ways to play: Daily">
+                <span aria-hidden="true">🎮</span> <span data-mode-label>Daily</span> <span aria-hidden="true">▾</span>
+              </button>
+            </div>
           </div>
           <p class="game-modal-sub">One fresh chain every day — same for everyone. Connect the bands, beat par, build your streak.</p>
           <!--
@@ -319,7 +333,12 @@
             Internal mode values stay as-is; only user-facing labels changed
             (head-to-head → Challenge, chaos → Explore).
           -->
-          <div class="game-modes" role="radiogroup" aria-label="Ways to play">
+          <!--
+            The pills are tucked away (Cole, 2026-10-08): the 🎮 button in the
+            header opens a "Ways to play" sheet that drives these radios. They
+            stay in the DOM because the engine reads and sets them.
+          -->
+          <div class="game-modes is-tucked" role="radiogroup" aria-label="Ways to play">
             <label class="game-mode">
               <input type="radio" name="game-mode" value="daily" checked />
               <span><strong>Daily</strong><span>One fresh matchup every day. Same chain for everyone.</span></span>

@@ -296,6 +296,9 @@ function initGameUI() {
   function setModePickerVisible(v) {
     const picker = document.querySelector('.game-modes');
     if (picker) picker.style.display = v ? '' : 'none';
+    // The header's 🎮 switcher stands in for the tucked-away pills.
+    const btn = document.getElementById('game-modes-btn');
+    if (btn) btn.style.display = v ? '' : 'none';
   }
 
   const selected = { a: null, b: null };
@@ -548,6 +551,7 @@ function initGameUI() {
 
   function syncModeUI() {
     const mode = currentMode();
+    syncModesButton();
     // Tab bar description: one line under the tabs naming what this mode does.
     // (Full descriptions live in the label markup for accessibility.)
     const descEl = document.getElementById('game-mode-desc');
@@ -653,6 +657,49 @@ function initGameUI() {
     statusLine.textContent = '';
   }
   modeInputs.forEach((i) => i.addEventListener('change', syncModeUI));
+
+  // "Ways to play" sheet (Cole, 2026-10-08): the five pills crowded the top
+  // of the card, so they're tucked away and this sheet drives the same
+  // radios. Daily stays the front door; the rest are one tap off.
+  function modeLabelOf(input) {
+    const strong = input.closest('label')?.querySelector('strong');
+    return strong ? strong.textContent.trim() : input.value;
+  }
+  function syncModesButton() {
+    const btn = document.getElementById('game-modes-btn');
+    const cur = modeInputs.find((i) => i.checked);
+    if (!btn || !cur) return;
+    const label = modeLabelOf(cur);
+    const slot = btn.querySelector('[data-mode-label]');
+    if (slot) slot.textContent = label;
+    btn.setAttribute('aria-label', `Ways to play: ${label}`);
+  }
+  function openModesSheet() {
+    openSdModal((c) => {
+      c.appendChild(el('<h2>Ways to play</h2>'));
+      const list = el('<div class="sd-mode-list"></div>');
+      for (const input of modeInputs) {
+        const row = el('<button type="button" class="sd-mode"><strong></strong><span></span></button>');
+        row.querySelector('strong').textContent = modeLabelOf(input);
+        const desc = input.closest('label')?.querySelector('strong + span');
+        row.querySelector('span').textContent = input.disabled
+          ? 'Coming soon'
+          : (desc ? desc.textContent.trim() : '');
+        if (input.checked) row.setAttribute('aria-current', 'true');
+        if (input.disabled) row.disabled = true;
+        row.addEventListener('click', () => {
+          closeSdModal();
+          if (input.checked) return;
+          input.checked = true;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        list.appendChild(row);
+      }
+      c.appendChild(list);
+    });
+  }
+  const modesBtn = document.getElementById('game-modes-btn');
+  if (modesBtn) modesBtn.addEventListener('click', openModesSheet);
   // The format picker re-labels the challenge button (quick vs match).
   // Direct getElementById→addEventListener pair (kept adjacent) so
   // tests/mobile-toolbar-parity.test.mjs sees the dedicated handler —
@@ -793,6 +840,13 @@ function initGameUI() {
       .sd-secondary{display:block;width:100%;min-height:46px;margin-top:10px;border-radius:999px;border:1px solid var(--color-border);background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer}
       .sd-guest{margin-top:16px;text-align:center;font-size:.88rem;color:var(--color-text-muted)}
       .sd-linkbtn{background:none;border:none;padding:0;font:inherit;color:var(--color-primary);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+      .sd-mode-list{display:grid;gap:8px;margin-top:14px}
+      .sd-mode{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;padding:12px 14px;border:1px solid var(--color-border);border-radius:14px;background:transparent;color:inherit;font:inherit;cursor:pointer}
+      .sd-mode strong{font-size:1rem}
+      .sd-mode span{font-size:.85rem;color:var(--color-text-muted);line-height:1.4}
+      .sd-mode:hover:not(:disabled){border-color:rgba(143,232,246,.55)}
+      .sd-mode[aria-current]{border-color:var(--color-primary);background:rgba(143,232,246,.08)}
+      .sd-mode:disabled{opacity:.5;cursor:default}
       @keyframes sd-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
       @keyframes sd-pop{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}
       @keyframes sd-rise{0%{transform:translateY(12px);opacity:0}100%{transform:none;opacity:1}}
