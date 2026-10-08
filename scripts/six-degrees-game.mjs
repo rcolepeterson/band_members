@@ -932,7 +932,12 @@ function initGameUI() {
         box.appendChild(mkPill('?', 'game-chain-blank', 'A hop to find'));
       }
     }
-    box.appendChild(mkPill(run.target.name, 'game-chain-anchor', 'Target band'));
+    // Don't duplicate the target pill if the last pick already reached it.
+    const lastPick = picks[picks.length - 1];
+    const reached = lastPick && lastPick.name === run.target.name;
+    if (!reached) {
+      box.appendChild(mkPill(run.target.name, 'game-chain-anchor', 'Target band'));
+    }
   }
 
   // Persistent player line: "Playing as X · N credits". Credits update on
