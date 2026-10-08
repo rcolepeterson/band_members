@@ -574,7 +574,13 @@ function initGameUI() {
       .game-daily-pick{width:20px;height:24px;flex:none}
       .game-daily-current{font-size:.9rem;color:#bbb;margin:8px 0 6px}
       .game-daily-current strong{color:#fff}
-      .game-daily-trail{font-size:.78rem;color:#8a8a8a;margin:0 0 8px;line-height:1.6}
+      .game-player-line{font-size:.78rem;color:#8a8a8a;margin:0 0 2px}
+      .game-chain-pills{display:flex;gap:6px;align-items:center;margin:10px 0;flex-wrap:wrap}
+      .game-chain-pill{padding:6px 12px;border-radius:999px;font-size:.82rem;font-weight:600;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis}
+      .game-chain-anchor{border:1px solid rgba(82,174,182,.7);background:rgba(82,174,182,.16);color:#fff}
+      .game-chain-filled{border:1px solid rgba(82,174,182,.45);background:rgba(82,174,182,.08);color:#fff}
+      .game-chain-deadend{border:1px solid rgba(200,90,90,.6);background:rgba(200,90,90,.1);color:#f0b0b0}
+      .game-chain-blank{border:1px dashed rgba(255,255,255,.28);background:transparent;color:#777;min-width:44px;text-align:center}
       .game-daily-reveal{font-size:.9rem;color:#bbb;margin:10px 0;line-height:1.7}
       .game-daily-reveal strong{color:#fff;font-weight:600}
       .game-daily-options{display:grid;gap:8px;margin:6px 0 10px}
@@ -822,11 +828,12 @@ function initGameUI() {
     result.innerHTML = '';
     const card = el(`<div class="game-result-card game-daily">
       <div class="game-daily-head"><span class="game-hops">Daily Chain</span><span class="game-daily-date"></span></div>
+      <div class="game-player-line"></div>
       <p class="game-daily-pair"></p>
       <p class="game-daily-econ"></p>
       <div class="game-daily-picks" aria-label="Your picks"></div>
       <div class="game-daily-current"></div>
-      <div class="game-daily-trail"></div>
+      <div class="game-chain-pills"></div>
       <div class="game-daily-options"></div>
       <div class="game-daily-tools"></div>
       <p class="game-daily-note"></p>
@@ -892,6 +899,58 @@ function initGameUI() {
     card.querySelector('.game-daily-econ').after(sheet);
   }
 
+  // Chain pills: the whole chain as pills — [start][?][?]...[target].
+  // Filled pills show picked bands; blank pills show remaining par hops.
+  // Each non-optimal pick adds a blank pill, so going over par visibly
+  // lengthens the chain. Shared by Daily Chain and Solo (same card).
+  function paintChainPills(card, run) {
+    const box = card.querySelector('.game-chain-pills');
+    if (!box || !run) return;
+    box.innerHTML = '';
+    const par = run.par || 3;
+    const picks = run.picks || [];
+    const extra = picks.filter((p) => p.kind && p.kind !== 'optimal' && p.kind !== 'deadend').length;
+    const middle = Math.max(par - 1 + extra, picks.length);
+    const mkPill = (text, cls, title) => {
+      const s = document.createElement('span');
+      s.className = 'game-chain-pill ' + cls;
+      s.textContent = text;
+      if (title) s.title = title;
+      return s;
+    };
+    box.appendChild(mkPill(run.start_band.name, 'game-chain-anchor', 'Start band'));
+    for (let i = 0; i < middle; i++) {
+      if (i < picks.length) {
+        const p = picks[i];
+        const dead = p.kind === 'deadend';
+        box.appendChild(mkPill(
+          p.name,
+          dead ? 'game-chain-filled game-chain-deadend' : 'game-chain-filled',
+          p.kind === 'optimal' ? 'On the shortest path' : dead ? 'Dead end' : 'Connects, but not the shortest way'
+        ));
+      } else {
+        box.appendChild(mkPill('?', 'game-chain-blank', 'A hop to find'));
+      }
+    }
+    box.appendChild(mkPill(run.target.name, 'game-chain-anchor', 'Target band'));
+  }
+
+  // Persistent player line: "Playing as X · N credits". Credits update on
+  // every repaint; the handle fills in async (cached after first load).
+  function paintPlayerLine(card, run) {
+    const line = card.querySelector('.game-player-line');
+    if (!line) return;
+    const credits = run && run.credits != null ? run.credits : 0;
+    const seq = (parseInt(line.dataset.seq || '0', 10) + 1);
+    line.dataset.seq = String(seq);
+    line.textContent = credits + ' credits';
+    loadMyHandle().then((h) => {
+      if (line.dataset.seq !== String(seq)) return; // a newer paint won
+      line.textContent = h ? 'Playing as ' + h + ' \u00b7 ' + credits + ' credits'
+                           : credits + ' credits';
+    });
+  }
+
   function paintDailyBoard(card, completed, gaveUpInfo) {
     const run = dailyRun;
     if (!run) return;
@@ -924,9 +983,9 @@ function initGameUI() {
       picksRow.appendChild(wrap);
     }
 
-    // Your chain, in words — no hover needed (mobile has none).
-    const trailNames = [run.start_band.name, ...(run.picks || []).map((p) => p.name)];
-    q('.game-daily-trail').textContent = trailNames.join(' → ');
+    // Chain pills replace the old text trail (Aaron: the text was confusing).
+    paintChainPills(card, run);
+    paintPlayerLine(card, run);
 
     const note = q('.game-daily-note');
     const tools = q('.game-daily-tools');
@@ -1522,11 +1581,12 @@ function initGameUI() {
     result.innerHTML = '';
     const card = el(`<div class="game-result-card game-daily">
       <div class="game-daily-head"><span class="game-hops">Solo Run</span><span class="game-daily-date"></span></div>
+      <div class="game-player-line"></div>
       <p class="game-daily-pair"></p>
       <p class="game-daily-econ"></p>
       <div class="game-daily-picks" aria-label="Your picks"></div>
       <div class="game-daily-current"></div>
-      <div class="game-daily-trail"></div>
+      <div class="game-chain-pills"></div>
       <div class="game-daily-options"></div>
       <div class="game-daily-tools"></div>
       <p class="game-daily-note"></p>
@@ -1565,9 +1625,9 @@ function initGameUI() {
       picksRow.appendChild(wrap);
     }
 
-    // Your chain, in words — no hover needed (mobile has none).
-    const trailNames = [run.start_band.name, ...(run.picks || []).map((p) => p.name)];
-    q('.game-daily-trail').textContent = trailNames.join(' → ');
+    // Chain pills replace the old text trail (Aaron: the text was confusing).
+    paintChainPills(card, run);
+    paintPlayerLine(card, run);
 
     const note = q('.game-daily-note');
     const tools = q('.game-daily-tools');
