@@ -858,6 +858,9 @@ function initGameUI() {
       .sd-giveup:hover{color:var(--color-text)}
       .sd-danger{border-color:color-mix(in srgb,var(--sd-bad) 70%,transparent);color:#f6cdc8}
       .sd-danger:hover{background:color-mix(in srgb,var(--sd-bad) 18%,transparent)}
+      .sd-gameover{text-align:center;margin:14px 0 6px}
+      .sd-gameover-title{font-family:var(--font-display);font-size:clamp(1.5rem,1.1rem + 1.6vw,2rem);font-weight:700;letter-spacing:.02em;margin:0;line-height:1.15}
+      .sd-gameover-sub{color:var(--color-text-muted);font-size:1rem;margin:4px 0 0}
       .sd-reveal-label{text-align:center;font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--color-text-muted);margin:12px 0 4px}
       .sd-reveal-chain{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:0 0 10px}
       .sd-mode-list{display:grid;gap:8px;margin-top:14px}
@@ -942,7 +945,7 @@ function initGameUI() {
     center('SIX DEGREES OF RAWK', 118, `600 42px ${FONT}`, gold);
     try { ctx.letterSpacing = '2px'; } catch {}
     center(`Daily Chain · ${fmtChainDate(data.date)}`, 172, `400 30px ${FONT}`, gray);
-    center(data.mode === 'win' ? 'I connected the constellation' : 'The tree wins today',
+    center(data.mode === 'win' ? 'I connected the constellation' : 'Show\u2019s over',
       232, `600 36px ${FONT}`, data.mode === 'win' ? gold : gray);
     // Stats.
     const stats = [
@@ -1392,7 +1395,7 @@ function initGameUI() {
     openSdModal((c) => {
       const h = document.createElement('h2');
       const hopsWord = `${counts.hops} hop${counts.hops === 1 ? '' : 's'}`;
-      h.textContent = !won ? '💀 Dead end! The tree wins.'
+      h.textContent = !won ? dailyGameOverText(run).title
         : completed.beat_tree ? `🏆 You beat the tree in ${hopsWord}!`
         : `🎉 Chain completed in ${hopsWord}!`;
       c.appendChild(h);
@@ -1400,7 +1403,7 @@ function initGameUI() {
       const missNote = counts.deadEnds
         ? ` ${hops} moves, including ${counts.deadEnds} dead end${counts.deadEnds === 1 ? '' : 's'}.`
         : '';
-      sub.textContent = !won ? 'Here\u2019s the chain the tree had in mind.'
+      sub.textContent = !won ? `${dailyGameOverText(run).sub} Here\u2019s the shortest chain.`
         : completed.beat_tree ? `Par was ${par}. You found a shorter chain than the tree.${missNote}`
         : hops === par ? `Right on par. The tree nods.${missNote}`
         : `Par was ${par}.${missNote}`;
@@ -1483,6 +1486,17 @@ function initGameUI() {
       row.appendChild(pill);
     });
     return row;
+  }
+
+  // The game-over copy (Cole, 2026-10-08: the old "tree" line read like
+  // developer text). Two ways to lose, and the subtext must not lie about
+  // which: running out of moves, or giving up with moves left.
+  function dailyGameOverText(run) {
+    const ranOut = run && run.hops_used >= dailyMoveLimit(run.par);
+    return {
+      title: '🎸 Show\u2019s over!',
+      sub: ranOut ? 'You ran out of moves.' : 'You gave up on this one.',
+    };
   }
 
   // The newest link lands in the chain with a little pop.
@@ -1707,7 +1721,7 @@ function initGameUI() {
     // giveup, which used to leave live buttons at "0 moves left".
     if (run.hops_used >= dailyMoveLimit(run.par)) {
       q('.sd-hints').hidden = true;
-      prompt.textContent = 'Out of moves. The tree wins today.';
+      prompt.textContent = 'You ran out of moves.';
       const actions = el('<div class="sd-finish-actions"></div>');
       const reveal = el('<button type="button" class="tool-chip">Show me the chain</button>');
       reveal.addEventListener('click', () => dailyGiveUp(card, { outOfMoves: true }));
@@ -1965,10 +1979,10 @@ function initGameUI() {
       } else {
         paintDailyBoard(card);
         popNewestPill(card);
-        // Out of moves: the tree wins. Uses the existing giveup action, so
+        // Out of moves: show's over. Uses the existing giveup action, so
         // the server still decides what a finished day means.
         if (dailyRun.status === 'active' && dailyRun.hops_used >= dailyMoveLimit(dailyRun.par)) {
-          showToast('Out of moves. The tree wins today.', 'bad');
+          showToast('🎸 Show\u2019s over! You ran out of moves.', 'bad');
           await pause(900);
           await dailyGiveUp(card, { outOfMoves: true });
         }
@@ -2014,7 +2028,11 @@ function initGameUI() {
     const finish = card.querySelector('.game-daily-finish');
     // Your own row is worth keeping only if you actually picked something.
     card.querySelector('.game-chain-pills').style.display = run.picks && run.picks.length ? '' : 'none';
-    finish.appendChild(el(`<p class="sd-finish-line">${practiceMode ? 'The tree wins this one.' : 'The tree wins today.'}</p>`));
+    const over = dailyGameOverText(run);
+    const head = el('<div class="sd-gameover"><p class="sd-gameover-title"></p><p class="sd-gameover-sub"></p></div>');
+    head.querySelector('.sd-gameover-title').textContent = over.title;
+    head.querySelector('.sd-gameover-sub').textContent = over.sub;
+    finish.appendChild(head);
     // The answer, drawn the way the game draws chains: green links in a row.
     if (run.reveal_path && run.reveal_path.length) {
       finish.appendChild(el('<p class="sd-reveal-label">The shortest chain</p>'));
