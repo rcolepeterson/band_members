@@ -45,7 +45,7 @@ test('elapsed time reads like 28s or 2m 05s', () => {
   assert.equal(fmtElapsed(-3), null);
 });
 
-test('a win names start and target, squares in between, no band spoilers', () => {
+test('a win names start and target, one square per move, no band spoilers', () => {
   const text = dailyShareResultText({
     date: '2026-10-08',
     start: 'Nirvana',
@@ -62,7 +62,7 @@ test('a win names start and target, squares in between, no band spoilers', () =>
   });
   assert.equal(text, [
     'Six Degrees of Rock 🎸 #9',
-    'Nirvana ➡️ 🟩 ➡️ 🟥 ➡️ 🟨 ➡️ Metallica',
+    'Nirvana ➡️ 🟩🟥🟨🟩 ➡️ Metallica', // one square per move
     'Moves: 4/4 ⏱️ 28s',
     'Can you beat my chain? https://sixdegreesofrock.com/game',
   ].join('\n'));
@@ -74,7 +74,7 @@ test('a loss marks the target missed and leaves the time off when unknown', () =
     date: '2026-10-08', start: 'Nirvana', target: 'Metallica',
     picks: [{ kind: 'deadend' }, { kind: 'solid' }], moves: 2, par: 4, won: false,
   });
-  assert.match(text, /^Nirvana ➡️ 🟥 ➡️ 🟨 ➡️ ❌ Metallica$/m);
+  assert.match(text, /^Nirvana ➡️ 🟥🟨 ➡️ ❌ Metallica$/m);
   assert.match(text, /^Moves: 2\/4$/m);
   assert.match(text, /Can you crack it\?/);
 });
@@ -163,7 +163,7 @@ test('hops count links, moves count taps: dead ends cost a move but are not a ho
 
 test('results show your chain band by band; share text stays spoiler-free', () => {
   assert.ok(src.includes("${won ? 'Your chain' : 'Your attempt'}"));
-  assert.ok(src.includes('c.appendChild(chainRowEl([start, ...mine], run.connections || {}));'));
+  assert.ok(src.includes('c.appendChild(chainListEl([start, ...mine], run.connections || {}));'));
 });
 
 test('Ask the tree is obvious: drawer closes, choices glow, cancellable, answer on the board', () => {
@@ -239,4 +239,13 @@ test('rawk, not Wordle: guitar picks on screen, line icons instead of emoji', ()
   assert.ok(src.includes("const DAILY_PICK_HEX = { gold: '#3fa36b', robin: '#c9a83a', black: '#c8584f' };"));
   // Icons are drawn like the main site's: no fill, currentColor stroke 1.8, round caps.
   assert.match(src, /class="sd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1\.8" stroke-linecap="round"/);
+});
+
+test('results: vertical chain list, one pick per move, no duplicate hops stat', () => {
+  assert.ok(src.includes('c.appendChild(chainListEl([start, ...mine], run.connections || {}));'));
+  assert.match(src, /function chainListEl\(nodes, connections = \{\}\) \{[\s\S]{0,500}via\.textContent = fmtMembersLong\(names\);/);
+  assert.ok(src.includes('for (const p of picks) {'), 'every move gets a pick');
+  const rows = src.slice(src.indexOf('const statRows = ['), src.indexOf('const statRows = [') + 200);
+  assert.ok(!rows.includes("'Hops'"), 'hops stat dropped (the headline says it)');
+  assert.ok(src.includes('.sd-modal-close:focus:not(:focus-visible){outline:none;box-shadow:none}'));
 });

@@ -184,11 +184,11 @@ export function fmtElapsed(seconds) {
 }
 
 // Spoiler-free share text. The start and target are the same for everyone;
-// the bands in between are squares. On a win the last pick IS the target,
-// so it is drawn as the target, not as a square.
+// every move is one square, so "Moves: 5" shows five squares (Cole,
+// 2026-10-08: 4 squares for "5 hops" read as a miscount).
 export function dailyShareResultText({ date, start, target, picks = [], moves = picks.length, par, won, seconds = null }) {
-  const steps = won ? picks.slice(0, -1) : picks;
-  const chain = [start, ...steps.map((p) => dailyPickSquare(p.kind)), won ? target : `❌ ${target}`].join(' ➡️ ');
+  const squares = picks.map((p) => dailyPickSquare(p.kind)).join('');
+  const chain = [start, ...(squares ? [squares] : []), won ? target : `❌ ${target}`].join(' ➡️ ');
   const num = dailyPuzzleNumber(date);
   const time = fmtElapsed(seconds);
   return [
@@ -836,6 +836,17 @@ function initGameUI() {
       .sd-modal h2 .sd-ico-text,.sd-gameover-title .sd-ico-text{gap:.35em}
       .sd-result-pick{width:18px;height:21px;vertical-align:-4px;margin:0 2px}
       .tool-chip .sd-ico{margin-right:4px}
+      .sd-chain-list{list-style:none;margin:6px auto 12px;padding:0;display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:fit-content;max-width:100%}
+      .sd-chain-list li{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+      .sd-chain-step{position:relative;padding-left:22px}
+      .sd-chain-step::before{content:'';position:absolute;left:8px;top:-6px;bottom:50%;width:10px;border-left:1.5px solid var(--color-divider);border-bottom:1.5px solid var(--color-divider);border-bottom-left-radius:6px}
+      .sd-chain-list .game-chain-pill{max-width:none}
+      .sd-chain-via{font-size:.8rem;font-weight:600;color:var(--color-text);background:rgba(143,232,246,.08);border:1px solid rgba(143,232,246,.22);border-radius:999px;padding:2px 10px;line-height:1.35}
+      .sd-chain-via::after{content:' →';color:var(--color-text-muted);font-weight:400}
+      .sd-stat strong{display:flex;align-items:center;justify-content:center;gap:.2em;min-height:1.15em}
+      .sd-stat strong .sd-ico{width:.7em;height:.7em}
+      .sd-modal-close:focus:not(:focus-visible){outline:none;box-shadow:none}
+      .sd-modal-close:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px}
       .sd-misses{text-align:center;font-size:.82rem;color:#f0b8b2;margin:-4px 0 8px}
       .sd-via-name{font-size:.68rem;font-style:italic;color:var(--color-text-muted);white-space:normal}
       .game-chain-good{border-color:var(--sd-good);background:color-mix(in srgb,var(--sd-good) 22%,transparent)}
@@ -1493,7 +1504,7 @@ function initGameUI() {
       if (won && mine.length) mine[mine.length - 1].anchor = true; // the last pick is the target
       if (mine.length || won) {
         c.appendChild(el(`<p class="sd-reveal-label">${won ? 'Your chain' : 'Your attempt'}</p>`));
-        c.appendChild(chainRowEl([start, ...mine], run.connections || {}));
+        c.appendChild(chainListEl([start, ...mine], run.connections || {}));
       }
       if (misses.length) {
         const m = el('<p class="sd-misses"></p>');
@@ -1502,16 +1513,16 @@ function initGameUI() {
       }
       if (!won && run.reveal_path && run.reveal_path.length) {
         c.appendChild(el('<p class="sd-reveal-label">The shortest chain</p>'));
-        c.appendChild(chainRowEl(run.reveal_path.map((b, i, a) => ({
+        c.appendChild(chainListEl(run.reveal_path.map((b, i, a) => ({
           id: b.id, name: b.name, kind: 'optimal', anchor: i === 0 || i === a.length - 1,
         })), run.connections || {}));
       }
       // The score line in guitar picks (the copied share text keeps emoji
       // squares, since chat apps have no pick emoji).
       const chainLine = el('<p class="sd-result-chain"></p>');
-      const steps = won ? picks.slice(0, -1) : picks;
+      // One pick per move (dead ends included), matching the Moves count.
       chainLine.appendChild(document.createTextNode(run.start_band.name + ' '));
-      for (const p of steps) {
+      for (const p of picks) {
         const w = document.createElement('span');
         w.innerHTML = pickSvg(pickColor(p.kind), 'sd-result-pick');
         chainLine.appendChild(w.firstChild);
@@ -1520,8 +1531,9 @@ function initGameUI() {
       c.appendChild(chainLine);
       const stats = el('<div class="sd-result-stats"></div>');
       const time = fmtElapsed(seconds);
+      // The headline already says the hops; the row says what you spent
+      // and what was possible (no more "5 · 5 · 5").
       const statRows = [
-        ...(won ? [[counts.hops, 'Hops']] : []),
         [hops, 'Moves'],
         [par, 'Shortest'],
         ...(streak != null ? [[streak, 'Streak']] : []),
@@ -1623,6 +1635,32 @@ function initGameUI() {
     tick();
     timer = setInterval(tick, 1000);
     return p;
+  }
+
+  // The chain as a top-to-bottom list for the results modal (Cole,
+  // 2026-10-08: the wrapping rows snaked right-to-left). Each step says who
+  // links it, in a readable pill rather than tiny italics over an arrow:
+  //   [Rage Against the Machine]
+  //     └ Brad Wilk, Tim Commerford and Tom Morello → [Audioslave]
+  function chainListEl(nodes, connections = {}) {
+    const list = el('<ol class="sd-chain-list"></ol>');
+    nodes.forEach((n, i) => {
+      const li = el(`<li class="${i ? 'sd-chain-step' : 'sd-chain-start'}"></li>`);
+      if (i) {
+        const names = connections[`${nodes[i - 1].id}|${n.id}`];
+        if (names && names.length) {
+          const via = el('<span class="sd-chain-via"></span>');
+          via.textContent = fmtMembersLong(names);
+          li.appendChild(via);
+        }
+      }
+      const cls = n.anchor ? 'game-chain-anchor' : n.kind === 'optimal' ? 'game-chain-filled game-chain-good' : 'game-chain-filled game-chain-ok';
+      const pill = el(`<span class="game-chain-pill ${cls}"></span>`);
+      pill.textContent = n.name;
+      li.appendChild(pill);
+      list.appendChild(li);
+    });
+    return list;
   }
 
   // The newest link lands in the chain with a little pop.
