@@ -60,23 +60,26 @@ test('a win names start and target, one square per move, no band spoilers', () =
     won: true,
     seconds: 28,
   });
+  // Wordle-style: score line, squares, link. No slogan.
   assert.equal(text, [
-    'Six Degrees of Rock 🎸 #9',
+    'Six Degrees of Rock #9 🎸 4/4 (28s)',
     'Nirvana ➡️ 🟩🟥🟨🟩 ➡️ Metallica', // one square per move
-    'Moves: 4/4 ⏱️ 28s',
-    'Can you beat my chain? https://sixdegreesofrock.com/game',
+    'sixdegreesofrock.com/game',
   ].join('\n'));
   for (const spoiler of ['Foo Fighters', 'Pearl Jam', 'Probot']) assert.ok(!text.includes(spoiler));
 });
 
-test('a loss marks the target missed and leaves the time off when unknown', () => {
+test('a loss scores X, like Wordle, and leaves the time off when unknown', () => {
   const text = dailyShareResultText({
     date: '2026-10-08', start: 'Nirvana', target: 'Metallica',
     picks: [{ kind: 'deadend' }, { kind: 'solid' }], moves: 2, par: 4, won: false,
   });
-  assert.match(text, /^Nirvana ➡️ 🟥🟨 ➡️ ❌ Metallica$/m);
-  assert.match(text, /^Moves: 2\/4$/m);
-  assert.match(text, /Can you crack it\?/);
+  assert.equal(text, [
+    'Six Degrees of Rock #9 🎸 X/4',
+    'Nirvana ➡️ 🟥🟨 ➡️ Metallica',
+    'sixdegreesofrock.com/game',
+  ].join('\n'));
+  assert.ok(!/Can you|beat my chain|crack it/.test(text), 'no slogan');
 });
 
 test('board keeps the server authoritative: running out of moves calls giveup', () => {
