@@ -210,7 +210,8 @@ test('countdown to the next chain is measured to midnight Pacific, shown as HH:M
 test('plain English: "Shortest path", "Share score", full band names', () => {
   assert.ok(src.includes('`Shortest path: ${run.par} hops`'));
   assert.ok(src.includes("[par, 'Shortest'],"));
-  assert.equal((src.match(/\$\{lineIcon\('share'\)\} Share score/g) || []).length, 2);
+  // "Share score" became a one-tap "Share result" (Wordle-style, 2026-10-08).
+  assert.equal((src.match(/\$\{lineIcon\('share'\)\} Share result/g) || []).length, 2);
   assert.ok(!src.includes('>See results<'));
   assert.match(src, /\.sd-board \.game-chain-pill,\.sd-modal \.game-chain-pill\{white-space:normal;overflow:visible;text-overflow:clip/);
 });
@@ -262,4 +263,11 @@ test('chain timeline: one rail, dots, names aligned; finished boards collapse em
   assert.ok(src.includes('.sd-chain-via{padding-left:26px;'), 'via lines align with band names (12px dot + 14px gap)');
   assert.ok(src.includes("card.classList.toggle('is-over', !active);"));
   assert.ok(src.includes('.sd-board.is-over .sd-prompt:empty'));
+});
+
+test('one share action, like Wordle: text only, no share image', () => {
+  assert.ok(!src.includes('Share image'), 'no share-image button');
+  assert.ok(!src.includes('function drawDailyShareCard'), 'PNG card code removed');
+  assert.ok(src.includes('shareDailyText(results, dailyResultShareText(true, c))'), 'board shares in one tap');
+  assert.ok(src.includes('const text = dailyResultShareText(won, completed);'), 'modal uses the same text');
 });
