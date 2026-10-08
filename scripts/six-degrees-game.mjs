@@ -420,6 +420,29 @@ function initGameUI() {
   function openModal() {
     modal.hidden = false;
     document.body.classList.add('game-modal-open');
+    // Paint the top player line when the modal opens (the div may not exist
+    // at page-load init time if the modal HTML is injected later).
+    // (Aaron, 2026-10-07: root fix for player line on initial load.)
+    try {
+      const topLine = document.getElementById('game-player-line-top');
+      if (topLine) {
+        Promise.all([
+          (typeof loadMyHandle === 'function' ? loadMyHandle() : Promise.resolve('')).catch(() => ''),
+          fetch('/api/game-credits', {
+            headers: { authorization: 'Bearer ' + (typeof authToken === 'function' ? authToken() : '') },
+          }).then((r) => r.json().catch(() => ({}))).catch(() => ({})),
+        ]).then(([h, credData]) => {
+          const credits = credData && credData.ok && credData.credits != null ? credData.credits : null;
+          if (h && credits != null) {
+            topLine.textContent = 'Playing as ' + h + ' \u00b7 ' + credits + ' credits';
+          } else if (h) {
+            topLine.textContent = 'Playing as ' + h;
+          } else if (credits != null) {
+            topLine.textContent = credits + ' credits';
+          }
+        });
+      }
+    } catch {}
     loadGraph().catch(() => {
       statusLine.textContent = 'Could not load the tree. Check your connection and try again.';
     });
