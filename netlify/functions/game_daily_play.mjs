@@ -434,8 +434,9 @@ export default async (req) => {
       payload = { option: { id: target.band_id, name: target.name }, on_optimal_path: target.kind === 'optimal' };
     }
 
-    const credits = await spendCredits(sql, me.id, HINT_COST);
-    if (credits === null) return forbidden('not enough credits', { hint_cost: HINT_COST });
+    // Hints are free (Cole, 2026-10-08: no credits for launch). The per-run
+    // budget (hintsFor(par): 1 at par 3, 2 at par 4) is the only limit.
+    const credits = me.credits;
     const upd = await sql`
       update daily_runs set hints_used = hints_used + 1,
              current_options = ${JSON.stringify(slate)}::jsonb

@@ -94,7 +94,7 @@ test('board feedback: green/yellow/red buttons, shake on dead end, toast', () =>
 
 test('hints, streak and credits live in drawers, not on the board', () => {
   assert.ok(src.includes('<details class="sd-drawer sd-hints">'));
-  assert.ok(src.includes('<details class="sd-drawer sd-stats">'));
+  assert.ok(src.includes('<details class="sd-drawer sd-stats" hidden>'), 'the credits drawer is gone');
 });
 
 test('results modal offers a share and a non-blocking guest sign-up nudge', () => {
@@ -131,7 +131,7 @@ test('practice mode (?practice=1) runs on the Solo endpoint, for fun only', () =
   assert.ok(src.includes("return practiceMode ? '/api/game-solo/play' : dailyPath;"));
   assert.ok(src.includes("{ action: 'start', fresh: true, famous: true }"), 'fresh famous pair each start');
   // Daily calls still name the daily endpoint, so the daily is untouched without the flag.
-  assert.equal((src.match(/dailyFetch\(practicePath\('\/api\/game-daily\/play'\)/g) || []).length, 7);
+  assert.equal((src.match(/dailyFetch\(practicePath\('\/api\/game-daily\/play'\)/g) || []).length, 6);
 });
 
 test('giving up is not a hint: separate link, one confirm, honest copy', () => {
@@ -145,7 +145,7 @@ test('giving up is not a hint: separate link, one confirm, honest copy', () => {
 });
 
 test('practice is permanent, for fun: no hints in the UI, no "remove this" comments', () => {
-  assert.ok(src.includes("q('.sd-hints').hidden = practiceMode || !tools.children.length;"));
+  assert.ok(src.includes("q('.sd-hints').hidden = practiceMode || !run.hints_total;"));
   assert.ok(src.includes('Practice mode: a permanent product feature, not a test hook'));
   assert.ok(!src.includes('TEMPORARY test hook'));
 });
@@ -175,4 +175,15 @@ test('Ask the tree is obvious: drawer closes, choices glow, cancellable, answer 
 
 test('a new board clears a leftover toast', () => {
   assert.match(src, /async function renderDailyBoard[\s\S]{0,300}clearTimeout\(sdToastTimer\);\s*document\.querySelector\('\.sd-toast'\)\?\.classList\.remove\('is-on'\);/);
+});
+
+test('no credits anywhere on the daily board: free hints, streak in the header', () => {
+  const board = src.slice(src.indexOf('function paintDailyBoard('), src.indexOf('function armDailyAsk('));
+  assert.ok(!/credits/.test(board.replace(/\/\/.*$/gm, '')), 'no credit UI in the board painter');
+  assert.ok(board.includes('`💡 Get a hint (${hintsLeft} left today)`'));
+  assert.ok(board.includes('elim.disabled = peek.disabled = hintsLeft === 0;'), 'gray out at zero');
+  // (The old Solo board, unreachable while SHOW_MODE_SWITCHER is false, still has its own.)
+  const daily = src.slice(src.indexOf('async function renderDailyBoard('), src.indexOf('function renderSoloBoard('));
+  assert.ok(!daily.includes('Freeze my streak (100)') && !daily.includes('(−50)') && !daily.includes('Unlock (75)'));
+  assert.ok(src.includes("`🔥 ${run.streak}-day streak`"));
 });

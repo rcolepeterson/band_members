@@ -107,15 +107,21 @@ test('play strips option kinds before sending the slate to the client', () => {
 });
 
 // Credit spends are atomic: deduct only when the balance covers it.
-test('hint and escape deduct credits atomically', () => {
+// Credits were removed for launch (2026-10-08): hints are free within the
+// per-run budget; the (now UI-less) escape still spends atomically.
+test('hints are free; escape still deducts credits atomically', () => {
   const body = src('netlify/functions/game_daily_play.mjs');
   assert.ok(body.includes('where id = ${userId} and credits >= ${amount}'));
+  const hint = body.slice(body.indexOf("if (action === 'hint') {"), body.indexOf("if (action === 'escape') {"));
+  assert.ok(!hint.includes('spendCredits('), 'hints spend nothing');
+  assert.ok(hint.includes('no hints left today'), 'the per-run budget still applies');
 });
 
 // Archive unlocks are atomic too.
-test('archive unlock deducts atomically', () => {
+test('past days are free to unlock (no credits for launch)', () => {
   const body = src('netlify/functions/game_daily_archive.mjs');
-  assert.ok(body.includes('where id = ${me.id} and credits >= ${ARCHIVE_COST}'));
+  assert.ok(!body.includes('credits = credits - ${ARCHIVE_COST}'));
+  assert.ok(body.includes('insert into daily_unlocks'));
 });
 
 // Freeze purchase is atomic and increments the freeze count.
@@ -194,7 +200,7 @@ test('start deals today\'s chain on demand instead of 404ing before the first GE
 
 test('every in-run daily action names the run\'s day, not just start', () => {
   const client = src('scripts/six-degrees-game.mjs');
-  for (const action of ["action: 'giveup'", "action: 'pick', option_id: optionId", "action: 'escape'"]) {
+  for (const action of ["action: 'giveup'", "action: 'pick', option_id: optionId"]) {
     const daily = client.split('/api/game-daily/play').slice(1).some((chunk) =>
       chunk.slice(0, 200).includes(`{ ${action}, ...dailyDate() }`));
     assert.ok(daily, `${action} should send dailyDate()`);

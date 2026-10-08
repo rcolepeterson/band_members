@@ -504,21 +504,11 @@ function initGameUI() {
     try {
       const topLine = document.getElementById('game-player-line-top');
       if (topLine) {
-        Promise.all([
-          (typeof loadMyHandle === 'function' ? loadMyHandle() : Promise.resolve('')).catch(() => ''),
-          fetch('/api/game-credits', {
-            headers: { authorization: 'Bearer ' + (typeof authToken === 'function' ? authToken() : '') },
-          }).then((r) => r.json().catch(() => ({}))).catch(() => ({})),
-        ]).then(([h, credData]) => {
-          const credits = credData && credData.ok && credData.credits != null ? credData.credits : null;
-          if (h && credits != null) {
-            topLine.textContent = 'Playing as ' + h + ' \u00b7 ' + credits + ' credits';
-          } else if (h) {
-            topLine.textContent = 'Playing as ' + h;
-          } else if (credits != null) {
-            topLine.textContent = credits + ' credits';
-          }
-        });
+        // No credits for launch (Cole, 2026-10-08): just who you are. The
+        // daily board adds your streak once it loads (paintPlayerLine).
+        (typeof loadMyHandle === 'function' ? loadMyHandle() : Promise.resolve(''))
+          .catch(() => '')
+          .then((h) => { if (h && !topLine.textContent) topLine.textContent = 'Playing as ' + h; });
       }
     } catch {}
     loadGraph().catch(() => {
@@ -828,6 +818,7 @@ function initGameUI() {
       .sd-drawer>summary,.sd-board .game-daily-archive>summary{cursor:pointer;font-size:.9rem;color:var(--color-text-muted);padding:8px 0;list-style-position:inside}
       .sd-board .game-daily-archive{margin-top:0}
       .sd-drawer .game-daily-tools{margin:2px 0 8px}
+      .sd-hints .tool-chip:disabled{opacity:.4;cursor:not-allowed}
       .sd-drawer .game-daily-econ{margin:2px 0 8px}
       .sd-toast{position:fixed;left:50%;top:84px;transform:translate(-50%,-8px);z-index:1100;max-width:calc(100vw - 32px);padding:10px 16px;border-radius:12px;background:#f2f6f9;color:#0f1319;font-weight:700;font-size:.95rem;box-shadow:0 10px 30px rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;text-align:center}
       .sd-toast.is-on{opacity:1;transform:translate(-50%,0);pointer-events:auto;cursor:pointer}
@@ -1034,8 +1025,8 @@ function initGameUI() {
   // 2026-10-08). /game?practice=1 plays the same board against the Solo
   // endpoint with a fresh famous pair every time, and the daily's reveal
   // screen links here so players can keep playing. It's purely for fun:
-  // no streak, no credits earned, no hints. The Daily Chain is where
-  // credits, streaks and hints live. game_solo_play.mjs enforces this too.
+  // no streak, no hints. The Daily Chain is where streaks and hints live.
+  // game_solo_play.mjs enforces this too.
   const practiceMode = (() => {
     try { return isArenaPage() && new URLSearchParams(window.location.search).get('practice') === '1'; }
     catch { return false; }
@@ -1125,7 +1116,7 @@ function initGameUI() {
     const card = el(`<div class="game-result-card game-daily">
       <div class="game-daily-head"><span class="game-hops">Daily Chain</span><span class="game-daily-date"></span></div>
       <p class="game-daily-pair"></p>
-      <p class="game-daily-note">One fresh chain every day — same for everyone. Sign in to play, keep your streak, and earn credits.</p>
+      <p class="game-daily-note">One fresh chain every day — same for everyone. Sign in to play and keep your streak.</p>
       <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to play</button></div>
     </div>`);
     result.appendChild(card);
@@ -1182,7 +1173,7 @@ function initGameUI() {
       <div class="game-daily-finish"></div>
       <div class="sd-drawers">
         <details class="sd-drawer sd-hints"><summary>💡 Get a hint</summary><div class="game-daily-tools"></div></details>
-        <details class="sd-drawer sd-stats"><summary>Streak &amp; credits</summary><p class="game-daily-econ"></p><div class="game-daily-tools sd-stats-actions"></div></details>
+        <details class="sd-drawer sd-stats" hidden><summary>Stats</summary><p class="game-daily-econ"></p><div class="game-daily-tools sd-stats-actions"></div></details>
         <details class="game-daily-archive"><summary>Past days</summary><div class="game-daily-archive-list"></div></details>
       </div>
     </div>`);
@@ -1192,7 +1183,7 @@ function initGameUI() {
       card.querySelector('.game-hops').textContent = 'Practice';
       card.querySelector('.sd-stats').hidden = true;
       card.querySelector('.game-daily-archive').hidden = true;
-      const back = el('<p class="game-daily-note" style="text-align:center;margin:10px 0 0">Just for fun: no streaks, credits or hints. <a href="/game">Play today\u2019s Daily Chain</a></p>');
+      const back = el('<p class="game-daily-note" style="text-align:center;margin:10px 0 0">Just for fun: no streaks or hints. <a href="/game">Play today\u2019s Daily Chain</a></p>');
       card.querySelector('.sd-drawers').after(back);
     }
     if (loading) {
@@ -1441,7 +1432,7 @@ function initGameUI() {
         ...(streak != null ? [[streak, 'Streak']] : []),
         ...(time ? [[time, 'Time']] : []),
       ];
-      for (const [num, label] of statRows) {
+      for (const [num, label] of statRows.map(([n, l]) => (l === 'Streak' ? [`🔥 ${n}`, l] : [n, l]))) {
         const s = el('<div class="sd-stat"><strong></strong><span></span></div>');
         s.querySelector('strong').textContent = String(num);
         s.querySelector('span').textContent = label;
@@ -1602,20 +1593,20 @@ function initGameUI() {
     }
   }
 
-  // Persistent player line: "Playing as X · N credits". Credits update on
+  // Persistent player line: "Playing as X · 🔥 3-day streak". (Credits were
+  // removed for launch, 2026-10-08.) The streak updates on
   // every repaint; the handle fills in async (cached after first load).
   // Also paints the prominent top line under the game title (Aaron, 2026-10-07).
   function paintPlayerLine(card, run) {
-    const credits = run && run.credits != null ? run.credits : 0;
+    const streak = !practiceMode && run && run.streak > 0 ? `🔥 ${run.streak}-day streak` : '';
     const paintOne = (line) => {
       if (!line) return;
       const seq = (parseInt(line.dataset.seq || '0', 10) + 1);
       line.dataset.seq = String(seq);
-      line.textContent = credits + ' credits';
+      line.textContent = streak;
       loadMyHandle().then((h) => {
         if (line.dataset.seq !== String(seq)) return; // a newer paint won
-        line.textContent = h ? 'Playing as ' + h + ' \u00b7 ' + credits + ' credits'
-                             : credits + ' credits';
+        line.textContent = h ? 'Playing as ' + h + (streak ? ' \u00b7 ' + streak : '') : streak;
       });
     };
     paintOne(card.querySelector('.game-player-line'));
@@ -1647,24 +1638,8 @@ function initGameUI() {
       meta.appendChild(strong);
     }
 
-    // Streak & credits drawer (out of the way, still one tap off).
-    const econLine = q('.game-daily-econ');
-    econLine.innerHTML = '';
-    econLine.appendChild(mk(`Streak ${run.streak} · `));
-    const creditBtn = el('<button type="button" class="game-credit-btn"></button>');
-    creditBtn.textContent = `${run.credits} credits`;
-    creditBtn.setAttribute('aria-label', 'Your credit balance — how credits work');
-    creditBtn.addEventListener('click', () => toggleCreditSheet(card));
-    econLine.appendChild(creditBtn);
-    if (run.freeze_count) econLine.appendChild(mk(` · ❄ ${run.freeze_count}`));
-    if (run.best_hops != null) econLine.appendChild(mk(` · Best today: ${run.best_hops}`));
-    const statsActions = q('.sd-stats-actions');
-    statsActions.innerHTML = '';
-    if (practiceMode) statsActions.hidden = true;
-    const econ = el('<button type="button" class="tool-chip">Freeze my streak (100)</button>');
-    econ.addEventListener('click', () => dailyBuyFreeze(card));
-    statsActions.appendChild(econ);
-
+    // No credits drawer (removed for launch, 2026-10-08): the streak shows in
+    // the header and on the results screen; streak freezes can't be bought.
     // Chain pills replace the old text trail (Aaron: the text was confusing).
     paintChainPills(card, run);
     paintPlayerLine(card, run);
@@ -1756,35 +1731,22 @@ function initGameUI() {
       optsBox.appendChild(btn);
     }
 
-    const hintsLeft = run.hints_total - run.hints_used;
+    // Free hints (no credits, 2026-10-08): the per-game budget is the limit
+    // (1 at par 3, 2 at par 4). At zero the buttons stay, grayed out.
+    const hintsLeft = Math.max(0, run.hints_total - run.hints_used);
     q('.sd-hints > summary').textContent = hintsLeft > 0
-      ? `💡 Get a hint (${hintsLeft} left)`
-      : '💡 Hints';
-    if (hintsLeft > 0) {
-      const elim = el('<button type="button" class="tool-chip">Cut one option (−10)</button>');
-      elim.addEventListener('click', () => dailyHint(card, 'eliminate'));
-      const peek = el('<button type="button" class="tool-chip">Ask the tree (−10)</button>');
-      peek.addEventListener('click', () => armDailyAsk(card));
-      tools.appendChild(elim);
-      tools.appendChild(peek);
-    }
+      ? `💡 Get a hint (${hintsLeft} left today)`
+      : '💡 No hints left today';
+    const elim = el('<button type="button" class="tool-chip">Cut one option</button>');
+    elim.addEventListener('click', () => dailyHint(card, 'eliminate'));
+    const peek = el('<button type="button" class="tool-chip">Ask the tree</button>');
+    peek.addEventListener('click', () => armDailyAsk(card));
+    elim.disabled = peek.disabled = hintsLeft === 0;
+    tools.appendChild(elim);
+    tools.appendChild(peek);
 
-    const last = run.picks[run.picks.length - 1];
-    if (last && last.kind === 'deadend') {
-      const esc = el('<button type="button" class="tool-chip"></button>');
-      // Bail-out: when a session legend is actually in the room (the server
-      // checked the graph), the escape wears his name. Same price, same
-      // effect — and yes, it's a Freese/Freeze pun.
-      esc.textContent = run.bailout
-        ? `${run.bailout} bails you out (−50)`
-        : 'Dig out of the dead end (−50)';
-      esc.addEventListener('click', () => dailyEscape(card));
-      tools.appendChild(esc);
-    }
-
-    // Hints only help you keep playing; nothing to offer means no drawer.
-    // Practice is for fun: no hints, no credits (Cole, 2026-10-08).
-    q('.sd-hints').hidden = practiceMode || !tools.children.length;
+    // Practice is for fun: no hints (Cole, 2026-10-08).
+    q('.sd-hints').hidden = practiceMode || !run.hints_total;
 
     // Giving up is not a hint (Cole, 2026-10-08): a quiet link under the
     // board, confirmed once in a modal that says plainly what it costs.
@@ -1802,7 +1764,7 @@ function initGameUI() {
     if (drawer) drawer.open = false;
     card.querySelector('.game-daily-options').classList.add('is-asking');
     const prompt = card.querySelector('.sd-prompt');
-    prompt.textContent = 'Ask the tree: tap a band to check if it\u2019s on the shortest path (−10). ';
+    prompt.textContent = 'Ask the tree: tap a band to check if it\u2019s on the shortest path. ';
     const cancel = el('<button type="button" class="sd-linkbtn">Cancel</button>');
     cancel.addEventListener('click', () => paintDailyBoard(card));
     prompt.appendChild(cancel);
@@ -2047,41 +2009,6 @@ function initGameUI() {
     }
   }
 
-  async function dailyEscape(card) {
-    const note = card.querySelector('.game-daily-note');
-    const who = dailyRun && dailyRun.bailout;
-    try {
-      const data = await dailyFetch(practicePath('/api/game-daily/play'), {
-        method: 'POST',
-        body: JSON.stringify({ action: 'escape', ...dailyDate() }),
-      });
-      dailyRun = data.run;
-      dailyOptions = data.options || [];
-      paintDailyBoard(card);
-      card.querySelector('.game-daily-note').textContent = who
-        ? `${who.split(' ').pop()} got you out of the black hole.`
-        : `Dug out — ${data.escaped.name} is off your trail.`;
-    } catch (err) {
-      note.textContent = err.message;
-    }
-  }
-
-  async function dailyBuyFreeze(card) {
-    const note = card.querySelector('.game-daily-note');
-    try {
-      const data = await dailyFetch('/api/game-credits', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'buy_freeze' }),
-      });
-      dailyRun = { ...dailyRun, credits: data.credits, freeze_count: data.freeze_count, streak: data.streak };
-      paintDailyBoard(card);
-      card.querySelector('.game-daily-note').textContent =
-        'Freeze stocked — it auto-burns if you miss exactly one day.';
-    } catch (err) {
-      note.textContent = err.message;
-    }
-  }
-
   function paintDailyGiveUp(card) {
     const run = dailyRun;
     const finish = card.querySelector('.game-daily-finish');
@@ -2192,7 +2119,7 @@ function initGameUI() {
             play.addEventListener('click', () => renderDailyBoard({ date: d.date }));
             act.appendChild(play);
           } else {
-            const unlock = el('<button type="button" class="tool-chip">Unlock (75)</button>');
+            const unlock = el('<button type="button" class="tool-chip">Play</button>');
             unlock.addEventListener('click', async () => {
               try {
                 await dailyFetch('/api/game-daily/archive', {
