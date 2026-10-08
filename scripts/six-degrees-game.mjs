@@ -3274,9 +3274,15 @@ function initGameUI() {
         badge.hidden = false;
         badge.removeAttribute('data-action');
         badge.innerHTML = '';
+        // Guest play (2026-10-08): show "Guest" instead of "Sign in to play"
+        // when a guest session exists.
+        let hasGuestSession = false;
+        try {
+          hasGuestSession = !!localStorage.getItem('sdr-guest-session');
+        } catch {}
         const link = document.createElement('a');
         link.href = '/';
-        link.textContent = 'Sign in to play';
+        link.textContent = hasGuestSession ? 'Playing as Guest' : 'Sign in to play';
         link.style.color = 'inherit';
         link.style.textDecoration = 'none';
         badge.appendChild(link);
@@ -3480,7 +3486,17 @@ function initGameUI() {
           const credits = credData && credData.ok && credData.credits != null ? credData.credits : null;
           const signedIn = isSignedIn();
           if (!signedIn) {
-            topLine.innerHTML = '<span style="opacity:.7">Sign in to play</span>';
+            // Guest play (2026-10-08): if a guest session exists, we're loading
+            // guest credits — don't flash "Sign in to play".
+            let hasGuestSession = false;
+            try {
+              hasGuestSession = !!localStorage.getItem('sdr-guest-session');
+            } catch {}
+            if (hasGuestSession) {
+              topLine.innerHTML = '<span style="opacity:.5">Loading…</span>';
+            } else {
+              topLine.innerHTML = '<span style="opacity:.7">Sign in to play</span>';
+            }
             // Retry in 2s — auth token may not be in localStorage yet on
             // initial page load (Aaron, 2026-10-07).
             setTimeout(() => {
