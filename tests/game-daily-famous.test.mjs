@@ -99,3 +99,31 @@ test('practice runs pay no credits and refuse hints, enforced on the server', as
   assert.equal((solo.match(/const reward = isPracticeRun\(run, hl\) \? 0/g) || []).length, 2, 'both completion paths pay 0');
   assert.equal((solo.match(/return badRequest\('no hints in practice'\)/g) || []).length, 2, 'hint and escape refused');
 });
+
+test('who links two bands: shared musicians per chain link', async () => {
+  const { buildBandMembers, sharedMembers, chainConnections } = await import('../netlify/functions/_daily.mjs');
+  const ms = [
+    { band_id: 'RATM', member_id: 'tom' }, { band_id: 'RATM', member_id: 'tim' }, { band_id: 'RATM', member_id: 'zack' },
+    { band_id: 'AUDIO', member_id: 'tom' }, { band_id: 'AUDIO', member_id: 'tim' }, { band_id: 'AUDIO', member_id: 'chris' },
+    { band_id: 'SG', member_id: 'chris' },
+  ];
+  const names = new Map([['tom', 'Tom Morello'], ['tim', 'Tim Commerford'], ['zack', 'Zack de la Rocha'], ['chris', 'Chris Cornell']]);
+  const bm = buildBandMembers(ms);
+  assert.deepEqual(sharedMembers(bm, names, 'RATM', 'AUDIO'), ['Tim Commerford', 'Tom Morello']);
+  assert.deepEqual(sharedMembers(bm, names, 'RATM', 'SG'), []);
+  assert.deepEqual(chainConnections(bm, names, ['RATM', 'AUDIO', 'SG']), {
+    'RATM|AUDIO': ['Tim Commerford', 'Tom Morello'],
+    'AUDIO|SG': ['Chris Cornell'],
+  });
+});
+
+test('both game states send connections (and the daily sends dist_to_target)', async () => {
+  const { readFileSync } = await import('node:fs');
+  for (const f of ['game_daily_play.mjs', 'game_solo_play.mjs']) {
+    const body = readFileSync(new URL(`../netlify/functions/${f}`, import.meta.url), 'utf8');
+    assert.match(body, /chainConnections\(bandMembers, memberNames, chainIds\)/, f);
+    assert.match(body, /\n    connections,\n/, f);
+  }
+  const daily = readFileSync(new URL('../netlify/functions/game_daily_play.mjs', import.meta.url), 'utf8');
+  assert.match(daily, /\n    dist_to_target,\n/);
+});

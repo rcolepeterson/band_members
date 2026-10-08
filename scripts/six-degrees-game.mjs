@@ -163,6 +163,19 @@ export function fmtCountdown(seconds) {
   return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
 }
 
+// Musician names on a chain connector. Compact for the scrolling chain row
+// ("Tom Morello +2"); full for sentences ("Tom Morello, Tim Commerford and
+// Brad Wilk").
+export function fmtMembersShort(names = []) {
+  if (!names.length) return '';
+  return names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`;
+}
+export function fmtMembersLong(names = []) {
+  if (names.length <= 1) return names[0] || '';
+  if (names.length <= 3) return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`;
+}
+
 export function fmtElapsed(seconds) {
   if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
   const s = Math.round(seconds);
@@ -817,6 +830,9 @@ function initGameUI() {
       .sd-countdown{text-align:center;font-size:.85rem;color:var(--color-text-muted);margin:8px 0 0}
       .sd-countdown strong{color:var(--color-text);font-variant-numeric:tabular-nums;letter-spacing:.04em}
       .sd-link{flex:none;color:var(--color-text-faint);font-size:.8rem}
+      .sd-via{display:inline-flex;flex-direction:column;align-items:center;gap:1px;line-height:1.1;max-width:110px;text-align:center}
+      .sd-misses{text-align:center;font-size:.82rem;color:#f0b8b2;margin:-4px 0 8px}
+      .sd-via-name{font-size:.68rem;font-style:italic;color:var(--color-text-muted);white-space:normal}
       .game-chain-good{border-color:var(--sd-good);background:color-mix(in srgb,var(--sd-good) 22%,transparent)}
       .game-chain-ok{border-color:var(--sd-ok);background:color-mix(in srgb,var(--sd-ok) 20%,transparent)}
       .sd-board .game-chain-deadend,.sd-modal .game-chain-deadend{border-color:var(--sd-bad);background:color-mix(in srgb,var(--sd-bad) 18%,transparent);color:#f3c4bf;text-decoration:line-through;text-decoration-thickness:1px}
@@ -1432,18 +1448,26 @@ function initGameUI() {
       c.appendChild(sub);
       // Your chain, band by band (Cole, 2026-10-08): the share TEXT stays
       // spoiler-free, but the player gets to see exactly what they built.
-      const start = { name: run.start_band.name, anchor: true };
-      const mine = picks.map((p) => ({ name: p.name, kind: p.kind }));
+      const start = { id: run.start_band.id, name: run.start_band.name, anchor: true };
+      // Real links only, each with who connects them; dead ends get their own
+      // line so a name never looks like it came out of a dead end.
+      const mine = picks.filter((p) => p.kind !== 'deadend').map((p) => ({ id: p.band_id, name: p.name, kind: p.kind }));
+      const misses = picks.filter((p) => p.kind === 'deadend').map((p) => p.name);
       if (won && mine.length) mine[mine.length - 1].anchor = true; // the last pick is the target
       if (mine.length || won) {
         c.appendChild(el(`<p class="sd-reveal-label">${won ? 'Your chain' : 'Your attempt'}</p>`));
-        c.appendChild(chainRowEl([start, ...mine]));
+        c.appendChild(chainRowEl([start, ...mine], run.connections || {}));
+      }
+      if (misses.length) {
+        const m = el('<p class="sd-misses"></p>');
+        m.textContent = `✗ Dead end${misses.length === 1 ? '' : 's'}: ${misses.join(', ')}`;
+        c.appendChild(m);
       }
       if (!won && run.reveal_path && run.reveal_path.length) {
         c.appendChild(el('<p class="sd-reveal-label">The shortest chain</p>'));
         c.appendChild(chainRowEl(run.reveal_path.map((b, i, a) => ({
-          name: b.name, kind: 'optimal', anchor: i === 0 || i === a.length - 1,
-        }))));
+          id: b.id, name: b.name, kind: 'optimal', anchor: i === 0 || i === a.length - 1,
+        })), run.connections || {}));
       }
       const chainLine = el('<p class="sd-result-chain"></p>');
       chainLine.textContent = text.split('\n')[1];
@@ -1487,19 +1511,38 @@ function initGameUI() {
     });
   }
 
-  function dailyMoveText({ kind, name, from }) {
+  function dailyMoveText({ kind, name, from, members = [], extra = null }) {
     if (kind === 'deadend') return `✗ ${name} is a dead end: no shared member with ${from}. −1 move.`;
-    if (kind === 'optimal') return `✓ ${name} connects. You\u2019re on the shortest path.`;
-    return `✓ ${name} connects, but it\u2019s the long way round.`;
+    const via = members.length ? ` ${fmtMembersLong(members)} played in both.` : '';
+    if (kind === 'optimal') return `✓ ${name} connects. You\u2019re on the shortest path!${via}`;
+    // The long way round costs at least one move; say exactly how many.
+    const cost = extra > 0 ? ` (+${extra} extra move${extra === 1 ? '' : 's'})` : '';
+    return `✓ Valid connection! But a shorter route exists${cost}.${via}`;
+  }
+
+  // The arrow between two bands, with WHO links them above it (Cole,
+  // 2026-10-08: the trivia payoff). No names: a plain arrow.
+  function connectorEl(names) {
+    if (!names || !names.length) return el('<span class="sd-link" aria-hidden="true">→</span>');
+    const c = el('<span class="sd-link sd-via"><span class="sd-via-name"></span><span aria-hidden="true">→</span></span>');
+    c.querySelector('.sd-via-name').textContent = fmtMembersShort(names);
+    c.title = fmtMembersLong(names);
+    c.setAttribute('aria-label', `linked by ${fmtMembersLong(names)}`);
+    return c;
   }
 
   // A chain drawn as pills: [start] → link → link → [target]. Links are
   // colored by kind; dead ends are crossed out but kept, so your own chain
-  // shows where you went wrong.
-  function chainRowEl(nodes) {
+  // shows where you went wrong. Connectors name the shared musicians.
+  function chainRowEl(nodes, connections = {}) {
     const row = el('<div class="sd-reveal-chain"></div>');
+    let prevId = null;
     nodes.forEach((n, i) => {
-      if (i) row.appendChild(el('<span class="sd-link" aria-hidden="true">→</span>'));
+      if (i) {
+        const names = n.kind !== 'deadend' && prevId && n.id ? connections[`${prevId}|${n.id}`] : null;
+        row.appendChild(connectorEl(names));
+      }
+      if (n.id && n.kind !== 'deadend') prevId = n.id;
       const cls = n.anchor ? 'game-chain-anchor'
         : n.kind === 'deadend' ? 'game-chain-filled game-chain-deadend'
         : n.kind === 'optimal' ? 'game-chain-filled game-chain-good' : 'game-chain-filled game-chain-ok';
@@ -1596,6 +1639,7 @@ function initGameUI() {
       return s;
     };
     const startPill = mkPill(run.start_band.name, 'game-chain-anchor', 'Start band');
+    startPill.dataset.bandId = run.start_band.id;
     box.appendChild(startPill);
     // The band you're standing on gets a ring: the start, or your last
     // pick that actually connected (dead ends leave you where you were).
@@ -1611,6 +1655,8 @@ function initGameUI() {
             : p.kind === 'optimal' ? 'game-chain-filled game-chain-good' : 'game-chain-filled game-chain-ok',
           p.kind === 'optimal' ? 'On the shortest path' : dead ? 'Dead end' : 'Connects, but not the shortest way'
         );
+        pill.dataset.bandId = p.band_id;
+        if (dead) pill.dataset.dead = '1';
         box.appendChild(pill);
         if (!dead && curId && String(p.band_id) === curId) currentPill = pill;
       } else {
@@ -1623,15 +1669,20 @@ function initGameUI() {
     if (!reached) {
       box.appendChild(mkPill(run.target.name, 'game-chain-anchor', 'Target band'));
     }
-    // Wordle-simple board: arrows between links, a ring on where you are,
-    // and the row scrolled so that ring is in view on a phone.
+    // Wordle-simple board: connectors between links (naming the musician
+    // who links them), a ring on where you are, and the row scrolled so that
+    // ring is in view on a phone.
     if (card.classList.contains('sd-board')) {
-      [...box.children].slice(1).forEach((pill) => {
-        const a = document.createElement('span');
-        a.className = 'sd-link';
-        a.setAttribute('aria-hidden', 'true');
-        a.textContent = '→';
-        box.insertBefore(a, pill);
+      // A name only sits on a connector whose left-hand pill is the band
+      // you came from; after a crossed-out dead end it would read as if the
+      // dead end led on, so that arrow stays plain.
+      const pillsNow = [...box.children];
+      pillsNow.forEach((pill, i) => {
+        if (!i) return;
+        const left = pillsNow[i - 1];
+        const names = !pill.dataset.dead && !left.dataset.dead && left.dataset.bandId && pill.dataset.bandId
+          ? (run.connections || {})[`${left.dataset.bandId}|${pill.dataset.bandId}`] : null;
+        box.insertBefore(connectorEl(names), pill);
       });
       if (active) {
         currentPill.classList.add('game-chain-current');
@@ -1956,6 +2007,8 @@ function initGameUI() {
     }
     const optsBox = card.querySelector('.game-daily-options');
     const fromName = dailyRun && dailyRun.current_band ? dailyRun.current_band.name : '';
+    const fromId = dailyRun && dailyRun.current_band ? dailyRun.current_band.id : null;
+    const distBefore = dailyRun ? dailyRun.dist_to_target : null;
     const pickedName = btn ? btn.textContent : '';
     optsBox.classList.add('is-busy');
     if (btn) btn.classList.add('is-pending');
@@ -1982,7 +2035,11 @@ function initGameUI() {
       const picks = dailyRun.picks || [];
       const kind = (data.picked && data.picked.kind) || (picks.length ? picks[picks.length - 1].kind : null);
       if (btn) btn.classList.add(kind === 'deadend' ? 'is-bad' : kind === 'optimal' ? 'is-good' : 'is-ok');
-      dailyLastMove = data.completed ? null : { kind, name: pickedName, from: fromName };
+      // Extra moves a long-way pick cost: you spent 1 and got (before − after) closer.
+      const distAfter = dailyRun.dist_to_target;
+      const extra = distBefore != null && distAfter != null ? distAfter + 1 - distBefore : null;
+      const members = (dailyRun.connections || {})[`${fromId}|${optionId}`] || [];
+      dailyLastMove = data.completed ? null : { kind, name: pickedName, from: fromName, members, extra };
       if (!data.completed) {
         showToast(
           kind === 'deadend' ? '✗ Dead end. No shared member. −1 move'
@@ -2074,8 +2131,8 @@ function initGameUI() {
     if (run.reveal_path && run.reveal_path.length) {
       finish.appendChild(el('<p class="sd-reveal-label">The shortest chain</p>'));
       finish.appendChild(chainRowEl(run.reveal_path.map((b, i, a) => ({
-        name: b.name, kind: 'optimal', anchor: i === 0 || i === a.length - 1,
-      }))));
+        id: b.id, name: b.name, kind: 'optimal', anchor: i === 0 || i === a.length - 1,
+      })), run.connections || {}));
     }
     const actions = el('<div class="sd-finish-actions"></div>');
     const results = el('<button type="button" class="tool-chip">Share score 📤</button>');

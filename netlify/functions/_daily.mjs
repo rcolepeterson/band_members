@@ -169,6 +169,41 @@ export function bfsPath(adj, fromId, targetId, preferWithin = null) {
   return path;
 }
 
+// ---------------------------------------------------------------------------
+// Who links two bands — the trivia payoff (Cole, 2026-10-08)
+// ---------------------------------------------------------------------------
+
+// band id -> Set(member id), from the same member_of rows as buildBandAdj.
+export function buildBandMembers(memberships) {
+  const out = new Map();
+  for (const ms of memberships || []) {
+    if (!ms || !ms.band_id || !ms.member_id) continue;
+    if (!out.has(ms.band_id)) out.set(ms.band_id, new Set());
+    out.get(ms.band_id).add(ms.member_id);
+  }
+  return out;
+}
+
+// Names of the musicians two bands share, alphabetical so it's stable.
+export function sharedMembers(bandMembers, memberNames, a, b) {
+  const ma = bandMembers.get(a);
+  const mb = bandMembers.get(b);
+  if (!ma || !mb) return [];
+  const names = [];
+  for (const id of ma) if (mb.has(id)) names.push(memberNames.get(id) || 'A shared member');
+  return names.sort((x, y) => x.localeCompare(y));
+}
+
+// { "aId|bId": [names] } for each consecutive pair of a chain of band ids.
+export function chainConnections(bandMembers, memberNames, ids = []) {
+  const out = {};
+  for (let i = 1; i < ids.length; i++) {
+    const names = sharedMembers(bandMembers, memberNames, ids[i - 1], ids[i]);
+    if (names.length) out[`${ids[i - 1]}|${ids[i]}`] = names;
+  }
+  return out;
+}
+
 // Seeded fair-pair deal: shortest path within [minHops, maxHops], skipping
 // any pair in excludeKeys. Returns { a, b, hops } or null.
 // requireWithin (optional Set): the pair only counts if a shortest route

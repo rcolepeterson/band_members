@@ -120,7 +120,7 @@ test('out of moves: the board paints no choices, only the reveal', () => {
 
 test('the last move stays on the board in words until the next tap', () => {
   assert.ok(src.includes('<p class="sd-result" aria-live="polite" hidden></p>'), 'result line in the board');
-  assert.match(src, /dailyLastMove = data\.completed \? null : \{ kind, name: pickedName, from: fromName \}/);
+  assert.match(src, /dailyLastMove = data\.completed \? null : \{ kind, name: pickedName, from: fromName, members, extra \}/);
   assert.ok(src.includes('is a dead end: no shared member with ${from}. −1 move.'));
   assert.match(src, /sdToastTimer = setTimeout\(\(\) => t\.classList\.remove\('is-on'\), 3000\)/, 'toast lasts 3s');
   assert.ok(src.includes("t.onclick = () => { clearTimeout(sdToastTimer); t.classList.remove('is-on'); };"), 'tap dismisses');
@@ -163,7 +163,7 @@ test('hops count links, moves count taps: dead ends cost a move but are not a ho
 
 test('results show your chain band by band; share text stays spoiler-free', () => {
   assert.ok(src.includes("${won ? 'Your chain' : 'Your attempt'}"));
-  assert.ok(src.includes('c.appendChild(chainRowEl([start, ...mine]));'));
+  assert.ok(src.includes('c.appendChild(chainRowEl([start, ...mine], run.connections || {}));'));
 });
 
 test('Ask the tree is obvious: drawer closes, choices glow, cancellable, answer on the board', () => {
@@ -213,4 +213,19 @@ test('plain English: "Shortest path", "Share score", full band names', () => {
   assert.equal((src.match(/Share score 📤/g) || []).length, 2);
   assert.ok(!src.includes('>See results<'));
   assert.match(src, /\.sd-board \.game-chain-pill,\.sd-modal \.game-chain-pill\{white-space:normal;overflow:visible;text-overflow:clip/);
+});
+
+test('musician names: compact on the chain row, full in sentences', async () => {
+  const { fmtMembersShort, fmtMembersLong } = await import('../scripts/six-degrees-game.mjs');
+  assert.equal(fmtMembersShort(['Tom Morello']), 'Tom Morello');
+  assert.equal(fmtMembersShort(['Tom Morello', 'Tim Commerford', 'Brad Wilk']), 'Tom Morello +2');
+  assert.equal(fmtMembersShort([]), '');
+  assert.equal(fmtMembersLong(['Chris Cornell']), 'Chris Cornell');
+  assert.equal(fmtMembersLong(['Tom Morello', 'Tim Commerford', 'Brad Wilk']), 'Tom Morello, Tim Commerford and Brad Wilk');
+  assert.equal(fmtMembersLong(['A', 'B', 'C', 'D', 'E']), 'A, B, C and 2 more');
+});
+
+test('long-way-round copy names the exact extra moves', () => {
+  assert.ok(src.includes('`✓ Valid connection! But a shorter route exists${cost}.${via}`'));
+  assert.ok(src.includes('const extra = distBefore != null && distAfter != null ? distAfter + 1 - distBefore : null;'));
 });
