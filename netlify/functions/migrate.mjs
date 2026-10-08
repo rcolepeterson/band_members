@@ -869,6 +869,38 @@ export default async (req) => {
     }
     results.push('daily_runs replay support ready');
 
+    // Solo Run tables --------------------------------------------------------
+    // Solo v2 (Oct 2026): the guessing game — the tree deals a pair (or the
+    // player picks band A and the tree supplies band B), and the player
+    // builds the chain link-by-link from multiple-choice options, Daily
+    // Chain style. Free to start; hints and blackhole escapes cost credits.
+    // No streaks, no archive — each run is a fresh deal.
+    await sql`
+      create table if not exists solo_runs (
+        id              uuid primary key default gen_random_uuid(),
+        user_id         uuid not null references users(id) on delete cascade,
+        status          text not null default 'active',
+        band_a          uuid not null references bands(id) on delete cascade,
+        band_b          uuid not null references bands(id) on delete cascade,
+        optimal_hops    integer not null,
+        current_band_id uuid not null,
+        hops_used       integer not null default 0,
+        hints_used      integer not null default 0,
+        picks           jsonb not null default '[]',
+        current_options jsonb,
+        escaped         jsonb not null default '[]',
+        created_at      timestamptz not null default now(),
+        completed_at    timestamptz
+      )
+    `;
+    results.push('table solo_runs ready');
+
+    await sql`
+      create index if not exists solo_runs_user_id_idx
+      on solo_runs (user_id)
+    `;
+    results.push('index solo_runs_user_id_idx ready');
+
     // duplicate_flags table --------------------------------------------------
     // Duplicate-band monitor (see scanDuplicateBands in
     // cron_verify_stale_bands.mjs). One row per detected true-duplicate pair
