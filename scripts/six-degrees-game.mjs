@@ -577,7 +577,7 @@ function initGameUI() {
       .game-player-line{font-size:.78rem;color:#8a8a8a;margin:0 0 2px}
       .game-chain-pills{display:flex;gap:6px;align-items:center;margin:10px 0;flex-wrap:wrap}
       .game-chain-pill{padding:6px 12px;border-radius:999px;font-size:.82rem;font-weight:600;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis}
-      .game-chain-anchor{border:1px solid rgba(82,174,182,.7);background:rgba(82,174,182,.16);color:#fff}
+      .game-chain-anchor{border:1px solid rgba(212,175,55,.7);background:rgba(212,175,55,.14);color:#fff}
       .game-chain-filled{border:1px solid rgba(82,174,182,.45);background:rgba(82,174,182,.08);color:#fff}
       .game-chain-deadend{border:1px solid rgba(200,90,90,.6);background:rgba(200,90,90,.1);color:#f0b0b0}
       .game-chain-blank{border:1px dashed rgba(255,255,255,.28);background:transparent;color:#777;min-width:44px;text-align:center}
@@ -1003,7 +1003,20 @@ function initGameUI() {
     }
 
     // Chain pills replace the old text trail (Aaron: the text was confusing).
-    paintChainPills(card, run);
+    // Per 2026-10-01 decision: never reveal the current day's answer — the
+    // full chain is only shown 2+ days later (anti answer-sharing).
+    const chainDate = run.chain_date ? new Date(run.chain_date + 'T12:00:00') : null;
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    const revealAllowed = !chainDate || chainDate <= twoDaysAgo;
+    if (revealAllowed) {
+      paintChainPills(card, run);
+    } else {
+      const box = card.querySelector('.game-chain-pills');
+      if (box) {
+        box.innerHTML = '<span style="color:#888;font-size:.85rem">Chain reveals in 2 days — no spoilers.</span>';
+      }
+    }
     paintPlayerLine(card, run);
 
     const note = q('.game-daily-note');
