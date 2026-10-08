@@ -137,9 +137,8 @@ async function dealOptions(sql, run, chain, excludeExtra = []) {
   const opts = optionsFor({
     adj, dist, degree, meta,
     currentId: run.current_band_id,
-    excludeIds: new Set([...deadPicked, ...dugOut, ...excludeExtra]),
-    // The target is never a trap — reaching it always ends the run.
-    // (It stays eligible as a neighbor pick at distance 1.)
+    // Target excluded — auto-finish completes when adjacent (Aaron, 2026-10-07).
+    excludeIds: new Set([...deadPicked, ...dugOut, ...excludeExtra, chain.band_b]),
     trapExcludeIds: new Set([chain.band_b]),
   });
   return opts.map((o) => ({ band_id: o.band_id, name: (meta.get(o.band_id) || {}).name || 'Band', kind: o.kind }));
@@ -256,11 +255,29 @@ export default async (req) => {
 
     const kind = chosen.kind;
     const picks = [...(run.picks || []), { band_id: chosen.band_id, name: chosen.name, kind }];
-    const hopsUsed = run.hops_used + 1;
+    let hopsUsed = run.hops_used + 1;
     let newCurrent = run.current_band_id;
     let completed = null;
 
     if (kind !== 'deadend') newCurrent = chosen.band_id;
+
+    // Auto-finish (Aaron, 2026-10-07): if the new position is adjacent to the
+    // target, the chain completes itself — no need to tap the final band.
+    // We append the target as the final pick and let the completion logic run.
+    if (String(newCurrent) !== String(chain.band_b) && kind !== 'deadend') {
+      try {
+        const { adj: adjAF, meta: metaAF } = await loadBandGraph(sql);
+        if (adjAF.get(newCurrent)?.has(chain.band_b)) {
+          const tgtName = (metaAF.get(chain.band_b) || {}).name || 'Target';
+          picks.push({ band_id: chain.band_b, name: tgtName, kind: 'optimal' });
+          hopsUsed += 1; // The auto hop to the target.
+          // Rewrite chosen so the target check below triggers completion.
+          chosen.band_id = chain.band_b;
+          chosen.name = tgtName;
+          chosen.kind = 'optimal';
+        }
+      } catch {}
+    }
 
     if (String(chosen.band_id) === String(chain.band_b)) {
       // Reached the target — score the run.
