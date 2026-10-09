@@ -9,7 +9,15 @@
   <script type="application/ld+json">{"@context": "https://schema.org", "@type": "VideoGame", "name": "Six Degrees of Rock: Daily Chain", "url": "https://sixdegreesofrock.com/game/", "description": "A new rock puzzle every day: connect two famous bands through the musicians they share. Free, no sign-up, a Wordle-style daily game for music fans.", "image": "https://sixdegreesofrock.com/game-og.png?v=2", "genre": ["Puzzle", "Trivia", "Music"], "gamePlatform": "Web browser", "applicationCategory": "GameApplication", "operatingSystem": "Any", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "publisher": {"@type": "Organization", "name": "Six Degrees of Rock", "url": "https://sixdegreesofrock.com/"}}</script>
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <!-- Add to Home Screen (2026-10-08): the daily game installs as its own
+       app, opening straight to /game/ with no browser bar. -->
+  <link rel="manifest" href="/game.webmanifest" />
+  <link rel="apple-touch-icon" href="/game-icon-180.png" />
+  <meta name="theme-color" content="#05080d" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Six Degrees" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Six Degrees of Rock" />
   <meta property="og:title" content="Six Degrees of Rock — a new rock puzzle every day" />

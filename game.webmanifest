@@ -1,0 +1,17 @@
+{
+  "name": "Six Degrees of Rock: Daily Chain",
+  "short_name": "Six Degrees",
+  "description": "A new rock puzzle every day: connect two bands through the musicians they share.",
+  "start_url": "/game/",
+  "scope": "/game/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#05080d",
+  "theme_color": "#05080d",
+  "categories": ["games", "music", "entertainment"],
+  "icons": [
+    { "src": "/game-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/game-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/game-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
