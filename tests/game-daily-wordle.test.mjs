@@ -326,5 +326,6 @@ test('stats screen: header button, block in the daily results, not in practice',
   assert.ok(src.includes('<button type="button" class="sd-icon" data-stats aria-label="Your stats">'));
   assert.ok(src.includes("if (practiceMode) statsBtn.hidden = true;"));
   assert.ok(src.includes("body: JSON.stringify({ action: 'stats' }),"));
-  assert.match(src, /function statsBlockEl\(st, highlight\) \{[\s\S]{0,600}'Played'\], \[st\.win_pct, 'Win %'\], \[st\.current_streak, 'Current streak'\], \[st\.max_streak, 'Max streak'\]/);
+  // Labels short enough to stay on one line on a phone.
+  assert.match(src, /function statsBlockEl\(st, highlight, \{ label = true \} = \{\}\) \{[\s\S]{0,800}'Played'\], \[st\.win_pct, 'Win %'\], \[st\.current_streak, 'Streak'\], \[st\.max_streak, 'Best streak'\]/);
 });
