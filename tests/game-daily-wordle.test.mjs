@@ -287,3 +287,12 @@ test('no "tree" jargon in game copy; the music map link comes after the game', (
   assert.ok(!html.includes('Back to the tree'), 'no exit button in the header');
   assert.match(html, /<a class="arena-wordmark" href="\/">/, 'the wordmark still links home');
 });
+
+test('feedback: out of the header, in the footer and on the results screen', () => {
+  const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'game/index.html'), 'utf8');
+  const header = html.slice(html.indexOf('<div class="arena-header-actions">'), html.indexOf('</header>'));
+  assert.ok(!header.includes('send-feedback-btn'), 'not in the header');
+  const footer = html.slice(html.indexOf('<footer class="arena-foot">'), html.indexOf('</footer>'));
+  assert.ok(footer.includes('id="send-feedback-btn"'), 'in the footer, same id so the popover wiring is unchanged');
+  assert.ok(src.includes('Something off? <button type="button" class="sd-linkbtn">Send feedback</button>'));
+});

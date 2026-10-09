@@ -857,6 +857,7 @@ function initGameUI() {
       .sd-map-link{display:flex;align-items:center;justify-content:center;gap:8px;margin:12px auto 0;width:fit-content;max-width:100%;font-size:.9rem;font-weight:600;color:var(--color-primary);text-decoration:none;text-align:center}
       .sd-map-link:hover span{text-decoration:underline;text-underline-offset:3px}
       .sd-map-link--modal{margin-top:14px}
+      .sd-feedback{text-align:center;font-size:.82rem;color:var(--color-text-muted);margin:10px 0 0}
       .sd-misses{text-align:center;font-size:.82rem;color:#f0b8b2;margin:-4px 0 8px}
       .sd-via-name{font-size:.68rem;font-style:italic;color:var(--color-text-muted);white-space:normal}
       .game-chain-good{border-color:var(--sd-good);background:color-mix(in srgb,var(--sd-good) 22%,transparent)}
@@ -1458,6 +1459,13 @@ function initGameUI() {
       const mapLink = musicMapLinkEl(run);
       mapLink.classList.add('sd-map-link--modal');
       c.appendChild(mapLink);
+      // While we're testing: ask right when people have an opinion. Easy to
+      // drop after launch; the footer link stays either way.
+      if (typeof window.openFeedbackPopover === 'function') {
+        const fb = el('<p class="sd-feedback">Something off? <button type="button" class="sd-linkbtn">Send feedback</button></p>');
+        fb.querySelector('button').addEventListener('click', () => { closeSdModal(); window.openFeedbackPopover(); });
+        c.appendChild(fb);
+      }
       if (completed.freeze_used) {
         c.appendChild(el('<p class="sd-modal-sub">A Seattle Freeze bridged your missed day. Streak intact.</p>'));
       }
