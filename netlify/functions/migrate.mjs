@@ -40,6 +40,7 @@ import {
   serverError,
   methodNotAllowed,
 } from './_db.mjs';
+import { ensureGameExclusionsTable } from './_game_exclusions.mjs';
 
 const ADMIN_TOKEN_HEADER = 'x-admin-token';
 
@@ -977,6 +978,11 @@ export default async (req) => {
       on users (guest_session_id) where guest_session_id is not null
     `;
     results.push('index users_guest_session_id_idx ready');
+
+    // Bands the game never uses but the explorer keeps (Cole, 2026-10-09).
+    // Seeded with Supergroup A/B; see _game_exclusions.mjs.
+    await ensureGameExclusionsTable(sql);
+    results.push('table game_excluded_bands ready');
 
     return ok({ steps: results });
   } catch (err) {

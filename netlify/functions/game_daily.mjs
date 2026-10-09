@@ -32,6 +32,7 @@ import {
   NO_REPEAT_DAYS,
 } from './_daily.mjs';
 import { famousIdsFrom, HEADLINER_BANDS } from './_famous.mjs';
+import { loadGameExclusions, withoutExcludedBands } from './_game_exclusions.mjs';
 
 // Famous dailies stay short: par 3 or 4.
 const FAMOUS_MAX_HOPS = 4;
@@ -42,12 +43,16 @@ let graphCache = null;
 
 export async function loadBandGraph(sql) {
   if (graphCache) return graphCache;
-  const [memberships, bands, members] = await Promise.all([
+  const [allMemberships, bands, members, excluded] = await Promise.all([
     sql`select band_id, member_id from memberships where relation = 'member_of'`,
     sql`select id, name, genre, years_active from bands`,
     // Musician names, so the board can say WHO links two bands.
     sql`select id, name from band_members`,
+    loadGameExclusions(sql),
   ]);
+  // Excluded bands (see _game_exclusions.mjs) are left out of the game's
+  // graph entirely: no option, route, trap or endpoint can reach them.
+  const memberships = withoutExcludedBands(allMemberships, excluded);
   const { adj, degree } = buildBandAdj(memberships);
   const bandMembers = buildBandMembers(memberships);
   const memberNames = new Map((members || []).map((m) => [m.id, m.name]));
@@ -55,7 +60,7 @@ export async function loadBandGraph(sql) {
   const bandIds = bands.map((b) => b.id).filter((id) => adj.has(id));
   const famous = famousIdsFrom(meta, adj);
   const headliners = famousIdsFrom(meta, adj, HEADLINER_BANDS);
-  graphCache = { adj, degree, meta, bandIds, famous, headliners, bandMembers, memberNames };
+  graphCache = { adj, degree, meta, bandIds, famous, headliners, bandMembers, memberNames, excluded };
   return graphCache;
 }
 
