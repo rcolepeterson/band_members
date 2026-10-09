@@ -66,10 +66,17 @@ import { SHAPES, BUDGETS, layoutFor, violations } from './helpers/layout-checks.
 // go away without understanding it first.
 // ---------------------------------------------------------------------------
 
+// Cross-platform note (2026-10-08): the same Node version lays these out a
+// hair differently on x64 (CI, Linux) and arm64 (Apple Silicon Macs), because
+// the two round floating-point math slightly differently and the force layout
+// compounds it over hundreds of ticks. Measured: Swans 5 hops is 6 on x64 and
+// 7 on arm64; Swans 6 hops is 1 and 2. Each allowance is the arm64 count, so
+// both pass; the "lower it" check (found >= allowance - 1) still trips if
+// either platform improves by two, and any real regression still fails.
 const KNOWN_TIGHT = new Map([
   ['liveSample / anchor Swans / 4 hops, 160 nodes', 1],
-  ['liveSample / anchor Swans / 5 hops, 220 nodes', 6],
-  ['liveSample / anchor Swans / 6 hops, 400 nodes', 1],
+  ['liveSample / anchor Swans / 5 hops, 220 nodes', 7],
+  ['liveSample / anchor Swans / 6 hops, 400 nodes', 2],
   ['liveSample / anchor John Stanier / 6 hops, 400 nodes', 1],
 ]);
 
