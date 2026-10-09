@@ -1788,5 +1788,6 @@ test('homepage shows the daily game: hero button + note, and a visible Game nav 
   assert.match(EXPLORER, /Connect today&rsquo;s two bands in as few moves as you can\./);
   assert.match(EXPLORER, /\.sigma-daily-cta\{[^}]*min-height:44px/, 'thumb-sized');
   assert.match(INDEX_HTML, /<a class="header-game-link" id="header-game-link" href="\/game\/">Game<\/a>/);
-  assert.match(INDEX_HTML, /@media \(max-width: 720px\) \{\n  body\.rbft-sigma-boot \.header-right \.header-game-link \{[^}]*min-height: 44px;/, 'thumb-sized on phones');
+  // Desktop is 36px like Sign in; the phone rule is the 44px one.
+  assert.match(INDEX_HTML, /\.header-right \.header-game-link \{[^}]*min-height: 44px;/, 'thumb-sized on phones');
 });
