@@ -32,7 +32,6 @@
 import {
   getSql,
   isDbConfigured,
-  ok,
   dbUnavailable,
   serverError,
   methodNotAllowed,
@@ -97,11 +96,26 @@ export default async (req) => {
     //     -H "Accept-Encoding: gzip"     -> content-encoding: gzip
     //   curl -s -D - -o /dev/null https://bandmembers.netlify.app/api/bands \
     //     -H "Accept-Encoding: gzip, br, deflate" -> content-encoding: br
-    // This holds even though ok() sets Cache-Control: no-store below --
+    // This holds whatever the Cache-Control below says --
     // compression and caching are independent concerns at the edge. If
     // Netlify's platform behavior ever changes, revisit this; until then,
     // adding manual gzip here would just duplicate what the platform does.
-    return ok({ bands, members, memberships, band_links });
+    // Cached (Cole/team, 2026-10-08): this used to be no-store, so every
+    // visit re-downloaded ~1.6 MB gzipped and re-queried the whole graph.
+    // Public data, same for everyone, so it's safe to share. Browsers and
+    // Netlify's CDN reuse it for 60s and may serve a copy up to an hour old
+    // while refreshing in the background. Editors never see a stale copy of
+    // their own change: after a write the page asks for /api/bands?v=<time>
+    // with cache: 'no-store' (see loadGraphData in index.html), and the CDN
+    // keys on the query string. Errors below stay no-store via json().
+    return new Response(JSON.stringify({ ok: true, bands, members, memberships, band_links }), {
+      status: 200,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': BANDS_CACHE_CONTROL,
+        'netlify-cdn-cache-control': `${BANDS_CACHE_CONTROL}, durable`,
+      },
+    });
   } catch (err) {
     console.error('bands_neon GET failed', err);
     return serverError('could not load bands', {
@@ -114,4 +128,7 @@ export default async (req) => {
 // new read path. Does NOT collide with bands.mjs, which has no `config`
 // export and therefore only serves the legacy `/.netlify/functions/bands`
 // path.
+// 60s fresh, then up to an hour of "serve the old copy while fetching a new one".
+export const BANDS_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=3600';
+
 export const config = { path: '/api/bands', method: 'GET' };

@@ -212,3 +212,16 @@ test('the slate never offers a step backwards (start band or bands already in th
   assert.match(play, /const visited = \[chain\.band_a, \.\.\.\(run\.picks \|\| \[\]\)\.filter\(\(p\) => p\.kind !== 'deadend'\)\.map\(\(p\) => p\.band_id\)\]/);
   assert.match(play, /excludeIds: new Set\(\[\.\.\.deadPicked, \.\.\.visited,/);
 });
+
+// Band data caching (2026-10-08): public data, so browsers and the CDN may
+// reuse it briefly; editors bypass the cache after their own writes.
+test('/api/bands is cached briefly, errors are not, and writes bypass it client-side', () => {
+  const neon = src('netlify/functions/bands_neon.mjs');
+  assert.match(neon, /BANDS_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=3600'/);
+  assert.match(neon, /'netlify-cdn-cache-control': `\$\{BANDS_CACHE_CONTROL\}, durable`/);
+  assert.match(neon, /return serverError\('could not load bands'/, 'errors still go through json() (no-store)');
+  const html = src('index.html');
+  assert.match(html, /const response = await fetch\(\.\.\.bandsFetchArgs\(\)\);/);
+  assert.match(html, /return \['\/api\/bands\?v=' \+ changedAt, \{ cache: 'no-store' \}\];/);
+  assert.match(html, /if \(method !== 'GET' && method !== 'HEAD' && BAND_WRITE_PATH\.test\(path\)\)/);
+});

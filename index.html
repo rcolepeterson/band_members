@@ -6729,9 +6729,48 @@ function downloadPngBlob(blob) {
       }
     }
 
+    // Band data is cached now (60s, plus up to an hour of stale-while-
+    // revalidate; see bands_neon.mjs). So nobody ever reloads into a copy
+    // from before their own change, any successful write to the band data
+    // stamps the time, and for an hour after it this browser asks for a
+    // unique, uncached URL. That covers the redraw right after an edit
+    // (loadGraphData below) and a manual reload.
+    const BANDS_CHANGED_KEY = 'sdr-bands-changed-at';
+    const BANDS_BYPASS_MS = 60 * 60 * 1000;
+    const BAND_WRITE_PATH = /^\/(api\/bands(\/|$|\?)|api\/edit-person|api\/patch-members|\.netlify\/functions\/bands)/;
+    function markBandsChanged() {
+      try { localStorage.setItem(BANDS_CHANGED_KEY, String(Date.now())); } catch (_) { /* private mode */ }
+    }
+    function bandsFetchArgs() {
+      let changedAt = 0;
+      try { changedAt = Number(localStorage.getItem(BANDS_CHANGED_KEY)) || 0; } catch (_) { /* private mode */ }
+      if (changedAt && Date.now() - changedAt < BANDS_BYPASS_MS) {
+        return ['/api/bands?v=' + changedAt, { cache: 'no-store' }];
+      }
+      return ['/api/bands'];
+    }
+    // One place catches every write (add, edit, delete, members, person
+    // edits, the legacy blob endpoint) rather than each save path having to
+    // remember. Reads and other endpoints pass straight through.
+    (function watchBandWrites() {
+      const nativeFetch = window.fetch.bind(window);
+      window.fetch = function (input, init) {
+        const promise = nativeFetch(input, init);
+        try {
+          const method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+          const raw = typeof input === 'string' ? input : (input && input.url) || '';
+          const path = new URL(raw, window.location.href).pathname;
+          if (method !== 'GET' && method !== 'HEAD' && BAND_WRITE_PATH.test(path)) {
+            promise.then((res) => { if (res && res.ok) markBandsChanged(); }, () => {});
+          }
+        } catch (_) { /* never let the watcher break a request */ }
+        return promise;
+      };
+    })();
+
     async function loadGraphData() {
       try {
-        const response = await fetch('/api/bands');
+        const response = await fetch(...bandsFetchArgs());
         if (!response.ok) throw new Error(`/api/bands returned ${response.status}`);
         const data = await response.json();
         if (!data || !Array.isArray(data.bands) || data.bands.length === 0) {
