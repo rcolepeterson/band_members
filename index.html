@@ -1009,6 +1009,9 @@ body.rbft-sigma-boot .header-btn--primary:hover {
 }
 body.rbft-sigma-boot .rbft-boot-shell { display: block; }
 body.rbft-sigma-chrome .rbft-boot-shell { display: none !important; }
+/* The constellation prints its own Privacy · Terms (.sigma-legal); the page's
+   old footer was a second copy under it. It stays for the SVG renderer. */
+body.rbft-sigma-chrome .site-footer { display: none !important; }
 .rbft-boot-shell__inner {
   position: absolute;
   left: 50%;
@@ -7064,6 +7067,11 @@ function downloadPngBlob(blob) {
       if (isSignedIn && typeof window.__dismissWelcomeNudge === 'function') {
         window.__dismissWelcomeNudge('signed-in');
       }
+      // One dialog, two jobs: signed out it is the sign-in panel, signed in
+      // the add-a-band form. Its accessible name follows what is on screen
+      // (it used to say "Add your band" over a "Sign in" heading).
+      const addBandDialog = document.getElementById('add-band-popover');
+      if (addBandDialog) addBandDialog.setAttribute('aria-label', isSignedIn ? 'Add your band' : 'Sign in or create an account');
       const addBtn = document.getElementById('add-band-btn');
       const mobileAddBtn = document.getElementById('mobile-add-band-btn');
       const popover = document.getElementById('add-band-popover');
@@ -8815,7 +8823,7 @@ function downloadPngBlob(blob) {
 
     // A connection chip that shows "Name · tenure" with the tenure years
     // rendered as a subdued badge inside the same button. Missing tenure
-    // renders as em-dash so users see the field is trackable.
+    // shows the name alone.
     function appendTenureChip(container, name, tenure, onClick) {
       const chip = document.createElement('button');
       chip.type = 'button';
@@ -8823,13 +8831,16 @@ function downloadPngBlob(blob) {
       const nameEl = document.createElement('span');
       nameEl.className = 'node-card__chip-name';
       nameEl.textContent = name;
-      const yearsEl = document.createElement('span');
-      yearsEl.className = 'node-card__chip-years';
       const yearsText = (tenure || '').trim();
-      yearsEl.textContent = yearsText || EM_DASH;
-      if (!yearsText) yearsEl.classList.add('node-card__chip-years--empty');
       chip.appendChild(nameEl);
-      chip.appendChild(yearsEl);
+      // Unknown years: just the name. A dimmed dash read as a dangling
+      // "Dave Grohl —" (and was read aloud that way).
+      if (yearsText) {
+        const yearsEl = document.createElement('span');
+        yearsEl.className = 'node-card__chip-years';
+        yearsEl.textContent = yearsText;
+        chip.appendChild(yearsEl);
+      }
       chip.addEventListener('click', ev => {
         ev.stopPropagation();
         if (typeof onClick === 'function') onClick();

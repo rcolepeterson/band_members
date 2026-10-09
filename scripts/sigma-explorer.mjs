@@ -1665,7 +1665,7 @@ export function initSigmaExplorer({
     const kindWord = anchor && anchor.type === 'band' ? 'band' : 'musician';
     contextEl.innerHTML = `Centered on <strong>${escapeHtml(state.anchorId)}</strong> — ` +
       `${view.nodes.length} of ${master.nodes.length} nodes in view, ` +
-      `${state.maxHops} degrees out from this ${kindWord}.`;
+      `${state.maxHops} ${state.maxHops === 1 ? 'degree' : 'degrees'} out from this ${kindWord}.`;
 
     const remaining = view.frontier.length;
     frontierEl.textContent = remaining
