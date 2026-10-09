@@ -267,11 +267,13 @@ export default async (req) => {
         return ok({ run: await runState(sql, active, me), options: publicOptions(active.current_options), resumed: true });
       }
     }
-    const { adj, bandIds } = await loadBandGraph(sql);
+    const { adj, bandIds, excluded } = await loadBandGraph(sql);
     let bandA = null;
     if (body.band_a) {
       const check = await sql`select id from bands where id = ${String(body.band_a)} limit 1`;
       if (!check || !check[0]) return badRequest('unknown band');
+      // In the explorer, not the game (see _game_exclusions.mjs).
+      if (excluded && excluded.has(String(check[0].id))) return badRequest('that band isn\u2019t in the game');
       bandA = check[0].id;
     }
     const { famous, headliners } = await loadBandGraph(sql);
