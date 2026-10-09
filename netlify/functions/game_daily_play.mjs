@@ -40,6 +40,8 @@ import {
   hintsFor,
   applyCompletion,
   currentStreak,
+  liveStreak,
+  dailyStats,
   dailyShareText,
   HINT_COST,
   ESCAPE_COST,
@@ -143,7 +145,8 @@ async function runState(sql, run, chain, me) {
     picks: publicPicks(run.picks),
     credits: fresh.credits ?? 50,
     freeze_count: fresh.freeze_count ?? 0,
-    streak: currentStreak(dates),
+    // Live: a streak you stopped a week ago isn't "current" (2026-10-08).
+    streak: liveStreak(dates, pacificDate(), fresh.freeze_count ?? 0),
   };
 }
 
@@ -230,9 +233,33 @@ export default async (req) => {
     return ok({
       credits: me.credits ?? 50,
       freeze_count: me.freeze_count ?? 0,
-      streak: currentStreak(dates),
+      streak: liveStreak(dates, today, me.freeze_count ?? 0),
       completed_dates: dates,
       best_today: bestRows[0].best == null ? null : Number(bestRows[0].best),
+    });
+  }
+
+  // --- stats ----------------------------------------------------------------
+  // Wordle-style history (2026-10-08): played, win %, current and max
+  // streak, and how close to the shortest path each win came. First run of
+  // each day only, so replays can't pad the numbers. Guests get stats too
+  // (their guest user row).
+  if (action === 'stats') {
+    const runs = await sql`
+      select r.chain_date, r.status, r.hops_used, c.optimal_hops as par
+        from daily_runs r
+        join daily_chains c on c.date = r.chain_date
+       where r.user_id = ${me.id}
+         and coalesce(r.run_number, 1) = 1
+         and r.status in ('complete', 'given_up')`;
+    const comps = await sql`select chain_date from daily_completions where user_id = ${me.id}`;
+    return ok({
+      stats: dailyStats({
+        runs: runs || [],
+        completionDates: (comps || []).map((c) => c.chain_date),
+        today: pacificDate(),
+        freezeCount: me.freeze_count ?? 0,
+      }),
     });
   }
 
