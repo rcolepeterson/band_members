@@ -339,3 +339,20 @@ test('practice is unmistakable: banner, amber accent, real buttons back to the d
   const play = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'netlify/functions/game_daily_play.mjs'), 'utf8');
   assert.match(play, /today_status: \(todayRows && todayRows\[0\] && todayRows\[0\]\.status\) \|\| 'none',/);
 });
+
+test('/game installs to the home screen: manifest, icons, iOS tags', () => {
+  const read = (f) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', f));
+  const html = read('game/index.html').toString();
+  assert.match(html, /<link rel="manifest" href="\/game\.webmanifest" \/>/);
+  assert.match(html, /<link rel="apple-touch-icon" href="\/game-icon-180\.png" \/>/);
+  assert.match(html, /<meta name="apple-mobile-web-app-capable" content="yes" \/>/);
+  const m = JSON.parse(read('game.webmanifest'));
+  assert.equal(m.start_url, '/game/');
+  assert.equal(m.display, 'standalone');
+  for (const size of [180, 192, 512]) {
+    const png = read(`game-icon-${size}.png`);
+    assert.equal(png.readUInt32BE(16), size, `${size} icon width`);
+    assert.equal(png.readUInt32BE(20), size, `${size} icon height`);
+  }
+  assert.ok(m.icons.some((i) => i.sizes === '512x512' && i.purpose === 'maskable'));
+});
