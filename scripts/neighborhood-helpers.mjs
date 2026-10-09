@@ -469,6 +469,29 @@ export function strongestRole(links = []) {
   return best;
 }
 
+// A person's memberships (the links that point at them), indexed once per links
+// array. roleForNode and classifyNode run for every node, and each used to
+// filter the whole links list: nodes x links. At ~3,000 bands that was minutes
+// of CPU on a phone before the homepage map appeared (Cole, 2026-10-08). The
+// index is keyed on the array itself and rebuilt when its length changes
+// (index.html pushes new memberships onto master.links after an edit).
+const membershipIndexes = new WeakMap();
+const NO_MEMBERSHIPS = Object.freeze([]);
+function membershipsOf(id, links) {
+  let cached = membershipIndexes.get(links);
+  if (!cached || cached.length !== links.length) {
+    const index = new Map();
+    links.forEach(link => {
+      const target = linkEndpoints(link)[1];
+      if (!index.has(target)) index.set(target, []);
+      index.get(target).push(link);
+    });
+    cached = { length: links.length, index };
+    membershipIndexes.set(links, cached);
+  }
+  return cached.index.get(id) || NO_MEMBERSHIPS;
+}
+
 /**
  * The role to draw a person's node with, relative to the current anchor.
  *
@@ -487,7 +510,7 @@ export function strongestRole(links = []) {
  */
 export function roleForNode(node, { anchorId = null, links = [] } = {}) {
   if (!node || node.type === 'band') return null;
-  const memberships = links.filter(link => linkEndpoints(link)[1] === node.id);
+  const memberships = membershipsOf(node.id, links);
   if (!memberships.length) return null;
   if (anchorId && anchorId !== node.id) {
     const toAnchor = memberships.filter(link => linkEndpoints(link)[0] === anchorId);
@@ -568,7 +591,7 @@ export function classifyNode(node, { anchorId = null, adjacency = null, links = 
     return NODE_KINDS.SOLAR_SYSTEM;
   }
 
-  const memberships = links.filter(link => linkEndpoints(link)[1] === node.id);
+  const memberships = membershipsOf(node.id, links);
   if (!memberships.length) return NODE_KINDS.ASTEROID;
 
   const bandCount = new Set(memberships.map(link => linkEndpoints(link)[0])).size;
