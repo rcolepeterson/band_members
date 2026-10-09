@@ -32,10 +32,10 @@ test('puzzle number counts from the first Daily Chain', () => {
 });
 
 test('pick kinds map to Wordle squares', () => {
-  assert.equal(dailyPickSquare('optimal'), '⭐');
-  assert.equal(dailyPickSquare('solid'), '☆');
-  assert.equal(dailyPickSquare('obscure'), '☆');
-  assert.equal(dailyPickSquare('deadend'), '★');
+  assert.equal(dailyPickSquare('optimal'), '🟩');
+  assert.equal(dailyPickSquare('solid'), '🟨');
+  assert.equal(dailyPickSquare('obscure'), '🟨');
+  assert.equal(dailyPickSquare('deadend'), '🟥');
 });
 
 test('elapsed time reads like 28s or 2m 05s', () => {
@@ -63,7 +63,7 @@ test('a win names start and target, one square per move, no band spoilers', () =
   // Wordle-style: score line, squares, link. No slogan.
   assert.equal(text, [
     'Six Degrees of Rock #9 🎸 Solved in 4 moves', // plain words, no timer
-    'Nirvana ➡️ ⭐★☆⭐ ➡️ Metallica', // one star per move
+    'Nirvana ➡️ 🟩🟥🟨🟩 ➡️ Metallica', // one square per move
     'sixdegreesofrock.com/game?s=1',
   ].join('\n'));
   for (const spoiler of ['Foo Fighters', 'Pearl Jam', 'Probot']) assert.ok(!text.includes(spoiler));
@@ -76,7 +76,7 @@ test('a loss says Not solved', () => {
   });
   assert.equal(text, [
     'Six Degrees of Rock #9 🎸 Not solved',
-    'Nirvana ➡️ ★☆ ➡️ Metallica',
+    'Nirvana ➡️ 🟥🟨 ➡️ Metallica',
     'sixdegreesofrock.com/game?s=1',
   ].join('\n'));
   assert.ok(!/Can you|beat my chain|crack it/.test(text), 'no slogan');
@@ -240,7 +240,7 @@ test('rawk, not Wordle: guitar picks on screen, line icons instead of emoji', ()
   for (const e of ['💡', '🔥', '🎉', '🏆', '💀', '🌳', '📤']) assert.ok(!daily.includes(e), `${e} removed from the daily screens`);
   // The results score line is drawn as picks, colored like the board.
   assert.ok(src.includes("w.innerHTML = pickSvg(pickColor(p.kind), 'sd-result-pick');"));
-  assert.ok(src.includes("const DAILY_PICK_HEX = { gold: '#c9a83a', robin: '#c0c0c0', black: '#74c9d0' };"));
+  assert.ok(src.includes("const DAILY_PICK_HEX = { gold: '#3fa36b', robin: '#c9a83a', black: '#c8584f' };"));
   // Icons are drawn like the main site's: no fill, currentColor stroke 1.8, round caps.
   assert.match(src, /class="sd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1\.8" stroke-linecap="round"/);
 });
@@ -299,8 +299,8 @@ test('feedback: out of the header, in the footer and on the results screen', () 
 
 test('/game has its own link-preview image', () => {
   const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'game/index.html'), 'utf8');
-  assert.match(html, /<meta property="og:image" content="https:\/\/sixdegreesofrock\.com\/game-og\.png\?v=2" \/>/);
-  assert.match(html, /<meta name="twitter:image" content="https:\/\/sixdegreesofrock\.com\/game-og\.png\?v=2" \/>/);
+  assert.match(html, /<meta property="og:image" content="https:\/\/sixdegreesofrock\.com\/game-og\.png\?v=3" \/>/);
+  assert.match(html, /<meta name="twitter:image" content="https:\/\/sixdegreesofrock\.com\/game-og\.png\?v=3" \/>/);
   const png = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'game-og.png'));
   assert.equal(png.readUInt32BE(16), 1200, 'width');
   assert.equal(png.readUInt32BE(20), 630, 'height');
@@ -377,9 +377,9 @@ test('share squares are each move\'s real color, so grids differ by how you play
   const perfect = dailyShareResultText({ ...base, picks: [{ kind: 'optimal' }, { kind: 'optimal' }, { kind: 'optimal' }] });
   const messy = dailyShareResultText({ ...base, picks: [{ kind: 'optimal' }, { kind: 'deadend' }, { kind: 'obscure' }, { kind: 'solid' }, { kind: 'optimal' }] });
   assert.equal(perfect.split('\n')[0], 'Six Degrees of Rock #9 🎸 Solved in 3 moves');
-  assert.equal(perfect.split('\n')[1], 'Journey ➡️ ⭐⭐⭐ ➡️ Heart');
+  assert.equal(perfect.split('\n')[1], 'Journey ➡️ 🟩🟩🟩 ➡️ Heart');
   assert.equal(messy.split('\n')[0], 'Six Degrees of Rock #9 🎸 Solved in 5 moves');
-  assert.equal(messy.split('\n')[1], 'Journey ➡️ ⭐★☆☆⭐ ➡️ Heart');
+  assert.equal(messy.split('\n')[1], 'Journey ➡️ 🟩🟥🟨🟨🟩 ➡️ Heart');
   assert.equal(messy.split('\n').at(-1), 'sixdegreesofrock.com/game?s=1');
   assert.ok(!/\d+\/\d+/.test(messy), 'no fraction score');
 });
