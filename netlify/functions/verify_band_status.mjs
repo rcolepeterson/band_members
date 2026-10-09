@@ -37,12 +37,58 @@ const MAX_BAND_IDS = 100;
 // reject obviously-bad input with a clean 400 before it reaches Postgres.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// One verification row in the public response shape.
+function verificationOf(row) {
+  return {
+    overall_score: row.overall_score,
+    verified_at: row.verified_at,
+    breakdown: row.breakdown,
+    sources: {
+      musicbrainz: row.musicbrainz_mbid
+        ? { mbid: row.musicbrainz_mbid, url: row.musicbrainz_url }
+        : null,
+      wikipedia: row.wikipedia_title
+        ? { title: row.wikipedia_title, url: row.wikipedia_url }
+        : null,
+    },
+  };
+}
+
 export default async (req) => {
   if (req.method !== 'GET') return methodNotAllowed();
 
   if (!isDbConfigured()) return dbUnavailable();
 
   const url = new URL(req.url);
+
+  // ?all=1 (2026-10-08): every verified band in ONE request. The homepage
+  // used to ask for all ~3,000 bands 100 at a time, 31 requests in a row
+  // (~10s) before the map could draw. Only verified bands are returned;
+  // a missing id means "not verified", exactly like a null below. Public
+  // and identical for everyone, so it's cached like /api/bands.
+  if (url.searchParams.get('all') === '1') {
+    try {
+      const rows = await getSql()`
+        select band_id, verified_at, overall_score, breakdown,
+               musicbrainz_mbid, musicbrainz_url, wikipedia_title, wikipedia_url
+        from verifications
+      `;
+      const verifications = {};
+      for (const row of rows) verifications[row.band_id] = verificationOf(row);
+      return new Response(JSON.stringify({ ok: true, verifications }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'public, max-age=60, stale-while-revalidate=3600',
+          'netlify-cdn-cache-control': 'public, max-age=60, stale-while-revalidate=3600, durable',
+        },
+      });
+    } catch (err) {
+      console.error('verify_band_status all failed', err);
+      return serverError('could not load verifications');
+    }
+  }
+
   const raw = url.searchParams.get('band_ids') || '';
   const bandIds = raw
     .split(',')
@@ -93,21 +139,7 @@ export default async (req) => {
     const verifications = {};
     for (const id of bandIds) {
       const row = byId.get(id);
-      verifications[id] = row
-        ? {
-            overall_score: row.overall_score,
-            verified_at: row.verified_at,
-            breakdown: row.breakdown,
-            sources: {
-              musicbrainz: row.musicbrainz_mbid
-                ? { mbid: row.musicbrainz_mbid, url: row.musicbrainz_url }
-                : null,
-              wikipedia: row.wikipedia_title
-                ? { title: row.wikipedia_title, url: row.wikipedia_url }
-                : null,
-            },
-          }
-        : null;
+      verifications[id] = row ? verificationOf(row) : null;
     }
 
     return ok({ verifications });

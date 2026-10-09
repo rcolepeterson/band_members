@@ -6709,6 +6709,21 @@ function downloadPngBlob(blob) {
     // stars), never something that should block the graph from rendering.
     async function loadVerificationStatuses(bandIds) {
       if (!Array.isArray(bandIds) || !bandIds.length) return;
+      // One request for every verified band (2026-10-08). The chunked loop
+      // below became 31 sequential requests (~10s) at ~3,000 bands and the
+      // first paint waited on all of them. Kept only as a fallback.
+      try {
+        const res = await fetch('/api/verify-band-status?all=1');
+        if (!res.ok) throw new Error(`/api/verify-band-status?all=1 returned ${res.status}`);
+        const data = await res.json();
+        const verifications = (data && data.verifications) || {};
+        for (const [bandId, verification] of Object.entries(verifications)) {
+          verificationsMap.set(bandId, verification || null);
+        }
+        return;
+      } catch (error) {
+        console.warn('Bulk verification load failed; falling back to batches.', error);
+      }
       // The endpoint caps at 100 ids per request (see
       // verify_band_status.mjs); chunk so this still works once the app
       // has grown well past 500 bands, not just at today's scale.
