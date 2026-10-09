@@ -64,7 +64,7 @@ test('a win names start and target, one square per move, no band spoilers', () =
   assert.equal(text, [
     'Six Degrees of Rock #9 🎸 Solved in 4 moves', // plain words, no timer
     'Nirvana ➡️ 🟩🟥🟨🟩 ➡️ Metallica', // one square per move
-    'sixdegreesofrock.com/game',
+    'sixdegreesofrock.com/game?s=1',
   ].join('\n'));
   for (const spoiler of ['Foo Fighters', 'Pearl Jam', 'Probot']) assert.ok(!text.includes(spoiler));
 });
@@ -77,7 +77,7 @@ test('a loss says Not solved', () => {
   assert.equal(text, [
     'Six Degrees of Rock #9 🎸 Not solved',
     'Nirvana ➡️ 🟥🟨 ➡️ Metallica',
-    'sixdegreesofrock.com/game',
+    'sixdegreesofrock.com/game?s=1',
   ].join('\n'));
   assert.ok(!/Can you|beat my chain|crack it/.test(text), 'no slogan');
 });
@@ -380,7 +380,7 @@ test('share squares are each move\'s real color, so grids differ by how you play
   assert.equal(perfect.split('\n')[1], 'Journey ➡️ 🟩🟩🟩 ➡️ Heart');
   assert.equal(messy.split('\n')[0], 'Six Degrees of Rock #9 🎸 Solved in 5 moves');
   assert.equal(messy.split('\n')[1], 'Journey ➡️ 🟩🟥🟨🟨🟩 ➡️ Heart');
-  assert.equal(messy.split('\n').at(-1), 'sixdegreesofrock.com/game');
+  assert.equal(messy.split('\n').at(-1), 'sixdegreesofrock.com/game?s=1');
   assert.ok(!/\d+\/\d+/.test(messy), 'no fraction score');
 });
 
@@ -407,4 +407,20 @@ test('GA4: /game loads the tag, and the five game events fire once per occurrenc
   assert.match(src, /gaEvent\('game_gave_up', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used \}, dailyRun\.id\)/);
   assert.match(src, /hint_type: type === 'eliminate' \? 'cut_option' : 'check_band'/);
   assert.match(src, /gaEvent\('share_clicked', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used \}\)/, 'one per click, no once-key');
+});
+
+test('analytics follow-ups: team browsers tagged internal, share links tagged, retention counts', () => {
+  for (const page of ['../index.html', '../game/index.html']) {
+    const html = readFileSync(new URL(page, import.meta.url), 'utf8');
+    assert.match(html, /localStorage\.setItem\('sdr-internal', '1'\)/, `${page}: ?internal=1 marks this browser`);
+    assert.match(html, /gaConfig\.traffic_type = 'internal'/, `${page}: GA's Internal Traffic filter drops it`);
+    assert.match(html, /gtag\('config', 'G-E2SNSPFHGB', gaConfig\)/);
+  }
+  const game = readFileSync(new URL('../game/index.html', import.meta.url), 'utf8');
+  assert.match(game, /\?utm_source=share&utm_medium=share_text/, 'a visit from a shared link reports source "share"');
+  assert.ok(src.includes("'sixdegreesofrock.com/game?s=1',"), 'share text links with ?s=1');
+  const retention = readFileSync(new URL('../netlify/functions/game_retention.mjs', import.meta.url), 'utf8');
+  assert.match(retention, /path: '\/api\/game-retention'/);
+  assert.match(retention, /max-age=300/, 'cached so it never costs Neon much');
+  assert.ok(!/email|handle|name/.test(retention.replace(/\/\/.*$/gm, '')), 'counts only, no player details');
 });

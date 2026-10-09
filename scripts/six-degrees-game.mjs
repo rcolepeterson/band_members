@@ -188,7 +188,7 @@ export function fmtElapsed(seconds) {
 // the squares and the link.
 //   Six Degrees of Rock #17 🎸 Solved in 5 moves      ("Not solved" on a loss)
 //   Rage Against the Machine ➡️ 🟩🟥🟨🟩🟩 ➡️ Pearl Jam
-//   sixdegreesofrock.com/game
+//   sixdegreesofrock.com/game?s=1   (?s=1: GA counts visits from shares)
 // Plain words, not "5/4" (Cole, 2026-10-09): the fraction read as a grade
 // and nobody knew the 4 was the shortest path. One square per move, each in
 // that move's real color, so the squares always match the count.
@@ -199,7 +199,7 @@ export function dailyShareResultText({ date, start, target, picks = [], moves = 
   return [
     `Six Degrees of Rock${num ? ` #${num}` : ''} 🎸 ${score}`,
     [start, ...(squares ? [squares] : []), target].join(' ➡️ '),
-    'sixdegreesofrock.com/game',
+    'sixdegreesofrock.com/game?s=1',
   ].join('\n');
 }
 
