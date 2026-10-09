@@ -858,6 +858,19 @@ function initGameUI() {
       .sd-map-link:hover span{text-decoration:underline;text-underline-offset:3px}
       .sd-map-link--modal{margin-top:14px}
       .sd-feedback{text-align:center;font-size:.82rem;color:var(--color-text-muted);margin:10px 0 0}
+      .sd-icons{display:flex;gap:8px}
+      .sd-icon .sd-ico{width:18px;height:18px}
+      .sd-stats-block{margin:6px 0 16px}
+      .sd-stats-block .sd-reveal-label{margin-top:4px}
+      .sd-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0 14px;text-align:center}
+      .sd-stats-grid .sd-stat strong{font-size:1.6rem}
+      .sd-dist{display:flex;flex-direction:column;gap:5px;margin:6px 0}
+      .sd-dist-row{display:grid;grid-template-columns:62px 1fr;align-items:center;gap:8px}
+      .sd-dist-label{font-size:.78rem;color:var(--color-text-muted);text-align:right}
+      .sd-dist-track{display:block}
+      .sd-dist-bar{display:block;min-width:22px;padding:2px 8px;border-radius:6px;background:rgba(143,232,246,.16);color:var(--color-text);font-size:.78rem;font-weight:700;text-align:right;line-height:1.5}
+      .sd-dist-row.is-today .sd-dist-bar{background:var(--sd-good);color:#fff}
+      .sd-stats-loading{text-align:center;font-size:.85rem;color:var(--color-text-muted);margin:8px 0}
       .sd-misses{text-align:center;font-size:.82rem;color:#f0b8b2;margin:-4px 0 8px}
       .sd-via-name{font-size:.68rem;font-style:italic;color:var(--color-text-muted);white-space:normal}
       .game-chain-good{border-color:var(--sd-good);background:color-mix(in srgb,var(--sd-good) 22%,transparent)}
@@ -969,6 +982,7 @@ function initGameUI() {
     trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4"/><path d="M16 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4"/><path d="M8 21h8"/><path d="M10 17h4"/>',
     tree: '<path d="M12 21v-5"/><path d="M8 16h8a4 4 0 0 0 1-7.9A5 5 0 0 0 7 8.1 4 4 0 0 0 8 16z"/>',
     map: '<path d="M3 6.5l6-3 6 3 6-3v14l-6 3-6-3-6 3z"/><path d="M9 3.5v14"/><path d="M15 6.5v14"/>',
+    stats: '<path d="M4 20V11"/><path d="M10 20V5"/><path d="M16 20v-7"/><path d="M21 20H3"/>',
   };
   function lineIcon(name) {
     return `<svg class="sd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LINE_ICONS[name] || ''}</svg>`;
@@ -1141,7 +1155,10 @@ function initGameUI() {
     const card = el(`<div class="game-result-card game-daily sd-board">
       <div class="sd-topbar">
         <div class="game-daily-head"><span class="game-hops">Daily Chain</span><span class="game-daily-date"></span></div>
-        <button type="button" class="sd-icon" data-howto aria-label="How to play">?</button>
+        <div class="sd-icons">
+          <button type="button" class="sd-icon" data-stats aria-label="Your stats">${lineIcon('stats')}</button>
+          <button type="button" class="sd-icon" data-howto aria-label="How to play">?</button>
+        </div>
       </div>
       <div class="game-player-line"></div>
       <div class="sd-goal">
@@ -1163,6 +1180,9 @@ function initGameUI() {
     </div>`);
     result.appendChild(card);
     card.querySelector('[data-howto]').addEventListener('click', openHowToPlay);
+    const statsBtn = card.querySelector('[data-stats]');
+    if (practiceMode) statsBtn.hidden = true; // practice keeps no history
+    else statsBtn.addEventListener('click', openStatsModal);
     if (practiceMode) {
       card.querySelector('.game-hops').textContent = 'Practice';
       card.querySelector('.sd-stats').hidden = true;
@@ -1374,6 +1394,62 @@ function initGameUI() {
     });
   }
 
+  // --- Player stats, Wordle-style (2026-10-08) -------------------------------
+  const STAT_ROWS = [['beat', 'Beat it'], ['par', 'Matched'], ['plus1', '+1'], ['plus2', '+2'], ['plus3', '+3']];
+  function statBucketOf(moves, par) {
+    const d = Number(moves) - Number(par);
+    return d < 0 ? 'beat' : d === 0 ? 'par' : d === 1 ? 'plus1' : d === 2 ? 'plus2' : 'plus3';
+  }
+  async function loadDailyStats() {
+    try {
+      const data = await dailyFetch('/api/game-daily/play', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'stats' }),
+      });
+      return data.stats || null;
+    } catch {
+      return null; // stats are a nice-to-have; never block the results
+    }
+  }
+  // Played · Win % · Current · Max, then a bar per "how close to the
+  // shortest path" bucket, with today's result highlighted.
+  function statsBlockEl(st, highlight) {
+    const wrap = el('<div class="sd-stats-block"><p class="sd-reveal-label">Your stats</p><div class="sd-stats-grid"></div><p class="sd-reveal-label">How close to the shortest path</p><div class="sd-dist"></div></div>');
+    const grid = wrap.querySelector('.sd-stats-grid');
+    for (const [n, label] of [[st.played, 'Played'], [st.win_pct, 'Win %'], [st.current_streak, 'Current streak'], [st.max_streak, 'Max streak']]) {
+      const cell = el('<div class="sd-stat"><strong></strong><span></span></div>');
+      cell.querySelector('strong').textContent = String(n);
+      cell.querySelector('span').textContent = label;
+      grid.appendChild(cell);
+    }
+    const dist = wrap.querySelector('.sd-dist');
+    const max = Math.max(1, ...STAT_ROWS.map(([k]) => st.distribution[k] || 0));
+    for (const [key, label] of STAT_ROWS) {
+      const count = st.distribution[key] || 0;
+      const row = el(`<div class="sd-dist-row${key === highlight ? ' is-today' : ''}"><span class="sd-dist-label"></span><span class="sd-dist-track"><span class="sd-dist-bar"></span></span></div>`);
+      row.querySelector('.sd-dist-label').textContent = label;
+      const bar = row.querySelector('.sd-dist-bar');
+      bar.style.width = `${Math.max(8, Math.round((100 * count) / max))}%`;
+      bar.textContent = String(count);
+      dist.appendChild(row);
+    }
+    if (!st.played) wrap.appendChild(el('<p class="sd-stats-loading">Finish today\u2019s chain to start your stats.</p>'));
+    return wrap;
+  }
+  async function openStatsModal() {
+    let slot = null;
+    openSdModal((c) => {
+      const h = document.createElement('h2');
+      h.appendChild(iconText(lineIcon('stats'), 'Your stats'));
+      c.appendChild(h);
+      slot = el('<div class="sd-stats-slot"><p class="sd-stats-loading">Loading your stats…</p></div>');
+      c.appendChild(slot);
+    });
+    const st = await loadDailyStats();
+    if (!slot || !slot.isConnected) return; // closed while loading
+    slot.replaceChildren(st ? statsBlockEl(st, null) : el('<p class="sd-stats-loading">Couldn\u2019t load your stats. Try again in a moment.</p>'));
+  }
+
   function openDailyResults({ won, completed = {} }) {
     const run = dailyRun;
     if (!run) return;
@@ -1442,7 +1518,8 @@ function initGameUI() {
       const statRows = [
         [hops, 'Moves'],
         [par, 'Shortest'],
-        ...(streak != null ? [[streak, 'Streak']] : []),
+        // Streak moves to the stats block below on the daily.
+        ...(streak != null && practiceMode ? [[streak, 'Streak']] : []),
         ...(time ? [[time, 'Time']] : []),
       ];
       for (const [num, label] of statRows) {
@@ -1453,6 +1530,13 @@ function initGameUI() {
         stats.appendChild(s);
       }
       c.appendChild(stats);
+      if (!practiceMode) {
+        const box = el('<div class="sd-stats-slot"><p class="sd-stats-loading">Loading your stats…</p></div>');
+        c.appendChild(box);
+        loadDailyStats().then((st) => {
+          box.replaceChildren(st ? statsBlockEl(st, won && !completed.is_replay ? statBucketOf(hops, par) : null) : '');
+        });
+      }
       const shareBtn = el('<button type="button" class="sd-primary">Share result</button>');
       shareBtn.addEventListener('click', () => shareDailyText(shareBtn, text));
       c.appendChild(shareBtn);

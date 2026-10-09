@@ -321,3 +321,10 @@ test('SEO: /game canonical is the served URL, structured data on both pages, bot
   assert.match(sitemap, /<loc>https:\/\/sixdegreesofrock\.com\/<\/loc>/);
   assert.match(sitemap, /<loc>https:\/\/sixdegreesofrock\.com\/game\/<\/loc>/);
 });
+
+test('stats screen: header button, block in the daily results, not in practice', () => {
+  assert.ok(src.includes('<button type="button" class="sd-icon" data-stats aria-label="Your stats">'));
+  assert.ok(src.includes("if (practiceMode) statsBtn.hidden = true;"));
+  assert.ok(src.includes("body: JSON.stringify({ action: 'stats' }),"));
+  assert.match(src, /function statsBlockEl\(st, highlight\) \{[\s\S]{0,600}'Played'\], \[st\.win_pct, 'Win %'\], \[st\.current_streak, 'Current streak'\], \[st\.max_streak, 'Max streak'\]/);
+});

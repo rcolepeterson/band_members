@@ -390,6 +390,63 @@ export function currentStreak(dates = []) {
   return streak;
 }
 
+// The streak that's still alive today (2026-10-08). currentStreak() counts
+// back from the LAST completion, so a player who stopped a week ago still
+// read "3-day streak". A streak is alive if the last completion is today or
+// yesterday (today's chain may not be played yet), or the day before that
+// when a streak freeze can still bridge the missed day.
+export function liveStreak(dates = [], today, freezeCount = 0) {
+  if (!dates.length) return 0;
+  const last = [...new Set(dates)].sort().pop();
+  const alive = last >= addDays(today, -1) || (freezeCount > 0 && last === addDays(today, -2));
+  return alive ? currentStreak(dates) : 0;
+}
+
+// Longest run of consecutive completed days, ever.
+export function maxStreak(dates = []) {
+  const sorted = [...new Set(dates)].sort();
+  let best = 0;
+  let run = 0;
+  let prev = null;
+  for (const d of sorted) {
+    run = prev && addDays(prev, 1) === d ? run + 1 : 1;
+    best = Math.max(best, run);
+    prev = d;
+  }
+  return best;
+}
+
+// How a finished first-try daily ended, relative to the shortest path.
+// Wordle buckets by guesses; our puzzles differ in length, so we bucket by
+// distance from par. The move limit is par + 3, so +3 is the last bucket.
+export const STAT_BUCKETS = ['beat', 'par', 'plus1', 'plus2', 'plus3'];
+export function statBucket(hopsUsed, par) {
+  const diff = Number(hopsUsed) - Number(par);
+  if (diff < 0) return 'beat';
+  if (diff === 0) return 'par';
+  if (diff === 1) return 'plus1';
+  if (diff === 2) return 'plus2';
+  return 'plus3';
+}
+
+// A player's Wordle-style stats from their FIRST run of each day (replays
+// don't count) plus their completion dates (which drive streaks).
+//   runs: [{ chain_date, status: 'complete'|'given_up', hops_used, par }]
+export function dailyStats({ runs = [], completionDates = [], today, freezeCount = 0 }) {
+  const finished = runs.filter((r) => r.status === 'complete' || r.status === 'given_up');
+  const wins = finished.filter((r) => r.status === 'complete');
+  const distribution = Object.fromEntries(STAT_BUCKETS.map((b) => [b, 0]));
+  for (const r of wins) distribution[statBucket(r.hops_used, r.par)] += 1;
+  return {
+    played: finished.length,
+    wins: wins.length,
+    win_pct: finished.length ? Math.round((100 * wins.length) / finished.length) : 0,
+    current_streak: liveStreak(completionDates, today, freezeCount),
+    max_streak: maxStreak(completionDates),
+    distribution,
+  };
+}
+
 // Replay scoring (pure — the wallet rules for finishing a run).
 // - First completion of the day: COMPLETION_REWARD (+ OPTIMAL_BONUS on par).
 // - Replays: unlimited, but credits only for beating your previous best —
