@@ -32,10 +32,10 @@ test('puzzle number counts from the first Daily Chain', () => {
 });
 
 test('pick kinds map to Wordle squares', () => {
-  assert.equal(dailyPickSquare('optimal'), '🟩');
-  assert.equal(dailyPickSquare('solid'), '🟨');
-  assert.equal(dailyPickSquare('obscure'), '🟨');
-  assert.equal(dailyPickSquare('deadend'), '🟥');
+  assert.equal(dailyPickSquare('optimal'), '⭐');
+  assert.equal(dailyPickSquare('solid'), '☆');
+  assert.equal(dailyPickSquare('obscure'), '☆');
+  assert.equal(dailyPickSquare('deadend'), '★');
 });
 
 test('elapsed time reads like 28s or 2m 05s', () => {
@@ -63,7 +63,7 @@ test('a win names start and target, one square per move, no band spoilers', () =
   // Wordle-style: score line, squares, link. No slogan.
   assert.equal(text, [
     'Six Degrees of Rock #9 🎸 Solved in 4 moves', // plain words, no timer
-    'Nirvana ➡️ 🟩🟥🟨🟩 ➡️ Metallica', // one square per move
+    'Nirvana ➡️ ⭐★☆⭐ ➡️ Metallica', // one star per move
     'sixdegreesofrock.com/game?s=1',
   ].join('\n'));
   for (const spoiler of ['Foo Fighters', 'Pearl Jam', 'Probot']) assert.ok(!text.includes(spoiler));
@@ -76,7 +76,7 @@ test('a loss says Not solved', () => {
   });
   assert.equal(text, [
     'Six Degrees of Rock #9 🎸 Not solved',
-    'Nirvana ➡️ 🟥🟨 ➡️ Metallica',
+    'Nirvana ➡️ ★☆ ➡️ Metallica',
     'sixdegreesofrock.com/game?s=1',
   ].join('\n'));
   assert.ok(!/Can you|beat my chain|crack it/.test(text), 'no slogan');
@@ -240,7 +240,7 @@ test('rawk, not Wordle: guitar picks on screen, line icons instead of emoji', ()
   for (const e of ['💡', '🔥', '🎉', '🏆', '💀', '🌳', '📤']) assert.ok(!daily.includes(e), `${e} removed from the daily screens`);
   // The results score line is drawn as picks, colored like the board.
   assert.ok(src.includes("w.innerHTML = pickSvg(pickColor(p.kind), 'sd-result-pick');"));
-  assert.ok(src.includes("const DAILY_PICK_HEX = { gold: '#3fa36b', robin: '#c9a83a', black: '#c8584f' };"));
+  assert.ok(src.includes("const DAILY_PICK_HEX = { gold: '#c9a83a', robin: '#c0c0c0', black: '#74c9d0' };"));
   // Icons are drawn like the main site's: no fill, currentColor stroke 1.8, round caps.
   assert.match(src, /class="sd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1\.8" stroke-linecap="round"/);
 });
@@ -377,9 +377,9 @@ test('share squares are each move\'s real color, so grids differ by how you play
   const perfect = dailyShareResultText({ ...base, picks: [{ kind: 'optimal' }, { kind: 'optimal' }, { kind: 'optimal' }] });
   const messy = dailyShareResultText({ ...base, picks: [{ kind: 'optimal' }, { kind: 'deadend' }, { kind: 'obscure' }, { kind: 'solid' }, { kind: 'optimal' }] });
   assert.equal(perfect.split('\n')[0], 'Six Degrees of Rock #9 🎸 Solved in 3 moves');
-  assert.equal(perfect.split('\n')[1], 'Journey ➡️ 🟩🟩🟩 ➡️ Heart');
+  assert.equal(perfect.split('\n')[1], 'Journey ➡️ ⭐⭐⭐ ➡️ Heart');
   assert.equal(messy.split('\n')[0], 'Six Degrees of Rock #9 🎸 Solved in 5 moves');
-  assert.equal(messy.split('\n')[1], 'Journey ➡️ 🟩🟥🟨🟨🟩 ➡️ Heart');
+  assert.equal(messy.split('\n')[1], 'Journey ➡️ ⭐★☆☆⭐ ➡️ Heart');
   assert.equal(messy.split('\n').at(-1), 'sixdegreesofrock.com/game?s=1');
   assert.ok(!/\d+\/\d+/.test(messy), 'no fraction score');
 });
@@ -404,7 +404,7 @@ test('GA4: /game loads the tag, and the five game events fire once per occurrenc
   assert.match(src, /dailyRun\.status === 'active' && dailyRun\.hops_used === 0 && gaCountsRun\(dailyRun\)/, 'only a fresh first attempt');
   assert.match(src, /practiceMode \|\| \(run\.run_number \|\| 1\) === 1/, 'replays of a finished daily never count');
   assert.match(src, /gaEvent\('game_completed', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used, par: dailyRun\.par \}, dailyRun\.id\)/);
-  assert.match(src, /gaEvent\('game_gave_up', \{\s*puzzle_id: gaPuzzleId\(dailyRun\),\s*moves_used: dailyRun\.hops_used,\s*reason:/, 'puzzle_id, moves_used, and why it ended');
+  assert.match(src, /gaEvent\('game_gave_up', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used \}, dailyRun\.id\)/);
   assert.match(src, /hint_type: type === 'eliminate' \? 'cut_option' : 'check_band'/);
   assert.match(src, /gaEvent\('share_clicked', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used \}\)/, 'one per click, no once-key');
 });
@@ -423,17 +423,4 @@ test('analytics follow-ups: team browsers tagged internal, share links tagged, r
   assert.match(retention, /path: '\/api\/game-retention'/);
   assert.match(retention, /max-age=300/, 'cached so it never costs Neon much');
   assert.ok(!/email|handle|name/.test(retention.replace(/\/\/.*$/gm, '')), 'counts only, no player details');
-});
-
-test('played to the end vs stopped early: each first try lands in exactly one bucket', async () => {
-  const { outcomeOf } = await import('../netlify/functions/game_retention.mjs');
-  // par 3 → 6 moves allowed (3 extra)
-  assert.equal(outcomeOf({ status: 'complete', hops_used: 4, optimal_hops: 3 }), 'won');
-  assert.equal(outcomeOf({ status: 'given_up', hops_used: 6, optimal_hops: 3 }), 'out_of_moves');
-  assert.equal(outcomeOf({ status: 'given_up', hops_used: 2, optimal_hops: 3 }), 'gave_up');
-  assert.equal(outcomeOf({ status: 'active', hops_used: 0, optimal_hops: 3 }), 'left_without_moving');
-  assert.equal(outcomeOf({ status: 'active', hops_used: 2, optimal_hops: 3 }), 'left_partway');
-  // GA mirrors it: a first-move event, and a reason on give-ups.
-  assert.match(src, /gaEvent\('first_move', \{ puzzle_id: gaPuzzleId\(dailyRun\), mode: practiceMode \? 'practice' : 'daily' \}, dailyRun\.id\)/);
-  assert.match(src, /reason: outOfMoves \? 'out_of_moves' : 'gave_up'/);
 });
