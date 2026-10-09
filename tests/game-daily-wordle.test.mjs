@@ -324,7 +324,8 @@ test('SEO: /game canonical is the served URL, structured data on both pages, bot
 
 test('stats screen: header button, block in the daily results, not in practice', () => {
   assert.ok(src.includes('<button type="button" class="sd-icon" data-stats aria-label="Your stats">'));
-  assert.ok(src.includes("if (practiceMode) statsBtn.hidden = true;"));
+  assert.ok(src.includes("if (practiceMode) statsBtn.style.display = 'none';"), 'hidden for real in practice');
+  assert.ok(!src.includes('touch received'), 'temporary diagnostic removed');
   assert.ok(src.includes("body: JSON.stringify({ action: 'stats' }),"));
   // Labels short enough to stay on one line on a phone.
   assert.match(src, /function statsBlockEl\(st, highlight, \{ label = true \} = \{\}\) \{[\s\S]{0,800}'Played'\], \[st\.win_pct, 'Win %'\], \[st\.current_streak, 'Streak'\], \[st\.max_streak, 'Best streak'\]/);
