@@ -1102,3 +1102,29 @@ test('the graph is still built with self-loops forbidden', () => {
     'Self-loops stay forbidden; the writer skips them instead.'
   );
 });
+
+test('classifyNode stays fast at full scale and sees links added after load', () => {
+  // The homepage classifies every node against every link. It used to filter
+  // the whole links list per node (nodes x links): minutes on a phone at
+  // ~3,000 bands. Memberships are now indexed once per links array.
+  const nodes = [];
+  const links = [];
+  for (let b = 0; b < 3000; b += 1) {
+    nodes.push({ id: `Band ${b}`, type: 'band' });
+    for (let m = 0; m < 5; m += 1) {
+      const id = `Person ${b}-${m}`;
+      nodes.push({ id, type: 'member' });
+      links.push({ source: `Band ${b}`, target: id, relation: 'member' });
+    }
+  }
+  const adjacency = buildAdjacency(nodes, links);
+  const started = Date.now();
+  nodes.forEach(node => classifyNode(node, { adjacency, links }));
+  assert.ok(Date.now() - started < 1000, `classified ${nodes.length} nodes in ${Date.now() - started}ms`);
+
+  // index.html pushes a new membership onto master.links after an edit.
+  const person = nodes.find(n => n.id === 'Person 0-0');
+  assert.notEqual(classifyNode(person, { adjacency, links }), NODE_KINDS.CONSTELLATION);
+  links.push({ source: 'Band 1', target: 'Person 0-0', relation: 'member' });
+  assert.equal(classifyNode(person, { adjacency, links }), NODE_KINDS.CONSTELLATION);
+});
