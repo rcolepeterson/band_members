@@ -207,3 +207,14 @@ test('GET /api/verify-band-status returns null sources sub-objects when no exter
     )
   )
 );
+
+// ?all=1 (2026-10-08): the homepage loads every verified band in one
+// request instead of ~31 sequential batches of 100.
+test('GET ?all=1 returns every verification in one cached request', async () => {
+  const { readFileSync } = await import('node:fs');
+  const body = readFileSync(new URL('../netlify/functions/verify_band_status.mjs', import.meta.url), 'utf8');
+  assert.match(body, /if \(url\.searchParams\.get\('all'\) === '1'\) \{/);
+  assert.match(body, /'cache-control': 'public, max-age=60, stale-while-revalidate=3600'/);
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /await fetch\('\/api\/verify-band-status\?all=1'\)/);
+});
