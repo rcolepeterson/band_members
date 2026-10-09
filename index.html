@@ -895,6 +895,40 @@ body.rbft-sigma-boot .header-right .header-btn {
   min-height: 36px !important;
   border-radius: var(--radius-full);
 }
+/* Game: the daily game in plain sight (it used to live only in the menu).
+   Its own class, not .header-btn: that class is the sign-in control, and the
+   corner's auth rules key on it. Looks like its neighbour: an outlined pill
+   beside Sign in on desktop, an accent text link on a phone, but always a
+   44px tap target there. */
+body.rbft-sigma-boot .header-right .header-game-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 var(--space-4, 16px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: var(--text-sm, 0.85rem);
+  color: var(--color-text, #dbe6f2);
+  text-decoration: none;
+  pointer-events: auto;
+}
+@media (max-width: 720px) {
+  /* Game's taller tap target and Sign in share one centre line. */
+  body.rbft-sigma-boot .header-right { align-items: center; }
+  body.rbft-sigma-boot .header-right .header-game-link {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 6px;
+    border: 0;
+    background: none;
+    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-accent, #7cc4ff);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
 @media (max-width: 720px) {
   body.rbft-sigma-boot .header-right { gap: 5px; padding: 6px 8px 0 0; }
   /*
@@ -3203,6 +3237,12 @@ main.layout { padding: 0 !important; gap: 0 !important; }
             with the flows merged there is one thing to press, so showing two was
             the confusion rather than the cure (feedback item x).
           -->
+          <!--
+            The daily game, in plain sight (Cole, 2026-10-08): it used to be
+            reachable only through the menu, so new visitors never found it.
+            Always shown, signed in or out.
+          -->
+          <a class="header-game-link" id="header-game-link" href="/game/">Game</a>
           <button class="header-btn header-btn--primary" type="button" id="sign-in-btn" hidden>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>

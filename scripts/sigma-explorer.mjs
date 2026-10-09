@@ -472,6 +472,25 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-wordmark{margin:0;font-size:clamp(15px,2.2vw,26px);font-weight:400;
   letter-spacing:0.18em;text-transform:uppercase;color:#dbe6f2;text-align:center;
   text-shadow:0 0 10px rgba(8,11,17,0.95),0 0 20px rgba(8,11,17,0.8)}
+/* The daily game's way in, under the search. Hairline pill like the rest of
+   the chrome, in the accent colour so it reads as the one thing to press;
+   44px tall for thumbs. */
+#${STAGE_ID} .sigma-daily{display:flex;flex-direction:column;align-items:center;gap:6px}
+#${STAGE_ID} .sigma-daily-cta{display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;padding:0 22px;border-radius:999px;border:1px solid rgba(143,232,246,0.45);
+  background:rgba(8,12,18,0.94);color:#8fe8f6;font-size:15px;letter-spacing:0.02em;
+  text-decoration:none;white-space:nowrap}
+#${STAGE_ID} .sigma-daily-cta:hover{border-color:rgba(143,232,246,0.85);background:rgba(16,24,34,0.8)}
+#${STAGE_ID} .sigma-daily-cta:focus-visible{outline:2px solid #8fe8f6;outline-offset:3px}
+/* Short screens (iPhone SE 1st gen and smaller): the button alone, so the
+   graph below keeps its room and the home star clears the intro text. */
+@media (max-height:600px){
+  #${STAGE_ID} .sigma-daily-note{display:none}
+}
+/* Out of the way while search suggestions are open over it. */
+#${STAGE_ID} .sigma-prompt:has(.sigma-suggest:not([hidden])) ~ .sigma-daily{visibility:hidden}
+#${STAGE_ID} .sigma-daily-note{margin:0;font-size:13px;color:#9fb1c1;text-align:center;
+  text-shadow:0 0 8px rgba(8,11,17,0.95),0 0 16px rgba(8,11,17,0.8)}
 /* The shortcut row stays deliberately quiet -- hairline border, no fill -- so
    the constellation is the only bright thing until someone reaches for a
    control.
@@ -843,6 +862,12 @@ function buildStage(doc, mount) {
         <div class="sigma-suggest" id="sigma-search-suggest" role="listbox"
              aria-label="Band suggestions" hidden></div>
       </form>
+    </div>
+    <!-- The daily game, under the search (Cole, 2026-10-08): the menu was the
+         only way to it, so new visitors never found it. -->
+    <div class="sigma-daily">
+      <a class="sigma-daily-cta" href="/game/">Play today&rsquo;s daily chain</a>
+      <p class="sigma-daily-note">Connect today&rsquo;s two bands in as few moves as you can.</p>
     </div>
     </div>
     <!--

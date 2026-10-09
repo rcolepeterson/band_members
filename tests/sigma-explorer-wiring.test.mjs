@@ -309,6 +309,9 @@ test('stage chrome is not hidden on small screens with no way back', () => {
     '.sigma-frontier',
     '.sigma-other-groups__text',
     '.sigma-hint:not(.sigma-hint--intro)',
+    // Short screens only: the "Play today's daily chain" BUTTON stays; the
+    // one-line description under it goes so the graph keeps its room.
+    '.sigma-daily-note',
   ];
   // Controls that default to display:none on a phone but are NOT the trap:
   // each one has an always-visible trigger that reveals it (a toggle button,
@@ -1777,4 +1780,14 @@ test('"Show next group" jumps to a random unvisited group', () => {
     /unvisited\[Math\.floor\(Math\.random\(\) \* unvisited\.length\)\]/,
     'next group is picked at random',
   );
+});
+
+test('homepage shows the daily game: hero button + note, and a visible Game nav link', () => {
+  // Before 2026-10-08 the only way to /game/ was the hamburger menu.
+  assert.match(EXPLORER, /<a class="sigma-daily-cta" href="\/game\/">Play today&rsquo;s daily chain<\/a>/);
+  assert.match(EXPLORER, /Connect today&rsquo;s two bands in as few moves as you can\./);
+  assert.match(EXPLORER, /\.sigma-daily-cta\{[^}]*min-height:44px/, 'thumb-sized');
+  assert.match(INDEX_HTML, /<a class="header-game-link" id="header-game-link" href="\/game\/">Game<\/a>/);
+  // Desktop is 36px like Sign in; the phone rule is the 44px one.
+  assert.match(INDEX_HTML, /\.header-right \.header-game-link \{[^}]*min-height: 44px;/, 'thumb-sized on phones');
 });
