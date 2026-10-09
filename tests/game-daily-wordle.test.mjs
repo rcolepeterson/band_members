@@ -383,3 +383,13 @@ test('share squares are each move\'s real color, so grids differ by how you play
   assert.equal(messy.split('\n').at(-1), 'sixdegreesofrock.com/game');
   assert.ok(!/\d+\/\d+/.test(messy), 'no fraction score');
 });
+
+test('practice is findable: a win offers it, and a warm-up link sits under the daily', () => {
+  // Cole, 2026-10-09: "Play again" replayed a solved puzzle (answer known).
+  const winBoard = src.slice(src.indexOf("if (completed || run.status === 'complete') {"), src.indexOf("if (completed || run.status === 'complete') {") + 2500);
+  assert.ok(winBoard.includes("again.textContent = 'Play a practice puzzle';"));
+  assert.ok(!winBoard.includes("'Play again'"));
+  assert.ok(src.includes('<p class="sd-practice-link"><a href="/game/?practice=1">New here? Warm up with a practice puzzle \\u2192</a></p>'));
+  assert.match(src, /\.sd-practice-link a\{[^}]*min-height:44px/, 'thumb-sized');
+  assert.ok(src.includes('if (practiceLink) practiceLink.hidden = !active;'), 'gone once the daily is finished');
+});
