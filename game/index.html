@@ -1,19 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-  <!-- Google tag (gtag.js), the same GA4 property as the homepage. /game had
-       none, so GA saw no game traffic at all. It also carries the game's
-       events (game_started, game_completed, ...; see gaEvent in
-       scripts/six-degrees-game.mjs). Async: never blocks the board. -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-E2SNSPFHGB"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    // /game/?ga_debug=1 sends this visit's events to GA4 DebugView, for
-    // checking the game events after a deploy.
-    gtag('config', 'G-E2SNSPFHGB', /[?&]ga_debug=1\b/.test(location.search) ? { debug_mode: true } : {});
-  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Daily Rock Puzzle: Connect Two Bands | Six Degrees of Rock</title>
@@ -39,7 +26,7 @@
   <meta property="og:image" content="https://sixdegreesofrock.com/game-og.png?v=2" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Six Degrees of Rock: a new rock puzzle every day. A row of green, yellow and red guitar picks. Connect two bands through the musicians they share." />
+  <meta property="og:image:alt" content="Six Degrees of Rock: a new rock puzzle every day. A row of gold, silver and blue guitar picks. Connect two bands through the musicians they share." />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Six Degrees of Rock — a new rock puzzle every day" />
   <meta name="twitter:description" content="Connect two famous bands through the musicians they share. Free, no sign-up." />
