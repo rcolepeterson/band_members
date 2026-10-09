@@ -1,7 +1,7 @@
 // Draws game-og.png, the link-preview card for /game (1200x630).
 //
 // Wordle-simple (Cole, 2026-10-08): a dark field, a row of guitar picks in
-// the game's green/yellow/red (our answer to Wordle's tile grid), and words
+// the brand's gold/silver/blue, and words
 // that say "this is a game you play every day" at a glance. Static on purpose; a per-day card
 // showing today's matchup would be a server-rendered follow-up.
 //
@@ -22,9 +22,9 @@ const TEXT = '#edf7ff';
 const MUTED = '#9fb1c1';
 const FAINT = '#5b6b7c';
 const ACCENT = '#8fe8f6';
-const GOOD = '#3fa36b';
-const OK = '#c9a83a';
-const BAD = '#c8584f';
+const GOOD = '#c9a83a';
+const OK = '#c0c0c0';
+const BAD = '#74c9d0';
 
 const font = PImage.registerFont(join(ROOT, 'vendor/fonts/og/Lato-Medium.ttf'), 'Lato');
 font.loadSync();
