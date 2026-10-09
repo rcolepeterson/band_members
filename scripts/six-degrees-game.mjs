@@ -131,11 +131,12 @@ export function dailyPuzzleNumber(date) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-// Wordle's tile colors, mapped onto a pick's kind.
+// Star colors in brand palette (gold/silver/black), mapped onto a pick's kind.
+// Gold for optimal, silver for solid, black for dead ends.
 export function dailyPickSquare(kind) {
-  if (kind === 'optimal') return '🟩';
-  if (kind === 'deadend') return '🟥';
-  return '🟨';
+  if (kind === 'optimal') return '⭐';
+  if (kind === 'deadend') return '★';
+  return '☆';
 }
 
 // A dead end costs a move but isn't a link in the chain, so "hops" (links
@@ -183,11 +184,11 @@ export function fmtElapsed(seconds) {
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
 }
 
-// Spoiler-free share text, Wordle-style (Cole, 2026-10-08): no slogan,
+// Spoiler-free share text (stars in brand palette): no slogan,
 // no timer (the clock counted idle hours, e.g. "194m"), just the score,
-// the squares and the link.
+// the stars and the link.
 //   Six Degrees of Rock #17 🎸 Solved in 5 moves      ("Not solved" on a loss)
-//   Rage Against the Machine ➡️ 🟩🟥🟨🟩🟩 ➡️ Pearl Jam
+//   Rage Against the Machine ➡️ ⭐★☆⭐⭐ ➡️ Pearl Jam
 //   sixdegreesofrock.com/game
 // Plain words, not "5/4" (Cole, 2026-10-09): the fraction read as a grade
 // and nobody knew the 4 was the shortest path. One square per move, each in
@@ -285,27 +286,6 @@ function trackGameEvent(payload) {
   } catch {
     // fetch itself threw (very old browser) — ignore
   }
-}
-
-// GA4 events for the daily game (Cole, 2026-10-09). Separate from
-// trackGameEvent above, which feeds our own game_analytics table.
-//
-// onceKey makes an event fire once per occurrence, not once per paint: the
-// board re-renders on every move and on reload, so "this run started" or
-// "this run was won" is remembered (per browser) under the run's id. Events
-// without a key (share clicks) are one per click by nature.
-export function gaEvent(name, params, onceKey) {
-  if (!isBrowser || typeof window.gtag !== 'function') return;
-  if (onceKey != null) {
-    const key = `sdr-ga:${name}:${onceKey}`;
-    try {
-      if (localStorage.getItem(key)) return;
-      localStorage.setItem(key, '1');
-    } catch {
-      // Private mode: send it anyway; a rare duplicate beats a lost event.
-    }
-  }
-  try { window.gtag('event', name, params); } catch {}
 }
 
 function initGameUI() {
@@ -850,7 +830,7 @@ function initGameUI() {
       /* --- Daily board, Wordle-simple (Cole, 2026-10-08) -------------------
          One goal, one chain, one question, four big buttons. Everything else
          (hints, streak, credits, past days) sits in quiet drawers below. */
-      .sd-board,.sd-modal,.sd-toast{--sd-good:#3fa36b;--sd-ok:#c9a83a;--sd-bad:#c8584f}
+      .sd-board,.sd-modal,.sd-toast{--sd-good:#c9a83a;--sd-ok:#c0c0c0;--sd-bad:#74c9d0}
       .sd-topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px}
       .sd-topbar .game-daily-head{margin:0}
       .sd-icon{flex:none;width:36px;height:36px;border-radius:999px;border:1px solid var(--color-border);background:transparent;color:inherit;font:inherit;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
@@ -1023,8 +1003,8 @@ function initGameUI() {
 
   // Pick colors follow the board's traffic lights (Cole, 2026-10-08): green
   // is the shortest path, yellow the long way round, red a dead end. The
-  // server still names them gold/robin/black; only the paint changed.
-  const DAILY_PICK_HEX = { gold: '#3fa36b', robin: '#c9a83a', black: '#c8584f' };
+  // Brand palette: gold for optimal, silver for solid, blue for misses.
+  const DAILY_PICK_HEX = { gold: '#c9a83a', robin: '#c0c0c0', black: '#74c9d0' };
   // Same mapping as the server's pickColor(kind).
   function pickColor(kind) {
     if (kind === 'optimal') return 'gold';
@@ -1315,11 +1295,6 @@ function initGameUI() {
         band_a: dailyRun && dailyRun.start_band ? dailyRun.start_band.name : null,
         band_b: dailyRun && dailyRun.target ? dailyRun.target.name : null,
       });
-      // GA4: a puzzle begins when a fresh run (no moves yet) is dealt; a
-      // reload of the same run, or of a finished day, is not a new start.
-      if (dailyRun && dailyRun.status === 'active' && dailyRun.hops_used === 0 && gaCountsRun(dailyRun)) {
-        gaEvent('game_started', { puzzle_id: gaPuzzleId(dailyRun), mode: practiceMode ? 'practice' : 'daily' }, dailyRun.id);
-      }
       card.querySelector('.game-daily-note').textContent = '';
       paintDailyBoard(card);
       // First visit: show the rules once, the way Wordle does.
@@ -1470,7 +1445,6 @@ function initGameUI() {
 
   async function shareDailyText(btn, text) {
     const label = btn.textContent;
-    if (dailyRun) gaEvent('share_clicked', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used });
     // Phones get the share sheet; everywhere else copies, like Wordle.
     let coarse = false;
     try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch {}
@@ -1487,24 +1461,6 @@ function initGameUI() {
       btn.textContent = 'Copy failed. Long-press the chain to copy.';
     }
     setTimeout(() => { btn.textContent = label; }, 2200);
-  }
-
-  // GA4 parameters for the current run. Practice has no puzzle number, so
-  // its puzzle_id is "practice". Only a first attempt at the daily counts
-  // (a replay of a finished day is not a new start); every practice puzzle
-  // is a fresh run.
-  function gaPuzzleId(run) {
-    return practiceMode ? 'practice' : String(dailyPuzzleNumber(run && run.chain_date) || '');
-  }
-  function gaCountsRun(run) {
-    return Boolean(run && run.id != null) && (practiceMode || (run.run_number || 1) === 1);
-  }
-  function gaHint(run, type) {
-    if (!gaCountsRun(run)) return;
-    gaEvent('hint_used', {
-      puzzle_id: gaPuzzleId(run),
-      hint_type: type === 'eliminate' ? 'cut_option' : 'check_band',
-    }, `${run.id}:${run.hints_used}`);
   }
 
   // The share text for the current run: one source for the results modal
@@ -2181,9 +2137,6 @@ function initGameUI() {
       });
       dailyRun = data.run;
       dailyOptions = [];
-      if (gaCountsRun(dailyRun)) {
-        gaEvent('game_gave_up', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used }, dailyRun.id);
-      }
       // Analytics: game completed (abandon — player gave up)
       if (analyticsSessionId) {
         const durationSeconds = analyticsGameStartTime
@@ -2250,7 +2203,6 @@ function initGameUI() {
         });
         dailyRun = data.run;
         dailyOptions = data.options || [];
-        gaHint(dailyRun, 'reveal');
         // Analytics: hint used (peek/reveal)
         if (analyticsSessionId) {
           analyticsHintCount++;
@@ -2321,9 +2273,6 @@ function initGameUI() {
       }
       await pause(kind === 'deadend' ? 1000 : 800);
       if (data.completed) {
-        if (gaCountsRun(dailyRun)) {
-          gaEvent('game_completed', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used, par: dailyRun.par }, dailyRun.id);
-        }
         // Analytics: game completed (win)
         if (analyticsSessionId) {
           const durationSeconds = analyticsGameStartTime
@@ -2372,7 +2321,6 @@ function initGameUI() {
       });
       dailyRun = data.run;
       dailyOptions = data.options || [];
-      gaHint(dailyRun, type);
       // Analytics: hint used (eliminate)
       if (analyticsSessionId) {
         analyticsHintCount++;
