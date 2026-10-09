@@ -1023,15 +1023,11 @@ body.rbft-sigma-chrome .rbft-boot-shell { display: none !important; }
   .rbft-boot-shell__field, .rbft-boot-shell__spinner { animation: none; }
 }
 .rbft-boot-shell__note {
-  /* The shell ignores the pointer; this link must not. */
-  pointer-events: auto;
-  color: #8fe8f6;
-  font-size: 14px;
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
   letter-spacing: 0.02em;
-  text-decoration: none;
-  padding: 6px 10px;
 }
-.rbft-boot-shell__note:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 /* Downward-opening popovers (mirror of .popover-up used elsewhere). */
 .popover-down {
@@ -3145,13 +3141,12 @@ main.layout { padding: 0 !important; gap: 0 !important; }
  <!-- Stands in for the constellation chrome until the module mounts.
       The real search box only appears once the band data has loaded, so this
       stand-in must look like it's loading, not like a box you can type in
-      (Cole, 2026-10-08). The game doesn't need the map, so offer it while
-      people wait. -->
+      (Cole, 2026-10-08). -->
  <div class="rbft-boot-shell">
    <div class="rbft-boot-shell__inner">
      <p class="rbft-boot-shell__wordmark" aria-hidden="true">Six Degrees of Rock</p>
      <div class="rbft-boot-shell__field" role="status"><span class="rbft-boot-shell__spinner" aria-hidden="true"></span>Loading the bands&hellip;</div>
-     <a class="rbft-boot-shell__note" href="/game">While the map loads, play today&rsquo;s game &rarr;</a>
+     <p class="rbft-boot-shell__note">Mapping the universe of rock&hellip;</p>
    </div>
  </div>
  <!--
