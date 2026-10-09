@@ -920,6 +920,10 @@ body.rbft-sigma-boot .header-right .header-game-link {
   body.rbft-sigma-boot .header-right .header-game-link {
     min-height: 44px;
     min-width: 44px;
+    /* The 44px target hangs 10px above and below the text without taking up
+       layout space, so the row stays where Sign in always sat and doesn't
+       crowd the wordmark. */
+    margin: -10px 0;
     padding: 0 6px;
     border: 0;
     background: none;
