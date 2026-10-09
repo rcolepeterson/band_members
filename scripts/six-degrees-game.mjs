@@ -2182,7 +2182,12 @@ function initGameUI() {
       dailyRun = data.run;
       dailyOptions = [];
       if (gaCountsRun(dailyRun)) {
-        gaEvent('game_gave_up', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used }, dailyRun.id);
+        // reason: out_of_moves = played to the end; gave_up = quit on purpose.
+        gaEvent('game_gave_up', {
+          puzzle_id: gaPuzzleId(dailyRun),
+          moves_used: dailyRun.hops_used,
+          reason: outOfMoves ? 'out_of_moves' : 'gave_up',
+        }, dailyRun.id);
       }
       // Analytics: game completed (abandon — player gave up)
       if (analyticsSessionId) {
@@ -2291,6 +2296,11 @@ function initGameUI() {
       });
       dailyRun = data.run;
       dailyOptions = data.options || [];
+      // GA4: the first tap on a band. Opened but never moved = "didn't get
+      // it"; moved and then left = got stuck or lost interest (2026-10-09).
+      if (dailyRun && dailyRun.hops_used === 1 && gaCountsRun(dailyRun)) {
+        gaEvent('first_move', { puzzle_id: gaPuzzleId(dailyRun), mode: practiceMode ? 'practice' : 'daily' }, dailyRun.id);
+      }
       // Analytics: move made
       if (analyticsSessionId) {
         analyticsMoveCount++;

@@ -404,7 +404,7 @@ test('GA4: /game loads the tag, and the five game events fire once per occurrenc
   assert.match(src, /dailyRun\.status === 'active' && dailyRun\.hops_used === 0 && gaCountsRun\(dailyRun\)/, 'only a fresh first attempt');
   assert.match(src, /practiceMode \|\| \(run\.run_number \|\| 1\) === 1/, 'replays of a finished daily never count');
   assert.match(src, /gaEvent\('game_completed', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used, par: dailyRun\.par \}, dailyRun\.id\)/);
-  assert.match(src, /gaEvent\('game_gave_up', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used \}, dailyRun\.id\)/);
+  assert.match(src, /gaEvent\('game_gave_up', \{\s*puzzle_id: gaPuzzleId\(dailyRun\),\s*moves_used: dailyRun\.hops_used,\s*reason:/, 'puzzle_id, moves_used, and why it ended');
   assert.match(src, /hint_type: type === 'eliminate' \? 'cut_option' : 'check_band'/);
   assert.match(src, /gaEvent\('share_clicked', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used \}\)/, 'one per click, no once-key');
 });
@@ -423,4 +423,17 @@ test('analytics follow-ups: team browsers tagged internal, share links tagged, r
   assert.match(retention, /path: '\/api\/game-retention'/);
   assert.match(retention, /max-age=300/, 'cached so it never costs Neon much');
   assert.ok(!/email|handle|name/.test(retention.replace(/\/\/.*$/gm, '')), 'counts only, no player details');
+});
+
+test('played to the end vs stopped early: each first try lands in exactly one bucket', async () => {
+  const { outcomeOf } = await import('../netlify/functions/game_retention.mjs');
+  // par 3 → 6 moves allowed (3 extra)
+  assert.equal(outcomeOf({ status: 'complete', hops_used: 4, optimal_hops: 3 }), 'won');
+  assert.equal(outcomeOf({ status: 'given_up', hops_used: 6, optimal_hops: 3 }), 'out_of_moves');
+  assert.equal(outcomeOf({ status: 'given_up', hops_used: 2, optimal_hops: 3 }), 'gave_up');
+  assert.equal(outcomeOf({ status: 'active', hops_used: 0, optimal_hops: 3 }), 'left_without_moving');
+  assert.equal(outcomeOf({ status: 'active', hops_used: 2, optimal_hops: 3 }), 'left_partway');
+  // GA mirrors it: a first-move event, and a reason on give-ups.
+  assert.match(src, /gaEvent\('first_move', \{ puzzle_id: gaPuzzleId\(dailyRun\), mode: practiceMode \? 'practice' : 'daily' \}, dailyRun\.id\)/);
+  assert.match(src, /reason: outOfMoves \? 'out_of_moves' : 'gave_up'/);
 });
