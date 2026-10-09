@@ -3764,21 +3764,12 @@ function initGameUI() {
     if (!badge) return;
     try {
       if (!isSignedIn()) {
-        badge.hidden = false;
+        // Guests play the whole daily, like Wordle, so the header says
+        // nothing to them. It used to read "Sign in to play" and link to the
+        // homepage: wrong on both counts (Cole, 2026-10-08).
+        badge.hidden = true;
         badge.removeAttribute('data-action');
         badge.innerHTML = '';
-        // Guest play (2026-10-08): show "Guest" instead of "Sign in to play"
-        // when a guest session exists.
-        let hasGuestSession = false;
-        try {
-          hasGuestSession = !!localStorage.getItem('sdr-guest-session');
-        } catch {}
-        const link = document.createElement('a');
-        link.href = '/';
-        link.textContent = hasGuestSession ? 'Playing as Guest' : 'Sign in to play';
-        link.style.color = 'inherit';
-        link.style.textDecoration = 'none';
-        badge.appendChild(link);
         return;
       }
       const h = await loadMyHandle();
