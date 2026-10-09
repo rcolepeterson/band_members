@@ -1186,14 +1186,10 @@ function initGameUI() {
     result.appendChild(card);
     card.querySelector('[data-howto]').addEventListener('click', openHowToPlay);
     const statsBtn = card.querySelector('[data-stats]');
-    if (practiceMode) statsBtn.hidden = true; // practice keeps no history
-    // TEMP DIAGNOSTIC (do not merge): which events reach the stats button on
-    // Cole's Android phone? Touch shows a toast; a completed tap opens the
-    // How to Play dialog, the same one "?" opens.
-    else if (new URLSearchParams(location.search).has('debugstats') || true) {
-      statsBtn.addEventListener('pointerdown', (e) => showToast(`touch received (${e.pointerType})`));
-      statsBtn.addEventListener('click', () => openHowToPlay());
-    }
+    // Practice keeps no history, so no stats button. style.display, not
+    // [hidden]: .sd-icon sets display:inline-flex, which beat the hidden
+    // attribute, so practice showed a stats button that did nothing.
+    if (practiceMode) statsBtn.style.display = 'none';
     else statsBtn.addEventListener('click', (event) => {
       event.preventDefault();
       // Never fail silently: if anything throws, still show the modal.
