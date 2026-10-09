@@ -1,8 +1,8 @@
 // Draws game-og.png, the link-preview card for /game (1200x630).
 //
 // Wordle-simple (Cole, 2026-10-08): a dark field, a row of guitar picks in
-// the game's green/yellow/red (our answer to Wordle's tile grid), the name,
-// and one line saying what the game is. Static on purpose; a per-day card
+// the game's green/yellow/red (our answer to Wordle's tile grid), and words
+// that say "this is a game you play every day" at a glance. Static on purpose; a per-day card
 // showing today's matchup would be a server-rendered follow-up.
 //
 // Regenerate:  node scripts/make-game-og-image.mjs
@@ -81,7 +81,7 @@ const rowW = picks.length * size + (picks.length - 1) * gap;
 picks.forEach((color, i) => pick((W - rowW) / 2 + size / 2 + i * (size + gap), 150, size, color));
 
 centered('SIX DEGREES OF ROCK', 340, 26, ACCENT, 9);
-centered('The Daily Game', 432, 76, TEXT);
+centered('A new rock puzzle every day', 428, 60, TEXT);
 centered('Connect two bands through the musicians they share.', 500, 28, MUTED);
 centered('sixdegreesofrock.com/game', 560, 22, FAINT, 1);
 
