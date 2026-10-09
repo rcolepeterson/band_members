@@ -1286,7 +1286,9 @@ function initGameUI() {
     document.addEventListener('keydown', onKey);
     modal.sdClose = close;
     document.body.appendChild(modal);
-    modal.querySelector('.sd-modal-close').focus();
+    // Focus for keyboard and screen-reader users, without Chrome painting a
+    // ring on a mouse-opened modal (keyboard tabbing still shows it).
+    modal.querySelector('.sd-modal-close').focus({ focusVisible: false });
     return close;
   }
   function closeSdModal() {
@@ -1413,10 +1415,11 @@ function initGameUI() {
   }
   // Played · Win % · Current · Max, then a bar per "how close to the
   // shortest path" bucket, with today's result highlighted.
-  function statsBlockEl(st, highlight) {
+  function statsBlockEl(st, highlight, { label = true } = {}) {
     const wrap = el('<div class="sd-stats-block"><p class="sd-reveal-label">Your stats</p><div class="sd-stats-grid"></div><p class="sd-reveal-label">How close to the shortest path</p><div class="sd-dist"></div></div>');
+    if (!label) wrap.querySelector('.sd-reveal-label').remove(); // the modal's title says it
     const grid = wrap.querySelector('.sd-stats-grid');
-    for (const [n, label] of [[st.played, 'Played'], [st.win_pct, 'Win %'], [st.current_streak, 'Current streak'], [st.max_streak, 'Max streak']]) {
+    for (const [n, label] of [[st.played, 'Played'], [st.win_pct, 'Win %'], [st.current_streak, 'Streak'], [st.max_streak, 'Best streak']]) {
       const cell = el('<div class="sd-stat"><strong></strong><span></span></div>');
       cell.querySelector('strong').textContent = String(n);
       cell.querySelector('span').textContent = label;
@@ -1447,7 +1450,7 @@ function initGameUI() {
     });
     const st = await loadDailyStats();
     if (!slot || !slot.isConnected) return; // closed while loading
-    slot.replaceChildren(st ? statsBlockEl(st, null) : el('<p class="sd-stats-loading">Couldn\u2019t load your stats. Try again in a moment.</p>'));
+    slot.replaceChildren(st ? statsBlockEl(st, null, { label: false }) : el('<p class="sd-stats-loading">Couldn\u2019t load your stats. Try again in a moment.</p>'));
   }
 
   function openDailyResults({ won, completed = {} }) {
