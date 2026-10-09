@@ -1791,3 +1791,12 @@ test('homepage shows the daily game: hero button + note, and a visible Game nav 
   // Desktop is 36px like Sign in; the phone rule is the 44px one.
   assert.match(INDEX_HTML, /\.header-right \.header-game-link \{[^}]*min-height: 44px;/, 'thumb-sized on phones');
 });
+
+test('tester polish: 1 degree, one legal footer, honest dialog name, no dangling dash', () => {
+  assert.match(EXPLORER, /\$\{state\.maxHops === 1 \? 'degree' : 'degrees'\} out from this/);
+  assert.match(INDEX_HTML, /body\.rbft-sigma-chrome \.site-footer \{ display: none !important; \}/);
+  assert.match(INDEX_HTML, /addBandDialog\.setAttribute\('aria-label', isSignedIn \? 'Add your band' : 'Sign in or create an account'\)/);
+  const chip = INDEX_HTML.slice(INDEX_HTML.indexOf('function appendTenureChip'), INDEX_HTML.indexOf('function appendTenureChip') + 1200);
+  assert.ok(!chip.includes('EM_DASH'), 'unknown years show the name alone');
+  assert.match(chip, /if \(yearsText\) \{/);
+});
