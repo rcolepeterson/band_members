@@ -1106,7 +1106,9 @@ test('a placeholder holds the new look until the real chrome mounts', () => {
   // on IS the new look and the constellation fills in behind it.
   assert.match(INDEX_HTML, /class="rbft-boot-shell"/);
   assert.match(INDEX_HTML, /rbft-boot-shell__wordmark/);
-  assert.match(INDEX_HTML, /who&rsquo;s your favorite band\?/);
+  // While loading, the stand-in field says it's loading (it isn't a real
+  // input yet, so it must not look like one) (2026-10-08).
+  assert.match(INDEX_HTML, /class="rbft-boot-shell__field" role="status">[\s\S]{0,120}Loading the bands/);
   // And it must get out of the way the moment the real chrome is up.
   assert.match(INDEX_HTML, /body\.rbft-sigma-chrome \.rbft-boot-shell \{ display: none !important; \}/);
 });
