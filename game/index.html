@@ -1,6 +1,19 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
+  <!-- Google tag (gtag.js), the same GA4 property as the homepage. /game had
+       none, so GA saw no game traffic at all. It also carries the game's
+       events (game_started, game_completed, ...; see gaEvent in
+       scripts/six-degrees-game.mjs). Async: never blocks the board. -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-E2SNSPFHGB"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    // /game/?ga_debug=1 sends this visit's events to GA4 DebugView, for
+    // checking the game events after a deploy.
+    gtag('config', 'G-E2SNSPFHGB', /[?&]ga_debug=1\b/.test(location.search) ? { debug_mode: true } : {});
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Daily Rock Puzzle: Connect Two Bands | Six Degrees of Rock</title>
