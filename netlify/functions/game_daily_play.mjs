@@ -230,7 +230,11 @@ export default async (req) => {
     const dates = (comps || []).map((c) => c.chain_date);
     const today = pacificDate();
     const bestRows = await sql`select coalesce(min(hops_used), null) as best from daily_runs where user_id = ${me.id} and chain_date = ${today} and status = 'complete'`;
+    // How today's first attempt stands ('none' if not started), so the
+    // practice page can say "you haven't played today's puzzle yet".
+    const todayRows = await sql`select status from daily_runs where user_id = ${me.id} and chain_date = ${today} and coalesce(run_number, 1) = 1 limit 1`;
     return ok({
+      today_status: (todayRows && todayRows[0] && todayRows[0].status) || 'none',
       credits: me.credits ?? 50,
       freeze_count: me.freeze_count ?? 0,
       streak: liveStreak(dates, today, me.freeze_count ?? 0),

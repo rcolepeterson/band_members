@@ -330,3 +330,12 @@ test('stats screen: header button, block in the daily results, not in practice',
   // Labels short enough to stay on one line on a phone.
   assert.match(src, /function statsBlockEl\(st, highlight, \{ label = true \} = \{\}\) \{[\s\S]{0,800}'Played'\], \[st\.win_pct, 'Win %'\], \[st\.current_streak, 'Streak'\], \[st\.max_streak, 'Best streak'\]/);
 });
+
+test('practice is unmistakable: banner, amber accent, real buttons back to the daily', () => {
+  assert.ok(src.includes("card.classList.add('is-practice');"));
+  assert.ok(src.includes('<strong>Practice mode</strong>'));
+  assert.equal((src.match(/<a class="sd-practice-cta" href="\/game">Play today\\u2019s daily puzzle \\u2192<\/a>/g) || []).length, 2, 'top and bottom');
+  assert.ok(!src.includes('Just for fun: no streaks or hints.'), 'vague footer gone');
+  const play = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'netlify/functions/game_daily_play.mjs'), 'utf8');
+  assert.match(play, /today_status: \(todayRows && todayRows\[0\] && todayRows\[0\]\.status\) \|\| 'none',/);
+});

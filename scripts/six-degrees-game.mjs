@@ -876,6 +876,16 @@ function initGameUI() {
       .sd-dist-bar{display:block;min-width:22px;padding:2px 8px;border-radius:6px;background:rgba(143,232,246,.16);color:var(--color-text);font-size:.78rem;font-weight:700;text-align:right;line-height:1.5}
       .sd-dist-row.is-today .sd-dist-bar{background:var(--sd-good);color:#fff}
       .sd-stats-loading{text-align:center;font-size:.85rem;color:var(--color-text-muted);margin:8px 0}
+      /* Practice looks different at a glance: amber instead of teal. */
+      .sd-board.is-practice{--sd-practice:#e0a63a}
+      .sd-board.is-practice .game-hops{border-color:var(--sd-practice);color:var(--sd-practice)}
+      .sd-practice-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin:2px 0 10px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--sd-practice) 65%,transparent);border-radius:12px;background:color-mix(in srgb,var(--sd-practice) 10%,transparent)}
+      .sd-practice-banner strong{display:block;color:var(--sd-practice);font-size:.78rem;letter-spacing:.14em;text-transform:uppercase}
+      .sd-practice-sub{display:block;font-size:.85rem;color:var(--color-text-muted);margin-top:2px}
+      .sd-practice-cta{display:inline-flex;align-items:center;min-height:36px;padding:0 14px;border-radius:999px;background:var(--color-primary);color:var(--color-text-inverse);font-weight:700;font-size:.85rem;text-decoration:none;white-space:nowrap}
+      .sd-practice-cta:hover{background:var(--color-primary-hover)}
+      .sd-practice-foot{text-align:center;margin:14px 0 0}
+      .sd-practice-foot p{font-size:.8rem;color:var(--color-text-muted);margin:6px 0 0}
       .sd-misses{text-align:center;font-size:.82rem;color:#f0b8b2;margin:-4px 0 8px}
       .sd-via-name{font-size:.68rem;font-style:italic;color:var(--color-text-muted);white-space:normal}
       .game-chain-good{border-color:var(--sd-good);background:color-mix(in srgb,var(--sd-good) 22%,transparent)}
@@ -1199,11 +1209,38 @@ function initGameUI() {
       });
     });
     if (practiceMode) {
+      // Practice must be unmistakable (Cole, 2026-10-08: he played it without
+      // noticing, and "Just for fun" read as a vibe, not "this doesn't count").
+      // Its own color, a banner on top, and a real button back to the daily.
+      card.classList.add('is-practice');
+      // The page heading said "THE DAILY GAME" above a practice board.
+      const eyebrow = document.querySelector('.arena-eyebrow');
+      if (eyebrow) { eyebrow.textContent = 'Practice'; eyebrow.style.color = '#e0a63a'; }
       card.querySelector('.game-hops').textContent = 'Practice';
       card.querySelector('.sd-stats').hidden = true;
       card.querySelector('.game-daily-archive').hidden = true;
-      const back = el('<p class="game-daily-note" style="text-align:center;margin:10px 0 0">Just for fun: no streaks or hints. <a href="/game">Play today\u2019s Daily Chain</a></p>');
-      card.querySelector('.sd-drawers').after(back);
+      const banner = el(`<div class="sd-practice-banner" role="note">
+        <div><strong>Practice mode</strong><span class="sd-practice-sub">Doesn\u2019t count toward your streak or stats.</span></div>
+        <a class="sd-practice-cta" href="/game">Play today\u2019s daily puzzle \u2192</a>
+      </div>`);
+      card.querySelector('.sd-topbar').after(banner);
+      const foot = el(`<div class="sd-practice-foot">
+        <a class="sd-practice-cta" href="/game">Play today\u2019s daily puzzle \u2192</a>
+        <p>Practice games don\u2019t count toward your streak or stats.</p>
+      </div>`);
+      card.querySelector('.sd-drawers').after(foot);
+      // Say whether today's real puzzle is still waiting.
+      dailyFetch('/api/game-daily/play', { method: 'POST', body: JSON.stringify({ action: 'status' }) })
+        .then((st) => {
+          const sub = banner.querySelector('.sd-practice-sub');
+          const done = st && (st.today_status === 'complete' || st.today_status === 'given_up');
+          sub.textContent = done
+            ? `\u2713 You\u2019ve played today\u2019s puzzle. Practice doesn\u2019t count toward your stats.`
+            : 'You haven\u2019t played today\u2019s puzzle yet. Practice doesn\u2019t count toward your stats.';
+          if (done) banner.querySelectorAll('.sd-practice-cta').forEach((a) => { a.textContent = 'See today\u2019s daily puzzle \u2192'; });
+          if (done) foot.querySelector('.sd-practice-cta').textContent = 'See today\u2019s daily puzzle \u2192';
+        })
+        .catch(() => {});
     }
     if (loading) {
       card.querySelector('.game-daily-note').textContent = 'Dealing today’s chain…';
