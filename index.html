@@ -11,7 +11,17 @@
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', 'G-E2SNSPFHGB');
+    var gaConfig = {};
+    // Team devices (2026-10-09): open any page once with ?internal=1 (undo:
+    // ?internal=0). This browser's visits are then tagged
+    // traffic_type=internal, which GA's "Internal Traffic" data filter drops,
+    // so our own test plays don't skew the numbers.
+    try {
+      if (/[?&]internal=1\b/.test(location.search)) localStorage.setItem('sdr-internal', '1');
+      if (/[?&]internal=0\b/.test(location.search)) localStorage.removeItem('sdr-internal');
+      if (localStorage.getItem('sdr-internal') === '1') gaConfig.traffic_type = 'internal';
+    } catch (e) {}
+    gtag('config', 'G-E2SNSPFHGB', gaConfig);
   </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />

@@ -10,9 +10,27 @@
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
+    var gaConfig = {};
     // /game/?ga_debug=1 sends this visit's events to GA4 DebugView, for
     // checking the game events after a deploy.
-    gtag('config', 'G-E2SNSPFHGB', /[?&]ga_debug=1\b/.test(location.search) ? { debug_mode: true } : {});
+    if (/[?&]ga_debug=1\b/.test(location.search)) gaConfig.debug_mode = true;
+    // Team devices (2026-10-09): open any page once with ?internal=1 (undo:
+    // ?internal=0). This browser's visits are then tagged
+    // traffic_type=internal, which GA's "Internal Traffic" data filter drops,
+    // so our own test plays don't skew the numbers.
+    try {
+      if (/[?&]internal=1\b/.test(location.search)) localStorage.setItem('sdr-internal', '1');
+      if (/[?&]internal=0\b/.test(location.search)) localStorage.removeItem('sdr-internal');
+      if (localStorage.getItem('sdr-internal') === '1') gaConfig.traffic_type = 'internal';
+    } catch (e) {}
+    // The link in a shared result is /game?s=1 (short, so the share text
+    // stays clean). GA reads campaign tags from the page location, so a
+    // visit from a share is reported as source "share" without long utm
+    // tags in the share text or the address bar.
+    if (/[?&]s=1\b/.test(location.search)) {
+      gaConfig.page_location = location.origin + location.pathname + '?utm_source=share&utm_medium=share_text';
+    }
+    gtag('config', 'G-E2SNSPFHGB', gaConfig);
   </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
