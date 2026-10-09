@@ -897,6 +897,9 @@ function initGameUI() {
       /* Practice looks different at a glance: amber instead of teal. */
       .sd-board.is-practice{--sd-practice:#e0a63a}
       .sd-board.is-practice .game-hops{border-color:var(--sd-practice);color:var(--sd-practice)}
+      .sd-practice-link{margin:12px 0 0;text-align:center}
+      .sd-practice-link a{display:inline-flex;align-items:center;min-height:44px;padding:0 8px;font-size:.88rem;color:var(--sd-practice,#e0a63a);text-decoration:none}
+      .sd-practice-link a:hover{text-decoration:underline;text-underline-offset:3px}
       .sd-practice-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin:2px 0 10px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--sd-practice) 65%,transparent);border-radius:12px;background:color-mix(in srgb,var(--sd-practice) 10%,transparent)}
       .sd-practice-banner strong{display:block;color:var(--sd-practice);font-size:.78rem;letter-spacing:.14em;text-transform:uppercase}
       .sd-practice-sub{display:block;font-size:.85rem;color:var(--color-text-muted);margin-top:2px}
@@ -1228,6 +1231,11 @@ function initGameUI() {
         openSdModal((c) => c.appendChild(el('<p class="sd-stats-loading">Couldn\u2019t load your stats. Try again in a moment.</p>')));
       });
     });
+    if (!practiceMode) {
+      // A warm-up ramp for first-timers (Cole, 2026-10-09): the game is new,
+      // so practice is findable before the daily, not only after it.
+      card.querySelector('.sd-drawers').after(el('<p class="sd-practice-link"><a href="/game/?practice=1">New here? Warm up with a practice puzzle \u2192</a></p>'));
+    }
     if (practiceMode) {
       // Practice must be unmistakable (Cole, 2026-10-08: he played it without
       // noticing, and "Just for fun" read as a vibe, not "this doesn't count").
@@ -1968,6 +1976,10 @@ function initGameUI() {
     prompt.innerHTML = '';
     note.textContent = '';
     q('.sd-hints').hidden = !active;
+    // The warm-up link is for before the daily; once it's finished the
+    // finish actions offer practice themselves.
+    const practiceLink = q('.sd-practice-link');
+    if (practiceLink) practiceLink.hidden = !active;
     dailyRevealArmed = false;
 
     if (run.status === 'given_up') {
@@ -1995,9 +2007,17 @@ function initGameUI() {
       // One tap shares, like Wordle (the results modal opened on its own at the finish).
       const results = el(`<button type="button" class="tool-chip">${lineIcon('share')} Share result</button>`);
       results.addEventListener('click', () => shareDailyText(results, dailyResultShareText(true, c)));
+      // A win offers a NEW puzzle, same as the give-up screen (Cole,
+      // 2026-10-09). "Play again" replayed today's pair, whose answer you had
+      // just seen: a dead end for exactly the players most likely to want more.
       const again = el('<button type="button" class="tool-chip"></button>');
-      again.textContent = practiceMode ? 'New puzzle' : 'Play again';
-      again.addEventListener('click', () => dailyReplay(card));
+      if (practiceMode) {
+        again.textContent = 'New puzzle';
+        again.addEventListener('click', () => dailyReplay(card));
+      } else {
+        again.textContent = 'Play a practice puzzle';
+        again.addEventListener('click', () => { window.location.href = '/game/?practice=1'; });
+      }
       actions.appendChild(results);
       actions.appendChild(again);
       finish.appendChild(actions);
