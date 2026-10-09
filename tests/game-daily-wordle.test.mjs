@@ -296,3 +296,12 @@ test('feedback: out of the header, in the footer and on the results screen', () 
   assert.ok(footer.includes('id="send-feedback-btn"'), 'in the footer, same id so the popover wiring is unchanged');
   assert.ok(src.includes('Something off? <button type="button" class="sd-linkbtn">Send feedback</button>'));
 });
+
+test('/game has its own link-preview image', () => {
+  const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'game/index.html'), 'utf8');
+  assert.match(html, /<meta property="og:image" content="https:\/\/sixdegreesofrock\.com\/game-og\.png\?v=1" \/>/);
+  assert.match(html, /<meta name="twitter:image" content="https:\/\/sixdegreesofrock\.com\/game-og\.png\?v=1" \/>/);
+  const png = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'game-og.png'));
+  assert.equal(png.readUInt32BE(16), 1200, 'width');
+  assert.equal(png.readUInt32BE(20), 630, 'height');
+});
