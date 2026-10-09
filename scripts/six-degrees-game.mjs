@@ -860,6 +860,11 @@ function initGameUI() {
       .sd-feedback{text-align:center;font-size:.82rem;color:var(--color-text-muted);margin:10px 0 0}
       .sd-icons{display:flex;gap:8px}
       .sd-icon .sd-ico{width:18px;height:18px}
+      /* The tap target is the button, never the drawn icon inside it (Cole's
+         Android: "?" worked, the icon-only stats button didn't). */
+      .sd-icon svg,.sd-icon svg *{pointer-events:none}
+      .sd-icon{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+      .sd-stats-grid .sd-stat > span{letter-spacing:.08em;font-size:.62rem;white-space:nowrap}
       .sd-stats-block{margin:6px 0 16px}
       .sd-stats-block .sd-reveal-label{margin-top:4px}
       .sd-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0 14px;text-align:center}
@@ -1182,7 +1187,14 @@ function initGameUI() {
     card.querySelector('[data-howto]').addEventListener('click', openHowToPlay);
     const statsBtn = card.querySelector('[data-stats]');
     if (practiceMode) statsBtn.hidden = true; // practice keeps no history
-    else statsBtn.addEventListener('click', openStatsModal);
+    else statsBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      // Never fail silently: if anything throws, still show the modal.
+      Promise.resolve().then(openStatsModal).catch((err) => {
+        console.warn('stats modal failed', err);
+        openSdModal((c) => c.appendChild(el('<p class="sd-stats-loading">Couldn\u2019t load your stats. Try again in a moment.</p>')));
+      });
+    });
     if (practiceMode) {
       card.querySelector('.game-hops').textContent = 'Practice';
       card.querySelector('.sd-stats').hidden = true;
