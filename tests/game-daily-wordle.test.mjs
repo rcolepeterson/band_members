@@ -62,20 +62,20 @@ test('a win names start and target, one square per move, no band spoilers', () =
   });
   // Wordle-style: score line, squares, link. No slogan.
   assert.equal(text, [
-    'Six Degrees of Rock #9 🎸 4/4', // no timer
+    'Six Degrees of Rock #9 🎸 Solved in 4 moves', // plain words, no timer
     'Nirvana ➡️ 🟩🟥🟨🟩 ➡️ Metallica', // one square per move
     'sixdegreesofrock.com/game',
   ].join('\n'));
   for (const spoiler of ['Foo Fighters', 'Pearl Jam', 'Probot']) assert.ok(!text.includes(spoiler));
 });
 
-test('a loss scores X, like Wordle', () => {
+test('a loss says Not solved', () => {
   const text = dailyShareResultText({
     date: '2026-10-08', start: 'Nirvana', target: 'Metallica',
     picks: [{ kind: 'deadend' }, { kind: 'solid' }], moves: 2, par: 4, won: false,
   });
   assert.equal(text, [
-    'Six Degrees of Rock #9 🎸 X/4',
+    'Six Degrees of Rock #9 🎸 Not solved',
     'Nirvana ➡️ 🟥🟨 ➡️ Metallica',
     'sixdegreesofrock.com/game',
   ].join('\n'));
@@ -370,4 +370,16 @@ test('/game header says nothing to guests (no "Sign in to play" linking home)', 
   assert.ok(!badge.includes("'Sign in to play'") && !badge.includes("link.href = '/'"), 'no sign-in label, no link home');
   const html = readFileSync(new URL('../game/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('.arena-player[hidden]{display:none}'), 'inline-flex must not beat [hidden]');
+});
+
+test('share squares are each move\'s real color, so grids differ by how you played', () => {
+  const base = { date: '2026-10-08', start: 'Journey', target: 'Heart', par: 3, won: true };
+  const perfect = dailyShareResultText({ ...base, picks: [{ kind: 'optimal' }, { kind: 'optimal' }, { kind: 'optimal' }] });
+  const messy = dailyShareResultText({ ...base, picks: [{ kind: 'optimal' }, { kind: 'deadend' }, { kind: 'obscure' }, { kind: 'solid' }, { kind: 'optimal' }] });
+  assert.equal(perfect.split('\n')[0], 'Six Degrees of Rock #9 🎸 Solved in 3 moves');
+  assert.equal(perfect.split('\n')[1], 'Journey ➡️ 🟩🟩🟩 ➡️ Heart');
+  assert.equal(messy.split('\n')[0], 'Six Degrees of Rock #9 🎸 Solved in 5 moves');
+  assert.equal(messy.split('\n')[1], 'Journey ➡️ 🟩🟥🟨🟨🟩 ➡️ Heart');
+  assert.equal(messy.split('\n').at(-1), 'sixdegreesofrock.com/game');
+  assert.ok(!/\d+\/\d+/.test(messy), 'no fraction score');
 });
