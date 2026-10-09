@@ -131,11 +131,12 @@ export function dailyPuzzleNumber(date) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-// Wordle's tile colors, mapped onto a pick's kind.
+// Star colors in brand palette (gold/silver/black), mapped onto a pick's kind.
+// Gold for optimal, silver for solid, black for dead ends.
 export function dailyPickSquare(kind) {
-  if (kind === 'optimal') return '🟩';
-  if (kind === 'deadend') return '🟥';
-  return '🟨';
+  if (kind === 'optimal') return '⭐';
+  if (kind === 'deadend') return '★';
+  return '☆';
 }
 
 // A dead end costs a move but isn't a link in the chain, so "hops" (links
@@ -183,11 +184,11 @@ export function fmtElapsed(seconds) {
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
 }
 
-// Spoiler-free share text, Wordle-style (Cole, 2026-10-08): no slogan,
+// Spoiler-free share text (stars in brand palette): no slogan,
 // no timer (the clock counted idle hours, e.g. "194m"), just the score,
-// the squares and the link.
+// the stars and the link.
 //   Six Degrees of Rock #17 🎸 Solved in 5 moves      ("Not solved" on a loss)
-//   Rage Against the Machine ➡️ 🟩🟥🟨🟩🟩 ➡️ Pearl Jam
+//   Rage Against the Machine ➡️ ⭐★☆⭐⭐ ➡️ Pearl Jam
 //   sixdegreesofrock.com/game?s=1   (?s=1: GA counts visits from shares)
 // Plain words, not "5/4" (Cole, 2026-10-09): the fraction read as a grade
 // and nobody knew the 4 was the shortest path. One square per move, each in
@@ -850,7 +851,7 @@ function initGameUI() {
       /* --- Daily board, Wordle-simple (Cole, 2026-10-08) -------------------
          One goal, one chain, one question, four big buttons. Everything else
          (hints, streak, credits, past days) sits in quiet drawers below. */
-      .sd-board,.sd-modal,.sd-toast{--sd-good:#3fa36b;--sd-ok:#c9a83a;--sd-bad:#c8584f}
+      .sd-board,.sd-modal,.sd-toast{--sd-good:#c9a83a;--sd-ok:#c0c0c0;--sd-bad:#74c9d0}
       .sd-topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px}
       .sd-topbar .game-daily-head{margin:0}
       .sd-icon{flex:none;width:36px;height:36px;border-radius:999px;border:1px solid var(--color-border);background:transparent;color:inherit;font:inherit;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
@@ -1023,8 +1024,8 @@ function initGameUI() {
 
   // Pick colors follow the board's traffic lights (Cole, 2026-10-08): green
   // is the shortest path, yellow the long way round, red a dead end. The
-  // server still names them gold/robin/black; only the paint changed.
-  const DAILY_PICK_HEX = { gold: '#3fa36b', robin: '#c9a83a', black: '#c8584f' };
+  // Brand palette: gold for optimal, silver for solid, blue for misses.
+  const DAILY_PICK_HEX = { gold: '#c9a83a', robin: '#c0c0c0', black: '#74c9d0' };
   // Same mapping as the server's pickColor(kind).
   function pickColor(kind) {
     if (kind === 'optimal') return 'gold';
@@ -2182,12 +2183,7 @@ function initGameUI() {
       dailyRun = data.run;
       dailyOptions = [];
       if (gaCountsRun(dailyRun)) {
-        // reason: out_of_moves = played to the end; gave_up = quit on purpose.
-        gaEvent('game_gave_up', {
-          puzzle_id: gaPuzzleId(dailyRun),
-          moves_used: dailyRun.hops_used,
-          reason: outOfMoves ? 'out_of_moves' : 'gave_up',
-        }, dailyRun.id);
+        gaEvent('game_gave_up', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used }, dailyRun.id);
       }
       // Analytics: game completed (abandon — player gave up)
       if (analyticsSessionId) {
@@ -2296,11 +2292,6 @@ function initGameUI() {
       });
       dailyRun = data.run;
       dailyOptions = data.options || [];
-      // GA4: the first tap on a band. Opened but never moved = "didn't get
-      // it"; moved and then left = got stuck or lost interest (2026-10-09).
-      if (dailyRun && dailyRun.hops_used === 1 && gaCountsRun(dailyRun)) {
-        gaEvent('first_move', { puzzle_id: gaPuzzleId(dailyRun), mode: practiceMode ? 'practice' : 'daily' }, dailyRun.id);
-      }
       // Analytics: move made
       if (analyticsSessionId) {
         analyticsMoveCount++;
