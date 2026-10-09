@@ -994,20 +994,44 @@ body.rbft-sigma-chrome .rbft-boot-shell { display: none !important; }
   width: 100%;
   height: clamp(52px, 5.6vw, 62px);
   border-radius: 999px;
-  border: 1px solid rgba(190, 206, 224, 0.28);
-  background: rgba(10, 14, 20, 0.55);
+  border: 1px solid rgba(190, 206, 224, 0.18);
+  /* A slow shimmer says "loading", so nobody tries to type here. */
+  background:
+    linear-gradient(100deg, transparent 30%, rgba(143, 232, 246, 0.07) 50%, transparent 70%) 0 0 / 220% 100% no-repeat,
+    rgba(10, 14, 20, 0.55);
+  animation: rbft-boot-shimmer 1.6s linear infinite;
   display: flex;
   align-items: center;
+  gap: 12px;
   padding: 0 clamp(18px, 2vw, 24px);
-  color: #7f8fa1;
-  font-size: clamp(16px, 1.5vw, 18px);
-  font-style: italic;
+  color: #6b7a8c;
+  font-size: clamp(15px, 1.4vw, 17px);
+  cursor: progress;
+}
+.rbft-boot-shell__spinner {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(143, 232, 246, 0.22);
+  border-top-color: rgba(143, 232, 246, 0.85);
+  animation: rbft-boot-spin 0.9s linear infinite;
+}
+@keyframes rbft-boot-shimmer { from { background-position: 120% 0, 0 0; } to { background-position: -120% 0, 0 0; } }
+@keyframes rbft-boot-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .rbft-boot-shell__field, .rbft-boot-shell__spinner { animation: none; }
 }
 .rbft-boot-shell__note {
-  color: #64748b;
-  font-size: 13px;
+  /* The shell ignores the pointer; this link must not. */
+  pointer-events: auto;
+  color: #8fe8f6;
+  font-size: 14px;
   letter-spacing: 0.02em;
+  text-decoration: none;
+  padding: 6px 10px;
 }
+.rbft-boot-shell__note:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 /* Downward-opening popovers (mirror of .popover-up used elsewhere). */
 .popover-down {
@@ -3118,12 +3142,16 @@ main.layout { padding: 0 !important; gap: 0 !important; }
    })();
  </script>
 
- <!-- Stands in for the constellation chrome until the module mounts. -->
- <div class="rbft-boot-shell" aria-hidden="true">
+ <!-- Stands in for the constellation chrome until the module mounts.
+      The real search box only appears once the band data has loaded, so this
+      stand-in must look like it's loading, not like a box you can type in
+      (Cole, 2026-10-08). The game doesn't need the map, so offer it while
+      people wait. -->
+ <div class="rbft-boot-shell">
    <div class="rbft-boot-shell__inner">
-     <p class="rbft-boot-shell__wordmark">Six Degrees of Rock</p>
-     <div class="rbft-boot-shell__field">who&rsquo;s your favorite band?</div>
-     <p class="rbft-boot-shell__note">Mapping the universe of rock&hellip;</p>
+     <p class="rbft-boot-shell__wordmark" aria-hidden="true">Six Degrees of Rock</p>
+     <div class="rbft-boot-shell__field" role="status"><span class="rbft-boot-shell__spinner" aria-hidden="true"></span>Loading the bands&hellip;</div>
+     <a class="rbft-boot-shell__note" href="/game">While the map loads, play today&rsquo;s game &rarr;</a>
    </div>
  </div>
  <!--
