@@ -393,3 +393,18 @@ test('practice is findable: a win offers it, and a warm-up link sits under the d
   assert.match(src, /\.sd-practice-link a\{[^}]*min-height:44px/, 'thumb-sized');
   assert.ok(src.includes('if (practiceLink) practiceLink.hidden = !active;'), 'gone once the daily is finished');
 });
+
+test('GA4: /game loads the tag, and the five game events fire once per occurrence', () => {
+  const html = readFileSync(new URL('../game/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('googletagmanager.com/gtag/js?id=G-E2SNSPFHGB'), 'same GA4 property as the homepage');
+  assert.match(html, /ga_debug=1/, 'DebugView switch');
+  // Once per run: remembered under the run id, so re-renders and reloads don't repeat.
+  assert.match(src, /localStorage\.getItem\(key\)\) return;/);
+  assert.match(src, /gaEvent\('game_started', \{ puzzle_id: gaPuzzleId\(dailyRun\), mode: practiceMode \? 'practice' : 'daily' \}, dailyRun\.id\)/);
+  assert.match(src, /dailyRun\.status === 'active' && dailyRun\.hops_used === 0 && gaCountsRun\(dailyRun\)/, 'only a fresh first attempt');
+  assert.match(src, /practiceMode \|\| \(run\.run_number \|\| 1\) === 1/, 'replays of a finished daily never count');
+  assert.match(src, /gaEvent\('game_completed', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used, par: dailyRun\.par \}, dailyRun\.id\)/);
+  assert.match(src, /gaEvent\('game_gave_up', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used \}, dailyRun\.id\)/);
+  assert.match(src, /hint_type: type === 'eliminate' \? 'cut_option' : 'check_band'/);
+  assert.match(src, /gaEvent\('share_clicked', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used \}\)/, 'one per click, no once-key');
+});
