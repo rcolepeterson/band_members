@@ -207,6 +207,22 @@ export function dailyShareResultText({ date, start, target, picks = [], moves = 
 
 const isBrowser = typeof document !== 'undefined' && typeof window !== 'undefined';
 
+// Add to Home Screen, on our terms (Cole, 2026-10-08: "I don't want to scare
+// people, or have them worry they're installing an app"). Chrome's own
+// banner can pop up before someone has played at all; hold it, and offer
+// it in plain words on the results screen instead.
+let deferredInstallPrompt = null;
+if (isBrowser) {
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+  });
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    try { localStorage.setItem('sdr-home-screen-added', '1'); } catch {}
+  });
+}
+
 let graphPromise = null;
 function loadGraph() {
   if (!graphPromise) {
@@ -886,6 +902,8 @@ function initGameUI() {
       .sd-practice-cta:hover{background:var(--color-primary-hover)}
       .sd-practice-foot{text-align:center;margin:14px 0 0}
       .sd-practice-foot p{font-size:.8rem;color:var(--color-text-muted);margin:6px 0 0}
+      .sd-home-screen{text-align:center;font-size:.85rem;color:var(--color-text-muted);margin:12px 0 0}
+      .sd-home-screen strong{color:var(--color-text);font-weight:600}
       .sd-misses{text-align:center;font-size:.82rem;color:#f0b8b2;margin:-4px 0 8px}
       .sd-via-name{font-size:.68rem;font-style:italic;color:var(--color-text-muted);white-space:normal}
       .game-chain-good{border-color:var(--sd-good);background:color-mix(in srgb,var(--sd-good) 22%,transparent)}
@@ -1595,6 +1613,8 @@ function initGameUI() {
       const shareBtn = el('<button type="button" class="sd-primary">Share result</button>');
       shareBtn.addEventListener('click', () => shareDailyText(shareBtn, text));
       c.appendChild(shareBtn);
+      const homeScreen = homeScreenHintEl();
+      if (homeScreen) c.appendChild(homeScreen);
       const mapLink = musicMapLinkEl(run);
       mapLink.classList.add('sd-map-link--modal');
       c.appendChild(mapLink);
@@ -1721,6 +1741,38 @@ function initGameUI() {
     a.href = '/?band=' + encodeURIComponent(run.start_band.name);
     a.querySelector('span').textContent = `Explore ${run.start_band.name} on the music map →`;
     return a;
+  }
+
+  // "Play tomorrow in one tap": shown only after a game, never on arrival.
+  // Android/desktop Chrome: a button that opens Chrome's own prompt.
+  // iPhone/iPad (no API for it): a one-line tip. Nothing if the game is
+  // already on the home screen or was added.
+  function homeScreenHintEl() {
+    let added = false;
+    try { added = localStorage.getItem('sdr-home-screen-added') === '1'; } catch {}
+    const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+      || window.navigator.standalone === true;
+    if (added || standalone) return null;
+    if (deferredInstallPrompt) {
+      const p = el('<p class="sd-home-screen">Play tomorrow in one tap: <button type="button" class="sd-linkbtn">Add to home screen</button></p>');
+      p.querySelector('button').addEventListener('click', async () => {
+        const prompt = deferredInstallPrompt;
+        if (!prompt) return;
+        deferredInstallPrompt = null; // Chrome allows one prompt per event
+        prompt.prompt();
+        try {
+          const choice = await prompt.userChoice;
+          if (choice && choice.outcome === 'accepted') p.remove();
+        } catch {}
+      });
+      return p;
+    }
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (ios) {
+      return el('<p class="sd-home-screen">Tip: tap <strong>Share</strong>, then <strong>Add to Home Screen</strong> to play tomorrow in one tap.</p>');
+    }
+    return null;
   }
 
   // The newest link lands in the chain with a little pop.

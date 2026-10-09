@@ -356,3 +356,10 @@ test('/game installs to the home screen: manifest, icons, iOS tags', () => {
   }
   assert.ok(m.icons.some((i) => i.sizes === '512x512' && i.purpose === 'maskable'));
 });
+
+test('home screen: no automatic banner; a quiet offer after a game only', () => {
+  assert.match(src, /addEventListener\('beforeinstallprompt', \(event\) => \{\s*event\.preventDefault\(\);/);
+  assert.ok(src.includes('Play tomorrow in one tap: <button type="button" class="sd-linkbtn">Add to home screen</button>'));
+  assert.ok(src.includes('const homeScreen = homeScreenHintEl();'), 'offered in the results modal');
+  assert.ok(!/install(ing)? (the|an|our) app/i.test(src.slice(src.indexOf('function homeScreenHintEl'), src.indexOf('function homeScreenHintEl') + 2000)), 'no "install an app" wording');
+});
