@@ -363,3 +363,11 @@ test('home screen: no automatic banner; a quiet offer after a game only', () => 
   assert.ok(src.includes('const homeScreen = homeScreenHintEl();'), 'offered in the results modal');
   assert.ok(!/install(ing)? (the|an|our) app/i.test(src.slice(src.indexOf('function homeScreenHintEl'), src.indexOf('function homeScreenHintEl') + 2000)), 'no "install an app" wording');
 });
+
+test('/game header says nothing to guests (no "Sign in to play" linking home)', () => {
+  const badge = src.slice(src.indexOf('async function renderArenaPlayerBadge'), src.indexOf('const h = await loadMyHandle();', src.indexOf('async function renderArenaPlayerBadge')));
+  assert.match(badge, /if \(!isSignedIn\(\)\) \{[\s\S]*badge\.hidden = true;[\s\S]*return;/);
+  assert.ok(!badge.includes("'Sign in to play'") && !badge.includes("link.href = '/'"), 'no sign-in label, no link home');
+  const html = readFileSync(new URL('../game/index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('.arena-player[hidden]{display:none}'), 'inline-flex must not beat [hidden]');
+});
