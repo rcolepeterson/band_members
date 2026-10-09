@@ -113,7 +113,7 @@ export default async (req) => {
       headers: {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': BANDS_CACHE_CONTROL,
-        'netlify-cdn-cache-control': `${BANDS_CACHE_CONTROL}, durable`,
+        'netlify-cdn-cache-control': BANDS_CDN_CACHE_CONTROL,
       },
     });
   } catch (err) {
@@ -128,7 +128,15 @@ export default async (req) => {
 // new read path. Does NOT collide with bands.mjs, which has no `config`
 // export and therefore only serves the legacy `/.netlify/functions/bands`
 // path.
-// 60s fresh, then up to an hour of "serve the old copy while fetching a new one".
+// Browsers: 60s fresh, then up to an hour of "serve the old copy while
+// fetching a new one".
 export const BANDS_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=3600';
+// Netlify's CDN: 10 minutes (Cole/Aaron, 2026-10-09). Every CDN refresh is a
+// full read of the graph from Neon (~8 MB raw), and Neon transfer was at 80%.
+// 60s meant up to ~1,400 reads a day; 600s is ~144. Others may see an edit
+// up to ~10 minutes late; the editor still sees their own change at once
+// (the ?v= bypass above). Only the CDN is longer, so no phone holds an old
+// copy any longer than before.
+export const BANDS_CDN_CACHE_CONTROL = 'public, max-age=600, stale-while-revalidate=3600, durable';
 
 export const config = { path: '/api/bands', method: 'GET' };
