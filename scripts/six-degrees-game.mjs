@@ -186,13 +186,15 @@ export function fmtElapsed(seconds) {
 // Spoiler-free share text, Wordle-style (Cole, 2026-10-08): no slogan,
 // no timer (the clock counted idle hours, e.g. "194m"), just the score,
 // the squares and the link.
-//   Six Degrees of Rock #17 🎸 5/4      (X/4 on a loss)
+//   Six Degrees of Rock #17 🎸 Solved in 5 moves      ("Not solved" on a loss)
 //   Rage Against the Machine ➡️ 🟩🟥🟨🟩🟩 ➡️ Pearl Jam
 //   sixdegreesofrock.com/game
-// One square per move, so the squares always match the score.
+// Plain words, not "5/4" (Cole, 2026-10-09): the fraction read as a grade
+// and nobody knew the 4 was the shortest path. One square per move, each in
+// that move's real color, so the squares always match the count.
 export function dailyShareResultText({ date, start, target, picks = [], moves = picks.length, par, won }) {
   const num = dailyPuzzleNumber(date);
-  const score = `${won ? moves : 'X'}/${par}`;
+  const score = won ? `Solved in ${moves} ${moves === 1 ? 'move' : 'moves'}` : 'Not solved';
   const squares = picks.map((p) => dailyPickSquare(p.kind)).join('');
   return [
     `Six Degrees of Rock${num ? ` #${num}` : ''} 🎸 ${score}`,
