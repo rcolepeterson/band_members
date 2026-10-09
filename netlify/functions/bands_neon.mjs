@@ -65,7 +65,8 @@ export default async (req) => {
         order by name
       `,
       sql`
-        select id, name, city, state, country, instrument1, instrument2, years_active, bio
+        select id, name, city, state, country, instrument1, instrument2, years_active, bio,
+               coalesce(popularity_score, 0) as popularity_score
         from band_members
         order by name
       `,
