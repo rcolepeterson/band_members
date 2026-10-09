@@ -222,7 +222,13 @@ export function getNeighborhood({
       // Without this, a super-connector (30+ bands) floods the view.
       const neighbors = Array.from(adj.get(id) || new Set())
         .filter(neighbor => !visible.has(neighbor) && !seenThisLayer.has(neighbor))
-        .sort((a, b) => degree(b) - degree(a) || String(a).localeCompare(String(b)))
+        .sort((a, b) => {
+          // Peak popularity ordering: most recognizable members first.
+          // Falls back to degree then name for a stable, reproducible order.
+          const popA = byId.get(a)?.popularity_score || 0;
+          const popB = byId.get(b)?.popularity_score || 0;
+          return popB - popA || degree(b) - degree(a) || String(a).localeCompare(String(b));
+        })
         .slice(0, maxSatellites);
       neighbors.forEach(neighbor => {
         seenThisLayer.add(neighbor);
