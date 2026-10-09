@@ -218,7 +218,9 @@ test('the slate never offers a step backwards (start band or bands already in th
 test('/api/bands is cached briefly, errors are not, and writes bypass it client-side', () => {
   const neon = src('netlify/functions/bands_neon.mjs');
   assert.match(neon, /BANDS_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=3600'/);
-  assert.match(neon, /'netlify-cdn-cache-control': `\$\{BANDS_CACHE_CONTROL\}, durable`/);
+  // Netlify's CDN keeps it 10 minutes to spare Neon transfer (2026-10-09).
+  assert.match(neon, /BANDS_CDN_CACHE_CONTROL = 'public, max-age=600, stale-while-revalidate=3600, durable'/);
+  assert.match(neon, /'netlify-cdn-cache-control': BANDS_CDN_CACHE_CONTROL/);
   assert.match(neon, /return serverError\('could not load bands'/, 'errors still go through json() (no-store)');
   const html = src('index.html');
   assert.match(html, /const response = await fetch\(\.\.\.bandsFetchArgs\(\)\);/);
