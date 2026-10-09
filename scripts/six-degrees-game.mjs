@@ -189,7 +189,7 @@ export function fmtElapsed(seconds) {
 // the stars and the link.
 //   Six Degrees of Rock #17 🎸 Solved in 5 moves      ("Not solved" on a loss)
 //   Rage Against the Machine ➡️ ⭐★☆⭐⭐ ➡️ Pearl Jam
-//   sixdegreesofrock.com/game
+//   sixdegreesofrock.com/game?s=1   (?s=1: GA counts visits from shares)
 // Plain words, not "5/4" (Cole, 2026-10-09): the fraction read as a grade
 // and nobody knew the 4 was the shortest path. One square per move, each in
 // that move's real color, so the squares always match the count.
@@ -200,7 +200,7 @@ export function dailyShareResultText({ date, start, target, picks = [], moves = 
   return [
     `Six Degrees of Rock${num ? ` #${num}` : ''} 🎸 ${score}`,
     [start, ...(squares ? [squares] : []), target].join(' ➡️ '),
-    'sixdegreesofrock.com/game',
+    'sixdegreesofrock.com/game?s=1',
   ].join('\n');
 }
 
@@ -286,6 +286,27 @@ function trackGameEvent(payload) {
   } catch {
     // fetch itself threw (very old browser) — ignore
   }
+}
+
+// GA4 events for the daily game (Cole, 2026-10-09). Separate from
+// trackGameEvent above, which feeds our own game_analytics table.
+//
+// onceKey makes an event fire once per occurrence, not once per paint: the
+// board re-renders on every move and on reload, so "this run started" or
+// "this run was won" is remembered (per browser) under the run's id. Events
+// without a key (share clicks) are one per click by nature.
+export function gaEvent(name, params, onceKey) {
+  if (!isBrowser || typeof window.gtag !== 'function') return;
+  if (onceKey != null) {
+    const key = `sdr-ga:${name}:${onceKey}`;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+    } catch {
+      // Private mode: send it anyway; a rare duplicate beats a lost event.
+    }
+  }
+  try { window.gtag('event', name, params); } catch {}
 }
 
 function initGameUI() {
@@ -1295,6 +1316,11 @@ function initGameUI() {
         band_a: dailyRun && dailyRun.start_band ? dailyRun.start_band.name : null,
         band_b: dailyRun && dailyRun.target ? dailyRun.target.name : null,
       });
+      // GA4: a puzzle begins when a fresh run (no moves yet) is dealt; a
+      // reload of the same run, or of a finished day, is not a new start.
+      if (dailyRun && dailyRun.status === 'active' && dailyRun.hops_used === 0 && gaCountsRun(dailyRun)) {
+        gaEvent('game_started', { puzzle_id: gaPuzzleId(dailyRun), mode: practiceMode ? 'practice' : 'daily' }, dailyRun.id);
+      }
       card.querySelector('.game-daily-note').textContent = '';
       paintDailyBoard(card);
       // First visit: show the rules once, the way Wordle does.
@@ -1445,6 +1471,7 @@ function initGameUI() {
 
   async function shareDailyText(btn, text) {
     const label = btn.textContent;
+    if (dailyRun) gaEvent('share_clicked', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used });
     // Phones get the share sheet; everywhere else copies, like Wordle.
     let coarse = false;
     try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch {}
@@ -1461,6 +1488,24 @@ function initGameUI() {
       btn.textContent = 'Copy failed. Long-press the chain to copy.';
     }
     setTimeout(() => { btn.textContent = label; }, 2200);
+  }
+
+  // GA4 parameters for the current run. Practice has no puzzle number, so
+  // its puzzle_id is "practice". Only a first attempt at the daily counts
+  // (a replay of a finished day is not a new start); every practice puzzle
+  // is a fresh run.
+  function gaPuzzleId(run) {
+    return practiceMode ? 'practice' : String(dailyPuzzleNumber(run && run.chain_date) || '');
+  }
+  function gaCountsRun(run) {
+    return Boolean(run && run.id != null) && (practiceMode || (run.run_number || 1) === 1);
+  }
+  function gaHint(run, type) {
+    if (!gaCountsRun(run)) return;
+    gaEvent('hint_used', {
+      puzzle_id: gaPuzzleId(run),
+      hint_type: type === 'eliminate' ? 'cut_option' : 'check_band',
+    }, `${run.id}:${run.hints_used}`);
   }
 
   // The share text for the current run: one source for the results modal
@@ -2137,6 +2182,9 @@ function initGameUI() {
       });
       dailyRun = data.run;
       dailyOptions = [];
+      if (gaCountsRun(dailyRun)) {
+        gaEvent('game_gave_up', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used }, dailyRun.id);
+      }
       // Analytics: game completed (abandon — player gave up)
       if (analyticsSessionId) {
         const durationSeconds = analyticsGameStartTime
@@ -2203,6 +2251,7 @@ function initGameUI() {
         });
         dailyRun = data.run;
         dailyOptions = data.options || [];
+        gaHint(dailyRun, 'reveal');
         // Analytics: hint used (peek/reveal)
         if (analyticsSessionId) {
           analyticsHintCount++;
@@ -2273,6 +2322,9 @@ function initGameUI() {
       }
       await pause(kind === 'deadend' ? 1000 : 800);
       if (data.completed) {
+        if (gaCountsRun(dailyRun)) {
+          gaEvent('game_completed', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used, par: dailyRun.par }, dailyRun.id);
+        }
         // Analytics: game completed (win)
         if (analyticsSessionId) {
           const durationSeconds = analyticsGameStartTime
@@ -2321,6 +2373,7 @@ function initGameUI() {
       });
       dailyRun = data.run;
       dailyOptions = data.options || [];
+      gaHint(dailyRun, type);
       // Analytics: hint used (eliminate)
       if (analyticsSessionId) {
         analyticsHintCount++;
