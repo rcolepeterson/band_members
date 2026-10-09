@@ -1,12 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  One entry, on purpose. Every ?anchor= serves the same document with the same
-  content, so listing 496 band URLs would be 496 duplicates of this page.
+  The map is one page: every ?anchor= serves the same document with the same
+  content, so listing band URLs would just be duplicates of /. The daily game
+  is its own page (2026-10-08). Bump lastmod when either page changes.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://sixdegreesofrock.com/</loc>
+    <lastmod>2026-10-08</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://sixdegreesofrock.com/game/</loc>
+    <lastmod>2026-10-08</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
   </url>
 </urlset>

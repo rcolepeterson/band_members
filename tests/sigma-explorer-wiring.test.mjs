@@ -1434,7 +1434,8 @@ test('the page title carries no version number', () => {
   // labelled differently.
   const title = INDEX_HTML.match(/<title>([^<]*)<\/title>/);
   assert.ok(title, 'expected a title tag');
-  assert.equal(title[1], 'Six Degrees of Rock');
+  // Descriptive for search (2026-10-08); still no version, still matches og:title.
+  assert.equal(title[1], 'Six Degrees of Rock — How Bands and Musicians Connect');
   // Pinned as a shape too, so v2 cannot arrive the same way v1 did.
   assert.doesNotMatch(title[1], /\bv\d+\b/i, 'no version number in the title');
   // And it must agree with the card a shared link renders.

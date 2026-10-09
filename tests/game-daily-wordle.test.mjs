@@ -296,3 +296,28 @@ test('feedback: out of the header, in the footer and on the results screen', () 
   assert.ok(footer.includes('id="send-feedback-btn"'), 'in the footer, same id so the popover wiring is unchanged');
   assert.ok(src.includes('Something off? <button type="button" class="sd-linkbtn">Send feedback</button>'));
 });
+
+test('/game has its own link-preview image', () => {
+  const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'game/index.html'), 'utf8');
+  assert.match(html, /<meta property="og:image" content="https:\/\/sixdegreesofrock\.com\/game-og\.png\?v=2" \/>/);
+  assert.match(html, /<meta name="twitter:image" content="https:\/\/sixdegreesofrock\.com\/game-og\.png\?v=2" \/>/);
+  const png = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'game-og.png'));
+  assert.equal(png.readUInt32BE(16), 1200, 'width');
+  assert.equal(png.readUInt32BE(20), 630, 'height');
+});
+
+test('SEO: /game canonical is the served URL, structured data on both pages, both in the sitemap', () => {
+  const read = (f) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', f), 'utf8');
+  const game = read('game/index.html');
+  // /game 301s to /game/; a canonical pointing at a redirect is a crawl error.
+  assert.match(game, /<link rel="canonical" href="https:\/\/sixdegreesofrock\.com\/game\/" \/>/);
+  assert.match(game, /<meta property="og:url" content="https:\/\/sixdegreesofrock\.com\/game\/" \/>/);
+  for (const [file, html] of [['game', game], ['home', read('index.html')]]) {
+    const m = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+    assert.ok(m, `${file} has JSON-LD`);
+    JSON.parse(m[1]); // must be valid JSON
+  }
+  const sitemap = read('sitemap.xml');
+  assert.match(sitemap, /<loc>https:\/\/sixdegreesofrock\.com\/<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/sixdegreesofrock\.com\/game\/<\/loc>/);
+});
