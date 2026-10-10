@@ -13,27 +13,52 @@
 
 import { getSql, isDbConfigured } from './_db.mjs';
 import { readGameGraphRows } from './game_daily.mjs';
+import {
+  GAME_TABLES,
+  serveCachedGraph,
+} from './_graph_cache.mjs';
 
 export default async (req) => {
   if (req.method !== 'GET') return new Response('Method Not Allowed', { status: 405 });
   if (!isDbConfigured()) {
     return Response.json({ ok: false, error: 'database not configured' }, { status: 503 });
   }
-  try {
-    const { memberships, bands, members, excluded } = await readGameGraphRows(getSql());
-    return new Response(JSON.stringify({
+
+  const sql = getSql();
+
+  // The game graph payload, byte-for-byte what this endpoint served before
+  // the Blobs version cache (2026-10-10). Extracted unchanged into a builder
+  // so serveCachedGraph can run it only when the data version changed.
+  const buildPayload = async () => {
+    const { memberships, bands, members, excluded } = await readGameGraphRows(sql);
+    return {
       ok: true,
       memberships: memberships.map((m) => [m.band_id, m.member_id]),
       bands,
       members,
       excluded: [...excluded],
-    }), {
-      status: 200,
-      headers: {
-        'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'public, max-age=300',
-        'netlify-cdn-cache-control': 'public, max-age=3600, stale-while-revalidate=3600, durable',
-      },
+    };
+  };
+
+  const toResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'public, max-age=300',
+      'netlify-cdn-cache-control': 'public, max-age=3600, stale-while-revalidate=3600, durable',
+    },
+  });
+
+  try {
+    // Neon transfer (2026-10-10): serve the saved Blobs copy when the data
+    // version is unchanged, instead of re-reading ~3 MB from Neon on every
+    // CDN refresh. Falls back to readGameGraphRows on any Blob error.
+    return await serveCachedGraph({
+      sql,
+      tables: GAME_TABLES,
+      prefix: 'api-game-graph',
+      buildPayload,
+      toResponse,
     });
   } catch (err) {
     console.error('game_graph failed', err && err.message);

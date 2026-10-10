@@ -36,6 +36,10 @@ import {
   serverError,
   methodNotAllowed,
 } from './_db.mjs';
+import {
+  BANDS_TABLES,
+  serveCachedGraph,
+} from './_graph_cache.mjs';
 
 export default async (req) => {
   if (req.method !== 'GET') return methodNotAllowed();
@@ -44,7 +48,10 @@ export default async (req) => {
 
   const sql = getSql();
 
-  try {
+  // The full graph payload, byte-for-byte what this endpoint served before
+  // the Blobs version cache (2026-10-10). Extracted unchanged into a builder
+  // so serveCachedGraph can run it only when the data version changed.
+  const buildPayload = async () => {
     // Three independent selects rather than one big join: the client wants
     // nodes (bands, members) and edges (memberships) as separate arrays
     // anyway (see normalizeNeonToRows() in index.html), and keeping them
@@ -83,39 +90,28 @@ export default async (req) => {
         from band_links
       `,
     ]);
+    return { ok: true, bands, members, memberships, band_links };
+  };
 
-    // perf(api): response compression. This payload is ~215KB uncompressed
-    // (full bands + members + memberships graph as of 2026-07), which is
-    // worth gzip/brotli-ing on the wire for the mobile clients this PR's
-    // canvas renderer work is targeting. No code-level compression was
-    // added here because Netlify's platform already does it for us:
-    // Netlify Functions v2 responses (this one included) get automatic
-    // Brotli/gzip compression at the CDN edge based on the request's
-    // Accept-Encoding header -- verified empirically against the live
-    // endpoint:
-    //   curl -s -D - -o /dev/null https://bandmembers.netlify.app/api/bands \
-    //     -H "Accept-Encoding: gzip"     -> content-encoding: gzip
-    //   curl -s -D - -o /dev/null https://bandmembers.netlify.app/api/bands \
-    //     -H "Accept-Encoding: gzip, br, deflate" -> content-encoding: br
-    // This holds whatever the Cache-Control below says --
-    // compression and caching are independent concerns at the edge. If
-    // Netlify's platform behavior ever changes, revisit this; until then,
-    // adding manual gzip here would just duplicate what the platform does.
-    // Cached (Cole/team, 2026-10-08): this used to be no-store, so every
-    // visit re-downloaded ~1.6 MB gzipped and re-queried the whole graph.
-    // Public data, same for everyone, so it's safe to share. Browsers and
-    // Netlify's CDN reuse it for 60s and may serve a copy up to an hour old
-    // while refreshing in the background. Editors never see a stale copy of
-    // their own change: after a write the page asks for /api/bands?v=<time>
-    // with cache: 'no-store' (see loadGraphData in index.html), and the CDN
-    // keys on the query string. Errors below stay no-store via json().
-    return new Response(JSON.stringify({ ok: true, bands, members, memberships, band_links }), {
-      status: 200,
-      headers: {
-        'content-type': 'application/json; charset=utf-8',
-        'cache-control': BANDS_CACHE_CONTROL,
-        'netlify-cdn-cache-control': BANDS_CDN_CACHE_CONTROL,
-      },
+  const toResponse = (payload) => new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': BANDS_CACHE_CONTROL,
+      'netlify-cdn-cache-control': BANDS_CDN_CACHE_CONTROL,
+    },
+  });
+
+  try {
+    // Neon transfer (2026-10-10): serve the saved Blobs copy when the data
+    // version is unchanged, instead of re-reading ~8 MB from Neon on every
+    // CDN refresh. Falls back to the queries above on any Blob error.
+    return await serveCachedGraph({
+      sql,
+      tables: BANDS_TABLES,
+      prefix: 'api-bands',
+      buildPayload,
+      toResponse,
     });
   } catch (err) {
     console.error('bands_neon GET failed', err);
