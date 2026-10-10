@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Share test</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 24px 16px; background: #05080d; color: #edf7ff; font: 16px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  p { color: #9fb1c1; margin: 0 0 20px; }
+  button { display: block; width: 100%; min-height: 56px; margin: 0 0 8px; border-radius: 12px; border: 1px solid #52aeb6; background: #0b131c; color: #edf7ff; font: 600 16px system-ui, sans-serif; }
+  pre { white-space: pre-wrap; background: #0b131c; border-radius: 8px; padding: 10px; margin: 0 0 20px; font-size: 13px; color: #9fb1c1; }
+  #out { color: #8fe8f6; min-height: 24px; }
+</style>
+</head>
+<body>
+  <h1>Facebook share test</h1>
+  <p>Tap each button, choose Facebook, and note which ones show the text in the new post.</p>
+
+  <button id="a">A: exactly what the game shares now</button>
+  <pre id="a-text"></pre>
+  <button id="b">B: same, without the link</button>
+  <pre id="b-text"></pre>
+  <button id="c">C: text without the link, link sent separately</button>
+  <pre id="c-text"></pre>
+  <p id="out"></p>
+
+<script>
+  // Temporary test page (2026-10-10): why the game's share loses its text in
+  // Facebook on Android when Wordle's doesn't. Not linked from the site.
+  const head = 'Six Degrees of Rock #18 🎸 Solved in 7 moves\nAC/DC ➡️ 🟩🟨🟨🟨🟩🟩🟩 ➡️ Santana';
+  const link = 'sixdegreesofrock.com/game?s=1';
+  const variants = {
+    a: { text: head + '\n' + link },
+    b: { text: head },
+    c: { text: head, url: 'https://' + link },
+  };
+  for (const [id, data] of Object.entries(variants)) {
+    document.getElementById(id + '-text').textContent = JSON.stringify(data, null, 1);
+    document.getElementById(id).addEventListener('click', async () => {
+      const out = document.getElementById('out');
+      if (!navigator.share) { out.textContent = 'This browser has no share sheet.'; return; }
+      try { await navigator.share(data); out.textContent = id.toUpperCase() + ': shared.'; }
+      catch (err) { out.textContent = id.toUpperCase() + ': ' + (err && err.name); }
+    });
+  }
+</script>
+</body>
+</html>
