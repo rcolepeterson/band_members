@@ -112,3 +112,35 @@ test('practice refuses an excluded band as its start', () => {
   const solo = readFileSync(new URL('../netlify/functions/game_solo_play.mjs', import.meta.url), 'utf8');
   assert.match(solo, /if \(excluded && excluded\.has\(String\(check\[0\]\.id\)\)\) return badRequest/);
 });
+
+test('Neon transfer: the game graph comes from the CDN-cached /api/game-graph, Neon only as fallback', async () => {
+  const daily = readFileSync(new URL('../netlify/functions/game_daily.mjs', import.meta.url), 'utf8');
+  assert.match(daily, /const rows = \(await fetchGameGraphRows\(\)\) \|\| \(await readGameGraphRows\(sql\)\);/);
+  const endpoint = readFileSync(new URL('../netlify/functions/game_graph.mjs', import.meta.url), 'utf8');
+  assert.match(endpoint, /path: '\/api\/game-graph'/);
+  assert.match(endpoint, /'netlify-cdn-cache-control': 'public, max-age=3600/);
+  // The CDN copy builds the same graph, exclusions included.
+  const saved = { url: process.env.URL, fetch: globalThis.fetch };
+  process.env.URL = 'https://example.test';
+  globalThis.fetch = async (u) => ({
+    ok: String(u) === 'https://example.test/api/game-graph',
+    json: async () => ({
+      ok: true,
+      memberships: [['pj', 'eddie'], [SUPER_B, 'eddie'], [SUPER_B, 'tony'], ['sab', 'tony'], ['pj', 'stone'], ['totd', 'stone'], ['totd', 'chris'], ['sg', 'chris'], ['sg', 'kim'], ['sab', 'kim']],
+      bands: [{ id: 'pj', name: 'Pearl Jam' }, { id: 'sab', name: 'Black Sabbath' }, { id: 'totd', name: 'Temple of the Dog' }, { id: 'sg', name: 'Soundgarden' }, { id: SUPER_B, name: 'Supergroup B' }],
+      members: [],
+      excluded: [SUPER_B],
+    }),
+  });
+  try {
+    clearGraphCache();
+    const neverCalled = async () => { throw new Error('Neon should not be read'); };
+    const g = await loadBandGraph(neverCalled);
+    clearGraphCache();
+    assert.ok(!g.adj.has(SUPER_B));
+    assert.deepEqual(bfsPath(g.adj, 'pj', 'sab'), ['pj', 'totd', 'sg', 'sab']);
+  } finally {
+    if (saved.url === undefined) delete process.env.URL; else process.env.URL = saved.url;
+    globalThis.fetch = saved.fetch;
+  }
+});

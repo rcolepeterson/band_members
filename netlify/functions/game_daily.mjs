@@ -41,15 +41,49 @@ const FAMOUS_MAX_HOPS = 4;
 // changes slowly and a slightly stale deal is harmless).
 let graphCache = null;
 
-export async function loadBandGraph(sql) {
-  if (graphCache) return graphCache;
-  const [allMemberships, bands, members, excluded] = await Promise.all([
+// The raw rows the game graph is built from, straight from Neon. Used by
+// /api/game-graph (which the CDN caches) and as loadBandGraph's fallback.
+export async function readGameGraphRows(sql) {
+  const [memberships, bands, members, excluded] = await Promise.all([
     sql`select band_id, member_id from memberships where relation = 'member_of'`,
     sql`select id, name, genre, years_active from bands`,
     // Musician names, so the board can say WHO links two bands.
     sql`select id, name from band_members`,
     loadGameExclusions(sql),
   ]);
+  return { memberships, bands, members, excluded };
+}
+
+// Neon transfer (2026-10-10): every game function instance used to read the
+// whole graph from Neon when it started. On the deployed site they now take
+// it from /api/game-graph, which Netlify's CDN caches for an hour, so Neon
+// is read for it about once an hour in total. Anything wrong with that
+// fetch (no site URL in tests or local dev, a bad response) falls back to
+// reading Neon directly, exactly as before.
+async function fetchGameGraphRows() {
+  let base = process.env.URL;
+  try { if (!base && globalThis.Netlify) base = globalThis.Netlify.env.get('URL'); } catch {}
+  if (!base || typeof fetch !== 'function') return null;
+  try {
+    const res = await fetch(`${base.replace(/\/$/, '')}/api/game-graph`, { headers: { accept: 'application/json' } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || !data.ok || !Array.isArray(data.memberships) || !Array.isArray(data.bands)) return null;
+    return {
+      memberships: data.memberships.map(([band_id, member_id]) => ({ band_id, member_id })),
+      bands: data.bands,
+      members: data.members || [],
+      excluded: new Set((data.excluded || []).map(String)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function loadBandGraph(sql) {
+  if (graphCache) return graphCache;
+  const rows = (await fetchGameGraphRows()) || (await readGameGraphRows(sql));
+  const { memberships: allMemberships, bands, members, excluded } = rows;
   // Excluded bands (see _game_exclusions.mjs) are left out of the game's
   // graph entirely: no option, route, trap or endpoint can reach them.
   const memberships = withoutExcludedBands(allMemberships, excluded);
