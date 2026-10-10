@@ -80,7 +80,8 @@ export default async (req) => {
         headers: {
           'content-type': 'application/json; charset=utf-8',
           'cache-control': 'public, max-age=60, stale-while-revalidate=3600',
-          'netlify-cdn-cache-control': 'public, max-age=60, stale-while-revalidate=3600, durable',
+          // CDN: an hour (2026-10-10), like /api/bands: each refresh is a Neon read.
+          'netlify-cdn-cache-control': 'public, max-age=3600, stale-while-revalidate=3600, durable',
         },
       });
     } catch (err) {

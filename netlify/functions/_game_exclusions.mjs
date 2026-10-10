@@ -12,8 +12,9 @@
 //   insert into game_excluded_bands (band_id, reason)
 //   values ('<band uuid>', 'why it confuses the game');
 //
-// Warm function instances cache the game graph, so a new row takes effect as
-// instances recycle (usually within minutes). Delete the row to undo.
+// The game graph is cached (an hour at the CDN via /api/game-graph, then per
+// function instance), so a new row takes effect within about an hour or two.
+// Delete the row to undo.
 //
 // The two IDs below seed the table and are the fallback if it can't be read,
 // so a database hiccup never puts them back in the game.

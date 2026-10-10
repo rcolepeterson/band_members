@@ -132,12 +132,12 @@ export default async (req) => {
 // Browsers: 60s fresh, then up to an hour of "serve the old copy while
 // fetching a new one".
 export const BANDS_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=3600';
-// Netlify's CDN: 10 minutes (Cole/Aaron, 2026-10-09). Every CDN refresh is a
-// full read of the graph from Neon (~8 MB raw), and Neon transfer was at 80%.
-// 60s meant up to ~1,400 reads a day; 600s is ~144. Others may see an edit
-// up to ~10 minutes late; the editor still sees their own change at once
-// (the ?v= bypass above). Only the CDN is longer, so no phone holds an old
-// copy any longer than before.
-export const BANDS_CDN_CACHE_CONTROL = 'public, max-age=600, stale-while-revalidate=3600, durable';
+// Netlify's CDN: 1 hour (2026-10-10; was 10 minutes from 2026-10-09). Every
+// CDN refresh is a full read of the graph from Neon (~8 MB raw), and the
+// project hit Neon's monthly transfer limit. 600s allowed ~144 reads a day;
+// 3600s allows ~24. Others may see an edit up to ~an hour late; the editor
+// still sees their own change at once (the ?v= bypass above). Only the CDN
+// is longer, so no phone holds an old copy any longer than before.
+export const BANDS_CDN_CACHE_CONTROL = 'public, max-age=3600, stale-while-revalidate=3600, durable';
 
 export const config = { path: '/api/bands', method: 'GET' };
