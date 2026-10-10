@@ -413,6 +413,24 @@ export default async (req) => {
     `;
     results.push('index memberships_member_id_idx ready');
 
+    // Neon transfer (2026-10-10): the Blobs version cache keys off
+    // max(updated_at) per table, so memberships needs the column and the
+    // trigger like bands/band_members/band_links already have. ADD COLUMN IF
+    // NOT EXISTS is safe on existing tables; only adds, never changes data.
+    await sql`
+      alter table memberships
+      add column if not exists updated_at timestamptz not null default now()
+    `;
+    results.push('column memberships.updated_at ready');
+
+    await sql`drop trigger if exists memberships_set_updated_at on memberships`;
+    await sql`
+      create trigger memberships_set_updated_at
+      before update on memberships
+      for each row execute function set_updated_at()
+    `;
+    results.push('trigger memberships_set_updated_at ready');
+
     // verifications table ------------------------------------------------------
     // PR 4a: cross-check RESULT (not a lock — see _verify_helpers.mjs's header
     // comment) produced by comparing a band's row against MusicBrainz and
