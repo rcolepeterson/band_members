@@ -908,6 +908,9 @@ body.rbft-sigma-boot .site-header {
   background: none;
   border: 0;
   z-index: 20;
+  /* Same as the live chrome's header (sigma-explorer.mjs), so the corner
+     doesn't drop 10px when the map finishes loading (Cole, 2026-10-11). */
+  padding: 10px 14px;
 }
 body.rbft-sigma-boot .site-header .header-inner { padding: 0; max-width: none; }
 /* Sign up / Sign in occupy the corner the hamburger has vacated, on every size.

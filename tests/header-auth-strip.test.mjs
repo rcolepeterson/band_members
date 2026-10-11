@@ -435,3 +435,11 @@ test('the header shows Sign in or your initials at first paint, not after the ma
   assert.match(early[0], /if \(signIn\) signIn\.hidden = !!user;/);
   assert.match(early[0], /if \(chip\) chip\.hidden = !user;/);
 });
+
+test('the header corner sits in the same place while the map loads and after', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const explorer = readFileSync(new URL('../scripts/sigma-explorer.mjs', import.meta.url), 'utf8');
+  const live = explorer.match(/body\.\$\{BODY_ACTIVE_CLASS\} \.site-header\{[^}]*padding:([^;}]+)\}/)[1].trim();
+  const boot = html.match(/body\.rbft-sigma-boot \.site-header \{[^}]*padding: ([^;]+);/)[1].trim();
+  assert.equal(boot, live);
+});
