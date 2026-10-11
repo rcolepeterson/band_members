@@ -328,6 +328,9 @@
     .fd-when strong{display:block;font-weight:700}
     .fd-when span{color:var(--color-text-muted)}
     .fd-credit{position:relative;margin-top:var(--space-6);font-size:var(--text-xs);color:var(--color-text-muted)}
+    .fd-credit a{color:inherit;text-decoration:underline;text-decoration-color:rgba(194,213,226,.35);text-underline-offset:3px;
+      display:inline-block;padding:var(--space-2) var(--space-3)}
+    .fd-credit a:hover{color:var(--color-text)}
 
     @media (max-width: 640px){
       .arena-main{padding:var(--space-6) var(--space-3) var(--space-10)}
@@ -381,7 +384,9 @@
       </div>
       <p class="fd-when"><strong data-fd-date></strong><span data-fd-number></span></p>
     </div>
-    <p class="fd-credit">By Six Degrees of Rock</p>
+    <!-- Opens an email to the site's contact address (the one on Terms and
+         Privacy). -->
+    <p class="fd-credit"><a href="mailto:sixdegreesofrock@gmail.com">By Six Degrees of Rock</a></p>
   </section>
   <script>
     (function () {
