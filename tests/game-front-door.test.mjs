@@ -41,9 +41,10 @@ test('links that already mean "play" go straight in', () => {
 
 test('the screen: logo, one line, Play, Sign in, date and number, credit', () => {
   const door = page.match(/<section class="front-door"[\s\S]*?<\/section>/)[0];
-  assert.match(door, /class="fd-logo"[^>]*>6&deg;</);
-  assert.match(door, /<h1[^>]*>Daily Chain<\/h1>/);
-  assert.match(door, /Connect two bands through the musicians they share\./);
+  // "6°" is the name (Aaron, 2026-10-11); "Daily Chain" is retired.
+  assert.match(door, /<h1 class="fd-logo"[^>]*>6&deg;<\/h1>/);
+  assert.doesNotMatch(door, /Daily Chain/);
+  assert.match(door, /A daily rock puzzle\.<\/span> Connect two bands through the musicians they share\./);
   assert.match(door, /<button type="button" class="fd-play" data-fd-play>Play<\/button>/);
   assert.match(door, /<a class="fd-signin" data-fd-signin href="\/\?signin=game">Sign in<\/a>/);
   assert.match(door, /data-fd-date/);
@@ -84,4 +85,13 @@ test('sign-up from the game opens on the homepage and comes back', () => {
   // The homepage opens its sign-in panel, then sends a signed-in player back.
   assert.match(home, /signin=game\(&\|\$\)\/\.test\(location\.search\) && !loadCurrentUser\(\)\) \{\n\s*setTimeout\(\(\) => \{ try \{ openSignInFlow\(\); \}/);
   assert.match(home, /sessionStorage\.setItem\('sdr_pending_daily', '1'\); \} catch \(_\) \{\}\n\s*window\.location\.replace\('\/game\/'\);/);
+});
+
+test('6° naming: share text, puzzle label, past days', async () => {
+  const { dailyShareResultText } = await import('../scripts/six-degrees-game.mjs');
+  const text = dailyShareResultText({ date: '2026-10-11', start: 'A', target: 'B', picks: [{ kind: 'optimal' }], won: true });
+  assert.equal(text.split('\n')[0], '6\u00b0 Rock #12 🎸 Solved in 1 move');
+  assert.doesNotMatch(engine, /Daily Chain<\/span>/);
+  assert.match(engine, /<span class="game-hops">Today\\u2019s Puzzle<\/span>/);
+  assert.match(engine, /textContent = `Puzzle #\$\{dailyPuzzleNumber\(date\)\}`;/);
 });
