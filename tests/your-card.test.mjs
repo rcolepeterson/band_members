@@ -37,3 +37,14 @@ test('the game asks for the card once, after a win, only if no city is saved', (
   assert.match(ask, /if \(localStorage\.getItem\(CARD_PROMPT_KEY\)\) return false;/);
   assert.match(ask, /user && user\.token && !user\.city/);
 });
+
+test('"Playing as" in the game opens the account menu on the homepage', () => {
+  const link = engine.match(/function initPlayerLineLink\(\) \{[\s\S]*?\n  \}\n/)[0];
+  assert.match(link, /!isSignedIn\(\)\) return;/, 'guests get plain text');
+  assert.match(link, /window\.location\.href = '\/\?account=1'/);
+  assert.match(link, /setAttribute\('role', 'link'\)/);
+  assert.match(engine, /initPlayerLineLink\(\);/);
+  // The homepage opens the menu for account=1, and Your card only for card=1.
+  assert.match(home, /\[\?&\]account=1\(&\|\$\)\/\.test\(location\.search\) && loadCurrentUser\(\)/);
+  assert.match(home, /if \(details && openCard\) details\.open = true;/);
+});
