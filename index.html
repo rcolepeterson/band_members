@@ -3425,6 +3425,14 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                     <p class="user-card-profile-status" id="card-status" aria-live="polite"></p>
                   </form>
                 </details>
+                <!-- 6° daily reminder (2026-10-11): opt-in, off by default. -->
+                <div class="user-card-email-prefs user-card-reminder">
+                <label class="user-card-toggle">
+                  <input type="checkbox" id="user-card-reminder-toggle" />
+                  <span>Remind me daily</span>
+                </label>
+                <p class="user-card-note">One email when the new 6&deg; puzzle is live. Skipped if you've already played.</p>
+                </div>
                 <div class="user-card-email-prefs">
                 <label class="user-card-toggle">
                   <input type="checkbox" id="user-card-notify-toggle" />
@@ -7415,6 +7423,8 @@ function downloadPngBlob(blob) {
             setNotifyPref(prefs.email_enabled);
             const liveToggle = document.getElementById('user-card-notify-toggle');
             if (liveToggle) liveToggle.checked = prefs.email_enabled;
+            const reminder = document.getElementById('user-card-reminder-toggle');
+            if (reminder) reminder.checked = prefs.daily_reminder === true;
             // Granular event toggles.
             document.querySelectorAll('[data-notify-event]').forEach((el) => {
               const field = el.getAttribute('data-notify-event');
@@ -7438,6 +7448,16 @@ function downloadPngBlob(blob) {
           if (!ok) el.checked = !on; // revert on failure
         });
       });
+      // 6° daily reminder: its own list, off until someone turns it on.
+      const reminderToggle = document.getElementById('user-card-reminder-toggle');
+      if (reminderToggle && !reminderToggle.dataset.wired) {
+        reminderToggle.dataset.wired = '1';
+        reminderToggle.addEventListener('change', async () => {
+          const on = reminderToggle.checked;
+          const ok = await saveNotifyPref({ daily_reminder: on });
+          if (!ok) reminderToggle.checked = !on;
+        });
+      }
       const masterToggle = document.getElementById('user-card-notify-toggle');
       if (masterToggle && !masterToggle.dataset.wired) {
         masterToggle.dataset.wired = '1';

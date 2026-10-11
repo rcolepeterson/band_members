@@ -22,6 +22,7 @@ import {
   findUserByToken,
 } from './_db.mjs';
 import { ensureNotifyPrefs } from './_notify.mjs';
+import { ensureReminderSchema } from './_daily_reminder.mjs';
 
 function toResponseBody(prefs) {
   return {
@@ -35,7 +36,15 @@ function toResponseBody(prefs) {
     notify_band_edited: prefs.notify_band_edited !== false,
     notify_member_band_changed: prefs.notify_member_band_changed !== false,
     notify_member_edited: prefs.notify_member_edited !== false,
+    // The 6° daily puzzle reminder: opt-in, off by default, its own list.
+    daily_reminder: prefs.email_daily_reminder === true,
   };
+}
+
+async function readDailyReminder(sql, userId) {
+  await ensureReminderSchema(sql);
+  const rows = await sql`select email_daily_reminder from notification_prefs where user_id = ${userId} limit 1`;
+  return rows.length ? rows[0].email_daily_reminder === true : false;
 }
 
 const EVENT_TOGGLE_FIELDS = [
@@ -62,7 +71,8 @@ export default async (req) => {
 
     if (req.method === 'GET') {
       const prefs = await ensureNotifyPrefs(sql, user.id);
-      return ok(toResponseBody(prefs));
+      const email_daily_reminder = await readDailyReminder(sql, user.id);
+      return ok(toResponseBody({ ...prefs, email_daily_reminder }));
     }
 
     // PATCH
@@ -79,8 +89,9 @@ export default async (req) => {
     for (const field of EVENT_TOGGLE_FIELDS) {
       if (typeof body[field] === 'boolean') patch[field] = body[field];
     }
+    if (typeof body.daily_reminder === 'boolean') patch.daily_reminder = body.daily_reminder;
     if (Object.keys(patch).length === 0) {
-      return badRequest('body must include email_enabled or an event-type toggle', { field: 'email_enabled' });
+      return badRequest('body must include email_enabled, daily_reminder or an event-type toggle', { field: 'email_enabled' });
     }
 
     // ensureNotifyPrefs first so the row (and its unsubscribe token)
@@ -116,6 +127,10 @@ export default async (req) => {
       const v = patch.notify_member_edited;
       await sql`update notification_prefs set notify_member_edited = ${v}, updated_at = now() where user_id = ${user.id}`;
     }
+    if ('daily_reminder' in patch) {
+      await ensureReminderSchema(sql);
+      await sql`update notification_prefs set email_daily_reminder = ${patch.daily_reminder}, updated_at = now() where user_id = ${user.id}`;
+    }
     const updated = await sql`
       select user_id, email_enabled, unsubscribed_at, unsubscribe_token,
         notify_band_member_joined, notify_band_badge_added, notify_band_edited,
@@ -124,7 +139,8 @@ export default async (req) => {
       where user_id = ${user.id}
       limit 1
     `;
-    return ok(toResponseBody(updated[0]));
+    const email_daily_reminder = await readDailyReminder(sql, user.id);
+    return ok(toResponseBody({ ...updated[0], email_daily_reminder }));
   } catch (err) {
     console.error('notification_prefs failed', err);
     return serverError('could not update notification preferences', {
