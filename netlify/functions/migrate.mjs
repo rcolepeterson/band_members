@@ -687,6 +687,15 @@ export default async (req) => {
     `;
     results.push('table daily_snapshots ready');
 
+    // GA metrics on daily_snapshots (2026-10-10): Google Analytics numbers
+    // (active users, new users, avg engagement, events) logged alongside the
+    // IG/Neon counts. Idempotent — safe on existing deployments.
+    await sql`alter table daily_snapshots add column if not exists ga_active_users          integer`;
+    await sql`alter table daily_snapshots add column if not exists ga_new_users             integer`;
+    await sql`alter table daily_snapshots add column if not exists ga_avg_engagement_seconds integer`;
+    await sql`alter table daily_snapshots add column if not exists ga_events                integer`;
+    results.push('daily_snapshots GA columns ready');
+
     // shared_chains table ----------------------------------------------------
     // Game share cards: one row per "Share the chain" tap. The row is the
     // permanent record behind a share link (?game=<id>) — the edge function
