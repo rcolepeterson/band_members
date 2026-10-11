@@ -708,12 +708,32 @@ body {
   width: 100%;
   box-sizing: border-box;
 }
-.field-optional { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: .7; }
-#signup-status {
-  /* Reserve space so the submit button doesn't jump when a
-     validation or network message appears. Empty by default. */
-  min-height: 1.2em;
+/* Sign-in panel tidy (Cole, 2026-10-11). The title shares a row with the
+   close button and has room under it; the copy reads as a short note; no
+   reserved gap above the button (the status line takes space only when it
+   has something to say); and the "Create your account" step drops the
+   provider buttons, since the visitor already chose email. */
+[data-signup-only] #signup-panel-title {
+  display: flex;
+  align-items: center;
+  min-height: 1.9rem;
+  margin: -0.4rem 0 var(--space-4);
+  padding-right: 2.5rem;
+  font-weight: 600;
+  line-height: 1.25;
 }
+[data-signup-only] #signup-panel-copy {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+#signup-panel-copy[hidden] { display: none; }
+[data-signup-only] .oauth-options { margin-bottom: var(--space-5); }
+[data-signup-only].is-email-step .oauth-options { display: none; }
+#signup-form .footer-strip { padding-top: var(--space-1); }
+.field-optional { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: .7; }
+#signup-status:empty { display: none; }
 /* Four-option sign-in: provider buttons above the email form. Quiet,
    top-shelf styling — full-width bordered buttons, no brand-color noise.
    The flow is a full-page redirect (not a popup), started by JS via
@@ -3723,12 +3743,8 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                   Sign-in buttons (returning-user framing). Backlog #25.
                 -->
                 <div class="share-popover-title" id="signup-panel-title">Sign up to add your band</div>
-                <p class="share-popover-copy" id="signup-panel-copy">
-                  Quick one-time sign-up so we can attribute your contributions and let you edit later.
-                  No password. Your email is only used for account recovery — never shared.
-                </p>
+                <p class="share-popover-copy" id="signup-panel-copy" hidden></p>
                 <div class="oauth-options">
-                  <div class="oauth-label">Continue with</div>
                   <div class="oauth-buttons">
                     <button type="button" class="oauth-btn" data-oauth-provider="google">Google</button>
                     <button type="button" class="oauth-btn" data-oauth-provider="facebook">Facebook</button>
@@ -3740,7 +3756,6 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                   <div class="form-span-2">
                     <label for="signup-email">Email</label>
                     <input id="signup-email" name="signup-email" type="email" autocomplete="email" placeholder="you@example.com" required maxlength="254" />
-                    <div class="field-note">Only used to attribute contributions and reach you if we need to. Not shared.</div>
                   </div>
                   <!--
                     Step two, for an email we don't know yet: just a confirm, so a
@@ -11921,12 +11936,12 @@ function downloadPngBlob(blob) {
     // The two keys are kept so existing callers of setAuthMode() stay valid, but
     // both resolve to the same copy; the argument no longer changes what is on
     // screen. See setAuthMode below.
+    // Trimmed (Cole, 2026-10-11): a title, the buttons, the email box. The
+    // paragraph that explained providers and recovery is gone; an empty copy
+    // hides #signup-panel-copy (see setAuthMode).
     const AUTH_COPY = {
       title: 'Sign in or create an account',
-      copy: 'Choose how you would like to sign in. Google, Facebook, and Instagram go through ' +
-            'the provider; email needs no password. If you have been here before we will restore ' +
-            'your account; if not, we will make you one. Your email is only used for account ' +
-            'recovery — never shared.',
+      copy: '',
       submit: 'Continue',
       pending: 'Just a moment…'
     };
@@ -11942,6 +11957,7 @@ function downloadPngBlob(blob) {
       const wrap = document.getElementById('signup-profile-fields');
       if (!wrap || !wrap.hidden) return;
       wrap.hidden = false;
+      wrap.closest('[data-signup-only]')?.classList.add('is-email-step');
       const title = document.getElementById('signup-panel-title');
       const body = document.getElementById('signup-panel-copy');
       const submitBtn = document.getElementById('signup-submit-btn');
@@ -11949,6 +11965,7 @@ function downloadPngBlob(blob) {
       if (body) {
         body.textContent = 'No account on that email yet. Check it\u2019s right, add a name '
           + 'if you like, and you\u2019re in.';
+        body.hidden = false;
       }
       if (submitBtn) submitBtn.textContent = 'Create account';
       const name = document.getElementById('signup-name');
@@ -11961,6 +11978,7 @@ function downloadPngBlob(blob) {
       const wrap = document.getElementById('signup-profile-fields');
       if (!wrap) return;
       wrap.hidden = true;
+      wrap.closest('[data-signup-only]')?.classList.remove('is-email-step');
       PROFILE_FIELD_IDS.forEach(id => {
         const field = document.getElementById(id);
         if (field) field.required = false;
@@ -11977,7 +11995,7 @@ function downloadPngBlob(blob) {
       const body = document.getElementById('signup-panel-copy');
       const submitBtn = document.getElementById('signup-submit-btn');
       if (title) title.textContent = copy.title;
-      if (body) body.textContent = copy.copy;
+      if (body) { body.textContent = copy.copy; body.hidden = !copy.copy; }
       if (submitBtn) submitBtn.textContent = copy.submit;
       // Reframing means starting over, so the profile step folds away again.
       resetToEmailStep();
@@ -13362,6 +13380,10 @@ function downloadPngBlob(blob) {
                   country: data.user.country || '',
                   instrument: data.user.instrument || ''
                 });
+                // Opened with "Sign in" (not "Add your band"): signing in was the
+                // whole errand, so close the panel rather than let it turn into
+                // the Add-your-band form (Cole, 2026-10-11).
+                const signInOnly = currentAuthMode === 'signin';
                 setSignedInState(loadCurrentUser());
                 // The signup section is now hidden; if there's any residual
                 // input we clear it for good measure.
@@ -13369,6 +13391,7 @@ function downloadPngBlob(blob) {
                 // Leave the panel in its default framing so a later sign-out
                 // doesn't reopen it still saying "Welcome back".
                 setAuthMode('signup');
+                if (signInOnly) closeBottomPopovers();
               } catch (error) {
                 status.textContent = 'Could not reach the server. Check your connection and try again.';
                 status.className = 'validation-message is-error';
