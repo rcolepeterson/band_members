@@ -196,7 +196,9 @@ export function fmtElapsed(seconds) {
 // Spoiler-free share text (stars in brand palette): no slogan,
 // no timer (the clock counted idle hours, e.g. "194m"), just the score,
 // the stars and the link.
-//   Six Degrees of Rock #17 🎸 Solved in 5 moves      ("Not solved" on a loss)
+//   6° Rock #17 🎸 Solved in 5 moves      ("Not solved" on a loss)
+// "6°" is the game's name (Aaron, 2026-10-11: 6° the game, Six Degrees the
+// graph); "Rock" stays so a stranger in a group text knows what it is.
 //   Rage Against the Machine ➡️ ⭐★☆⭐⭐ ➡️ Pearl Jam
 //   sixdegreesofrock.com/game?s=1   (?s=1: GA counts visits from shares)
 // Plain words, not "5/4" (Cole, 2026-10-09): the fraction read as a grade
@@ -207,7 +209,7 @@ export function dailyShareResultText({ date, start, target, picks = [], moves = 
   const score = won ? `Solved in ${moves} ${moves === 1 ? 'move' : 'moves'}` : 'Not solved';
   const squares = picks.map((p) => dailyPickSquare(p.kind)).join('');
   return [
-    `Six Degrees of Rock${num ? ` #${num}` : ''} 🎸 ${score}`,
+    `6\u00b0 Rock${num ? ` #${num}` : ''} 🎸 ${score}`,
     [start, ...(squares ? [squares] : []), target].join(' ➡️ '),
     'sixdegreesofrock.com/game?s=1',
   ].join('\n');
@@ -659,7 +661,7 @@ function initGameUI() {
     try {
       const sub = document.querySelector('.game-modal-sub');
       const subtitles = {
-        daily: 'One fresh chain every day — same for everyone. Connect the bands, beat par, build your streak.',
+        daily: 'One fresh puzzle every day — same for everyone. Connect the bands, beat par, build your streak.',
         solo: 'Practice mode. Pick a band, we deal the opponent, you find the chain.',
         'head-to-head': 'Challenge a friend. You pick a band, they pick theirs, the shortest chain decides.',
         chaos: 'Two random bands. Hit Connect and see how they link.',
@@ -1205,9 +1207,9 @@ function initGameUI() {
   async function renderDailyGate() {
     result.innerHTML = '';
     const card = el(`<div class="game-result-card game-daily">
-      <div class="game-daily-head"><span class="game-hops">Daily Chain</span><span class="game-daily-date"></span></div>
+      <div class="game-daily-head"><span class="game-hops">Today\u2019s Puzzle</span><span class="game-daily-date"></span></div>
       <p class="game-daily-pair"></p>
-      <p class="game-daily-note">One fresh chain every day — same for everyone. Sign in to play and keep your streak.</p>
+      <p class="game-daily-note">One fresh puzzle every day — same for everyone. Sign in to play and keep your streak.</p>
       <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to play</button></div>
     </div>`);
     result.appendChild(card);
@@ -1222,7 +1224,7 @@ function initGameUI() {
       const pair = card.querySelector('.game-daily-pair');
       pair.appendChild(a); pair.appendChild(arrow); pair.appendChild(b);
     } catch {
-      card.querySelector('.game-daily-note').textContent = 'Could not load today\u2019s chain. Check your connection and try again.';
+      card.querySelector('.game-daily-note').textContent = 'Could not load today\u2019s puzzle. Check your connection and try again.';
     }
     card.querySelector('[data-signin]').addEventListener('click', () => {
       if (isArenaPage()) {
@@ -1247,7 +1249,7 @@ function initGameUI() {
     // big buttons. Hints, streak/credits and past days live in drawers.
     const card = el(`<div class="game-result-card game-daily sd-board">
       <div class="sd-topbar">
-        <div class="game-daily-head"><span class="game-hops">Daily Chain</span><span class="game-daily-date"></span></div>
+        <div class="game-daily-head"><span class="game-hops">Today\u2019s Puzzle</span><span class="game-daily-date"></span></div>
         <div class="sd-icons">
           <button type="button" class="sd-icon" data-stats aria-label="Your stats">${lineIcon('stats')}</button>
           <button type="button" class="sd-icon" data-howto aria-label="How to play">?</button>
@@ -1291,6 +1293,10 @@ function initGameUI() {
       // so practice is findable before the daily, not only after it.
       card.querySelector('.sd-drawers').after(el('<p class="sd-practice-link"><a href="/game/?practice=1">New here? Warm up with a practice puzzle \u2192</a></p>'));
     }
+    // A past day from "Past days" isn't today's puzzle: name it by number.
+    if (date && !practiceMode && dailyPuzzleNumber(date)) {
+      card.querySelector('.game-hops').textContent = `Puzzle #${dailyPuzzleNumber(date)}`;
+    }
     if (practiceMode) {
       // Practice must be unmistakable (Cole, 2026-10-08: he played it without
       // noticing, and "Just for fun" read as a vibe, not "this doesn't count").
@@ -1326,7 +1332,7 @@ function initGameUI() {
         .catch(() => {});
     }
     if (loading) {
-      card.querySelector('.game-daily-note').textContent = 'Dealing today’s chain…';
+      card.querySelector('.game-daily-note').textContent = 'Dealing today’s puzzle…';
     }
     try {
       const data = await dailyFetch(practicePath('/api/game-daily/play'), {
@@ -1463,7 +1469,7 @@ function initGameUI() {
         ex.appendChild(row);
       }
       c.appendChild(ex);
-      c.appendChild(el('<p class="sd-modal-sub">A new chain every day. Same chain for everyone.</p>'));
+      c.appendChild(el('<p class="sd-modal-sub">A new puzzle every day. Same puzzle for everyone.</p>'));
       const play = el('<button type="button" class="sd-primary" style="margin-top:14px">Play</button>');
       play.addEventListener('click', closeSdModal);
       c.appendChild(play);
@@ -1596,7 +1602,7 @@ function initGameUI() {
       bar.textContent = String(count);
       dist.appendChild(row);
     }
-    if (!st.played) wrap.appendChild(el('<p class="sd-stats-loading">Finish today\u2019s chain to start your stats.</p>'));
+    if (!st.played) wrap.appendChild(el('<p class="sd-stats-loading">Finish today\u2019s puzzle to start your stats.</p>'));
     return wrap;
   }
   async function openStatsModal() {
@@ -1797,7 +1803,7 @@ function initGameUI() {
 
   // "Next chain in 03:12:45", ticking. Stops itself once removed from the page.
   function nextChainCountdownEl() {
-    const p = el('<p class="sd-countdown">Next daily chain in <strong></strong></p>');
+    const p = el('<p class="sd-countdown">Next puzzle in <strong></strong></p>');
     const out = p.querySelector('strong');
     const tick = () => {
       if (!p.isConnected && timer) { clearInterval(timer); return; }
@@ -1899,7 +1905,7 @@ function initGameUI() {
       <div class="game-credit-sheet-head"><strong>Credits</strong><button type="button" aria-label="Close">✕</button></div>
       <p class="game-credit-sheet-balance">Balance: <strong></strong></p>
       <ul>
-        <li>Finish the daily chain · <strong>+20</strong></li>
+        <li>Finish today\u2019s puzzle · <strong>+20</strong></li>
         <li>Match par · <strong>+10</strong></li>
         <li>Replay and beat your best · <strong>+5</strong> per hop</li>
         <li>Beat the shortest path · <strong>+50</strong></li>
@@ -2203,7 +2209,7 @@ function initGameUI() {
         body.textContent = `This ends today\u2019s game and shows the shortest chain. Today won\u2019t count, so your ${run.streak}-day streak resets`
           + (run.freeze_count ? ' (your streak freeze covers one missed day).' : '.');
       } else {
-        body.textContent = 'This ends today\u2019s game and shows the shortest chain. You can\u2019t play today\u2019s chain again.';
+        body.textContent = 'This ends today\u2019s game and shows the shortest chain. You can\u2019t play today\u2019s puzzle again.';
       }
       c.appendChild(body);
       const keep = el('<button type="button" class="sd-primary" style="margin-top:14px">Keep playing</button>');
@@ -2594,7 +2600,7 @@ function initGameUI() {
     result.innerHTML = '';
     const card = el(`<div class="game-result-card game-daily">
       <div class="game-daily-head"><span class="game-hops">Solo Run</span></div>
-      <p class="game-daily-note">Pick a band (or let us deal both), then find the chain link by link, just like the Daily Chain.</p>
+      <p class="game-daily-note">Pick a band (or let us deal both), then find the chain link by link, just like today\u2019s puzzle.</p>
       <div class="game-result-actions"><button type="button" class="game-run-btn" data-signin>Sign in to play</button></div>
     </div>`);
     result.appendChild(card);

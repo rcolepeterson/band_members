@@ -49,10 +49,10 @@
   </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Daily Rock Puzzle: Connect Two Bands | Six Degrees of Rock</title>
+  <title>6° – Daily Rock Puzzle: Connect Two Bands | Six Degrees of Rock</title>
   <meta name="description" content="A new rock puzzle every day: connect two famous bands through the musicians they share. Free, no sign-up, a Wordle-style daily game for music fans." />
   <link rel="canonical" href="https://sixdegreesofrock.com/game/" />
-  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "VideoGame", "name": "Six Degrees of Rock: Daily Chain", "url": "https://sixdegreesofrock.com/game/", "description": "A new rock puzzle every day: connect two famous bands through the musicians they share. Free, no sign-up, a Wordle-style daily game for music fans.", "image": "https://sixdegreesofrock.com/game-og.png?v=3", "genre": ["Puzzle", "Trivia", "Music"], "gamePlatform": "Web browser", "applicationCategory": "GameApplication", "operatingSystem": "Any", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "publisher": {"@type": "Organization", "name": "Six Degrees of Rock", "url": "https://sixdegreesofrock.com/"}}</script>
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "VideoGame", "name": "6°: Daily Rock Puzzle", "url": "https://sixdegreesofrock.com/game/", "description": "A new rock puzzle every day: connect two famous bands through the musicians they share. Free, no sign-up, a Wordle-style daily game for music fans.", "image": "https://sixdegreesofrock.com/game-og.png?v=3", "genre": ["Puzzle", "Trivia", "Music"], "gamePlatform": "Web browser", "applicationCategory": "GameApplication", "operatingSystem": "Any", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "publisher": {"@type": "Organization", "name": "Six Degrees of Rock", "url": "https://sixdegreesofrock.com/"}}</script>
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
   <!-- Add to Home Screen (2026-10-08): the daily game installs as its own
@@ -309,11 +309,10 @@
       background:radial-gradient(circle at 50% 30%, rgba(126,145,160,0.20) 0%, rgba(82,174,182,0.14) 26%, transparent 55%)}
     .fd-inner{position:relative;flex:1;width:100%;max-width:360px;display:flex;flex-direction:column;
       align-items:center;justify-content:center}
-    .fd-logo{font-family:var(--font-display);font-weight:800;font-size:clamp(4.5rem,24vw,6.5rem);line-height:1;
+    .fd-logo{font-family:var(--font-display);font-weight:800;font-size:clamp(5.5rem,30vw,8rem);line-height:1;
       letter-spacing:.02em;text-shadow:0 0 60px rgba(82,174,182,.35), 0 0 140px rgba(82,174,182,.15)}
-    .fd-title{font-family:var(--font-display);font-weight:700;font-size:clamp(2.25rem,11vw,3rem);line-height:1.1;
-      margin-top:var(--space-3)}
     .fd-line{font-size:clamp(1.15rem,5.2vw,1.35rem);line-height:1.4;margin-top:var(--space-4);max-width:17em}
+    .fd-kicker{display:block;font-weight:700;margin-bottom:var(--space-1)}
     .fd-actions{display:flex;flex-direction:column;gap:var(--space-3);width:min(100%,250px);margin-top:var(--space-8)}
     .fd-play,.fd-signin{min-height:54px;border-radius:var(--radius-full);font-weight:700;font-size:1.1rem;
       display:flex;align-items:center;justify-content:center;text-decoration:none;
@@ -375,9 +374,10 @@
        "Continue" / "See today's result" for a returning player. -->
   <section class="front-door" id="front-door" aria-labelledby="fd-title">
     <div class="fd-inner">
-      <div class="fd-logo" aria-hidden="true">6&deg;</div>
-      <h1 class="fd-title" id="fd-title">Daily Chain</h1>
-      <p class="fd-line">Connect two bands through the musicians they share.</p>
+      <!-- "6°" is the game's name (Aaron, 2026-10-11): 6° the game, Six
+           Degrees the graph. -->
+      <h1 class="fd-logo" id="fd-title" aria-label="6 degrees">6&deg;</h1>
+      <p class="fd-line"><span class="fd-kicker">A daily rock puzzle.</span> Connect two bands through the musicians they share.</p>
       <div class="fd-actions">
         <button type="button" class="fd-play" data-fd-play>Play</button>
         <a class="fd-signin" data-fd-signin href="/?signin=game">Sign in</a>
@@ -464,7 +464,7 @@
               </button>
             </div>
           </div>
-          <p class="game-modal-sub">One fresh chain every day — same for everyone. Connect the bands, beat par, build your streak.</p>
+          <p class="game-modal-sub">One fresh puzzle every day — same for everyone. Connect the bands, beat par, build your streak.</p>
           <!--
             Mode tabs. Daily Chain is the front door (checked by default) —
             Cole's 2-second rule: land, see the puzzle, start tapping.
