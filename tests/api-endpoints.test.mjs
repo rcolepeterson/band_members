@@ -149,81 +149,55 @@ test('signup returns 400 when email is missing or invalid', async () => {
   }
 });
 
-test('signup returns 400 when name is missing', async () => {
-  process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
-  try {
-    const r = await signup(req('POST', {}, { email: 'a@b.co' }));
-    assert.equal(r.status, 400);
-    const j = await r.json();
-    assert.equal(j.field, 'name');
-  } finally {
-    delete process.env[DB_URL_ENV];
-  }
+// --- sign-up asks for the email only (2026-10-11) --------------------------
+// Name, city, state, country and instrument used to be required (PR
+// signup-profile-fields). They are optional now: a blank name is made from
+// the email, and the profile is filled in later on "Your card" (PATCH
+// /api/me). With a fake database the request can't succeed, but it must get
+// past validation: no 400 naming any of those fields.
+
+for (const missing of ['name', 'city', 'state', 'country', 'instrument']) {
+  test(`signup does not require ${missing}`, async () => {
+    process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
+    try {
+      const r = await signup(req('POST', {}, { email: 'a@b.co' }));
+      const j = await r.json();
+      if (r.status === 400) assert.notEqual(j.field, missing);
+      assert.doesNotMatch(String(j.error || ''), new RegExp(`${missing} is required`));
+    } finally {
+      delete process.env[DB_URL_ENV];
+    }
+  });
+}
+
+test('an email-only account gets a starting name from the email', async () => {
+  const { nameFromEmail } = await import('../netlify/functions/signup.mjs');
+  assert.equal(nameFromEmail('jane.doe@example.com'), 'Jane Doe');
+  assert.equal(nameFromEmail('vimana17@gmail.com'), 'Vimana17');
+  assert.equal(nameFromEmail('rock_n+roll@x.co'), 'Rock N Roll');
+  assert.equal(nameFromEmail('@x.co'), 'Rock fan');
 });
 
-// --- signup profile-field validation (added in PR signup-profile-fields) ----
-// Each required profile field returns a 400 with a matching `field` value
-// when omitted or whitespace-only. Order in the handler is email -> name ->
-// city -> state -> country -> instrument, so we build a "valid up to this
-// field" body for each test and drop just that one field.
+test('a returning sign-up never blanks a saved profile field', () => {
+  const source = readFileSync(new URL('../netlify/functions/signup.mjs', import.meta.url), 'utf8');
+  assert.match(source, /city:\s+city\s+\?\? current\.city/);
+  assert.match(source, /instrument: instrument \?\? current\.instrument/);
+  assert.match(source, /name:\s+normalizeName\(body\.name\) \|\| current\.name/);
+});
 
-function validSignupBody(overrides = {}) {
-  return {
-    email:      'a@b.co',
-    name:       'Jane Musician',
-    city:       'Seattle',
-    state:      'WA',
-    country:    'USA',
-    instrument: 'Guitar',
-    ...overrides,
-  };
-}
+test('Your card: PATCH /api/me changes only what is sent, and never empties the name', async () => {
+  const { profileChanges } = await import('../netlify/functions/me.mjs');
+  assert.deepEqual(profileChanges({ city: '  Seattle ', instrument: 'Bass' }).changes, { city: 'Seattle', instrument: 'Bass' });
+  assert.deepEqual(profileChanges({ state: '' }).changes, { state: null }, 'an empty field clears it');
+  assert.equal(profileChanges({ name: '  ' }).field, 'name');
+  assert.ok(profileChanges({}).error, 'nothing to update');
+  assert.ok(profileChanges(null).error);
+});
 
-for (const field of ['city', 'state', 'country', 'instrument']) {
-  test(`signup returns 400 when ${field} is missing`, async () => {
-    process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
-    try {
-      const body = validSignupBody({ [field]: undefined });
-      const r = await signup(req('POST', {}, body));
-      assert.equal(r.status, 400);
-      const j = await r.json();
-      assert.equal(j.field, field, `expected field=${field} in 400 response`);
-    } finally {
-      delete process.env[DB_URL_ENV];
-    }
-  });
-
-  test(`signup returns 400 when ${field} is whitespace-only`, async () => {
-    process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
-    try {
-      const body = validSignupBody({ [field]: '   ' });
-      const r = await signup(req('POST', {}, body));
-      assert.equal(r.status, 400);
-      const j = await r.json();
-      assert.equal(j.field, field);
-    } finally {
-      delete process.env[DB_URL_ENV];
-    }
-  });
-}
-
-test('signup instrument error message hints at Music listener alternative', async () => {
-  process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
-  try {
-    const r = await signup(req('POST', {}, validSignupBody({ instrument: '' })));
-    assert.equal(r.status, 400);
-    const j = await r.json();
-    assert.equal(j.field, 'instrument');
-    // Copy check: the hint helps non-players find the right entry. If the
-    // wording changes, update this test intentionally.
-    assert.match(
-      j.error,
-      /Music listener|Music connoisseur/,
-      'instrument error should hint at "Music listener" / "Music connoisseur"'
-    );
-  } finally {
-    delete process.env[DB_URL_ENV];
-  }
+test('PATCH /api/me needs a signed-in user', async () => {
+  const me = (await import('../netlify/functions/me.mjs')).default;
+  const r = await me(req('PATCH', {}, { city: 'Seattle' }));
+  assert.equal(r.status, 401);
 });
 
 // --- contributions input validation ----------------------------------------
@@ -325,25 +299,6 @@ test('sign-in intent does not demand the profile fields', async () => {
     if (parsed && parsed.error) {
       assert.doesNotMatch(parsed.error, /city|state|country|instrument|name is required/,
         'sign-in must not ask for profile fields');
-    }
-  } finally {
-    delete process.env[DB_URL_ENV];
-  }
-});
-
-test('creating an account still requires the four profile fields', async () => {
-  // The other half of the deal: the fields are collected on sign-up, so dropping
-  // the sign-in requirement must not have loosened creation.
-  process.env[DB_URL_ENV] = 'postgresql://fake:fake@fake/fake';
-  try {
-    const base = { email: 'new@example.com', name: 'New Person', city: 'Seattle', state: 'WA', country: 'USA', instrument: 'Guitar' };
-    for (const missing of ['city', 'state', 'country', 'instrument', 'name']) {
-      const body = { ...base };
-      delete body[missing];
-      const r = await signup(req('POST', { 'content-type': 'application/json' }, body));
-      assert.equal(r.status, 400, `expected 400 when ${missing} is missing`);
-      const parsed = await r.json();
-      assert.match(parsed.error, new RegExp(missing === 'state' ? 'state|region' : missing, 'i'));
     }
   } finally {
     delete process.env[DB_URL_ENV];

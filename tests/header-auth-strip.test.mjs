@@ -147,6 +147,8 @@ function loadAuthState() {
     // and the toggle keeps its localStorage value — the behavior under
     // test here.
     extract('fetchNotifyPref'),
+    // Your card (2026-10-11): renderUserCard fills the profile form.
+    extract('fillProfileCard'),
     extract('renderUserCard'),
     extract('deriveUserInitials'),
     extract('setSignedInState'),

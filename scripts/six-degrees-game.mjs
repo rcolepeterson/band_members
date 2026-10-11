@@ -1722,8 +1722,24 @@ function initGameUI() {
         const nudge = el('<p class="sd-guest"><button type="button" class="sd-linkbtn">Create a free account</button> to save your streak and stats!</p>');
         nudge.querySelector('button').addEventListener('click', requestDailySignup);
         c.appendChild(nudge);
+      } else if (won && shouldAskForCard()) {
+        // Sign-up asks for the email only (2026-10-11), so the profile is
+        // asked for once, here, after a win: the happiest moment, never a gate.
+        try { localStorage.setItem(CARD_PROMPT_KEY, '1'); } catch {}
+        c.appendChild(el('<p class="sd-guest">Where do you rock from? <a class="sd-linkbtn" href="/?card=1">Add it to your card</a></p>'));
       }
     });
+  }
+
+  // The "Add it to your card" prompt: signed in, no city saved yet, and
+  // never shown before on this device.
+  const CARD_PROMPT_KEY = 'sdr-card-prompt-shown';
+  function shouldAskForCard() {
+    try {
+      if (localStorage.getItem(CARD_PROMPT_KEY)) return false;
+      const user = JSON.parse(localStorage.getItem('bmft-user') || 'null');
+      return Boolean(user && user.token && !user.city);
+    } catch { return false; }
   }
 
   function dailyMoveText({ kind, name, from, members = [], extra = null }) {

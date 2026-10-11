@@ -67,62 +67,27 @@ test('signup form has a submit button and a status region', () => {
   assert.match(INDEX_HTML, /id="signup-status"[^>]*aria-live="polite"/);
 });
 
-// Profile fields added in PR signup-profile-fields, then moved behind the email
-// step in feat/email-first-signin. Still mandatory to CREATE an account -- the
-// server rejects a sign-up without them, and the client sets `required` when it
-// reveals them -- but no longer demanded of a returning visitor, who is found by
-// email alone. The `required` attribute therefore cannot be in the markup: it
-// would block submission of step one, where the fields are not on screen.
-test('signup form has city / state / country / instrument fields, required only once shown', () => {
+// Sign-up asks for the email only (2026-10-11). City, state, country and
+// instrument were required here (PR signup-profile-fields); they moved to
+// "Your card" in the account menu, filled in whenever someone wants.
+test('sign-up no longer asks for city / state / country / instrument', () => {
   for (const id of ['signup-city', 'signup-state', 'signup-country', 'signup-instrument']) {
-    assert.match(INDEX_HTML, new RegExp(`id="${id}"`), `Expected #${id} to be present.`);
-    assert.doesNotMatch(INDEX_HTML, new RegExp(`id="${id}"[^>]*required`),
-      `#${id} must not be required in the markup while hidden.`);
+    assert.doesNotMatch(INDEX_HTML, new RegExp(`id="${id}"`), `#${id} left the sign-up form`);
   }
-  // Enforcement moved here, and must exist somewhere or the fields became optional
-  // by accident.
-  assert.match(INDEX_HTML, /function revealProfileFields\(\)/);
-  assert.match(INDEX_HTML, /if \(field\) field\.required = true;/);
+  // ...and the account menu is where they live now.
+  for (const id of ['card-city', 'card-state', 'card-country', 'card-instrument']) {
+    assert.match(INDEX_HTML, new RegExp(`id="${id}"`), `#${id} is on Your card`);
+  }
 });
 
-test('signup instrument field hints at "Music listener" for non-players', () => {
-  // Grab the input tag itself so we don't accidentally match the surrounding
-  // documentation or another element.
-  const match = INDEX_HTML.match(/<input id="signup-instrument"[^>]*>/);
-  assert.ok(match, 'Expected #signup-instrument input to be present.');
-  assert.match(
-    match[0],
-    /Music listener/,
-    'Expected #signup-instrument placeholder to hint at the "Music listener" option.'
-  );
-});
-
-test('signup submit handler POSTs the profile fields to /api/signup', () => {
-  // The submit handler builds a JSON body containing every profile field.
-  // We assert on the object-literal shape rather than the exact whitespace
-  // so the test survives minor reformatting. Anchor on SIGNUP_ENDPOINT so
-  // we don't accidentally match one of the other fetch/JSON.stringify sites
-  // in index.html (contributions, verify-band, etc.).
+test('signup submit handler POSTs the email and optional name to /api/signup', () => {
   const anchorIdx = INDEX_HTML.indexOf('fetch(SIGNUP_ENDPOINT');
-  assert.ok(
-    anchorIdx > 0,
-    'Expected fetch(SIGNUP_ENDPOINT, ...) call inside submit handler.'
-  );
-  // Look at the next ~900 chars — enough to cover fetch options + both bodies.
+  assert.ok(anchorIdx > 0, 'Expected fetch(SIGNUP_ENDPOINT, ...) call inside submit handler.');
   const window = INDEX_HTML.slice(anchorIdx, anchorIdx + 900);
-  // The creation body still carries every profile field. Shorthand properties now,
-  // so match the names rather than "name:" style keys.
-  for (const key of ['name', 'email', 'city', 'state', 'country', 'instrument']) {
-    assert.ok(
-      new RegExp(`\\b${key}\\b`).test(window),
-      `Expected signup submit body to include "${key}".`
-    );
-  }
-  // And the sign-in body carries the email only, because that is all the server
-  // needs to recognise a returning visitor.
+  assert.ok(window.includes('? { name, email }'), 'creation sends the email and the optional name');
   assert.ok(
     window.includes("{ intent: 'signin', email }"),
-    'Expected an email-only sign-in body alongside the full sign-up body.'
+    'Expected an email-only sign-in body alongside the sign-up body.'
   );
 });
 
