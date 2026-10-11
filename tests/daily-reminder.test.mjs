@@ -141,3 +141,15 @@ test('the game asks once, after a finished puzzle, signed-in players only', () =
   assert.match(ask, /isSignedIn\(\) && !localStorage\.getItem\(REMINDER_PROMPT_KEY\)/);
   assert.match(engine, /body: JSON\.stringify\(\{ daily_reminder: true \}\)/);
 });
+
+test('under the countdown: "Email me when it\'s live" until they opt in', () => {
+  const engine = read('../scripts/six-degrees-game.mjs');
+  const link = engine.match(/function reminderLinkEl\(\) \{[\s\S]*?\n  \}\n/)[0];
+  assert.match(link, /if \(!isSignedIn\(\)\) return null;/, 'never for guests');
+  assert.match(link, /Email me when it\\u2019s live/);
+  assert.match(link, /hidden>/, 'hidden until the server says reminders are off');
+  assert.match(link, /if \(on === false\) p\.hidden = false;/);
+  // Both finished screens (won, and out of moves / gave up) carry it, daily only.
+  const calls = engine.match(/finish\.appendChild\(nextChainCountdownEl\(\)\);\n\s*const remind = reminderLinkEl\(\);/g) || [];
+  assert.equal(calls.length, 2);
+});
