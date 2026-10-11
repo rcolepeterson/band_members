@@ -882,6 +882,7 @@ function initGameUI() {
       .sd-board .game-chain-pill,.sd-modal .game-chain-pill{white-space:normal;overflow:visible;text-overflow:clip;text-align:center;line-height:1.25;border-radius:14px;overflow-wrap:break-word}
       .sd-countdown{text-align:center;font-size:.85rem;color:var(--color-text-muted);margin:8px 0 0}
       .sd-countdown strong{color:var(--color-text);font-variant-numeric:tabular-nums;letter-spacing:.04em}
+      .sd-remind-link{margin-top:4px}.sd-remind-link[hidden]{display:none}
       .sd-link{flex:none;color:var(--color-text-faint);font-size:.8rem}
       .sd-via{display:inline-flex;flex-direction:column;align-items:center;gap:1px;line-height:1.1;max-width:110px;text-align:center}
       .sd-ico{width:1.05em;height:1.05em;flex:none;vertical-align:-0.18em}
@@ -1748,6 +1749,52 @@ function initGameUI() {
   function shouldAskForReminder() {
     try { return isSignedIn() && !localStorage.getItem(REMINDER_PROMPT_KEY); } catch { return false; }
   }
+  // Saves "Remind me daily" on the server. Throws if it didn't stick.
+  let reminderState = null; // a promise of true/false, read once per page
+  async function turnOnReminder() {
+    const res = await fetch('/api/notification-prefs', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
+      body: JSON.stringify({ daily_reminder: true }),
+    });
+    if (!res.ok) throw new Error('save failed');
+    reminderState = Promise.resolve(true);
+    window.dispatchEvent(new Event('sdr-reminder-on'));
+  }
+  function reminderIsOn() {
+    if (!reminderState) {
+      reminderState = fetch('/api/notification-prefs', { headers: { authorization: 'Bearer ' + authToken() } })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((prefs) => (prefs ? prefs.daily_reminder === true : null))
+        .catch(() => null);
+    }
+    return reminderState;
+  }
+
+  // "Email me when it's live" under the countdown (Cole, 2026-10-11): stays
+  // until they opt in, signed-in players only. Hidden while we check, and
+  // if the check fails, so nobody is asked who already said yes.
+  function reminderLinkEl() {
+    if (!isSignedIn()) return null;
+    const p = el('<p class="sd-countdown sd-remind-link" hidden><button type="button" class="sd-linkbtn">Email me when it\u2019s live</button></p>');
+    reminderIsOn().then((on) => { if (on === false) p.hidden = false; });
+    // Said yes in the results popup: this one goes too.
+    let mine = false;
+    window.addEventListener('sdr-reminder-on', () => { if (!mine) p.hidden = true; }, { once: true });
+    const btn = p.querySelector('button');
+    btn.addEventListener('click', async () => {
+      mine = true;
+      btn.disabled = true;
+      try {
+        await turnOnReminder();
+        p.textContent = 'We\u2019ll email you when it\u2019s live.';
+      } catch {
+        p.textContent = 'Couldn\u2019t save that. Try \u201cRemind me daily\u201d in your account menu.';
+      }
+    });
+    return p;
+  }
+
   function reminderPromptEl() {
     const box = el('<p class="sd-guest sd-reminder">Want a reminder tomorrow? '
       + '<button type="button" class="sd-linkbtn" data-reminder="yes">Yes</button> '
@@ -1757,12 +1804,7 @@ function initGameUI() {
     yes.addEventListener('click', async () => {
       yes.disabled = true;
       try {
-        const res = await fetch('/api/notification-prefs', {
-          method: 'PATCH',
-          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
-          body: JSON.stringify({ daily_reminder: true }),
-        });
-        if (!res.ok) throw new Error('save failed');
+        await turnOnReminder();
         box.textContent = 'Done. We\u2019ll email you when tomorrow\u2019s puzzle is live.';
       } catch {
         box.textContent = 'Couldn\u2019t save that. You can turn on \u201cRemind me daily\u201d in your account menu.';
@@ -2157,7 +2199,11 @@ function initGameUI() {
       actions.appendChild(results);
       actions.appendChild(again);
       finish.appendChild(actions);
-      if (!practiceMode) finish.appendChild(nextChainCountdownEl());
+      if (!practiceMode) {
+        finish.appendChild(nextChainCountdownEl());
+        const remind = reminderLinkEl();
+        if (remind) finish.appendChild(remind);
+      }
       finish.appendChild(musicMapLinkEl(run));
       return;
     }
@@ -2518,6 +2564,8 @@ function initGameUI() {
     finish.appendChild(actions);
     if (!practiceMode) {
       finish.appendChild(nextChainCountdownEl());
+      const remind = reminderLinkEl();
+      if (remind) finish.appendChild(remind);
     }
     finish.appendChild(musicMapLinkEl(run));
   }
