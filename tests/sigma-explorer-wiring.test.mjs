@@ -1800,3 +1800,9 @@ test('tester polish: 1 degree, one legal footer, honest dialog name, no dangling
   assert.ok(!chip.includes('EM_DASH'), 'unknown years show the name alone');
   assert.match(chip, /if \(yearsText\) \{/);
 });
+
+test('a shared /?anchor=<band> link opens at its final depth, no big-then-small snap', () => {
+  // First paint must use the same depth setGraph uses right after it.
+  assert.match(EXPLORER, /state\.openingAnchorId = resolved\.anchorId;[\s\S]{0,400}?state\.maxHops = initialHopsForAnchor\(resolved\.anchorId\);\n\s*renderNeighborhood\(\{\n\s*anchorId: resolved\.anchorId,/);
+  assert.match(EXPLORER, /state\.maxHops = initialHopsForAnchor\(anchorId\);\n\s*clearHighlight\(\);\n\s*return renderNeighborhood/);
+});
