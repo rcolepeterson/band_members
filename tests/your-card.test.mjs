@@ -1,0 +1,39 @@
+// "Your card" (Cole, Paul, Aaron, 2026-10-11): sign-up asks for the email only;
+// name, city, state, country and instrument are filled in later from the
+// account menu, and the game asks once, after a win.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const home = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const engine = readFileSync(new URL('../scripts/six-degrees-game.mjs', import.meta.url), 'utf8');
+
+test('the account menu has Your card, all optional, saved with PATCH /api/me', () => {
+  const card = home.match(/<details class="user-card-profile"[\s\S]*?<\/details>/)[0];
+  for (const id of ['card-name', 'card-city', 'card-state', 'card-country', 'card-instrument']) {
+    assert.match(card, new RegExp(`id="${id}"`));
+  }
+  assert.doesNotMatch(card, /\srequired/, 'nothing on the card is required');
+  assert.match(home, /fetch\('\/api\/me', \{\n\s*method: 'PATCH'/);
+  assert.match(home, /initProfileCard\(\);/);
+});
+
+test('/?card=1 opens the account menu on Your card', () => {
+  assert.match(home, /\[\?&\]card=1\(&\|\$\)\/\.test\(location\.search\) && loadCurrentUser\(\)/);
+  assert.match(home, /details\.open = true;/);
+});
+
+test('Google, Facebook and Instagram sign-in are untouched', () => {
+  for (const provider of ['google', 'facebook', 'instagram']) {
+    assert.match(home, new RegExp(`data-oauth-provider="${provider}"`));
+  }
+  assert.match(home, /function startOAuth\(provider, button\)/);
+});
+
+test('the game asks for the card once, after a win, only if no city is saved', () => {
+  assert.match(engine, /\} else if \(won && shouldAskForCard\(\)\) \{/);
+  assert.match(engine, /href="\/\?card=1">Add it to your card<\/a>/);
+  const ask = engine.match(/function shouldAskForCard\(\) \{[\s\S]*?\n  \}\n/)[0];
+  assert.match(ask, /if \(localStorage\.getItem\(CARD_PROMPT_KEY\)\) return false;/);
+  assert.match(ask, /user && user\.token && !user\.city/);
+});

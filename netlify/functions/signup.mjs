@@ -30,6 +30,15 @@
 //    This exists so a returning visitor can be recognised by email alone rather
 //    than retyping a profile the row already holds.
 //
+// 6. Only the email is required (Cole, Paul, Aaron, 2026-10-11). Name, city,
+//    state, country and instrument are optional: a blank name becomes one
+//    made from the email (nameFromEmail), and the profile fields can be
+//    filled in later from "Your card" in the account menu (PATCH /api/me).
+//    Asking for five fields before anyone could play a daily puzzle cost
+//    players. Google / Facebook / Instagram sign-in never asked for them.
+//    A returning user's saved profile is never blanked by a sign-up that
+//    leaves a field empty.
+//
 // Rate limiting: none at this layer. Netlify's platform-level rate limits
 // apply. If we see abuse we'll add per-IP throttling in a separate PR.
 
@@ -63,15 +72,21 @@ async function parseJsonBody(req) {
   }
 }
 
+// A starting name for an account made with just an email, from the part
+// before the @: "jane.doe@x.com" -> "Jane Doe". Changeable on "Your card".
+export function nameFromEmail(email) {
+  const local = String(email || '').split('@')[0].replace(/[._+-]+/g, ' ').trim();
+  const name = local.replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 100);
+  return name || 'Rock fan';
+}
+
 export default async (req) => {
   if (req.method !== 'POST') return methodNotAllowed();
   if (!isDbConfigured()) return dbUnavailable();
 
   const body = await parseJsonBody(req);
   if (!body || typeof body !== 'object') {
-    return badRequest(
-      'request body must be JSON with { email, name, city, state, country, instrument }'
-    );
+    return badRequest('request body must be JSON with { email }');
   }
 
   const email      = normalizeEmail(body.email);
@@ -150,43 +165,16 @@ export default async (req) => {
     }
   }
 
-  const name       = normalizeName(body.name);
-  const city       = normalizeCity(body.city);
-  const state      = normalizeState(body.state);
-  const country    = normalizeCountry(body.country);
-  const instrument = normalizeInstrument(body.instrument);
+  // Optional (see 6 above). Blank profile fields are stored as null.
+  const name       = normalizeName(body.name) || nameFromEmail(email);
+  const city       = normalizeCity(body.city) || null;
+  const state      = normalizeState(body.state) || null;
+  const country    = normalizeCountry(body.country) || null;
+  const instrument = normalizeInstrument(body.instrument) || null;
 
   if (!isPlausibleEmail(email)) {
     return badRequest('email is required and must be a valid address', { field: 'email' });
   }
-  if (!name) {
-    return badRequest('name is required', { field: 'name' });
-  }
-
-  // Profile fields are required at signup as of PR signup-profile-fields
-  // (product decision 2026-07-19). We validate presence, but keep the columns
-  // themselves nullable in the DB so pre-existing users don't need a backfill.
-  //
-  // `instrument` accepts free-text — people who don't play an instrument are
-  // expected to type something like 'Music listener' or 'Music connoisseur'.
-  // The client shows that hint in its placeholder; the server just enforces
-  // non-empty.
-  if (!city) {
-    return badRequest('city is required', { field: 'city' });
-  }
-  if (!state) {
-    return badRequest('state or region is required', { field: 'state' });
-  }
-  if (!country) {
-    return badRequest('country is required', { field: 'country' });
-  }
-  if (!instrument) {
-    return badRequest(
-      'instrument is required (enter "Music listener" or "Music connoisseur" if you don\'t play)',
-      { field: 'instrument' }
-    );
-  }
-
   const sql = getSql();
 
   try {
@@ -210,26 +198,27 @@ export default async (req) => {
     let user;
     let created;
     if (existing[0]) {
-      // Returning user. Update profile fields when they've changed; token
-      // stays the same. We always write all four profile fields (plus name)
-      // so people can correct typos or move cities on their next signup.
-      // This is the same "re-signup keeps the token" contract described in
-      // the file-level comments above — we just carry more mutable state now.
+      // Returning user. Token stays the same. Only fields actually sent
+      // replace what's saved: a blank one keeps the saved value, and a blank
+      // name keeps the saved name rather than taking one made from the email.
       const current = existing[0];
-      const changed =
-        current.name       !== name       ||
-        current.city       !== city       ||
-        current.state      !== state      ||
-        current.country    !== country    ||
-        current.instrument !== instrument;
+      const next = {
+        name:       normalizeName(body.name) || current.name,
+        city:       city       ?? current.city,
+        state:      state      ?? current.state,
+        country:    country    ?? current.country,
+        instrument: instrument ?? current.instrument,
+      };
+      const changed = ['name', 'city', 'state', 'country', 'instrument']
+        .some((k) => current[k] !== next[k]);
       if (changed) {
         const updated = await sql`
           update users set
-            name       = ${name},
-            city       = ${city},
-            state      = ${state},
-            country    = ${country},
-            instrument = ${instrument},
+            name       = ${next.name},
+            city       = ${next.city},
+            state      = ${next.state},
+            country    = ${next.country},
+            instrument = ${next.instrument},
             updated_at = now()
           where id = ${current.id}
           returning id, email, name, token, bands_added, bands_edited, created_at,

@@ -572,30 +572,29 @@ test('deriveUserInitials is defined and falls back to the email', () => {
 });
 
 test('the panel asks for an email first and nothing else', () => {
-  // A returning visitor is found by email alone, so the four profile fields plus
-  // the name stay folded away until the email comes back unknown.
+  // A returning visitor is found by email alone; step two (an optional name)
+  // stays folded away until the email comes back unknown. City, state,
+  // country and instrument are not on the sign-up form at all (2026-10-11):
+  // they live on "Your card".
   assert.match(INDEX_HTML, /<div class="signup-profile-fields form-span-2" id="signup-profile-fields" hidden>/);
-  // Email must sit OUTSIDE that group, or step one would have no field at all.
   const group = sliceBetween(INDEX_HTML, /id="signup-profile-fields" hidden>/, 'id="signup-status"');
   assert.ok(!group.includes('id="signup-email"'), 'email belongs to step one');
-  for (const id of ['signup-name', 'signup-city', 'signup-state', 'signup-country', 'signup-instrument']) {
-    assert.ok(group.includes(`id="${id}"`), `${id} belongs to the profile step`);
+  assert.ok(group.includes('id="signup-name"'), 'the optional name belongs to step two');
+  for (const id of ['signup-city', 'signup-state', 'signup-country', 'signup-instrument']) {
+    assert.ok(!INDEX_HTML.includes(`id="${id}"`), `${id} is no longer asked at sign-up`);
   }
 });
 
-test('required is toggled with visibility, not baked into the markup', () => {
+test('nothing on the sign-up form is required but the email', () => {
   // A hidden required input blocks submission with a browser message the visitor
   // can neither see nor reach: a dead end with no visible cause.
   const group = sliceBetween(INDEX_HTML, /id="signup-profile-fields" hidden>/, 'id="signup-status"');
   assert.doesNotMatch(group, /\srequired/, 'no required attributes inside the hidden group');
+  assert.doesNotMatch(INDEX_HTML, /if \(field\) field\.required = true;/);
   assert.match(INDEX_HTML, /function revealProfileFields\(\)/);
-  assert.match(INDEX_HTML, /if \(field\) field\.required = true;/);
   assert.match(INDEX_HTML, /function resetToEmailStep\(\)/);
-  assert.match(INDEX_HTML, /if \(field\) field\.required = false;/);
-  // Reframing the panel folds it back, so a visitor who closed it mid-signup does
-  // not reopen it half-expanded.
   const setMode = sliceBetween(INDEX_HTML, /function setAuthMode\(mode\) \{/, '\n    }');
-  assert.ok(setMode.includes('resetToEmailStep();'), 'setAuthMode should fold the profile step away');
+  assert.ok(setMode.includes('resetToEmailStep();'), 'setAuthMode should fold step two away');
 });
 
 test('step one looks up, step two creates', () => {
@@ -603,18 +602,14 @@ test('step one looks up, step two creates', () => {
   // The lookup shape cannot create an account, so a typo'd email cannot silently
   // make a second one.
   assert.match(INDEX_HTML, /: \{ intent: 'signin', email \}\)/);
-  assert.match(INDEX_HTML, /\? \{ name, email, city, state, country, instrument \}/);
-  // Unknown email reveals the rest rather than creating on the first press.
+  assert.match(INDEX_HTML, /\? \{ name, email \}/);
+  // Unknown email asks for a confirm rather than creating on the first press.
   assert.match(INDEX_HTML, /if \(!creatingAccount && response\.ok && data && data\.found === false\) \{/);
   assert.match(INDEX_HTML, /revealProfileFields\(\);/);
-  // The panel title and copy carry the "you are new" message. A status line would
-  // repeat it below all six fields, where a phone visitor never sees it.
   assert.doesNotMatch(INDEX_HTML, /New here — tell us a little about you/);
-  // The profile rules only apply once those fields are on screen.
-  for (const field of ['city', 'state', 'country', 'instrument']) {
-    assert.match(INDEX_HTML, new RegExp(`if \\(creatingAccount && \\(!${field}`));
-  }
-  assert.match(INDEX_HTML, /if \(creatingAccount && \(!name \|\| name\.length > 100\)\)/);
+  // The name is optional; only its length is checked.
+  assert.match(INDEX_HTML, /if \(creatingAccount && name\.length > 100\)/);
+  assert.doesNotMatch(INDEX_HTML, /if \(creatingAccount && \(!(city|state|country|instrument)/);
 });
 
 test('the submit label follows the step, not just the panel framing', () => {

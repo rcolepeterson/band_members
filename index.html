@@ -708,6 +708,7 @@ body {
   width: 100%;
   box-sizing: border-box;
 }
+.field-optional { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: .7; }
 #signup-status {
   /* Reserve space so the submit button doesn't jump when a
      validation or network message appears. Empty by default. */
@@ -1317,6 +1318,37 @@ button.header-user-chip:focus-visible {
   margin: 0 0 0.85rem;
 }
 .user-card .link-btn { font-size: var(--text-sm); padding: 0; }
+/* "Your card" (2026-10-11): the profile fields sign-up no longer asks for. */
+.user-card-profile { margin: 0 0 0.85rem; }
+.user-card-profile summary {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+.user-card-profile-copy {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  margin: 0 0 0.6rem;
+}
+.user-card-field { display: block; margin-bottom: 0.5rem; text-transform: none; letter-spacing: normal; }
+.user-card-field span { display: block; font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: 0.2rem; }
+.user-card-field input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+.user-card-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.user-card-save { width: 100%; margin-top: 0.25rem; }
+.user-card-profile-status { font-size: var(--text-xs); margin: 0.4rem 0 0; min-height: 1em; color: var(--color-text-muted); }
+.user-card-profile-status.is-error { color: #ff9b9b; }
 
 /* --------------------------------------------------------------------
    Auth-strip mutual exclusivity (tester feedback after #68-#75).
@@ -3284,6 +3316,24 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                   <strong data-current-user-name>—</strong>
                   <span class="user-card-email" data-current-user-email></span>
                 </div>
+                <!-- Your card (2026-10-11): sign-up asks for the email only, so
+                     the rest of the profile is filled in here, any time. All
+                     optional. Saved with PATCH /api/me. /?card=1 opens it. -->
+                <details class="user-card-profile" id="user-card-profile">
+                  <summary>Your card</summary>
+                  <p class="user-card-profile-copy">All optional. Tell us where you rock from and what you play.</p>
+                  <form id="user-card-profile-form" novalidate>
+                    <label class="user-card-field"><span>Name</span><input id="card-name" type="text" autocomplete="name" maxlength="100" /></label>
+                    <div class="user-card-field-row">
+                      <label class="user-card-field"><span>City</span><input id="card-city" type="text" autocomplete="address-level2" placeholder="Seattle" maxlength="80" /></label>
+                      <label class="user-card-field"><span>State / region</span><input id="card-state" type="text" autocomplete="address-level1" placeholder="WA" maxlength="80" /></label>
+                    </div>
+                    <label class="user-card-field"><span>Country</span><input id="card-country" type="text" autocomplete="country-name" placeholder="USA" maxlength="80" /></label>
+                    <label class="user-card-field"><span>Instrument</span><input id="card-instrument" type="text" placeholder="Guitar, drums&hellip; or Music listener" maxlength="60" /></label>
+                    <button type="submit" class="submit-btn user-card-save" id="card-save-btn">Save</button>
+                    <p class="user-card-profile-status" id="card-status" aria-live="polite"></p>
+                  </form>
+                </details>
                 <label class="user-card-toggle">
                   <input type="checkbox" id="user-card-notify-toggle" />
                   <span>Email me when a band I've touched is updated</span>
@@ -3693,42 +3743,18 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                     <div class="field-note">Only used to attribute contributions and reach you if we need to. Not shared.</div>
                   </div>
                   <!--
-                    Everything below is what a NEW account needs: a name plus the
-                    four profile fields. It stays hidden until the email has been
-                    checked and come back unknown, so a returning visitor is
-                    recognised by email alone instead of retyping a profile the
-                    row already holds.
-
-                    City / state / country give the map its 'where do our
-                    contributors live?' signal; instrument answers 'what do they
-                    play?', free-text so people who don't play can enter 'Music
-                    listener' (hinted in the placeholder). Still required to
-                    create an account -- required is toggled in JS along with
-                    visibility, because a hidden required input blocks submission
-                    with a message the visitor can neither see nor reach.
+                    Step two, for an email we don't know yet: just a confirm, so a
+                    mistyped address doesn't quietly make an account nobody can
+                    reach, plus an optional name (left blank, one is made from the
+                    email). City, state, country and instrument are no longer asked
+                    at sign-up (2026-10-11); they live on "Your card" in the
+                    account menu, filled in whenever someone wants to.
                   -->
                   <div class="signup-profile-fields form-span-2" id="signup-profile-fields" hidden>
                   <div class="form-grid">
                   <div class="form-span-2">
-                    <label for="signup-name">Your name</label>
+                    <label for="signup-name">Your name <span class="field-optional">(optional)</span></label>
                     <input id="signup-name" name="signup-name" type="text" autocomplete="name" placeholder="Jane Musician" maxlength="100" />
-                  </div>
-                  <div>
-                    <label for="signup-city">City</label>
-                    <input id="signup-city" name="signup-city" type="text" autocomplete="address-level2" placeholder="Seattle" maxlength="80" />
-                  </div>
-                  <div>
-                    <label for="signup-state">State / region</label>
-                    <input id="signup-state" name="signup-state" type="text" autocomplete="address-level1" placeholder="WA" maxlength="80" />
-                  </div>
-                  <div class="form-span-2">
-                    <label for="signup-country">Country</label>
-                    <input id="signup-country" name="signup-country" type="text" autocomplete="country-name" placeholder="USA" maxlength="80" />
-                  </div>
-                  <div class="form-span-2">
-                    <label for="signup-instrument">Instrument you play</label>
-                    <input id="signup-instrument" name="signup-instrument" type="text" placeholder="Guitar, Bass, Drums… or &quot;Music listener&quot; if you don't play" maxlength="60" />
-                    <div class="field-note">Don't play? Type <em>Music listener</em> or <em>Music connoisseur</em>.</div>
                   </div>
                   </div>
                   </div>
@@ -7228,8 +7254,67 @@ function downloadPngBlob(blob) {
     // setSignedInState (session changes) and when the card opens.
     // The notify toggle renders instantly from the local cache, then
     // refreshes from the server — the server is the source of truth.
+    // Your card: the saved profile into the form. Only while it's closed, so a
+    // refresh never wipes what someone is in the middle of typing.
+    function fillProfileCard(user) {
+      const details = document.getElementById('user-card-profile');
+      if (!details || details.open) return;
+      const fields = { 'card-name': 'name', 'card-city': 'city', 'card-state': 'state', 'card-country': 'country', 'card-instrument': 'instrument' };
+      Object.entries(fields).forEach(([id, key]) => {
+        const input = document.getElementById(id);
+        if (input) input.value = (user && user[key]) || '';
+      });
+    }
+
+    function initProfileCard() {
+      const form = document.getElementById('user-card-profile-form');
+      if (!form || form.dataset.wired) return;
+      form.dataset.wired = '1';
+      const status = document.getElementById('card-status');
+      const saveBtn = document.getElementById('card-save-btn');
+      const say = (text, isError) => {
+        if (!status) return;
+        status.textContent = text;
+        status.classList.toggle('is-error', Boolean(isError));
+      };
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const user = loadCurrentUser();
+        if (!user || !user.token) { say('Sign in again to save your card.', true); return; }
+        const value = (id) => (document.getElementById(id)?.value || '').trim();
+        const body = {
+          name: value('card-name'),
+          city: value('card-city'),
+          state: value('card-state'),
+          country: value('card-country'),
+          instrument: value('card-instrument'),
+        };
+        // The name can change but not go blank; leave it out to keep it.
+        if (!body.name) delete body.name;
+        if (saveBtn) saveBtn.disabled = true;
+        say('Saving\u2026');
+        try {
+          const res = await fetch('/api/me', {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json', authorization: 'Bearer ' + user.token },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok || !data || !data.user) throw new Error((data && data.error) || 'save failed');
+          saveCurrentUser({ ...user, ...data.user, token: user.token });
+          setSignedInState(loadCurrentUser());
+          say('Saved.');
+        } catch (err) {
+          say('Couldn\u2019t save right now. Try again in a moment.', true);
+        } finally {
+          if (saveBtn) saveBtn.disabled = false;
+        }
+      });
+    }
+
     function renderUserCard() {
       const user = loadCurrentUser();
+      fillProfileCard(user);
       document.querySelectorAll('[data-current-user-email]').forEach(el => {
         el.textContent = user && user.email ? user.email : '';
       });
@@ -11848,27 +11933,22 @@ function downloadPngBlob(blob) {
     const AUTH_MODE_COPY = { signup: AUTH_COPY, signin: AUTH_COPY };
     let currentAuthMode = 'signup';
 
-    // The four profile fields plus the name, shown only once an email has come
-    // back unknown. `required` is set here rather than in the markup: a hidden
-    // required input blocks form submission with a browser message the visitor can
-    // neither see nor reach, which is a dead end with no visible cause.
-    const PROFILE_FIELD_IDS = ['signup-name', 'signup-city', 'signup-state', 'signup-country', 'signup-instrument'];
+    // Step two, shown only once an email has come back unknown: a confirm and an
+    // optional name (2026-10-11; city, state, country and instrument moved to
+    // "Your card"). Nothing here is required, so no field ever blocks submission.
+    const PROFILE_FIELD_IDS = ['signup-name'];
 
     function revealProfileFields() {
       const wrap = document.getElementById('signup-profile-fields');
       if (!wrap || !wrap.hidden) return;
       wrap.hidden = false;
-      PROFILE_FIELD_IDS.forEach(id => {
-        const field = document.getElementById(id);
-        if (field) field.required = true;
-      });
       const title = document.getElementById('signup-panel-title');
       const body = document.getElementById('signup-panel-copy');
       const submitBtn = document.getElementById('signup-submit-btn');
       if (title) title.textContent = 'Create your account';
       if (body) {
-        body.textContent = 'No account on that email yet. A few details and you are in — '
-          + 'city and instrument are what put you on the map.';
+        body.textContent = 'No account on that email yet. Check it\u2019s right, add a name '
+          + 'if you like, and you\u2019re in.';
       }
       if (submitBtn) submitBtn.textContent = 'Create account';
       const name = document.getElementById('signup-name');
@@ -11961,6 +12041,7 @@ function downloadPngBlob(blob) {
     // Wired once via initNotifyEventToggles: optimistic UI, PATCH the
     // server, revert on failure so toggles never lie about persisted state.
     initNotifyEventToggles();
+    initProfileCard();
 
     document.getElementById('edit-band-cancel-btn')?.addEventListener('click', closeEditBandPopover);
 
@@ -13143,21 +13224,28 @@ function downloadPngBlob(blob) {
           if (/[?&]signin=game(&|$)/.test(location.search) && !loadCurrentUser()) {
             setTimeout(() => { try { openSignInFlow(); } catch (_) {} }, 0);
           }
+          // /?card=1 (the game's "add it to your card" link): open the account
+          // menu with Your card expanded.
+          if (/[?&]card=1(&|$)/.test(location.search) && loadCurrentUser()) {
+            setTimeout(() => {
+              try {
+                const card = document.getElementById('user-card-popover');
+                if (card && card.hidden) {
+                  const chip = document.getElementById('header-user-initials');
+                  const mobile = document.getElementById('mobile-user-btn');
+                  ((chip && chip.offsetParent) ? chip : (mobile || chip))?.click();
+                }
+                const details = document.getElementById('user-card-profile');
+                if (details) details.open = true;
+              } catch (_) {}
+            }, 0);
+          }
 
           const form = document.getElementById('signup-form');
           const status = document.getElementById('signup-status');
           const submitBtn = document.getElementById('signup-submit-btn');
           const nameInput = document.getElementById('signup-name');
           const emailInput = document.getElementById('signup-email');
-          // Profile fields added in PR signup-profile-fields. Kept as separate
-          // element lookups (instead of a loop) so a missing element fails
-          // loudly at read time via the null check below rather than silently
-          // sending an empty string.
-          const cityInput = document.getElementById('signup-city');
-          const stateInput = document.getElementById('signup-state');
-          const countryInput = document.getElementById('signup-country');
-          const instrumentInput = document.getElementById('signup-instrument');
-
           // Four-option sign-in: Google / Facebook / Instagram go through a
           // full-page redirect (not a popup). The browser is sent to
           // /api/oauth/authorize, which returns the provider's authorize URL;
@@ -13196,10 +13284,6 @@ function downloadPngBlob(blob) {
               event.preventDefault();
               const name = (nameInput && nameInput.value || '').trim();
               const email = (emailInput && emailInput.value || '').trim().toLowerCase();
-              const city = (cityInput && cityInput.value || '').trim();
-              const state = (stateInput && stateInput.value || '').trim();
-              const country = (countryInput && countryInput.value || '').trim();
-              const instrument = (instrumentInput && instrumentInput.value || '').trim();
               // Two steps on one form.
               //
               // Step one asks for the email and nothing else: a returning visitor
@@ -13212,37 +13296,13 @@ function downloadPngBlob(blob) {
               const creatingAccount = Boolean(profileFields && !profileFields.hidden);
 
               // Client-side sanity check. Server enforces the real rules.
-              if (creatingAccount && (!name || name.length > 100)) {
-                status.textContent = 'Please enter your name (up to 100 characters).';
+              if (creatingAccount && name.length > 100) {
+                status.textContent = 'Please keep your name to 100 characters.';
                 status.className = 'validation-message is-error';
                 return;
               }
               if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                 status.textContent = 'That doesn’t look like a valid email. Try again.';
-                status.className = 'validation-message is-error';
-                return;
-              }
-              // Profile field checks mirror the server rules in signup.mjs.
-              // Length caps: city/state/country 80, instrument 60. We check
-              // presence + length here so users get instant feedback instead
-              // of a round-trip.
-              if (creatingAccount && (!city || city.length > 80)) {
-                status.textContent = 'Please enter your city (up to 80 characters).';
-                status.className = 'validation-message is-error';
-                return;
-              }
-              if (creatingAccount && (!state || state.length > 80)) {
-                status.textContent = 'Please enter your state or region (up to 80 characters).';
-                status.className = 'validation-message is-error';
-                return;
-              }
-              if (creatingAccount && (!country || country.length > 80)) {
-                status.textContent = 'Please enter your country (up to 80 characters).';
-                status.className = 'validation-message is-error';
-                return;
-              }
-              if (creatingAccount && (!instrument || instrument.length > 60)) {
-                status.textContent = 'Please enter an instrument (or type "Music listener" if you don\'t play).';
                 status.className = 'validation-message is-error';
                 return;
               }
@@ -13258,7 +13318,8 @@ function downloadPngBlob(blob) {
                   method: 'POST',
                   headers: { 'content-type': 'application/json' },
                   body: JSON.stringify(creatingAccount
-                    ? { name, email, city, state, country, instrument }
+                    // Name is optional; the server makes one from the email.
+                    ? { name, email }
                     // Look up only. The server never creates an account for this
                     // shape, so a typo'd email cannot silently make a second one.
                     : { intent: 'signin', email })
