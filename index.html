@@ -13336,8 +13336,10 @@ function downloadPngBlob(blob) {
             setTimeout(() => { try { openSignInFlow(); } catch (_) {} }, 0);
           }
           // /?card=1 (the game's "add it to your card" link): open the account
-          // menu with Your card expanded.
-          if (/[?&]card=1(&|$)/.test(location.search) && loadCurrentUser()) {
+          // menu with Your card expanded. /?account=1 (tapping "Playing as"
+          // in the game): just open the account menu.
+          const openCard = /[?&]card=1(&|$)/.test(location.search) && loadCurrentUser();
+          if (openCard || (/[?&]account=1(&|$)/.test(location.search) && loadCurrentUser())) {
             setTimeout(() => {
               try {
                 const card = document.getElementById('user-card-popover');
@@ -13347,7 +13349,7 @@ function downloadPngBlob(blob) {
                   ((chip && chip.offsetParent) ? chip : (mobile || chip))?.click();
                 }
                 const details = document.getElementById('user-card-profile');
-                if (details) details.open = true;
+                if (details && openCard) details.open = true;
               } catch (_) {}
             }, 0);
           }

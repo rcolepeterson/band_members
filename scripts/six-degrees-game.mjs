@@ -2079,6 +2079,26 @@ function initGameUI() {
     }
   }
 
+  // "Playing as X" opens your account menu (Cole, 2026-10-11). The menu
+  // lives on the homepage only, so this leaves the game; an unfinished
+  // puzzle is saved and Play becomes Continue.
+  function initPlayerLineLink() {
+    const line = document.getElementById('game-player-line-top');
+    if (!line || line.dataset.accountLink || !isSignedIn()) return;
+    line.dataset.accountLink = '1';
+    line.setAttribute('role', 'link');
+    line.setAttribute('tabindex', '0');
+    line.setAttribute('aria-label', 'Your account and settings');
+    line.title = 'Your account';
+    const go = () => { window.location.href = '/?account=1'; };
+    line.addEventListener('click', (e) => {
+      // Buttons inside the line (e.g. "pick a battle name") keep their own job.
+      if (e.target.closest('button, a')) return;
+      go();
+    });
+    line.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  }
+
   // Persistent player line: "Playing as X · [flame] 3-day streak". (Credits were
   // removed for launch, 2026-10-08.) The streak updates on
   // every repaint; the handle fills in async (cached after first load).
@@ -2097,6 +2117,7 @@ function initGameUI() {
     };
     paintOne(card.querySelector('.game-player-line'));
     paintOne(document.getElementById('game-player-line-top'));
+    initPlayerLineLink();
   }
 
   function paintDailyBoard(card, completed, gaveUpInfo) {
@@ -4163,6 +4184,8 @@ function initGameUI() {
   }
 
   initFrontDoor();
+
+  initPlayerLineLink();
   syncModeUI();
   // Paint the top player line on load (before any game card renders).
   try {

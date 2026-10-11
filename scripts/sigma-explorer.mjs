@@ -866,7 +866,7 @@ function buildStage(doc, mount) {
     <!-- The daily game, under the search (Cole, 2026-10-08): the menu was the
          only way to it, so new visitors never found it. -->
     <div class="sigma-daily">
-      <a class="sigma-daily-cta" href="/game/">Play today&rsquo;s daily chain</a>
+      <a class="sigma-daily-cta" href="/game/">Play today&rsquo;s 6&deg; puzzle</a>
       <p class="sigma-daily-note">Connect today&rsquo;s two bands in as few moves as you can.</p>
     </div>
     </div>
