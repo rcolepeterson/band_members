@@ -618,3 +618,17 @@ test('the submit label follows the step, not just the panel framing', () => {
   assert.match(INDEX_HTML, /const profileOpen = !document\.getElementById\('signup-profile-fields'\)\?\.hidden;/);
   assert.match(INDEX_HTML, /submitBtn\.textContent = profileOpen\s*\n\s*\? 'Create account'/);
 });
+
+test('sign-in panel tidy (2026-10-11): short, closes after a plain sign-in', () => {
+  // No explainer paragraph, no "Continue with" label, no note under the email.
+  assert.match(INDEX_HTML, /<p class="share-popover-copy" id="signup-panel-copy" hidden><\/p>/);
+  assert.doesNotMatch(INDEX_HTML, /<div class="oauth-label">/);
+  assert.doesNotMatch(INDEX_HTML, /Only used to attribute contributions and reach you/);
+  // Google / Facebook / Instagram stay; the create-account step hides them,
+  // since the visitor already chose email.
+  assert.match(INDEX_HTML, /\[data-signup-only\]\.is-email-step \.oauth-options \{ display: none; \}/);
+  // Opened with "Sign in": the panel closes once signed in instead of turning
+  // into the Add-your-band form.
+  assert.match(INDEX_HTML, /const signInOnly = currentAuthMode === 'signin';/);
+  assert.match(INDEX_HTML, /if \(signInOnly\) closeBottomPopovers\(\);/);
+});
