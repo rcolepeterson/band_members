@@ -48,7 +48,7 @@ test('the screen: logo, one line, Play, Sign in, date and number, credit', () =>
   assert.match(door, /<a class="fd-signin" data-fd-signin href="\/\?signin=game">Sign in<\/a>/);
   assert.match(door, /data-fd-date/);
   assert.match(door, /data-fd-number/);
-  assert.match(door, /By Six Degrees of Rock/);
+  assert.match(door, /<a href="mailto:sixdegreesofrock@gmail\.com">By Six Degrees of Rock<\/a>/);
   assert.doesNotMatch(door, /<nav|role="tab"|<select/, 'no menus, tabs or decisions');
 });
 
