@@ -545,6 +545,20 @@ export default async (req) => {
     `;
     results.push('onboarding email prefs + log ready');
 
+    // 6° daily puzzle reminder (2026-10-11): opt-in flag, off by default,
+    // plus a one-row-per-user-per-day send log. See _daily_reminder.mjs,
+    // which also creates these on first use.
+    await sql`alter table notification_prefs add column if not exists email_daily_reminder boolean not null default false`;
+    await sql`
+      create table if not exists daily_reminder_log (
+        user_id    uuid not null references users(id) on delete cascade,
+        chain_date text not null,
+        sent_at    timestamptz not null default now(),
+        primary key (user_id, chain_date)
+      )
+    `;
+    results.push('daily reminder prefs + log ready');
+
     await sql`drop trigger if exists notification_prefs_set_updated_at on notification_prefs`;
     await sql`
       create trigger notification_prefs_set_updated_at

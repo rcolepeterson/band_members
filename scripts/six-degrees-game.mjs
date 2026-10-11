@@ -1728,6 +1728,10 @@ function initGameUI() {
         const nudge = el('<p class="sd-guest"><button type="button" class="sd-linkbtn">Create a free account</button> to save your streak and stats!</p>');
         nudge.querySelector('button').addEventListener('click', requestDailySignup);
         c.appendChild(nudge);
+      } else if (!practiceMode && shouldAskForReminder()) {
+        // Once, after any finished puzzle: the moment people think "tomorrow".
+        try { localStorage.setItem(REMINDER_PROMPT_KEY, '1'); } catch {}
+        c.appendChild(reminderPromptEl());
       } else if (won && shouldAskForCard()) {
         // Sign-up asks for the email only (2026-10-11), so the profile is
         // asked for once, here, after a win: the happiest moment, never a gate.
@@ -1735,6 +1739,36 @@ function initGameUI() {
         c.appendChild(el('<p class="sd-guest">Where do you rock from? <a class="sd-linkbtn" href="/?card=1">Add it to your card</a></p>'));
       }
     });
+  }
+
+  // "Want a reminder tomorrow?" (2026-10-11): signed in, never asked on this
+  // device. Yes turns on the account menu's "Remind me daily" (the server
+  // stores it; see _daily_reminder.mjs). Off unless they say yes.
+  const REMINDER_PROMPT_KEY = 'sdr-reminder-prompt-shown';
+  function shouldAskForReminder() {
+    try { return isSignedIn() && !localStorage.getItem(REMINDER_PROMPT_KEY); } catch { return false; }
+  }
+  function reminderPromptEl() {
+    const box = el('<p class="sd-guest sd-reminder">Want a reminder tomorrow? '
+      + '<button type="button" class="sd-linkbtn" data-reminder="yes">Yes</button> '
+      + '<button type="button" class="sd-linkbtn" data-reminder="no">No</button></p>');
+    box.querySelector('[data-reminder="no"]').addEventListener('click', () => box.remove());
+    const yes = box.querySelector('[data-reminder="yes"]');
+    yes.addEventListener('click', async () => {
+      yes.disabled = true;
+      try {
+        const res = await fetch('/api/notification-prefs', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + authToken() },
+          body: JSON.stringify({ daily_reminder: true }),
+        });
+        if (!res.ok) throw new Error('save failed');
+        box.textContent = 'Done. We\u2019ll email you when tomorrow\u2019s puzzle is live.';
+      } catch {
+        box.textContent = 'Couldn\u2019t save that. You can turn on \u201cRemind me daily\u201d in your account menu.';
+      }
+    });
+    return box;
   }
 
   // The "Add it to your card" prompt: signed in, no city saved yet, and

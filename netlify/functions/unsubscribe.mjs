@@ -42,8 +42,13 @@ export default async (req) => {
   }
 
   let token = '';
+  // ?list=daily (the 6° reminder's footer) stops reminders only; anything
+  // else is the band-update list, as before.
+  let dailyOnly = false;
   try {
-    token = (new URL(req.url).searchParams.get('token') || '').trim();
+    const params = new URL(req.url).searchParams;
+    token = (params.get('token') || '').trim();
+    dailyOnly = params.get('list') === 'daily';
   } catch {
     token = '';
   }
@@ -76,6 +81,18 @@ export default async (req) => {
         title: 'Unsubscribe — Six Degrees of Rawk',
         heading: 'That link doesn\u2019t look right.',
         body: 'We couldn\u2019t find that unsubscribe link. It may have already been used — you can also turn emails off from your account card on <a href="https://sixdegreesofrock.com">sixdegreesofrock.com</a>.',
+      });
+    }
+    if (dailyOnly) {
+      await sql`
+        update notification_prefs
+        set email_daily_reminder = false, updated_at = now()
+        where unsubscribe_token = ${token}
+      `;
+      return page({
+        title: 'Unsubscribed — Six Degrees of Rock',
+        heading: 'No more daily reminders.',
+        body: 'You won\u2019t get the 6\u00b0 puzzle reminder again. Today\u2019s puzzle is always at <a href="https://sixdegreesofrock.com/game/">sixdegreesofrock.com/game</a>, and you can turn reminders back on from your account menu.',
       });
     }
     await sql`
