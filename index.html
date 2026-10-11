@@ -3470,6 +3470,31 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         </div>
       </div>
     </header>
+    <script>
+      // Header auth state at first paint (Cole, 2026-10-11). setSignedInState
+      // owns it, but runs only after the map has loaded, so "Sign in" (or your
+      // initials) used to pop in after the graph and nudge "Game" left. Same
+      // checks as loadCurrentUser and deriveUserInitials; setSignedInState
+      // still has the final word.
+      (function () {
+        var user = null;
+        try {
+          var parsed = JSON.parse(localStorage.getItem('bmft-user') || 'null');
+          if (parsed && typeof parsed.token === 'string' && parsed.token.length >= 8 && typeof parsed.email === 'string' && parsed.email) user = parsed;
+        } catch (e) {}
+        var signIn = document.getElementById('sign-in-btn');
+        var chip = document.getElementById('header-user');
+        if (signIn) signIn.hidden = !!user;
+        if (chip) chip.hidden = !user;
+        var initials = document.getElementById('header-user-initials');
+        if (user && initials) {
+          var words = String(user.name || '').trim().split(/\s+/).filter(Boolean);
+          initials.textContent = words.length
+            ? words.slice(0, 2).map(function (w) { return w[0].toUpperCase(); }).join('')
+            : String(user.email).trim()[0].toUpperCase();
+        }
+      })();
+    </script>
 
     <main id="main-content" class="layout">
       <section class="hero" aria-labelledby="hero-title">

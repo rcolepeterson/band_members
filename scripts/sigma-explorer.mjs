@@ -2803,6 +2803,11 @@ export function initSigmaExplorer({
   state.anchorSource = resolved.source;
   if (!resolved.anchorId) return null;
   state.openingAnchorId = resolved.anchorId;
+  // Open at the depth this anchor gets everywhere else (a band: 1 hop). The
+  // page's filter setup calls setGraph right after, which uses
+  // initialHopsForAnchor; starting at the default 2 hops made /?anchor=<band>
+  // draw a big view and then snap to the small one (Cole, 2026-10-11).
+  state.maxHops = initialHopsForAnchor(resolved.anchorId);
   renderNeighborhood({
     anchorId: resolved.anchorId,
     maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
