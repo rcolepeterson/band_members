@@ -79,6 +79,30 @@ export default async (req) => {
     const finalFollowsCount = num(body.follows_count) ?? followsCount;
     const finalBandsAdded = num(body.bands_added) ?? bandsAdded;
 
+    // GA fields: carry forward from the most recent snapshot that has them,
+    // since GA data only updates weekly via email. Explicit body values win.
+    let gaActive = num(body.ga_active_users);
+    let gaNew = num(body.ga_new_users);
+    let gaEngagement = num(body.ga_avg_engagement_seconds);
+    let gaEvents = num(body.ga_events);
+    if (gaActive === null || gaNew === null || gaEngagement === null || gaEvents === null) {
+      try {
+        const [latest] = await sql`
+          select ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events
+          from daily_snapshots
+          where ga_active_users is not null
+          order by snapshot_date desc
+          limit 1
+        `;
+        if (latest) {
+          gaActive = gaActive ?? latest.ga_active_users;
+          gaNew = gaNew ?? latest.ga_new_users;
+          gaEngagement = gaEngagement ?? latest.ga_avg_engagement_seconds;
+          gaEvents = gaEvents ?? latest.ga_events;
+        }
+      } catch { /* GA columns may not exist yet */ }
+    }
+
     const today = typeof body.snapshot_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.snapshot_date)
       ? body.snapshot_date
       : new Date().toISOString().slice(0, 10);
@@ -99,10 +123,10 @@ export default async (req) => {
         ${num(body.ig_vimana17)},
         ${num(body.fb_sixdegrees)},
         ${num(body.fb_aaron)},
-        ${num(body.ga_active_users)},
-        ${num(body.ga_new_users)},
-        ${num(body.ga_avg_engagement_seconds)},
-        ${num(body.ga_events)},
+        ${gaActive},
+        ${gaNew},
+        ${gaEngagement},
+        ${gaEvents},
         ${typeof body.notes === 'string' ? body.notes.slice(0, 500) : null}
       )
       on conflict (snapshot_date) do update set
