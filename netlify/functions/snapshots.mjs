@@ -30,7 +30,8 @@ export default async (req) => {
     if (since && /^\d{4}-\d{2}-\d{2}$/.test(since)) {
       rows = await sql`
         select snapshot_date, node_count, user_count, follows_count, bands_added,
-               ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, notes
+               ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron,
+               ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events, notes
         from daily_snapshots
         where snapshot_date >= ${since}::date
         order by snapshot_date asc
@@ -38,7 +39,8 @@ export default async (req) => {
     } else {
       rows = await sql`
         select snapshot_date, node_count, user_count, follows_count, bands_added,
-               ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, notes
+               ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron,
+               ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events, notes
         from daily_snapshots
         order by snapshot_date asc
       `;
