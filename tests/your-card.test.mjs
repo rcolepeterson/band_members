@@ -39,11 +39,12 @@ test('the game asks for the card once, after a win, only if no city is saved', (
 });
 
 test('"Playing as" in the game opens the account menu on the homepage', () => {
-  const link = engine.match(/function initPlayerLineLink\(\) \{[\s\S]*?\n  \}\n/)[0];
-  assert.match(link, /!isSignedIn\(\)\) return;/, 'guests get plain text');
-  assert.match(link, /window\.location\.href = '\/\?account=1'/);
-  assert.match(link, /setAttribute\('role', 'link'\)/);
-  assert.match(engine, /initPlayerLineLink\(\);/);
+  // The header pill, not the "Playing as" line inside the game box.
+  const badge = engine.match(/async function renderArenaPlayerBadge\(\) \{[\s\S]*?\n  \}\n/)[0];
+  assert.match(badge, /if \(!isSignedIn\(\)\) \{[\s\S]*?badge\.onclick = null;/, 'guests get no link');
+  assert.match(badge, /badge\.setAttribute\('data-action', 'account'\);/);
+  assert.match(badge, /badge\.onclick = \(\) => \{ window\.location\.href = '\/\?account=1'; \};/);
+  assert.doesNotMatch(engine, /initPlayerLineLink/);
   // The homepage opens the menu for account=1, and Your card only for card=1.
   assert.match(home, /\[\?&\]account=1\(&\|\$\)\/\.test\(location\.search\) && loadCurrentUser\(\)/);
   assert.match(home, /if \(details && openCard\) details\.open = true;/);
