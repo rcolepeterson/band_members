@@ -1338,6 +1338,77 @@ button.header-user-chip:focus-visible {
   margin: 0 0 0.85rem;
 }
 .user-card .link-btn { font-size: var(--text-sm); padding: 0; }
+/* Account menu tidy (Cole, 2026-10-11). The site-wide 48px input min-height
+   (touch targets) stretched each checkbox into a tall box drawn below its
+   label; checkboxes are now their own size, centred on their text, with the
+   whole row as the tap target. Title on the close button's row, sections
+   split by hairlines, chevrons instead of the browser's triangles. */
+.user-card > .share-popover-title {
+  display: flex;
+  align-items: center;
+  min-height: 1.9rem;
+  margin: -0.4rem 0 var(--space-3);
+  padding-right: 2.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.user-card .user-card-identity { margin-bottom: var(--space-3); }
+.user-card .user-card-identity strong { font-size: var(--text-base); }
+.user-card .user-card-profile,
+.user-card .user-card-email-prefs {
+  border-top: 1px solid var(--color-divider);
+  padding: var(--space-2) 0;
+  margin: 0;
+}
+.user-card .user-card-email-prefs { padding-bottom: var(--space-3); }
+.user-card .user-card-toggle {
+  align-items: center;
+  min-height: 44px;
+  margin: 0;
+  gap: 0.7rem;
+}
+.user-card .user-card-toggle input {
+  min-height: 0;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+}
+.user-card .user-card-toggle--sub { margin-left: 0; padding-left: 1.85rem; min-height: 40px; font-size: var(--text-sm); }
+.user-card summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  margin: 0;
+}
+.user-card summary::-webkit-details-marker { display: none; }
+.user-card summary::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.3rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  opacity: 0.7;
+  transition: transform 160ms ease;
+}
+.user-card details[open] > summary::after { transform: translateY(-0.15rem) rotate(45deg); }
+.user-card .user-card-profile summary,
+.user-card .user-card-notify-details summary { margin-bottom: 0; }
+.user-card .user-card-profile summary { font-weight: 600; }
+.user-card .user-card-profile[open] summary { margin-bottom: var(--space-2); }
+.user-card .user-card-notify-details { margin: 0 0 var(--space-2); }
+.user-card .user-card-notify-details summary { font-size: var(--text-sm); }
+.user-card .user-card-note { margin: var(--space-1) 0 0; }
+.user-card #header-sign-out-btn {
+  display: block;
+  width: 100%;
+  border-top: 1px solid var(--color-divider);
+  padding: var(--space-3) 0 0;
+  text-align: left;
+}
 /* "Your card" (2026-10-11): the profile fields sign-up no longer asks for. */
 .user-card-profile { margin: 0 0 0.85rem; }
 .user-card-profile summary {
@@ -3354,6 +3425,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                     <p class="user-card-profile-status" id="card-status" aria-live="polite"></p>
                   </form>
                 </details>
+                <div class="user-card-email-prefs">
                 <label class="user-card-toggle">
                   <input type="checkbox" id="user-card-notify-toggle" />
                   <span>Email me when a band I've touched is updated</span>
@@ -3382,6 +3454,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                   </label>
                 </details>
                 <p class="user-card-note">One email per band per day, max. Unsubscribe anytime with one click from any email.</p>
+                </div>
                 <button type="button" class="link-btn" id="header-sign-out-btn">Sign out</button>
               </div>
             </div>
