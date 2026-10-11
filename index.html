@@ -7077,6 +7077,14 @@ function downloadPngBlob(blob) {
       if (isSignedIn && typeof window.__dismissWelcomeNudge === 'function') {
         window.__dismissWelcomeNudge('signed-in');
       }
+      // Signed in after coming from the game's Sign in button (/?signin=game,
+      // Cole 2026-10-11): straight back to the game. Covers email sign-in on
+      // this page, the return from Google / Facebook / Instagram (return_to
+      // keeps the query), and arriving already signed in.
+      if (isSignedIn && /[?&]signin=game(&|$)/.test((window.location && window.location.search) || '')) {
+        try { sessionStorage.setItem('sdr_pending_daily', '1'); } catch (_) {}
+        window.location.replace('/game/');
+      }
       // One dialog, two jobs: signed out it is the sign-in panel, signed in
       // the add-a-band form. Its accessible name follows what is on screen
       // (it used to say "Add your band" over a "Sign in" heading).
@@ -13130,6 +13138,11 @@ function downloadPngBlob(blob) {
         (function initSignup() {
           setSignedInState(loadCurrentUser());
           verifyStoredUser();
+          // From the game's Sign in button: open the sign-in panel right away
+          // instead of leaving the visitor to find it on the map.
+          if (/[?&]signin=game(&|$)/.test(location.search) && !loadCurrentUser()) {
+            setTimeout(() => { try { openSignInFlow(); } catch (_) {} }, 0);
+          }
 
           const form = document.getElementById('signup-form');
           const status = document.getElementById('signup-status');

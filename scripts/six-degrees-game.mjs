@@ -131,6 +131,15 @@ export function dailyPuzzleNumber(date) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+// The front door's button for a returning player (Cole, 2026-10-11), from
+// the status action's today_status: Wordle says "Continue" or shows your
+// result instead of "Play" once you've started.
+export function frontDoorPlayLabel(todayStatus) {
+  if (todayStatus === 'complete' || todayStatus === 'given_up') return 'See today\u2019s result';
+  if (todayStatus === 'active') return 'Continue';
+  return 'Play';
+}
+
 // Star colors in brand palette (gold/silver/black), mapped onto a pick's kind.
 // Gold for optimal, silver for solid, black for dead ends.
 export function dailyPickSquare(kind) {
@@ -1130,9 +1139,39 @@ function initGameUI() {
 
   function renderDailyPanel() {
     ensureDailyStyles();
+    // The front door (game/index.html, Cole 2026-10-11): nothing is dealt
+    // until Play is tapped, so a visit that never plays starts no run.
+    if (frontDoorUp()) {
+      if (!frontDoorWaiting) {
+        frontDoorWaiting = true;
+        window.addEventListener('sdr-front-door-play', () => {
+          frontDoorWaiting = false;
+          if (currentMode() === 'daily') renderDailyBoard({ loading: true });
+        }, { once: true });
+      }
+      return;
+    }
     // Guest play (2026-10-08): no sign-in gate. Guests play free;
     // backend creates a guest user row from guest_session_id.
     renderDailyBoard({ loading: true });
+  }
+
+  let frontDoorWaiting = false;
+  function frontDoorUp() {
+    return isArenaPage() && document.documentElement.classList.contains('fd-on');
+  }
+  // A returning player's Play says "Continue" or "See today's result".
+  // Only asked for someone who has played here before (signed in, or a
+  // guest id already saved), so a first visit makes no request at all.
+  function initFrontDoor() {
+    const play = document.querySelector('[data-fd-play]');
+    if (!play || !frontDoorUp()) return;
+    let returning = isSignedIn();
+    try { returning = returning || !!localStorage.getItem('sdr-guest-session'); } catch {}
+    if (!returning) return;
+    dailyFetch('/api/game-daily/play', { method: 'POST', body: JSON.stringify({ action: 'status' }) })
+      .then((st) => { if (frontDoorUp()) play.textContent = frontDoorPlayLabel(st && st.today_status); })
+      .catch(() => {});
   }
 
   // Guest win prompt (Cole, 2026-10-08): "You won! Create a free account
@@ -1156,15 +1195,9 @@ function initGameUI() {
       </div>`);
       card.appendChild(prompt);
       const btn = prompt.querySelector('[data-guest-signup]');
-      if (btn) {
-        btn.addEventListener('click', () => {
-          if (typeof showSignInModal === 'function') {
-            showSignInModal();
-          } else {
-            window.dispatchEvent(new CustomEvent('sdr-guest-signup-request'));
-          }
-        });
-      }
+      // It called a sign-in modal that was never defined, or fired an event nothing
+      // listened for, so the button did nothing (found 2026-10-11).
+      if (btn) btn.addEventListener('click', requestDailySignup);
     } catch {}
   }
 
@@ -1194,7 +1227,7 @@ function initGameUI() {
     card.querySelector('[data-signin]').addEventListener('click', () => {
       if (isArenaPage()) {
         try { sessionStorage.setItem('sdr_pending_daily', '1'); } catch {}
-        window.location.href = '/';
+        window.location.href = '/?signin=game';
       } else if (typeof window.openSignupPopover === 'function') {
         try { sessionStorage.setItem('sdr_pending_daily', '1'); } catch {}
         window.openSignupPopover();
@@ -1461,10 +1494,11 @@ function initGameUI() {
   }
 
   // Guests reach sign-up the same way the old daily gate did: the main page
-  // owns the sign-up flow, and sdr_pending_daily brings them back here.
+  // owns the sign-up flow. ?signin=game opens it there and sends the player
+  // back here once signed in; sdr_pending_daily resumes the daily.
   function requestDailySignup() {
     try { sessionStorage.setItem('sdr_pending_daily', '1'); } catch {}
-    if (isArenaPage()) window.location.href = '/';
+    if (isArenaPage()) window.location.href = '/?signin=game';
     else if (typeof window.openSignupPopover === 'function') window.openSignupPopover();
     else document.getElementById('add-band-btn')?.click();
   }
@@ -2551,7 +2585,7 @@ function initGameUI() {
     card.querySelector('[data-signin]').addEventListener('click', () => {
       if (isArenaPage()) {
         try { sessionStorage.setItem('sdr_pending_solo', '1'); } catch {}
-        window.location.href = '/';
+        window.location.href = '/?signin=game';
       } else if (typeof window.openSignupPopover === 'function') {
         try { sessionStorage.setItem('sdr_pending_solo', '1'); } catch {}
         window.openSignupPopover();
@@ -4024,6 +4058,7 @@ function initGameUI() {
     result.appendChild(card);
   }
 
+  initFrontDoor();
   syncModeUI();
   // Paint the top player line on load (before any game card renders).
   try {

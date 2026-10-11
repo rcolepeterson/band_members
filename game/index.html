@@ -32,6 +32,21 @@
     }
     gtag('config', 'G-E2SNSPFHGB', gaConfig);
   </script>
+  <script>
+    // The front door (Cole, 2026-10-11): a Wordle-style start screen. Logo,
+    // one line, a big Play button, today's date and number. Decided here in
+    // the head so the board never flashes before it. Links that already mean
+    // "play this" go straight in: practice, challenge invites and matches,
+    // and a return from sign-in (sdr_pending_daily / sdr_pending_solo).
+    // Share links (?s=1) do get it: that's the newcomer it's for.
+    (function () {
+      try {
+        if (/[?&](practice|invite|match|game)(=|&|$)/.test(location.search)) return;
+        if (sessionStorage.getItem('sdr_pending_daily') || sessionStorage.getItem('sdr_pending_solo')) return;
+        document.documentElement.classList.add('fd-on');
+      } catch (e) {}
+    })();
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Daily Rock Puzzle: Connect Two Bands | Six Degrees of Rock</title>
@@ -283,6 +298,37 @@
     .feedback-submit:hover{background:var(--color-primary-hover)}
     .feedback-submit:disabled{opacity:.6;cursor:default}
 
+    /* The front door (see the head script). Hidden unless html.fd-on; while
+       it's up the arena is hidden, and tapping Play swaps them. */
+    .front-door{display:none}
+    html.fd-on .arena{display:none}
+    html.fd-on .front-door{display:flex}
+    .front-door{position:relative;min-height:100dvh;flex-direction:column;align-items:center;
+      padding:var(--space-8) var(--space-4) var(--space-6);text-align:center;overflow:hidden}
+    .front-door::before{content:'';position:absolute;inset:0;pointer-events:none;
+      background:radial-gradient(circle at 50% 30%, rgba(126,145,160,0.20) 0%, rgba(82,174,182,0.14) 26%, transparent 55%)}
+    .fd-inner{position:relative;flex:1;width:100%;max-width:360px;display:flex;flex-direction:column;
+      align-items:center;justify-content:center}
+    .fd-logo{font-family:var(--font-display);font-weight:800;font-size:clamp(4.5rem,24vw,6.5rem);line-height:1;
+      letter-spacing:.02em;text-shadow:0 0 60px rgba(82,174,182,.35), 0 0 140px rgba(82,174,182,.15)}
+    .fd-title{font-family:var(--font-display);font-weight:700;font-size:clamp(2.25rem,11vw,3rem);line-height:1.1;
+      margin-top:var(--space-3)}
+    .fd-line{font-size:clamp(1.15rem,5.2vw,1.35rem);line-height:1.4;margin-top:var(--space-4);max-width:17em}
+    .fd-actions{display:flex;flex-direction:column;gap:var(--space-3);width:min(100%,250px);margin-top:var(--space-8)}
+    .fd-play,.fd-signin{min-height:54px;border-radius:var(--radius-full);font-weight:700;font-size:1.1rem;
+      display:flex;align-items:center;justify-content:center;text-decoration:none;
+      transition:background var(--transition-interactive),border-color var(--transition-interactive)}
+    .fd-play{background:var(--color-primary);color:var(--color-text-inverse)}
+    .fd-play:hover{background:var(--color-primary-hover)}
+    .fd-signin{border:1px solid var(--color-border);color:var(--color-text)}
+    .fd-signin:hover{border-color:rgba(143,232,246,.6)}
+    .fd-signin[hidden]{display:none}
+    .fd-play:focus-visible,.fd-signin:focus-visible{outline:2px solid var(--color-primary);outline-offset:3px}
+    .fd-when{margin-top:var(--space-8);line-height:1.5}
+    .fd-when strong{display:block;font-weight:700}
+    .fd-when span{color:var(--color-text-muted)}
+    .fd-credit{position:relative;margin-top:var(--space-6);font-size:var(--text-xs);color:var(--color-text-muted)}
+
     @media (max-width: 640px){
       .arena-main{padding:var(--space-6) var(--space-3) var(--space-10)}
       .game-modal-card{padding:var(--space-4)}
@@ -320,6 +366,51 @@
     <input type="email" name="feedback-email" />
     <input type="text" name="bot-field" />
   </form>
+  <!-- The front door (Cole, 2026-10-11). Shown when the head script sets
+       html.fd-on. Play swaps it for the game; the engine waits for that
+       before it deals today's puzzle (renderDailyPanel), and turns Play into
+       "Continue" / "See today's result" for a returning player. -->
+  <section class="front-door" id="front-door" aria-labelledby="fd-title">
+    <div class="fd-inner">
+      <div class="fd-logo" aria-hidden="true">6&deg;</div>
+      <h1 class="fd-title" id="fd-title">Daily Chain</h1>
+      <p class="fd-line">Connect two bands through the musicians they share.</p>
+      <div class="fd-actions">
+        <button type="button" class="fd-play" data-fd-play>Play</button>
+        <a class="fd-signin" data-fd-signin href="/?signin=game">Sign in</a>
+      </div>
+      <p class="fd-when"><strong data-fd-date></strong><span data-fd-number></span></p>
+    </div>
+    <p class="fd-credit">By Six Degrees of Rock</p>
+  </section>
+  <script>
+    (function () {
+      var door = document.getElementById('front-door');
+      // Today's date and number, Pacific time like the puzzle itself (day
+      // one was 2026-09-30, DAILY_EPOCH in scripts/six-degrees-game.mjs).
+      try {
+        var p = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' })
+          .format(new Date()).split('-').map(Number);
+        var day = Date.UTC(p[0], p[1] - 1, p[2]);
+        door.querySelector('[data-fd-date]').textContent = new Date(day)
+          .toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric' });
+        var n = Math.round((day - Date.UTC(2026, 8, 30)) / 864e5) + 1;
+        if (n > 0) door.querySelector('[data-fd-number]').textContent = 'Puzzle #' + n;
+      } catch (e) {}
+      // Signed in already: Play is the only button.
+      try {
+        var u = JSON.parse(localStorage.getItem('bmft-user') || 'null');
+        if (u && u.token) door.querySelector('[data-fd-signin]').hidden = true;
+      } catch (e) {}
+      // Works even before the game script has loaded: the engine checks
+      // html.fd-on when it starts, and listens for this event if it's up.
+      door.querySelector('[data-fd-play]').addEventListener('click', function () {
+        document.documentElement.classList.remove('fd-on');
+        window.scrollTo(0, 0);
+        window.dispatchEvent(new Event('sdr-front-door-play'));
+      });
+    })();
+  </script>
   <div class="arena">
     <div class="arena-grid" aria-hidden="true"></div>
 
@@ -500,7 +591,9 @@
       document.getElementById('add-band-btn').addEventListener('click', function () {
         window.location.href = '/';
       });
-      window.openSignupPopover = function () { window.location.href = '/'; };
+      // Sign-up lives on the homepage; ?signin=game opens it there and
+      // brings the player back here once they're in.
+      window.openSignupPopover = function () { window.location.href = '/?signin=game'; };
       // On a dedicated page, Escape goes home instead of blanking the stage —
       // unless the feedback dialog is open, in which case Escape just closes it.
       document.addEventListener('keydown', function (e) {
