@@ -426,3 +426,12 @@ test('the desktop media block stays a vertical-only adjustment', () => {
   const rule = sliceBetween(INDEX_HTML, /@media \(min-width: 721px\) \{/, '}');
   assert.ok(!/\b(right|left)\s*:/.test(rule), 'Expected a vertical-only adjustment.');
 });
+
+test('the header shows Sign in or your initials at first paint, not after the map loads', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const early = html.match(/<\/header>\n\s*<script>\n\s*\/\/ Header auth state at first paint[\s\S]*?<\/script>/);
+  assert.ok(early, 'inline script right after the header');
+  assert.match(early[0], /parsed\.token\.length >= 8/, 'same check as loadCurrentUser');
+  assert.match(early[0], /if \(signIn\) signIn\.hidden = !!user;/);
+  assert.match(early[0], /if \(chip\) chip\.hidden = !user;/);
+});
