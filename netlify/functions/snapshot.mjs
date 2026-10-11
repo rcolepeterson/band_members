@@ -5,7 +5,9 @@
 // Neon counts (bands, members, users, follows) are always captured live.
 //
 // Body (all optional):
-//   { ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, notes }
+//   { ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron,
+//     ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events,
+//     notes }
 //
 // The daily cron on Nova's VM fetches Meta counts via CLI and POSTs them here.
 // Without Meta numbers, the row still captures graph/user growth.
@@ -84,7 +86,9 @@ export default async (req) => {
     await sql`
       insert into daily_snapshots
         (snapshot_date, node_count, user_count, follows_count, bands_added,
-         ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, notes)
+         ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron,
+         ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events,
+         notes)
       values (
         ${today}::date,
         ${nodeCount},
@@ -95,6 +99,10 @@ export default async (req) => {
         ${num(body.ig_vimana17)},
         ${num(body.fb_sixdegrees)},
         ${num(body.fb_aaron)},
+        ${num(body.ga_active_users)},
+        ${num(body.ga_new_users)},
+        ${num(body.ga_avg_engagement_seconds)},
+        ${num(body.ga_events)},
         ${typeof body.notes === 'string' ? body.notes.slice(0, 500) : null}
       )
       on conflict (snapshot_date) do update set
@@ -106,6 +114,10 @@ export default async (req) => {
         ig_vimana17 = coalesce(excluded.ig_vimana17, daily_snapshots.ig_vimana17),
         fb_sixdegrees = coalesce(excluded.fb_sixdegrees, daily_snapshots.fb_sixdegrees),
         fb_aaron = coalesce(excluded.fb_aaron, daily_snapshots.fb_aaron),
+        ga_active_users = coalesce(excluded.ga_active_users, daily_snapshots.ga_active_users),
+        ga_new_users = coalesce(excluded.ga_new_users, daily_snapshots.ga_new_users),
+        ga_avg_engagement_seconds = coalesce(excluded.ga_avg_engagement_seconds, daily_snapshots.ga_avg_engagement_seconds),
+        ga_events = coalesce(excluded.ga_events, daily_snapshots.ga_events),
         notes = coalesce(excluded.notes, daily_snapshots.notes)
     `;
 
@@ -117,6 +129,10 @@ export default async (req) => {
       users: finalUserCount,
       follows: finalFollowsCount,
       bands_added: finalBandsAdded,
+      ga_active_users: num(body.ga_active_users),
+      ga_new_users: num(body.ga_new_users),
+      ga_avg_engagement_seconds: num(body.ga_avg_engagement_seconds),
+      ga_events: num(body.ga_events),
     });
   } catch (err) {
     console.error('snapshot failed', err);
