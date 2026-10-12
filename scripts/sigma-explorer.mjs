@@ -1563,7 +1563,7 @@ export function initSigmaExplorer({
         ? (role === MEMBERSHIP_ROLES.FOUNDER
             ? KIND_STYLE[NODE_KINDS.CONSTELLATION].size  // large
             : role === MEMBERSHIP_ROLES.TOURING
-              ? KIND_STYLE[NODE_KINDS.ASTEROID].size    // just a circle
+              ? KIND_STYLE[NODE_KINDS.MOON].size        // hollow circle, label-readable
               : KIND_STYLE[NODE_KINDS.PLANET].size)     // medium
         : nodeSize;
       viewGraph.addNode(node.id, {
