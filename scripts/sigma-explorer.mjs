@@ -860,7 +860,7 @@ function buildStage(doc, mount) {
              is position:relative). Replaces the native datalist, whose popup
              the browser draws over the phone keyboard. -->
         <div class="sigma-suggest" id="sigma-search-suggest" role="listbox"
-             aria-label="Band suggestions" hidden></div>
+             aria-label="Band and musician suggestions" hidden></div>
       </form>
     </div>
     <!-- The daily game, under the search (Cole, 2026-10-08): the menu was the
@@ -1177,6 +1177,12 @@ export function initSigmaExplorer({
   // folded strings so "husker du" matches "Hüsker Dü". Folded once here, not
   // per keystroke, because NFD over 6,000 names on every input event is waste.
   const foldedBandDisplayNames = allBandDisplayNames.map(name => foldDiacritics(name).toLowerCase());
+  // Member (musician) names for the suggestion dropdown: same treatment as
+  // bands above, so typing "chris sh" suggests Chris Shinn. (2026-10-12)
+  const allMemberDisplayNames = [...new Set(
+    master.nodes.filter(node => node.type === 'member').map(node => displayNameForId(node.id))
+  )];
+  const foldedMemberDisplayNames = allMemberDisplayNames.map(name => foldDiacritics(name).toLowerCase());
   // Also computed once per filter, not per view: which nodes can reach which
   // others depends on the filtered graph's shape, not on where the anchor is.
   let components = getConnectedComponents(master.nodes, master.links, adjacency);
@@ -2434,6 +2440,12 @@ export function initSigmaExplorer({
       const folded = foldedBandDisplayNames[i];
       if (folded.startsWith(query)) starts.push(allBandDisplayNames[i]);
       else if (folded.includes(query)) contains.push(allBandDisplayNames[i]);
+    }
+    // Also match musician names (2026-10-12): members share the dropdown.
+    for (let i = 0; i < allMemberDisplayNames.length; i++) {
+      const folded = foldedMemberDisplayNames[i];
+      if (folded.startsWith(query)) starts.push(allMemberDisplayNames[i]);
+      else if (folded.includes(query)) contains.push(allMemberDisplayNames[i]);
     }
     const alpha = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
     renderSuggestions([...starts.sort(alpha), ...contains.sort(alpha)]
