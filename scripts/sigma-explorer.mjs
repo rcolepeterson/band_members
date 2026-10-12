@@ -1547,6 +1547,21 @@ export function initSigmaExplorer({
         : cappedGrow
           ? KIND_STYLE[NODE_KINDS.CONSTELLATION].size
           : style.size;
+      // Aaron's graph color scheme (2026-10-12): bands render gold, members
+      // render blue with three size tiers by role — founder=large,
+      // member=medium, touring=just a circle. This replaces the kind-based
+      // coloring so the node type is readable at a glance.
+      const isBandNode = node.type === 'band';
+      const nodeColor = isBandNode
+        ? '#ffb454'  // gold for bands
+        : '#27b8ff'; // blue for members
+      const roleSize = !isBandNode
+        ? (role === MEMBERSHIP_ROLES.FOUNDER
+            ? KIND_STYLE[NODE_KINDS.CONSTELLATION].size  // large
+            : role === MEMBERSHIP_ROLES.TOURING
+              ? KIND_STYLE[NODE_KINDS.ASTEROID].size    // just a circle
+              : KIND_STYLE[NODE_KINDS.PLANET].size)     // medium
+        : nodeSize;
       viewGraph.addNode(node.id, {
         // The label is the display NAME, not the id: a musician who shares a
         // band's name carries a suffixed id and must still read as himself.
@@ -1574,8 +1589,8 @@ export function initSigmaExplorer({
         // on one node at two different radii.
         type: kind === NODE_KINDS.HOME_STAR ? NODE_TYPES.SOLID : nodeTypeForRole(role),
         entityType: node.type,
-        size: nodeSize,
-        color: style.color,
+        size: roleSize,
+        color: nodeColor,
       });
     });
     view.links.forEach(link => {
