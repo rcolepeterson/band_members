@@ -1553,7 +1553,9 @@ export function initSigmaExplorer({
       // render blue with three size tiers by role — founder=large,
       // member=medium, touring=just a circle. This replaces the kind-based
       // coloring so the node type is readable at a glance.
-      const isBandNode = node.type === 'band';
+      // NOTE: node.type is unreliable on view nodes; use master data.
+      const masterNode = masterById.get(node.id);
+      const isBandNode = (masterNode && masterNode.type === 'band') || node.type === 'band';
       const nodeColor = isBandNode
         ? '#ffb454'  // gold for bands
         : '#27b8ff'; // blue for members
