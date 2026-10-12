@@ -341,3 +341,17 @@ test('a non-HTML response is never rewritten', async () => {
   const res = await ogTags(new Request('https://bandmembers.netlify.app/?anchor=Mudhoney'), ctx);
   assert.equal(await res.text(), 'binary-ish');
 });
+
+// Neon transfer (2026-10-12): the card's graph comes from the saved Blobs copy
+// like /api/bands and /api/game-graph, so a fresh container never reads every
+// band, musician and membership straight from Neon.
+test('the card reads the graph through the saved copy, not straight from Neon', () => {
+  const src = readFileSync(new URL('../netlify/functions/og_image.mjs', import.meta.url), 'utf8');
+  const load = src.match(/async function loadGraph\(\) \{[\s\S]*?\n\}\n/)[0];
+  assert.match(load, /await serveCachedGraph\(\{/);
+  assert.match(load, /tables: GAME_TABLES,/);
+  assert.match(load, /prefix: 'api-og',/);
+  // The full-table selects live only inside buildPayload, which runs when the data changed.
+  const before = load.slice(0, load.indexOf('buildPayload'));
+  assert.doesNotMatch(before, /sql`select/);
+});
