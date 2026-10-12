@@ -1696,8 +1696,9 @@ export function nodeSizeScale({ visibleCount = 0, ...viewport } = {}) {
 export function labelSettings({ visibleCount = 0, smallestNodeSize = 4 } = {}) {
   const crowded = visibleCount > NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES;
   return {
-    // Just under the smallest drawn node, so nothing is silently nameless.
-    labelRenderedSizeThreshold: Math.max(0, smallestNodeSize - 0.5),
+    // Always show labels (2026-10-12): the size threshold was hiding touring
+    // node labels at default zoom. Overlap culling handles clutter.
+    labelRenderedSizeThreshold: 0,
     // Sigma's grid culling is deliberately switched off (a very high density
     // allowance). It thins labels by grid cell, which cannot prevent collisions
     // across cell boundaries and hid names that had room -- exactly the "a
