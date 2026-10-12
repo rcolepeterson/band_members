@@ -1279,7 +1279,9 @@ export function initSigmaExplorer({
     const res = {
       ...attrs,
       size: (attrs.size || style.size) * state.sizeScale,
-      color: (roleStyle && roleStyle.color) || style.color,
+      // Aaron's gold/blue scheme (2026-10-12): attrs.color set in addNode wins;
+      // fall back to role/style only when not set.
+      color: attrs.color || (roleStyle && roleStyle.color) || style.color,
     };
     // The anchor's visual identity is the DOM ringed star overlay; the WebGL
     // node underneath is kept tiny and label-free so they don't fight.
