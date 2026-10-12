@@ -36,6 +36,7 @@ import { join } from 'node:path';
 import * as PImage from 'pureimage';
 
 import { getSql, isDbConfigured } from './_db.mjs';
+import { GAME_TABLES, serveCachedGraph } from './_graph_cache.mjs';
 import {
   buildAdjacency,
   getNeighborhood,
@@ -108,11 +109,23 @@ const GRAPH_TTL_MS = 5 * 60 * 1000;
 async function loadGraph() {
   if (graphCache && Date.now() - graphCache.at < GRAPH_TTL_MS) return graphCache.graph;
   const sql = getSql();
-  const [bands, members, memberships] = await Promise.all([
-    sql`select id, name, genre, city, state from bands`,
-    sql`select id, name, instrument1, city, state from band_members`,
-    sql`select band_id, member_id from memberships`,
-  ]);
+  // Neon transfer (2026-10-12): the rows come from the saved Blobs copy, the
+  // same one /api/bands and /api/game-graph use, so a fresh container asks
+  // Neon only "has the band data changed?" instead of reading every row.
+  const { bands, members, memberships } = await serveCachedGraph({
+    sql,
+    tables: GAME_TABLES,
+    prefix: 'api-og',
+    buildPayload: async () => {
+      const [bands, members, memberships] = await Promise.all([
+        sql`select id, name, genre, city, state from bands`,
+        sql`select id, name, instrument1, city, state from band_members`,
+        sql`select band_id, member_id from memberships`,
+      ]);
+      return { bands, members, memberships };
+    },
+    toResponse: (payload) => payload,
+  });
   const bandName = new Map(bands.map(b => [String(b.id), b.name]));
   const memberName = new Map(members.map(m => [String(m.id), m.name]));
   const nodes = [
