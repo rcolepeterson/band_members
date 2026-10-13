@@ -1589,6 +1589,45 @@ function refineRingAngles(positions, nodeAngles, ringIds, radius, links, linkEnd
     }
     if (!improved) break;
   }
+
+  // Swap phase: for each pair of nodes, try swapping their angular positions.
+  // This fixes cases where two nodes are in the wrong order — shifts alone
+  // can't fix an ordering problem.
+  // Deterministic: pairs tried in sorted order.
+  const sortedIds = [...ringIds].sort();
+  for (let pass = 0; pass < 2; pass++) {
+    let improved = false;
+    for (let i = 0; i < sortedIds.length; i++) {
+      for (let j = i + 1; j < sortedIds.length; j++) {
+        const idA = sortedIds[i];
+        const idB = sortedIds[j];
+        const posA = positions.get(idA);
+        const posB = positions.get(idB);
+        if (!posA || !posB) continue;
+
+        const before = countCross();
+        if (before === 0) break;
+
+        // Swap positions (save originals first)
+        const ax = posA.x, ay = posA.y;
+        const bx = posB.x, by = posB.y;
+        posA.x = bx; posA.y = by;
+        posB.x = ax; posB.y = ay;
+
+        const after = countCross();
+        if (after < before) {
+          improved = true;
+          // Keep the swap
+        } else {
+          // Revert to originals
+          posA.x = ax; posA.y = ay;
+          posB.x = bx; posB.y = by;
+        }
+      }
+      if (countCross() === 0) break;
+    }
+    if (!improved) break;
+  }
 }
 
 export function radialLayout({
