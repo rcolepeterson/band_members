@@ -867,7 +867,7 @@ function buildStage(doc, mount) {
          only way to it, so new visitors never found it. -->
     <div class="sigma-daily">
       <a class="sigma-daily-cta" href="/game/">Play today&rsquo;s 6&deg; puzzle</a>
-      <p class="sigma-daily-note">Connect today&rsquo;s two bands in as few moves as you can.</p>
+      <!-- Note removed 2026-10-12 per Aaron: keep the pill, drop the description text. -->
     </div>
     </div>
     <!--
