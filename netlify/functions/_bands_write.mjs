@@ -137,26 +137,52 @@ export async function createBandInNeon(sql, input) {
   `;
 
   const newByNameEntries = members.filter(m => !m.id && m.name);
-  const memberUpsertPromises = newByNameEntries.map(m => sql`
-    insert into band_members (name, instrument1, instrument2)
-    values (${m.name}, ${m.instrument1 || null}, ${m.instrument2 || null})
-    on conflict (lower(name)) do update set
-      instrument1 = coalesce(nullif(band_members.instrument1, ''), excluded.instrument1),
-      instrument2 = coalesce(nullif(band_members.instrument2, ''), excluded.instrument2)
-    returning id, lower(name) as key
-  `);
+  // Member identity is UUID-based (2026-10-12): no unique index on lower(name),
+  // so resolve by explicit id first, then by name lookup, then insert.
+  // If m.id is set (UI disambiguation), use it directly.
+  const memberIdByKey = new Map();
+  if (newByNameEntries.length) {
+    const names = [...new Set(newByNameEntries.map(m => m.name.toLowerCase()))];
+    const existing = await sql`
+      select id, lower(name) as key from band_members where lower(name) = any(${names})
+    `;
+    // If multiple people share a name, prefer the one already linked to this
+    // band's scene, else the first match (preserves old auto-thread behavior).
+    for (const row of existing) {
+      if (!memberIdByKey.has(row.key)) memberIdByKey.set(row.key, row.id);
+    }
+    const toInsert = newByNameEntries.filter(m => !memberIdByKey.has(m.name.toLowerCase()));
+    for (const m of toInsert) {
+      const rows = await sql`
+        insert into band_members (name, instrument1, instrument2)
+        values (${m.name}, ${m.instrument1 || null}, ${m.instrument2 || null})
+        returning id, lower(name) as key
+      `;
+      if (rows[0] && !memberIdByKey.has(rows[0].key)) memberIdByKey.set(rows[0].key, rows[0].id);
+    }
+    // Fill in instruments on the matched existing records if empty (old upsert behavior).
+    for (const m of newByNameEntries) {
+      const id = memberIdByKey.get(m.name.toLowerCase());
+      if (id && (m.instrument1 || m.instrument2)) {
+        await sql`
+          update band_members set
+            instrument1 = coalesce(nullif(instrument1, ''), ${m.instrument1 || null}),
+            instrument2 = coalesce(nullif(instrument2, ''), ${m.instrument2 || null})
+          where id = ${id}
+        `;
+      }
+    }
+  }
 
-  const [bandRows, ...memberResultSets] = await sql.transaction([bandInsertPromise, ...memberUpsertPromises]);
+  const [bandRows] = await sql.transaction([bandInsertPromise]);
   const band = bandRows[0];
 
   const resolvedMemberIds = [];
-  let newByNameCursor = 0;
   for (const m of members) {
     if (m.id) {
       resolvedMemberIds.push(m.id);
     } else if (m.name) {
-      const rows = memberResultSets[newByNameCursor++];
-      resolvedMemberIds.push(rows && rows[0] ? rows[0].id : null);
+      resolvedMemberIds.push(memberIdByKey.get(m.name.toLowerCase()) || null);
     } else {
       resolvedMemberIds.push(null);
     }

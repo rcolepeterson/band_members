@@ -362,11 +362,11 @@ export default async (req) => {
     `;
     results.push('table band_members ready');
 
-    await sql`
-      create unique index if not exists band_members_name_lower_idx
-      on band_members (lower(name))
-    `;
-    results.push('index band_members_name_lower_idx ready');
+    // Member identity is UUID-based, not name-based (2026-10-12): same-name
+    // members in different bands/towns are distinct people. The old unique
+    // index on lower(name) forced collisions; drop it if it exists.
+    await sql`drop index if exists band_members_name_lower_idx`;
+    results.push('index band_members_name_lower_idx dropped (member identity is UUID-based)');
 
     await sql`drop trigger if exists band_members_set_updated_at on band_members`;
     await sql`

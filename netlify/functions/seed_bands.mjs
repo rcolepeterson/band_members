@@ -224,24 +224,34 @@ function bandSeedKey(band) {
   ].join('|');
 }
 
-// Fill-missing upsert for one member. `on conflict (lower(name))` targets the
-// band_members_name_lower_idx unique index created in migrate.mjs.
-function buildMemberUpsert(sql, member) {
-  return sql`
+// Fill-missing resolve for one member (2026-10-12): member identity is UUID-based,
+// no unique index on lower(name). Look up by name first; if found, fill missing
+// fields, else insert. Returns { id, key }.
+async function resolveMember(sql, member) {
+  const key = member.name.toLowerCase();
+  const existing = await sql`select id from band_members where lower(name) = ${key} limit 1`;
+  if (existing[0]) {
+    await sql`
+      update band_members set
+        city = coalesce(nullif(city, ''), ${member.city || null}),
+        state = coalesce(nullif(state, ''), ${member.state || null}),
+        country = coalesce(nullif(country, ''), ${member.country || null}),
+        instrument1 = coalesce(nullif(instrument1, ''), ${member.instrument1 || null}),
+        instrument2 = coalesce(nullif(instrument2, ''), ${member.instrument2 || null}),
+        years_active = coalesce(nullif(years_active, ''), ${member.years_active || null})
+      where id = ${existing[0].id}
+    `;
+    return { id: existing[0].id, key };
+  }
+  const rows = await sql`
     insert into band_members (name, city, state, country, instrument1, instrument2, years_active)
     values (
       ${member.name}, ${member.city || null}, ${member.state || null}, ${member.country || null},
       ${member.instrument1 || null}, ${member.instrument2 || null}, ${member.years_active || null}
     )
-    on conflict (lower(name)) do update set
-      city = coalesce(nullif(band_members.city, ''), excluded.city),
-      state = coalesce(nullif(band_members.state, ''), excluded.state),
-      country = coalesce(nullif(band_members.country, ''), excluded.country),
-      instrument1 = coalesce(nullif(band_members.instrument1, ''), excluded.instrument1),
-      instrument2 = coalesce(nullif(band_members.instrument2, ''), excluded.instrument2),
-      years_active = coalesce(nullif(band_members.years_active, ''), excluded.years_active)
     returning id, lower(name) as key
   `;
+  return rows[0] ? { id: rows[0].id, key: rows[0].key } : { id: null, key };
 }
 
 // Fill-missing upsert for one membership, keyed by (band_id, member_id) —
@@ -350,13 +360,13 @@ export default async (req) => {
       }
     }
 
-    // --- Transaction 1: upsert every distinct band and member -------------
+    // --- Transaction 1: upsert every distinct band and resolve every distinct member
     const bandUpsertPromises = Array.from(bandsByKey.values()).map(band => buildBandUpsert(sql, band));
-    const memberUpsertPromises = Array.from(membersByKey.values()).map(member => buildMemberUpsert(sql, member));
+    const memberResolvePromises = Array.from(membersByKey.values()).map(member => resolveMember(sql, member));
 
-    const [bandResultSets, memberResultSets] = await Promise.all([
+    const [bandResultSets, memberResults] = await Promise.all([
       bandUpsertPromises.length ? sql.transaction(bandUpsertPromises) : Promise.resolve([]),
-      memberUpsertPromises.length ? sql.transaction(memberUpsertPromises) : Promise.resolve([]),
+      memberResolvePromises.length ? Promise.all(memberResolvePromises) : Promise.resolve([]),
     ]);
 
     const bandIdByKey = new Map();
@@ -365,9 +375,8 @@ export default async (req) => {
       if (row) bandIdByKey.set(bandSeedKey(row), row.id);
     });
     const memberIdByKey = new Map();
-    memberResultSets.forEach(rows => {
-      const row = rows[0];
-      if (row) memberIdByKey.set(row.key, row.id);
+    memberResults.forEach(row => {
+      if (row && row.id) memberIdByKey.set(row.key, row.id);
     });
 
     // --- Transaction 2: upsert every membership using the ids above -------

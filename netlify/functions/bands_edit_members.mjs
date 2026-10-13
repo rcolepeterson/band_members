@@ -262,13 +262,30 @@ export default async (req, context) => {
       }
     }
 
-    // --- Transaction 1: upsert-by-name adds, renames, instrument overwrites
-    const byNameUpsertPromises = addByName.map(e => sql`
-      insert into band_members (name)
-      values (${e.name})
-      on conflict (lower(name)) do update set name = band_members.name
-      returning id, lower(name) as key
-    `);
+    // --- Transaction 1: resolve-by-name adds, renames, instrument overwrites
+    // Member identity is UUID-based (2026-10-12): no unique index on lower(name).
+    // Resolve each name to an existing member id first, inserting only when absent.
+    const byNameIdByKey = new Map();
+    if (addByName.length) {
+      const addNames = [...new Set(addByName.map(e => e.name.toLowerCase()))];
+      const existingMembers = await sql`
+        select id, lower(name) as key from band_members where lower(name) = any(${addNames})
+      `;
+      for (const row of existingMembers) {
+        if (!byNameIdByKey.has(row.key)) byNameIdByKey.set(row.key, row.id);
+      }
+      for (const e of addByName) {
+        const key = e.name.toLowerCase();
+        if (!byNameIdByKey.has(key)) {
+          const rows = await sql`
+            insert into band_members (name) values (${e.name})
+            returning id, lower(name) as key
+          `;
+          if (rows[0]) byNameIdByKey.set(rows[0].key, rows[0].id);
+        }
+      }
+    }
+    const byNameResults = addByName.map(e => [{ id: byNameIdByKey.get(e.name.toLowerCase()) || null }]);
     const renamePromises = renameEntries.map(e => sql`
       update band_members set name = ${e.newName} where id = ${e.memberId} returning id
     `);
@@ -282,12 +299,11 @@ export default async (req, context) => {
       return sql`update band_members set instrument2 = ${e.instrument2 || null} where id = ${e.memberId} returning id, instrument1, instrument2`;
     });
 
-    const step1Queries = [...byNameUpsertPromises, ...renamePromises, ...instrumentPromises];
+    const step1Queries = [...renamePromises, ...instrumentPromises];
     const step1Results = step1Queries.length ? await sql.transaction(step1Queries) : [];
 
-    const byNameResults = step1Results.slice(0, byNameUpsertPromises.length);
-    const renameResults = step1Results.slice(byNameUpsertPromises.length, byNameUpsertPromises.length + renamePromises.length);
-    const instrumentResults = step1Results.slice(byNameUpsertPromises.length + renamePromises.length);
+    const renameResults = step1Results.slice(0, renamePromises.length);
+    const instrumentResults = step1Results.slice(renamePromises.length);
 
     // Resolve every `add` entry (by-id + by-name) to a concrete member id.
     const resolvedAdds = [
