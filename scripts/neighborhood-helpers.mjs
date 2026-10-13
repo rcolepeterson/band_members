@@ -1493,6 +1493,104 @@ export function normalizeAngle(angle) {
   return ((angle % full) + full) % full;
 }
 
+/**
+ * Refine the angular positions of nodes on a ring to reduce edge-edge crossings.
+ *
+ * For each node, tries small angular shifts (within its slot) and keeps the
+ * shift that minimizes the total crossing count with already-placed nodes.
+ * This runs on the clean ring geometry before scatter, so moves are predictable
+ * and the ring structure is preserved.
+ *
+ * Only adjusts angles, not radii. Deterministic: tries shifts in a fixed order.
+ */
+function refineRingAngles(positions, nodeAngles, ringIds, radius, links, linkEndpointsFn) {
+  if (ringIds.length < 2) return;
+
+  // Build edge list for crossing checks (only edges to already-placed nodes).
+  const placedIds = new Set(positions.keys());
+  const edges = [];
+  links.forEach(link => {
+    const [s, t] = linkEndpointsFn(link);
+    if (placedIds.has(s) && placedIds.has(t)) {
+      edges.push([s, t]);
+    }
+  });
+  if (edges.length < 2) return;
+
+  const countCross = () => {
+    let c = 0;
+    for (let i = 0; i < edges.length; i++) {
+      const [a1, b1] = edges[i];
+      const p1 = positions.get(a1), p2 = positions.get(b1);
+      if (!p1 || !p2) continue;
+      for (let j = i + 1; j < edges.length; j++) {
+        const [a2, b2] = edges[j];
+        if (a1 === a2 || a1 === b2 || b1 === a2 || b1 === b2) continue;
+        const p3 = positions.get(a2), p4 = positions.get(b2);
+        if (!p3 || !p4) continue;
+        if (segmentsCross(p1, p2, p3, p4)) c++;
+      }
+    }
+    return c;
+  };
+
+  // Try angular shifts for each node in the ring.
+  // Shift amounts are fractions of the slot, tried in fixed order for determinism.
+  // Larger shifts allowed: blocks can be pushed far from parent angle by the
+  // monotone placement, so we need room to pull them back.
+  const slot = (Math.PI * 2) / ringIds.length;
+  const shifts = [0, 0.25, -0.25, 0.5, -0.5, 0.75, -0.75, 1.0, -1.0];
+  
+  // Multiple passes: one node's move can enable another's.
+  for (let pass = 0; pass < 2; pass++) {
+    let improved = false;
+    for (const id of ringIds) {
+      const baseAngle = nodeAngles.get(id);
+      if (baseAngle === undefined) continue;
+      
+      const before = countCross();
+      let bestAngle = baseAngle;
+      let bestCount = before;
+      
+      for (const frac of shifts) {
+        if (frac === 0) continue;
+        const testAngle = baseAngle + frac * slot * 0.5;
+        // Apply test position
+        positions.set(id, {
+          x: Math.cos(testAngle) * radius,
+          y: Math.sin(testAngle) * radius,
+          hop: positions.get(id).hop,
+        });
+        const after = countCross();
+        if (after < bestCount) {
+          bestCount = after;
+          bestAngle = testAngle;
+        }
+      }
+      
+      // Restore best (or original). Note: we update positions but NOT nodeAngles.
+      // nodeAngles drives the placement of deeper rings; keeping it stable
+      // prevents the refinement from cascading into outer layers.
+      if (bestAngle !== baseAngle) {
+        positions.set(id, {
+          x: Math.cos(bestAngle) * radius,
+          y: Math.sin(bestAngle) * radius,
+          hop: positions.get(id).hop,
+        });
+        improved = true;
+      } else {
+        // Restore original (last test left it moved)
+        positions.set(id, {
+          x: Math.cos(baseAngle) * radius,
+          y: Math.sin(baseAngle) * radius,
+          hop: positions.get(id).hop,
+        });
+      }
+    }
+    if (!improved) break;
+  }
+}
+
 export function radialLayout({
   nodes = [],
   links = [],
@@ -1701,6 +1799,34 @@ export function radialLayout({
       return point ? Math.max(furthest, Math.hypot(point.x, point.y)) : furthest;
     }, radius);
   });
+
+  // Crossing-aware angular refinement for shallow views only.
+  // After all rings are placed (but before scatter), try angular shifts on
+  // rings 1-2 to reduce edge-edge crossings. Only runs when the view is
+  // shallow (maxHop <= 2) so deeper-ring placement is never disrupted.
+  const maxHop = Math.max(0, ...sortedHops);
+  if (maxHop <= 2 && maxHop >= 1) {
+    // Collect ring radii for refinement
+    const ringRadii = new Map();
+    positions.forEach((pt, id) => {
+      if (pt.hop >= 1 && pt.hop <= 2) {
+        const r = Math.hypot(pt.x, pt.y);
+        if (!ringRadii.has(pt.hop) || r > ringRadii.get(pt.hop).maxR) {
+          // Track approximate radius per hop (use max for safety)
+          ringRadii.set(pt.hop, { maxR: r });
+        }
+      }
+    });
+    sortedHops.forEach(hop => {
+      if (hop < 1 || hop > 2) return;
+      const ids = layers.get(hop) || [];
+      if (ids.length < 2) return;
+      // Use the actual radius from a sample node
+      const sample = positions.get(ids[0]);
+      const radius = sample ? Math.hypot(sample.x, sample.y) : spacing * hop;
+      refineRingAngles(positions, nodeAngles, ids, radius, links, linkEndpoints);
+    });
+  }
 
   // ----- 4. Scatter and relax ----------------------------------------------
   // The rings above are a SEED, not the finished drawing: they encode "distance
