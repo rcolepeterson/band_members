@@ -815,6 +815,167 @@ const REINDEX_EVERY = 4;
 // Constraint slack, in layout units, at which a view counts as settled.
 const TOLERANCE = 0.5;
 
+/**
+ * Do two line segments (p1-p2 and p3-p4) intersect at a point interior to both?
+ * Endpoints touching does not count as a crossing.
+ */
+function segmentsCross(p1, p2, p3, p4) {
+  const d1x = p2.x - p1.x;
+  const d1y = p2.y - p1.y;
+  const d2x = p4.x - p3.x;
+  const d2y = p4.y - p3.y;
+  const denom = d1x * d2y - d1y * d2x;
+  if (Math.abs(denom) < 1e-9) return false; // Parallel or collinear.
+  const t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / denom;
+  const u = ((p3.x - p1.x) * d1y - (p3.y - p1.y) * d1x) / denom;
+  // Strictly interior: sharing an endpoint is not a crossing.
+  return t > 1e-6 && t < 1 - 1e-6 && u > 1e-6 && u < 1 - 1e-6;
+}
+
+/**
+ * Count edge-edge crossings in the current layout. Edges sharing an endpoint
+ * never count.
+ */
+function countCrossings(positions, edgeList) {
+  let count = 0;
+  for (let i = 0; i < edgeList.length; i += 1) {
+    const [a1, b1] = edgeList[i];
+    const p1 = positions.get(a1);
+    const p2 = positions.get(b1);
+    if (!p1 || !p2) continue;
+    for (let j = i + 1; j < edgeList.length; j += 1) {
+      const [a2, b2] = edgeList[j];
+      // Shared endpoint: not a crossing.
+      if (a1 === a2 || a1 === b2 || b1 === a2 || b1 === b2) continue;
+      const p3 = positions.get(a2);
+      const p4 = positions.get(b2);
+      if (!p3 || !p4) continue;
+      if (segmentsCross(p1, p2, p3, p4)) count += 1;
+    }
+  }
+  return count;
+}
+
+/**
+ * Post-solver nudge pass: resolve edge-edge crossings by nudging endpoints.
+ *
+ * Only runs on sparse (1°/2°) views where empty space exists to nudge into.
+ * For each crossing, tries small nudges of each of the four endpoints in
+ * several directions, accepting the first nudge that:
+ *   1. Reduces the total crossing count, AND
+ *   2. Does not create a node-separation violation, AND
+ *   3. Does not create a node-edge clearance violation.
+ *
+ * Conservative by design: limited attempts, small steps, verify-after-each.
+ * If no safe nudge resolves a crossing, it is left alone.
+ */
+function nudgeCrossings({
+  positions,
+  edgeList,
+  minSeparation,
+  clampToBand,
+  targetRadius,
+}) {
+  const ids = Array.from(positions.keys());
+  if (ids.length < 2 || edgeList.length < 2) return;
+
+  const NUDGE_DISTANCE = minSeparation * 0.25;
+  const MAX_ATTEMPTS = 8;
+  // Eight compass directions to try for each endpoint.
+  const DIRECTIONS = [
+    { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+    { x: 0.7071, y: 0.7071 }, { x: -0.7071, y: 0.7071 },
+    { x: 0.7071, y: -0.7071 }, { x: -0.7071, y: -0.7071 },
+  ];
+
+  // Check if moving a node to a new position violates separation or clearance.
+  const isSafe = (nodeId, newX, newY) => {
+    // 1. Node separation: no other node within minSeparation * 0.5 (the test floor).
+    for (const otherId of ids) {
+      if (otherId === nodeId) continue;
+      const other = positions.get(otherId);
+      const dist = Math.hypot(newX - other.x, newY - other.y);
+      if (dist < minSeparation * 0.5) return false;
+    }
+    // 2. Edge clearance: node must not sit on an unrelated edge.
+    const testPoint = { x: newX, y: newY };
+    for (const [s, t] of edgeList) {
+      if (s === nodeId || t === nodeId) continue;
+      const a = positions.get(s);
+      const b = positions.get(t);
+      if (!a || !b) continue;
+      // Temporarily use new position for the moving node if it's an endpoint.
+      const pa = s === nodeId ? testPoint : a;
+      const pb = t === nodeId ? testPoint : b;
+      const clearance = straightDistance(testPoint, pa, pb);
+      if (clearance < minSeparation * 0.25) return false;
+    }
+    return true;
+  };
+
+  let attempts = 0;
+  let improved = true;
+
+  // Keep trying while we're making progress and have attempts left.
+  while (improved && attempts < MAX_ATTEMPTS) {
+    improved = false;
+    attempts += 1;
+
+    const before = countCrossings(positions, edgeList);
+    if (before === 0) break;
+
+    // Find the first crossing and try to resolve it.
+    let resolved = false;
+    for (let i = 0; i < edgeList.length && !resolved; i += 1) {
+      const [a1, b1] = edgeList[i];
+      const p1 = positions.get(a1);
+      const p2 = positions.get(b1);
+      if (!p1 || !p2) continue;
+
+      for (let j = i + 1; j < edgeList.length && !resolved; j += 1) {
+        const [a2, b2] = edgeList[j];
+        if (a1 === a2 || a1 === b2 || b1 === a2 || b1 === b2) continue;
+        const p3 = positions.get(a2);
+        const p4 = positions.get(b2);
+        if (!p3 || !p4) continue;
+
+        if (!segmentsCross(p1, p2, p3, p4)) continue;
+
+        // Found a crossing. Try nudging each of the four endpoints.
+        const endpoints = [a1, b1, a2, b2];
+        for (const nodeId of endpoints) {
+          if (resolved) break;
+          const point = positions.get(nodeId);
+          const origX = point.x;
+          const origY = point.y;
+
+          for (const dir of DIRECTIONS) {
+            const newX = origX + dir.x * NUDGE_DISTANCE;
+            const newY = origY + dir.y * NUDGE_DISTANCE;
+
+            if (!isSafe(nodeId, newX, newY)) continue;
+
+            // Try the nudge and check if crossings decreased.
+            point.x = newX;
+            point.y = newY;
+            clampToBand(point, targetRadius.get(nodeId));
+
+            const after = countCrossings(positions, edgeList);
+            if (after < before) {
+              resolved = true;
+              improved = true;
+              break;
+            }
+            // Revert: didn't help.
+            point.x = origX;
+            point.y = origY;
+          }
+        }
+      }
+    }
+  }
+}
+
 export function relaxLayout({
   positions = new Map(),
   links = [],
@@ -839,6 +1000,11 @@ export function relaxLayout({
   // pushed apart -- the solver compressed the drawing instead of relaxing it.
   cohesion = 0,
   spacing = 150,
+  // Maximum hop depth in this view. When provided and <= 2, a post-solver nudge
+  // pass runs to resolve edge-edge crossings. Sparse 1°/2° views have empty
+  // space to nudge into; dense 3°+ views do not, and the nudge creates more
+  // violations than it fixes there. Null disables the nudge pass.
+  maxDepth = null,
 } = {}) {
   const ids = Array.from(positions.keys());
   if (ids.length < 2) return positions;
@@ -1055,6 +1221,20 @@ export function relaxLayout({
     clampToBand,
     targetRadius,
   });
+
+  // Post-solver nudge pass for sparse views only. In 1°/2° views there is empty
+  // space to nudge into, so resolving an edge-edge crossing is a local fix. In
+  // dense 3°+ views there is no empty space, and nudging creates more violations
+  // than it resolves.
+  if (maxDepth !== null && maxDepth <= 2) {
+    nudgeCrossings({
+      positions,
+      edgeList,
+      minSeparation,
+      clampToBand,
+      targetRadius,
+    });
+  }
 
   return positions;
 }
@@ -1545,6 +1725,14 @@ export function radialLayout({
   }
 
   if (relax) {
+    // Maximum hop depth in this view: the nudge pass only runs on sparse 1°/2°
+    // views where empty space exists to nudge into.
+    let maxDepth = null;
+    if (depths) {
+      for (const hop of depths.values()) {
+        if (maxDepth === null || hop > maxDepth) maxDepth = hop;
+      }
+    }
     relaxLayout({
       positions,
       links,
@@ -1556,6 +1744,7 @@ export function radialLayout({
       edgeClearance: minSeparation * 2,
       spacing,
       radialBand,
+      maxDepth,
     });
   }
 
