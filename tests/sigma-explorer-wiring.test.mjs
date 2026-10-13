@@ -1782,14 +1782,13 @@ test('"Show next group" jumps to a random unvisited group', () => {
   );
 });
 
-test('homepage shows the daily game: hero button + note, and a visible Game nav link', () => {
-  // Before 2026-10-08 the only way to /game/ was the hamburger menu.
+test('homepage shows the daily game pill without the Game nav link', () => {
+  // 2026-10-12: Aaron, Cole, Paul agreed to remove the top-right "Game" word
+  // (Cole: "low rent"). The "Play today's 6° puzzle" pill stays; the game is
+  // also reachable via the burger-menu game icon.
   assert.match(EXPLORER, /<a class="sigma-daily-cta" href="\/game\/">Play today&rsquo;s 6&deg; puzzle<\/a>/);
-  assert.match(EXPLORER, /Connect today&rsquo;s two bands in as few moves as you can\./);
   assert.match(EXPLORER, /\.sigma-daily-cta\{[^}]*min-height:44px/, 'thumb-sized');
-  assert.match(INDEX_HTML, /<a class="header-game-link" id="header-game-link" href="\/game\/">Game<\/a>/);
-  // Desktop is 36px like Sign in; the phone rule is the 44px one.
-  assert.match(INDEX_HTML, /\.header-right \.header-game-link \{[^}]*min-height: 44px;/, 'thumb-sized on phones');
+  assert.doesNotMatch(INDEX_HTML, /<a class="header-game-link"/, 'Game nav link removed');
 });
 
 test('tester polish: 1 degree, one legal footer, honest dialog name, no dangling dash', () => {
