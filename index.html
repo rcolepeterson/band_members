@@ -7592,7 +7592,7 @@ function downloadPngBlob(blob) {
     function draftToNewBandPayload(draft) {
       const members = (Array.isArray(draft.members) ? draft.members : []).map(entry => {
         const { instrument1, instrument2 } = splitInstrumentField(entry.instrument);
-        return { name: entry.member, instrument1, instrument2, tenure: '' };
+        return { name: entry.member, instrument1, instrument2, tenure: '', id: entry.id || null };
       });
       return {
         name: draft.band,
@@ -10947,6 +10947,51 @@ function downloadPngBlob(blob) {
       return { valid: true, duplicate: false, memberExists: false, duplicateConnection: false };
     }
 
+    // Member disambiguation (2026-10-12): when the typed member name matches
+    // multiple people in the graph, show a picker below the name field listing
+    // each person with their connected bands. The user picks the right person
+    // or chooses "New person". The selection is stored as data-selected-member-id
+    // on the #member-name input; empty means create-new.
+    function updateMemberDisambiguation(matchedPeople, typedName) {
+      const memberField = document.getElementById('member-name');
+      if (!memberField) return;
+      let picker = document.getElementById('member-disambiguation');
+      // Clear any existing picker if 0 or 1 match (no ambiguity).
+      if (matchedPeople.length <= 1) {
+        if (picker) picker.remove();
+        // Single match: auto-select it (preserves old auto-thread behavior).
+        memberField.dataset.selectedMemberId = matchedPeople.length === 1 ? matchedPeople[0].id : '';
+        return;
+      }
+      if (!picker) {
+        picker = document.createElement('select');
+        picker.id = 'member-disambiguation';
+        picker.className = 'member-disambiguation-select';
+        picker.setAttribute('aria-label', 'Which person is this?');
+        memberField.parentNode.insertBefore(picker, memberField.nextSibling);
+        picker.addEventListener('change', () => {
+          memberField.dataset.selectedMemberId = picker.value;
+          populateCardsFromTreeContext();
+        });
+      }
+      const currentValue = memberField.dataset.selectedMemberId || '';
+      picker.innerHTML = '';
+      const prompt = document.createElement('option');
+      prompt.value = '';
+      prompt.textContent = `New person named "${typedName}"`;
+      picker.appendChild(prompt);
+      matchedPeople.forEach(person => {
+        const bands = getNodeConnections(person.id).join(', ') || 'no bands yet';
+        const opt = document.createElement('option');
+        opt.value = person.id;
+        opt.textContent = `${nodeName(person)} — ${bands}`;
+        picker.appendChild(opt);
+      });
+      // Preserve selection if the same person is still in the list.
+      picker.value = matchedPeople.some(p => p.id === currentValue) ? currentValue : '';
+      memberField.dataset.selectedMemberId = picker.value;
+    }
+
     function populateCardsFromTreeContext() {
       if (!graphState || !graphState.master) return;
       const band = document.getElementById('band-name').value.trim();
@@ -10964,9 +11009,15 @@ function downloadPngBlob(blob) {
       const safeBio = typedBio.replace(/(?:https?:\/\/|www\.|[a-z0-9-]+\.(?:com|net|org|io|co|fm|tv|gg|ly|me|info|biz|xyz|site|link|app|dev|music|band|rocks|live))/gi, '[link removed]');
 
       let matchedNode = null;
+      let matchedPeople = [];
       if (member) {
-        matchedNode = graphState.master.nodes.find(node => node.type === 'person' && normalizeKey(nodeName(node)) === normalizeKey(member));
+        matchedPeople = graphState.master.nodes.filter(node => node.type === 'person' && normalizeKey(nodeName(node)) === normalizeKey(member));
+        matchedNode = matchedPeople[0] || null;
       }
+      // Disambiguation (2026-10-12): if multiple people share the typed name,
+      // show a picker so the user selects the right person or creates a new one.
+      // The selection is stored on the member-name input as data-selected-member-id.
+      updateMemberDisambiguation(matchedPeople, member);
       if (!matchedNode && band) {
         matchedNode = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(nodeName(node)) === normalizeKey(band) && (!scene || normalizeKey(locationLabel(node) || '') === normalizeKey(scene)));
       }
@@ -11441,7 +11492,7 @@ function downloadPngBlob(blob) {
           showSubmissionFeedback(`${memberName} is already connected to ${band} in ${scene}. Remove or change that row.`, true);
           return;
         }
-        members.push({ member: memberName, instrument, relation });
+        members.push({ member: memberName, instrument, relation, id: row.dataset.selectedMemberId || nameInput?.dataset.selectedMemberId || null });
       }
 
       // City-aware: the band "exists" only if the same name in the same city
