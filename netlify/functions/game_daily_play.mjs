@@ -79,7 +79,9 @@ async function runState(sql, run, chain, me) {
   const tgt = meta.get(chain.band_b) || {};
   const comps = await sql`select chain_date from daily_completions where user_id = ${me.id}`;
   const dates = (comps || []).map((c) => c.chain_date);
-  const fresh = await findUserByToken(sql, me.token).catch(() => me);
+  // Use the already-fetched user object (me) — re-fetching via findUserByToken
+  // here was a redundant DB hit on every play action (2026-10-12).
+  const fresh = me;
   const replayRows = await sql`
     select coalesce(min(hops_used), null) as best,
            count(*) filter (where status = 'complete') as done
@@ -214,14 +216,19 @@ export default async (req) => {
 
   const action = body && body.action;
 
-  const budget = await consume({
-    sql,
-    bucket: `game-daily-play:uid:${me.id}`,
-    limit: 300,
-    windowSeconds: 3600,
-  });
-  if (!budget.allowed) {
-    return tooManyRequests('Too many moves. Try again shortly.', budget.retryAfterSeconds);
+  // Skip DB rate-limit for read-only actions (status, stats) — abuse potential
+  // is nil, and this saves ~2M writes/day at 1M DAU (2026-10-12).
+  const isReadOnly = action === 'status' || action === 'stats';
+  if (!isReadOnly) {
+    const budget = await consume({
+      sql,
+      bucket: `game-daily-play:uid:${me.id}`,
+      limit: 300,
+      windowSeconds: 3600,
+    });
+    if (!budget.allowed) {
+      return tooManyRequests('Too many moves. Try again shortly.', budget.retryAfterSeconds);
+    }
   }
 
   // --- status ---------------------------------------------------------------
