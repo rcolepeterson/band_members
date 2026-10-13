@@ -20,6 +20,7 @@ import {
   extractBearerToken,
   findUserByToken,
 } from './_db.mjs';
+import { getStore } from '@netlify/blobs';
 import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
 import {
   pacificDate,
@@ -166,24 +167,57 @@ export default async (req) => {
   }
 
   let chain;
+  let bandA;
+  let bandB;
+  
+  // Try Blobs cache first — the daily chain is identical for everyone all day.
+  // Saves ~3 DB queries per request (~3M/day at 1M DAU) (2026-10-12).
   try {
-    chain = await ensureChain(sql, date);
-  } catch (error) {
-    console.error('game-daily: chain generation failed', error && error.message);
-    return serverError('could not deal today\u2019s chain');
-  }
-  if (!chain) return serverError('could not deal today\u2019s chain');
-
-  let bandA = { id: chain.band_a, name: 'Band A' };
-  let bandB = { id: chain.band_b, name: 'Band B' };
-  try {
-    const rows = await sql`select id, name from bands where id in (${chain.band_a}, ${chain.band_b})`;
-    for (const r of rows || []) {
-      if (String(r.id) === String(chain.band_a)) bandA = { id: r.id, name: r.name };
-      if (String(r.id) === String(chain.band_b)) bandB = { id: r.id, name: r.name };
+    const store = getStore({ name: 'game-daily-cache', consistency: 'strong' });
+    const cached = await store.get(`daily-chain-${date}`, { type: 'json' });
+    if (cached && cached.band_a && cached.band_b) {
+      chain = cached;
+      bandA = { id: cached.band_a, name: cached.bandA_name || 'Band A' };
+      bandB = { id: cached.band_b, name: cached.bandB_name || 'Band B' };
     }
-  } catch (error) {
-    console.error('game-daily: band lookup failed', error && error.message);
+  } catch (e) {
+    // Blobs miss or error — fall through to DB
+  }
+  
+  if (!chain) {
+    try {
+      chain = await ensureChain(sql, date);
+    } catch (error) {
+      console.error('game-daily: chain generation failed', error && error.message);
+      return serverError('could not deal today\u2019s chain');
+    }
+    if (!chain) return serverError('could not deal today\u2019s chain');
+
+    bandA = { id: chain.band_a, name: 'Band A' };
+    bandB = { id: chain.band_b, name: 'Band B' };
+    try {
+      const rows = await sql`select id, name from bands where id in (${chain.band_a}, ${chain.band_b})`;
+      for (const r of rows || []) {
+        if (String(r.id) === String(chain.band_a)) bandA = { id: r.id, name: r.name };
+        if (String(r.id) === String(chain.band_b)) bandB = { id: r.id, name: r.name };
+      }
+      // Write to Blobs for subsequent requests
+      try {
+        const store = getStore({ name: 'game-daily-cache', consistency: 'strong' });
+        await store.setJSON(`daily-chain-${date}`, {
+          date: chain.date,
+          band_a: chain.band_a,
+          band_b: chain.band_b,
+          optimal_hops: chain.optimal_hops,
+          bandA_name: bandA.name,
+          bandB_name: bandB.name,
+        });
+      } catch (e) {
+        // Blobs write failed — non-fatal, DB will serve next time
+      }
+    } catch (error) {
+      console.error('game-daily: band lookup failed', error && error.message);
+    }
   }
 
   // Authenticated extras: credits, freezes, streak, today's completion.
