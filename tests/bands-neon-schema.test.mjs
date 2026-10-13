@@ -62,9 +62,12 @@ test('migrate.mjs enforces case-insensitive uniqueness on bands (name + city + c
   );
 });
 
-test('migrate.mjs still enforces case-insensitive uniqueness on band_members.name', () => {
+test('migrate.mjs drops the band_members name-uniqueness index (UUID identity)', () => {
+  // 2026-10-12: member identity is UUID-based; same-name members in different
+  // bands/towns are distinct people. The old unique index forced collisions.
   const src = readFn('migrate.mjs');
-  assert.match(src, /create unique index if not exists band_members_name_lower_idx/i);
+  assert.match(src, /drop index if exists band_members_name_lower_idx/i);
+  assert.doesNotMatch(src, /create unique index if not exists band_members_name_lower_idx/i);
 });
 
 test('seed_bands.mjs upserts bands against the (name, city, country) identity index', () => {
@@ -145,7 +148,9 @@ test('seed_bands.mjs reads the existing band-submissions blob store', () => {
 test('seed_bands.mjs upserts use fill-missing semantics (coalesce/nullif against existing columns)', () => {
   const src = readFn('seed_bands.mjs');
   assert.match(src, /coalesce\(nullif\(bands\.\w+,\s*''\)/i);
-  assert.match(src, /coalesce\(nullif\(band_members\.\w+,\s*''\)/i);
+  // 2026-10-12: member resolve uses UPDATE...WHERE (no table prefix) instead of
+  // ON CONFLICT (which required the band_members. prefix). Both are fill-missing.
+  assert.match(src, /coalesce\(nullif\((band_members\.)?\w+,\s*''\)/i);
 });
 
 // --- bands_neon.mjs (GET /api/bands) ----------------------------------------
