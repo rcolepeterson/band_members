@@ -818,7 +818,7 @@ export function refinePolygon(positions, links, minSeparation) {
     }
     const pad = minSeparation * 2;
     minX -= pad; maxX += pad; minY -= pad; maxY += pad;
-    const step = minSeparation * 0.7; // ~98px grid
+    const step = minSeparation * 0.35; // ~49px fine grid (v2.1: coarser grid couldn't separate overlapping nodes)
     // Combined score: crossings dominate, but separation violations count too.
     // This lets Phase 5 fix separation (to make collision a no-op) without
     // introducing crossings.
@@ -886,6 +886,34 @@ export function refinePolygon(positions, links, minSeparation) {
       }
       phase5Crossings = countCrossings(positions, links);
       if (!iterImproved) break;
+    }
+    // Fallback: if still stuck with violations, try FAR placement.
+    // Grid search is bounded; some nodes (e.g., overlapping bands sharing
+    // neighbors) need to go far outside to untangle. (Aaron's principle:
+    // the spanning member goes far so others can nest inside.)
+    let finalScore = scoreOf();
+    if (finalScore > 0 && finalScore < 1000) {
+      // Only violations remain (no crossings). Try far positions.
+      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+      const farDist = Math.max(maxX - minX, maxY - minY) * 1.5 + minSeparation * 3;
+      const stuck = [...involved].filter(id => id !== anchorId5).sort();
+      for (const id of stuck) {
+        if (scoreOf() === 0) break;
+        const pos = positions.get(id);
+        const origX = pos.x, origY = pos.y;
+        let bestX = origX, bestY = origY, bestS = scoreOf();
+        for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) {
+          const fx = cx + Math.cos(angle) * farDist;
+          const fy = cy + Math.sin(angle) * farDist;
+          pos.x = fx; pos.y = fy;
+          const s = scoreOf();
+          if (s < bestS) {
+            bestS = s; bestX = fx; bestY = fy;
+            if (s === 0) break;
+          }
+        }
+        pos.x = bestX; pos.y = bestY;
+      }
     }
   }
 }
