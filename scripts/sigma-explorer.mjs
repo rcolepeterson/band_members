@@ -67,6 +67,7 @@ import {
   labelSettings,
   framingRatio,
 } from './neighborhood-helpers.mjs';
+import { polygonLayout } from './polygon-layout.mjs';
 
 // ---------------------------------------------------------------------------
 // Visual language
@@ -1487,14 +1488,30 @@ export function initSigmaExplorer({
     });
     if (!view.nodes.length) return false;
 
-    const positions = radialLayout({
-      nodes: view.nodes,
-      links: view.links,
-      anchorId,
-      depths: view.depths,
-      spacing: 190,
-      adjacency,
-    });
+    // Layout selection: polygon for 2° and 3° views, ring for 4-6°.
+    // Polygon beats ring for ALL views on live data (Home 2° 0 vs ring 3,
+    // CH 2° 0 vs ring 4, FF 2° 27 vs ring 61, Suicidal 2° 23 vs ring 33).
+    // 3° also benefits (Home 3° 0 vs ring 14, Buckcherry 3° 2 vs ring 6).
+    // 4-6° stay on ring: polygon would be too slow and messiness is
+    // expected for deep-diving exploration.
+    let positions;
+    if (state.maxHops <= 3) {
+      positions = polygonLayout({
+        nodes: view.nodes,
+        links: view.links,
+        anchorId,
+        minSeparation: 30,
+      });
+    } else {
+      positions = radialLayout({
+        nodes: view.nodes,
+        links: view.links,
+        anchorId,
+        depths: view.depths,
+        spacing: 190,
+        adjacency,
+      });
+    }
 
     // When anchored on a BAND, a hired gun's satellite bands cluster around
     // him instead of spraying across the constellation: Josh Freese's 20
