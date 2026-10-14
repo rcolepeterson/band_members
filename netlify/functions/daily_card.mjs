@@ -8,7 +8,7 @@
 // show, so the score now lives there: the share link carries a short result
 // code (dailyResultCode in scripts/six-degrees-game.mjs), og_daily.js turns
 // it into the preview title, and this draws the matching card: puzzle
-// number, the result, one star per move in that move's color, and the two
+// number, the result, one pick per move in that move's color, and the two
 // bands.
 //
 // WHY IT IS CHEAP
@@ -32,7 +32,7 @@ import {
 import { DAILY_EPOCH } from '../../scripts/six-degrees-game.mjs';
 import { parseDailyResultCode, dailyResultTitle } from '../../scripts/daily-result.mjs';
 
-// Star fills, matching the share text's ⭐ ★ ☆ and the board's gold/silver/black.
+// Pick fills in brand colors (gold/silver/black), matching the board.
 const STAR = {
   o: { fill: '#d9b36c', stroke: '#d9b36c' },
   s: { fill: '#c7ced8', stroke: '#c7ced8' },
@@ -51,16 +51,14 @@ export function dailyDateForNumber(num) {
   return new Date(Date.UTC(y, m - 1, d + num - 1)).toISOString().slice(0, 10);
 }
 
-function drawStar(ctx, cx, cy, r, letter) {
+function drawPick(ctx, cx, cy, r, letter) {
+  // Guitar pick shape: rounded teardrop, point down.
   const style = STAR[letter] || STAR.s;
   ctx.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const rad = i % 2 === 0 ? r : r * 0.45;
-    const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    const x = cx + rad * Math.cos(a);
-    const y = cy + rad * Math.sin(a);
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  }
+  // Top is wide and rounded, bottom comes to a soft point.
+  ctx.moveTo(cx, cy + r);
+  ctx.bezierCurveTo(cx - r * 1.1, cy + r * 0.3, cx - r * 0.9, cy - r, cx, cy - r);
+  ctx.bezierCurveTo(cx + r * 0.9, cy - r, cx + r * 1.1, cy + r * 0.3, cx, cy + r);
   ctx.closePath();
   ctx.fillStyle = style.fill;
   ctx.fill();
@@ -88,13 +86,13 @@ export async function renderDailyCard({ result, start, target, host = 'sixdegree
   centerText(ctx, head, 54, 150, COLORS.wordmark);
   centerText(ctx, score, 36, 222, result.won ? COLORS.gold : COLORS.muted);
 
-  // One star per move, shrinking to fit a long game.
+  // One pick per move, shrinking to fit a long game.
   const n = result.kinds.length;
   if (n) {
     const gap = Math.min(96, (WIDTH - 180) / n);
     const r = Math.min(34, gap * 0.4);
     const left = (WIDTH - gap * (n - 1)) / 2;
-    result.kinds.forEach((k, i) => drawStar(ctx, left + i * gap, 330, r, k));
+    result.kinds.forEach((k, i) => drawPick(ctx, left + i * gap, 330, r, k));
   }
 
   // The two bands, when the day's chain could be looked up.
