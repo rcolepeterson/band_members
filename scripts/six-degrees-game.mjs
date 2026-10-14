@@ -1533,17 +1533,23 @@ function initGameUI() {
   async function shareDailyText(btn, text, shareUrl = 'https://sixdegreesofrock.com/game?s=1') {
     const label = btn.textContent;
     if (dailyRun) gaEvent('share_clicked', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used });
-    // Copy to clipboard FIRST, always. Facebook and Instagram strip pre-filled
-    // text from the native share sheet (their policy, not a bug we can fix),
-    // so the clipboard is the reliable path: one paste restores the full
-    // result + link even when the app drops everything from the sheet.
+    // Copy to clipboard in the background (not awaited before share).
+    // Facebook and Instagram strip pre-filled text from the native share
+    // sheet (their policy, not a bug we can fix), so the clipboard is the
+    // reliable path: one paste restores the full result + link even when
+    // the app drops everything from the sheet.
     // (Aaron, 2026-10-14: FB share opened an empty compose box.)
     let copied = false;
-    try {
-      await navigator.clipboard.writeText(text);
-      copied = true;
-    } catch {}
+    const copyPromise = (async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch {}
+    })();
     // Phones get the share sheet; everywhere else copies, like Wordle.
+    // navigator.share() must be called synchronously in the click handler
+    // (no await before it) or the browser drops the user gesture and the
+    // sheet never opens. (Aaron, 2026-10-14: sheet stopped appearing.)
     let coarse = false;
     try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch {}
     if (coarse && navigator.share) {
@@ -1553,16 +1559,19 @@ function initGameUI() {
         // (dailyShareLink). The text keeps its own link line for the
         // clipboard/paste path.
         await navigator.share({ title: '6° Rock', text, url: shareUrl });
+        await copyPromise;
         showToast(copied ? 'Shared! If the app dropped the text, just paste — it’s copied.' : 'Shared!', 'good');
         return;
       } catch (err) {
         if (err && err.name === 'AbortError') {
           // Sheet dismissed; the clipboard still has the result.
+          await copyPromise;
           if (copied) showToast('Results copied — paste them into your post.', 'good');
           return;
         }
       }
     }
+    await copyPromise;
     try {
       if (!copied) await navigator.clipboard.writeText(text);
       showToast('Copied results to clipboard', 'good');
