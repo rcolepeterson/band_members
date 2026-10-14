@@ -831,7 +831,31 @@ export function refinePolygon(positions, links, minSeparation) {
           if (Math.hypot(a.x - b.x, a.y - b.y) < minSeparation) v++;
         }
       }
-      return c * 1000 + v;
+      // DRAFTING RULE (v4, Aaron): dimension lines stay outside the part.
+      // Penalize edges passing too close to nodes they don't connect to.
+      // This routes long edges around clusters instead of through them.
+      let clearance = 0;
+      const clearanceDist = minSeparation * 0.5;
+      for (const link of links) {
+        const aId = typeof link.source === 'object' ? link.source.id : link.source;
+        const bId = typeof link.target === 'object' ? link.target.id : link.target;
+        const p1 = positions.get(aId), p2 = positions.get(bId);
+        if (!p1 || !p2) continue;
+        for (const nid of ids) {
+          if (nid === aId || nid === bId) continue;
+          const np = positions.get(nid);
+          // Distance from point to segment
+          const dx = p2.x - p1.x, dy = p2.y - p1.y;
+          const lenSq = dx * dx + dy * dy;
+          if (lenSq < 1e-9) continue;
+          let t = ((np.x - p1.x) * dx + (np.y - p1.y) * dy) / lenSq;
+          t = Math.max(0, Math.min(1, t));
+          const projX = p1.x + t * dx, projY = p1.y + t * dy;
+          const dist = Math.hypot(np.x - projX, np.y - projY);
+          if (dist < clearanceDist) clearance++;
+        }
+      }
+      return c * 1000 + v * 10 + clearance;
     };
     // Iterate until convergence: fixing one crossing may create another.
     // Recompute involved set each iteration to catch new crossings.
