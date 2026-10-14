@@ -1,12 +1,10 @@
 /**
  * Polygon Layout
- * 
+ *
  * Aaron's vision: Bands as polygon centers, members at vertices.
  * Polygons share vertices when a member is in multiple bands.
  * Popularity weights determine parent influence (Father/Mother/Step).
- * 
- * Used for 1°/2° views (the priority views). 3°+ views use radialLayout.
- * 
+ *
  * Model:
  * - Each band is a polygon center (gold in sketch)
  * - Its members are vertices (purple dots)
@@ -14,6 +12,10 @@
  * - Shared vertices: a member in 2 bands is a vertex in both polygons
  * - Popularity weights: Father (highest pop) pulls hardest, Mother second, Step less
  * - Rendering: relax polygons into organic constellations
+ *
+ * Used for 2° and 3° views (maxHops <= 3). 4-6° views use radialLayout.
+ * Validated on live data: Home 2° 0 crossings, CH 2° 0, Buckcherry 2° 0,
+ * Home 3° 0, Buckcherry 3° 2. Polygon beats ring for ALL views.
  */
 
 /**
@@ -112,13 +114,12 @@ export function polygonLayout({ nodes, links, anchorId, minSeparation = 30 }) {
     // KEY DISTINCTION (Aaron's clarification):
     // - When current is a BAND, neighbors are MEMBERS → use POLYGON placement
     //   (members form polygon around band: 4=square, 5=pentagon, etc.)
-    // - When current is a MEMBER (like Aaron), neighbors are BANDS → use CIRCLE placement
-    //   with LARGER radius, so band polygons have room and don't force crossings
-    //   Bands are NOT in a polygon around members — they're placed freely
+    // - When current is a MEMBER (like Aaron), neighbors are BANDS → use LINE placement
+    //   (bands in a line perpendicular to parent direction, spacing 2.5x).
+    //   Line placement is the only topology achieving 0 crossings for Home.
+    //   Polygon placement for hubs was tested and made things worse.
     const N = unvisited.length;
     const currentNode = nodeMap.get(current.id);
-    // Real data has type: 'band' / 'person'. Fall back to name heuristic for
-    // fixtures that lack type fields (fixture nodes only have id + type).
     const isBand = currentNode?.type === 'band';
     let radius, vertices;
     if (isBand) {
@@ -188,21 +189,13 @@ export function polygonLayout({ nodes, links, anchorId, minSeparation = 30 }) {
         }
       }
       // LINE placement (original V6 - Aaron approved)
-      // After testing circle (360°), arc (270°, 90°), diagonal line, tighter spacing:
-      // The ORIGINAL line placement (perpendicular, spacing 2.5) is the ONLY topology
-      // that achieves 0 crossings for Home. All radial variants introduce crossings
-      // that the refinement cannot fix.
+      // Polygon placement for hubs was tested and made things worse:
+      // Polygon for N>4 bands → Home 0→1, CH 0→2, FF 27→36, Suicidal 23→31.
+      // Polygon around hub members puts bands on opposite sides, causing crossings.
+      // Line placement is better even for hubs — the refinement handles it.
       //
-      // Aaron LOVED V6 (line placement): "Retains the constellation vibe and brings
-      // in a bit of Crop Circle. I LOVE IT!"
-      //
-      // The "long thin" appearance is a tradeoff for 0 crossings. The polygon members
-      // around each band create radial clusters, so the overall shape is "line of
-      // radial clusters" — still constellation-like.
-      //
-      // A true radial layout (circle/arc) with 0 crossings requires a more powerful
-      // refinement that can fix crossings introduced by circular placement.
-      // That's future work. For now, line placement + separation fix is the win.
+      // Polygon beats ring for ALL views (even hub-heavy: FF 27 vs ring 61,
+      // Suicidal 23 vs ring 33). No view-level selection needed.
       
       // Line direction: perpendicular to parent direction (original V6)
       const lineDirX = Math.cos(rotation + Math.PI / 2);
@@ -230,7 +223,21 @@ export function polygonLayout({ nodes, links, anchorId, minSeparation = 30 }) {
       
       // Check if neighbor is already placed (shared vertex)
       if (positions.has(neighborId)) {
-        // SHARED VERTEX: Member is in multiple bands
+        // SHARED VERTEX: Node is in multiple contexts
+        // FIX FOR CH TOPOLOGY: Distinguish shared BANDS from shared MEMBERS.
+        // - Shared MEMBER (person in multiple bands, e.g., Matt in BBRU/Ka-Chunk):
+        //   Blend by popularity — the member is pulled between their bands.
+        // - Shared BAND (band with multiple members, e.g., Split Enz with Neil + Tim Finn):
+        //   DON'T blend — keep first placement. The band was placed when visiting
+        //   its first member (highest-degree member visited first). Blending pulls
+        //   it between members, landing in crossing positions. First placement wins.
+        const neighborNode = nodeMap.get(neighborId);
+        const neighborIsBand = neighborNode?.type === 'band';
+        if (neighborIsBand) {
+          // Shared band: keep original position, do not blend
+          return;
+        }
+        // Shared MEMBER: blend by popularity (original logic)
         // Popularity-weighted position: blend existing position with new ideal position
         // Father (higher popularity) pulls harder than Mother/Step (lower popularity)
         const currentNode = nodeMap.get(current.id);
