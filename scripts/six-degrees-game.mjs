@@ -12,6 +12,8 @@
 // native share on wins, and an after-3-chains signup nudge for logged-out
 // players.
 
+import { resultCode } from './daily-result.mjs';
+
 // ---------------------------------------------------------------------------
 // Engine
 // ---------------------------------------------------------------------------
@@ -211,8 +213,18 @@ export function dailyShareResultText({ date, start, target, picks = [], moves = 
   return [
     `6\u00b0 Rock${num ? ` #${num}` : ''} 🎸 ${score}`,
     [start, ...(squares ? [squares] : []), target].join(' ➡️ '),
-    'sixdegreesofrock.com/game?s=1',
+    dailyShareLink({ date, picks, won }).replace(/^https:\/\//, ''),
   ].join('\n');
+}
+
+// The score rides in the link so a Facebook or Instagram share, which drops
+// the text, still previews the result (scripts/daily-result.mjs).
+export function dailyResultCode({ date, picks = [], won }) {
+  return resultCode(dailyPuzzleNumber(date), picks, won);
+}
+export function dailyShareLink({ date, picks = [], won } = {}) {
+  const code = dailyResultCode({ date, picks, won });
+  return `https://sixdegreesofrock.com/game?s=1${code ? `&r=${code}` : ''}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -1510,7 +1522,7 @@ function initGameUI() {
     else document.getElementById('add-band-btn')?.click();
   }
 
-  async function shareDailyText(btn, text) {
+  async function shareDailyText(btn, text, shareUrl = 'https://sixdegreesofrock.com/game?s=1') {
     const label = btn.textContent;
     if (dailyRun) gaEvent('share_clicked', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used });
     // Copy to clipboard FIRST, always. Facebook and Instagram strip pre-filled
@@ -1529,9 +1541,10 @@ function initGameUI() {
     if (coarse && navigator.share) {
       try {
         // Pass url separately: Facebook ignores `text` but renders the URL
-        // as a link preview from the /game OG tags. The text keeps its own
-        // bare link line for the clipboard/paste path.
-        await navigator.share({ title: '6° Rock', text, url: 'https://sixdegreesofrock.com/game?s=1' });
+        // as a link preview, and this link's preview carries the score
+        // (dailyShareLink). The text keeps its own link line for the
+        // clipboard/paste path.
+        await navigator.share({ title: '6° Rock', text, url: shareUrl });
         showToast(copied ? 'Shared! If the app dropped the text, just paste — it’s copied.' : 'Shared!', 'good');
         return;
       } catch (err) {
@@ -1582,6 +1595,12 @@ function initGameUI() {
       par: completed.beat_tree ? completed.old_par : run.par,
       won,
     });
+  }
+
+  function dailyResultShareLink(won, completed = {}) {
+    const run = dailyRun;
+    const picks = completed.picks && completed.picks.length ? completed.picks : (run.picks || []);
+    return dailyShareLink({ date: run.chain_date, picks, won });
   }
 
   // --- Player stats, Wordle-style (2026-10-08) -------------------------------
@@ -1729,7 +1748,7 @@ function initGameUI() {
         });
       }
       const shareBtn = el('<button type="button" class="sd-primary">Share result</button>');
-      shareBtn.addEventListener('click', () => shareDailyText(shareBtn, text));
+      shareBtn.addEventListener('click', () => shareDailyText(shareBtn, text, dailyResultShareLink(won, completed)));
       c.appendChild(shareBtn);
       const homeScreen = homeScreenHintEl();
       if (homeScreen) c.appendChild(homeScreen);
@@ -2205,7 +2224,7 @@ function initGameUI() {
       const actions = el('<div class="sd-finish-actions"></div>');
       // One tap shares, like Wordle (the results modal opened on its own at the finish).
       const results = el(`<button type="button" class="tool-chip">${lineIcon('share')} Share result</button>`);
-      results.addEventListener('click', () => shareDailyText(results, dailyResultShareText(true, c)));
+      results.addEventListener('click', () => shareDailyText(results, dailyResultShareText(true, c), dailyResultShareLink(true, c)));
       // A win offers a NEW puzzle, same as the give-up screen (Cole,
       // 2026-10-09). "Play again" replayed today's pair, whose answer you had
       // just seen: a dead end for exactly the players most likely to want more.
@@ -2571,7 +2590,7 @@ function initGameUI() {
     }
     const actions = el('<div class="sd-finish-actions"></div>');
     const results = el(`<button type="button" class="tool-chip">${lineIcon('share')} Share result</button>`);
-    results.addEventListener('click', () => shareDailyText(results, dailyResultShareText(false)));
+    results.addEventListener('click', () => shareDailyText(results, dailyResultShareText(false), dailyResultShareLink(false)));
     actions.appendChild(results);
     const again = el('<button type="button" class="tool-chip"></button>');
     if (practiceMode) {

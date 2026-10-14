@@ -64,7 +64,7 @@ test('a win names start and target, one square per move, no band spoilers', () =
   assert.equal(text, [
     '6° Rock #9 🎸 Solved in 4 moves', // plain words, no timer
     'Nirvana ➡️ ⭐★☆⭐ ➡️ Metallica', // one star per move
-    'sixdegreesofrock.com/game?s=1',
+    'sixdegreesofrock.com/game?s=1&r=9-odso', // the score rides in the link too
   ].join('\n'));
   for (const spoiler of ['Foo Fighters', 'Pearl Jam', 'Probot']) assert.ok(!text.includes(spoiler));
 });
@@ -77,7 +77,7 @@ test('a loss says Not solved', () => {
   assert.equal(text, [
     '6° Rock #9 🎸 Not solved',
     'Nirvana ➡️ ★☆ ➡️ Metallica',
-    'sixdegreesofrock.com/game?s=1',
+    'sixdegreesofrock.com/game?s=1&r=9x-ds',
   ].join('\n'));
   assert.ok(!/Can you|beat my chain|crack it/.test(text), 'no slogan');
 });
@@ -271,7 +271,7 @@ test('chain timeline: one rail, dots, names aligned; finished boards collapse em
 test('one share action, like Wordle: text only, no share image', () => {
   assert.ok(!src.includes('Share image'), 'no share-image button');
   assert.ok(!src.includes('function drawDailyShareCard'), 'PNG card code removed');
-  assert.ok(src.includes('shareDailyText(results, dailyResultShareText(true, c))'), 'board shares in one tap');
+  assert.ok(src.includes('shareDailyText(results, dailyResultShareText(true, c), dailyResultShareLink(true, c))'), 'board shares in one tap');
   assert.ok(src.includes('const text = dailyResultShareText(won, completed);'), 'modal uses the same text');
 });
 
@@ -380,7 +380,7 @@ test('share squares are each move\'s real color, so grids differ by how you play
   assert.equal(perfect.split('\n')[1], 'Journey ➡️ ⭐⭐⭐ ➡️ Heart');
   assert.equal(messy.split('\n')[0], '6° Rock #9 🎸 Solved in 5 moves');
   assert.equal(messy.split('\n')[1], 'Journey ➡️ ⭐★☆☆⭐ ➡️ Heart');
-  assert.equal(messy.split('\n').at(-1), 'sixdegreesofrock.com/game?s=1');
+  assert.equal(messy.split('\n').at(-1), 'sixdegreesofrock.com/game?s=1&r=9-odsso');
   assert.ok(!/\d+\/\d+/.test(messy), 'no fraction score');
 });
 
@@ -418,7 +418,7 @@ test('analytics follow-ups: team browsers tagged internal, share links tagged, r
   }
   const game = readFileSync(new URL('../game/index.html', import.meta.url), 'utf8');
   assert.match(game, /\?utm_source=share&utm_medium=share_text/, 'a visit from a shared link reports source "share"');
-  assert.ok(src.includes("'sixdegreesofrock.com/game?s=1',"), 'share text links with ?s=1');
+  assert.ok(src.includes("`https://sixdegreesofrock.com/game?s=1${code ? `&r=${code}` : ''}`"), 'share links keep ?s=1');
   const retention = readFileSync(new URL('../netlify/functions/game_retention.mjs', import.meta.url), 'utf8');
   assert.match(retention, /path: '\/api\/game-retention'/);
   assert.match(retention, /max-age=300/, 'cached so it never costs Neon much');

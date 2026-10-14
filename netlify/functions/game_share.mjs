@@ -41,13 +41,13 @@ import QRCode from 'qrcode';
 import { getSql, isDbConfigured, ok, badRequest, notFound, serverError } from './_db.mjs';
 import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
 
-const WIDTH = 1200;
-const HEIGHT = 630;
+export const WIDTH = 1200;
+export const HEIGHT = 630;
 // Supersample factor: the card is drawn at 2400x1260 and box-filtered down to
 // exactly 1200x630 before encoding. Output dimensions never change.
-const SUPER = 2;
+export const SUPER = 2;
 
-const COLORS = {
+export const COLORS = {
   background: '#070b10',
   edge: '#2dd4bf',
   band: '#8fe8f6',
@@ -65,7 +65,7 @@ const MAX_NAME = 80;
 
 // Same font plumbing as og_image.mjs: esbuild inlines JS, not binaries, so the
 // TTF ships via netlify.toml included_files and is read from disk at runtime.
-const FONT_FAMILY = 'OgSans';
+export const FONT_FAMILY = 'OgSans';
 const FONT_CANDIDATES = [
   'vendor/fonts/og/Lato-Medium.ttf',
   './vendor/fonts/og/Lato-Medium.ttf',
@@ -74,7 +74,7 @@ const FONT_CANDIDATES = [
 ];
 
 let fontReady = false;
-function ensureFont() {
+export function ensureFont() {
   if (fontReady) return true;
   const found = FONT_CANDIDATES.find((path) => {
     try { return existsSync(path); } catch (_) { return false; }
@@ -132,7 +132,7 @@ function newId() {
 // against a fixture chain without a database or a deploy; the handler's only
 // extra job is fetching the row and turning null into a redirect.
 
-function measure(ctx, text, size) {
+export function measure(ctx, text, size) {
   ctx.font = `${size}pt ${FONT_FAMILY}`;
   let width;
   try { width = PImage.measureText(ctx, text).width; } catch (_) { width = text.length * size * 0.58; }
@@ -140,7 +140,7 @@ function measure(ctx, text, size) {
   return width;
 }
 
-function ellipsize(ctx, text, size, maxWidth) {
+export function ellipsize(ctx, text, size, maxWidth) {
   if (measure(ctx, text, size) <= maxWidth) return text;
   let t = text;
   while (t.length > 1 && measure(ctx, t + '…', size) > maxWidth) t = t.slice(0, -1);
@@ -173,7 +173,7 @@ function drawQr(ctx, text, x, y, px) {
 // into one output pixel. The ratio is exactly 2:1, so there is no fractional
 // sampling and no ringing — just smoother glyph and line edges than a 1x
 // raster, which is what was reading as "fuzzy" after platform recompression.
-function downscale2x(src) {
+export function downscale2x(src) {
   const dw = src.width / 2;
   const dh = src.height / 2;
   const dst = PImage.make(dw, dh);
