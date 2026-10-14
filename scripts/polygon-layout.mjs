@@ -748,4 +748,109 @@ export function refinePolygon(positions, links, minSeparation) {
     }
     if (!improved) break;
   }
+
+  // Phase 5: Exhaustive grid search for nodes stuck in remaining crossings
+  // OR separation violations. Phases 1-4 are greedy/local and can get stuck
+  // in local minima. If crossings remain OR nodes are closer than minSeparation
+  // (which would trigger the collision pass and risk new crossings),
+  // grid-search each involved node's position space.
+  // (Proven: Home 2° has a valid 0-crossing position at Matt=(160,0) that
+  // greedy never finds. Aaron's manual drags confirm zero is achievable.)
+  let phase5Crossings = countCrossings(positions, links);
+  // Check separation violations too
+  let minDist5 = Infinity;
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      const a = positions.get(ids[i]), b = positions.get(ids[j]);
+      minDist5 = Math.min(minDist5, Math.hypot(a.x - b.x, a.y - b.y));
+    }
+  }
+  if (phase5Crossings > 0 || minDist5 < minSeparation) {
+    // Find nodes involved in crossings OR separation violations
+    const involved = new Set();
+    const si = (p1, p2, p3, p4) => {
+      const d = (p4.y - p3.y) * (p2.x - p1.x) - (p4.x - p3.x) * (p2.y - p1.y);
+      if (Math.abs(d) < 1e-9) return false;
+      const ua = ((p4.x - p3.x) * (p1.y - p3.y) - (p4.y - p3.y) * (p1.x - p3.x)) / d;
+      const ub = ((p2.x - p1.x) * (p1.y - p3.y) - (p2.y - p1.y) * (p1.x - p3.x)) / d;
+      return ua > 0.01 && ua < 0.99 && ub > 0.01 && ub < 0.99;
+    };
+    for (let i = 0; i < links.length; i++) {
+      for (let j = i + 1; j < links.length; j++) {
+        const l1 = links[i], l2 = links[j];
+        const a1 = typeof l1.source === 'object' ? l1.source.id : l1.source;
+        const b1 = typeof l1.target === 'object' ? l1.target.id : l1.target;
+        const a2 = typeof l2.source === 'object' ? l2.source.id : l2.source;
+        const b2 = typeof l2.target === 'object' ? l2.target.id : l2.target;
+        if (a1 === a2 || a1 === b2 || b1 === a2 || b1 === b2) continue;
+        const p1 = positions.get(a1), p2 = positions.get(b1);
+        const p3 = positions.get(a2), p4 = positions.get(b2);
+        if (p1 && p2 && p3 && p4 && si(p1, p2, p3, p4)) {
+          involved.add(a1); involved.add(b1); involved.add(a2); involved.add(b2);
+        }
+      }
+    }
+    // Also add nodes in separation violation
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = positions.get(ids[i]), b = positions.get(ids[j]);
+        if (Math.hypot(a.x - b.x, a.y - b.y) < minSeparation) {
+          involved.add(ids[i]); involved.add(ids[j]);
+        }
+      }
+    }
+    // Only move non-anchor person nodes (bands and anchor stay fixed)
+    // Note: nodeMap not in scope here; use positions order — anchor is ids[0]
+    const anchorId5 = ids[0];
+    // We need node types; reconstruct from links: bands appear as polygon centers.
+    // Simpler: skip ids[0] (anchor) and try others; bands will naturally be
+    // rejected if moving them doesn't help (their edges are structural).
+    // To be safe, only try person nodes: detect via links (persons have degree
+    // patterns, but we can't know type here). Instead, try all non-anchor and
+    // let the crossing count decide.
+    const candidates = [...involved].filter(id => id !== anchorId5).sort();
+    // Bounding box of current layout, expanded
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const id of ids) {
+      const p = positions.get(id);
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    }
+    const pad = minSeparation * 2;
+    minX -= pad; maxX += pad; minY -= pad; maxY += pad;
+    const step = minSeparation * 0.7; // ~98px grid
+    // Combined score: crossings dominate, but separation violations count too.
+    // This lets Phase 5 fix separation (to make collision a no-op) without
+    // introducing crossings.
+    const scoreOf = () => {
+      const c = countCrossings(positions, links);
+      let v = 0;
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          const a = positions.get(ids[i]), b = positions.get(ids[j]);
+          if (Math.hypot(a.x - b.x, a.y - b.y) < minSeparation) v++;
+        }
+      }
+      return c * 1000 + v;
+    };
+    for (const id of candidates) {
+      const pos = positions.get(id);
+      const origX = pos.x, origY = pos.y;
+      let bestX = origX, bestY = origY, bestS = scoreOf();
+      if (bestS === 0) continue; // already perfect
+      for (let gx = minX; gx <= maxX; gx += step) {
+        for (let gy = minY; gy <= maxY; gy += step) {
+          pos.x = gx; pos.y = gy;
+          const s = scoreOf();
+          if (s < bestS) {
+            bestS = s; bestX = gx; bestY = gy;
+            if (s === 0) break;
+          }
+        }
+        if (bestS === 0) break;
+      }
+      pos.x = bestX; pos.y = bestY;
+      phase5Crossings = countCrossings(positions, links);
+    }
+  }
 }
