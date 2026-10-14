@@ -1546,13 +1546,12 @@ function initGameUI() {
         copied = true;
       } catch {}
     })();
-    // Phones get the share sheet; everywhere else copies, like Wordle.
-    // navigator.share() must be called synchronously in the click handler
-    // (no await before it) or the browser drops the user gesture and the
-    // sheet never opens. (Aaron, 2026-10-14: sheet stopped appearing.)
-    let coarse = false;
-    try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch {}
-    if (coarse && navigator.share) {
+    // Try the native share sheet if available (phones). Must be called
+    // synchronously in the click handler (no await before it) or the
+    // browser drops the user gesture and the sheet never opens.
+    // (Aaron, 2026-10-14: sheet stopped appearing; coarse check was
+    // blocking Comet even though navigator.share exists.)
+    if (navigator.share) {
       try {
         // Pass url separately: Facebook ignores `text` but renders the URL
         // as a link preview, and this link's preview carries the score
