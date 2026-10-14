@@ -222,9 +222,18 @@ export function dailyShareResultText({ date, start, target, picks = [], moves = 
 export function dailyResultCode({ date, picks = [], won }) {
   return resultCode(dailyPuzzleNumber(date), picks, won);
 }
+// The link points at the site it was shared from: sixdegreesofrock.com in
+// production, the deploy preview while testing (so a test share previews
+// the test build).
+function shareOrigin() {
+  try {
+    if (typeof location !== 'undefined' && location.protocol === 'https:') return location.origin;
+  } catch {}
+  return 'https://sixdegreesofrock.com';
+}
 export function dailyShareLink({ date, picks = [], won } = {}) {
   const code = dailyResultCode({ date, picks, won });
-  return `https://sixdegreesofrock.com/game?s=1${code ? `&r=${code}` : ''}`;
+  return `${shareOrigin()}/game?s=1${code ? `&r=${code}` : ''}`;
 }
 
 // ---------------------------------------------------------------------------
