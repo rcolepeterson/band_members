@@ -195,24 +195,23 @@ export function fmtElapsed(seconds) {
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
 }
 
-// Spoiler-free share text (stars in brand palette): no slogan,
-// no timer (the clock counted idle hours, e.g. "194m"), just the score,
-// the stars and the link.
+// Spoiler-free share text: no slogan, no timer (the clock counted idle
+// hours, e.g. "194m"), just the score, the bands and the link. No stars in
+// the text (Aaron, 2026-10-14): the card's guitar picks carry the visual
+// score; stars in the text fought the picks for attention.
 //   6° Rock #17 🎸 Solved in 5 moves      ("Not solved" on a loss)
 // "6°" is the game's name (Aaron, 2026-10-11: 6° the game, Six Degrees the
 // graph); "Rock" stays so a stranger in a group text knows what it is.
-//   Rage Against the Machine ➡️ ⭐★☆⭐⭐ ➡️ Pearl Jam
-//   sixdegreesofrock.com/game?s=1   (?s=1: GA counts visits from shares)
+//   Rage Against the Machine ➡️ Pearl Jam
+//   sixdegreesofrock.com/game?s=1&r=17-xxxxx   (?s=1: GA counts visits from shares)
 // Plain words, not "5/4" (Cole, 2026-10-09): the fraction read as a grade
-// and nobody knew the 4 was the shortest path. One square per move, each in
-// that move's real color, so the squares always match the count.
+// and nobody knew the 4 was the shortest path.
 export function dailyShareResultText({ date, start, target, picks = [], moves = picks.length, par, won }) {
   const num = dailyPuzzleNumber(date);
   const score = won ? `Solved in ${moves} ${moves === 1 ? 'move' : 'moves'}` : 'Not solved';
-  const squares = picks.map((p) => dailyPickSquare(p.kind)).join('');
   return [
     `6\u00b0 Rock${num ? ` #${num}` : ''} 🎸 ${score}`,
-    [start, ...(squares ? [squares] : []), target].join(' ➡️ '),
+    [start, target].join(' ➡️ '),
     dailyShareLink({ date, picks, won }).replace(/^https:\/\//, ''),
   ].join('\n');
 }
