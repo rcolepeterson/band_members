@@ -1500,7 +1500,7 @@ export function initSigmaExplorer({
         nodes: view.nodes,
         links: view.links,
         anchorId,
-        minSeparation: 30,
+        minSeparation: 140,
       });
     } else {
       positions = radialLayout({
