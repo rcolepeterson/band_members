@@ -361,8 +361,10 @@ test('touring satellites cluster around their hub when anchored on a band', () =
   assert.match(fn, /hopOf\(satId\) <= hopOf\(hubId\)/, 'only satellites farther out than their hub move');
   assert.match(fn, /hub\.x \+ \(sat\.x - hub\.x\) \* factor/, 'satellites pull toward their hub');
   // And it only runs when the anchor is a band.
+  // Slice from 'let positions;' — the layout is now polygon for maxHops <= 3,
+  // radial for 4-6°, so 'const positions = radialLayout({' no longer exists.
   const call = EXPLORER.slice(
-    EXPLORER.indexOf('const positions = radialLayout({'),
+    EXPLORER.indexOf('let positions;'),
     EXPLORER.indexOf('viewGraph.clear();')
   );
   assert.match(call, /anchorIsBand/, 'clustering is band-anchor only');
