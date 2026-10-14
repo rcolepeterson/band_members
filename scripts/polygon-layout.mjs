@@ -77,6 +77,27 @@ export function popularityWeight(popularityScore, maxPopularity = 100) {
  * @returns {Map} positions - Map of id -> {x, y}
  */
 export function polygonLayout({ nodes, links, anchorId, minSeparation = 30 }) {
+  // ORDER-INDEPENDENCE: Sort nodes and links by ID before processing.
+  // The live site builds the graph in a different order than test harnesses
+  // (API order vs internal graph order). Without sorting, the same graph
+  // gives different layouts depending on input order — my test said Home=1
+  // crossing, live showed 7, both deterministic but different.
+  // Sorting ensures identical input → identical output regardless of
+  // the order the caller passes nodes/links in.
+  const sortedNodes = [...nodes].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  const sortedLinks = [...links].sort((a, b) => {
+    const aSrc = typeof a.source === 'object' ? a.source.id : a.source;
+    const aTgt = typeof a.target === 'object' ? a.target.id : a.target;
+    const bSrc = typeof b.source === 'object' ? b.source.id : b.source;
+    const bTgt = typeof b.target === 'object' ? b.target.id : b.target;
+    const srcCmp = String(aSrc).localeCompare(String(bSrc));
+    if (srcCmp !== 0) return srcCmp;
+    return String(aTgt).localeCompare(String(bTgt));
+  });
+  // Use sorted arrays from here on
+  nodes = sortedNodes;
+  links = sortedLinks;
+
   const positions = new Map();
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
   // Track claim popularity: for each node, the max popularity of bands that placed it
