@@ -418,7 +418,7 @@ test('analytics follow-ups: team browsers tagged internal, share links tagged, r
   }
   const game = readFileSync(new URL('../game/index.html', import.meta.url), 'utf8');
   assert.match(game, /\?utm_source=share&utm_medium=share_text/, 'a visit from a shared link reports source "share"');
-  assert.ok(src.includes("`https://sixdegreesofrock.com/game?s=1${code ? `&r=${code}` : ''}`"), 'share links keep ?s=1');
+  assert.ok(src.includes("`${shareOrigin()}/game?s=1${code ? `&r=${code}` : ''}`"), 'share links keep ?s=1');
   const retention = readFileSync(new URL('../netlify/functions/game_retention.mjs', import.meta.url), 'utf8');
   assert.match(retention, /path: '\/api\/game-retention'/);
   assert.match(retention, /max-age=300/, 'cached so it never costs Neon much');
