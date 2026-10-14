@@ -833,24 +833,59 @@ export function refinePolygon(positions, links, minSeparation) {
       }
       return c * 1000 + v;
     };
-    for (const id of candidates) {
-      const pos = positions.get(id);
-      const origX = pos.x, origY = pos.y;
-      let bestX = origX, bestY = origY, bestS = scoreOf();
-      if (bestS === 0) continue; // already perfect
-      for (let gx = minX; gx <= maxX; gx += step) {
-        for (let gy = minY; gy <= maxY; gy += step) {
-          pos.x = gx; pos.y = gy;
-          const s = scoreOf();
-          if (s < bestS) {
-            bestS = s; bestX = gx; bestY = gy;
-            if (s === 0) break;
+    // Iterate until convergence: fixing one crossing may create another.
+    // Recompute involved set each iteration to catch new crossings.
+    for (let p5iter = 0; p5iter < 5; p5iter++) {
+      const iterScore = scoreOf();
+      if (iterScore === 0) break;
+      let iterImproved = false;
+      // Recompute involved for this iteration
+      const involvedIter = new Set();
+      for (let i = 0; i < links.length; i++) {
+        for (let j = i + 1; j < links.length; j++) {
+          const l1 = links[i], l2 = links[j];
+          const a1 = typeof l1.source === 'object' ? l1.source.id : l1.source;
+          const b1 = typeof l1.target === 'object' ? l1.target.id : l1.target;
+          const a2 = typeof l2.source === 'object' ? l2.source.id : l2.source;
+          const b2 = typeof l2.target === 'object' ? l2.target.id : l2.target;
+          if (a1 === a2 || a1 === b2 || b1 === a2 || b1 === b2) continue;
+          const p1 = positions.get(a1), p2 = positions.get(b1);
+          const p3 = positions.get(a2), p4 = positions.get(b2);
+          if (p1 && p2 && p3 && p4 && si(p1, p2, p3, p4)) {
+            involvedIter.add(a1); involvedIter.add(b1); involvedIter.add(a2); involvedIter.add(b2);
           }
         }
-        if (bestS === 0) break;
       }
-      pos.x = bestX; pos.y = bestY;
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          const a = positions.get(ids[i]), b = positions.get(ids[j]);
+          if (Math.hypot(a.x - b.x, a.y - b.y) < minSeparation) {
+            involvedIter.add(ids[i]); involvedIter.add(ids[j]);
+          }
+        }
+      }
+      const candidatesIter = [...involvedIter].filter(id => id !== anchorId5).sort();
+      for (const id of candidatesIter) {
+        const pos = positions.get(id);
+        const origX = pos.x, origY = pos.y;
+        let bestX = origX, bestY = origY, bestS = scoreOf();
+        if (bestS === 0) continue;
+        for (let gx = minX; gx <= maxX; gx += step) {
+          for (let gy = minY; gy <= maxY; gy += step) {
+            pos.x = gx; pos.y = gy;
+            const s = scoreOf();
+            if (s < bestS) {
+              bestS = s; bestX = gx; bestY = gy;
+              if (s === 0) break;
+            }
+          }
+          if (bestS === 0) break;
+        }
+        if (bestX !== origX || bestY !== origY) iterImproved = true;
+        pos.x = bestX; pos.y = bestY;
+      }
       phase5Crossings = countCrossings(positions, links);
+      if (!iterImproved) break;
     }
   }
 }
