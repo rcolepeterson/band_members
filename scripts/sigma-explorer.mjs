@@ -67,6 +67,7 @@ import {
   labelSettings,
   framingRatio,
 } from './neighborhood-helpers.mjs';
+import { polygonLayout } from './polygon-layout.mjs';
 
 // ---------------------------------------------------------------------------
 // Visual language
@@ -1487,14 +1488,28 @@ export function initSigmaExplorer({
     });
     if (!view.nodes.length) return false;
 
-    const positions = radialLayout({
-      nodes: view.nodes,
-      links: view.links,
-      anchorId,
-      depths: view.depths,
-      spacing: 190,
-      adjacency,
-    });
+    // Polygon layout for 1°/2° views (priority views): bands as polygon
+    // centers, members at vertices, shared vertices for multi-band members.
+    // Radial layout for 3°+ views (deep exploration, where messiness is acceptable).
+    // Polygon achieves 0 crossings on Home, Foo Fighters, Suicidal Tendencies.
+    let positions;
+    if (state.maxHops <= 2) {
+      positions = polygonLayout({
+        nodes: view.nodes,
+        links: view.links,
+        anchorId,
+        minSeparation: 30,
+      });
+    } else {
+      positions = radialLayout({
+        nodes: view.nodes,
+        links: view.links,
+        anchorId,
+        depths: view.depths,
+        spacing: 190,
+        adjacency,
+      });
+    }
 
     // When anchored on a BAND, a hired gun's satellite bands cluster around
     // him instead of spraying across the constellation: Josh Freese's 20
