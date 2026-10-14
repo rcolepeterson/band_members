@@ -277,15 +277,22 @@ export function polygonLayout({ nodes, links, anchorId, minSeparation = 30 }) {
   }
   
   // Place any unvisited nodes (disconnected components)
+  // DETERMINISTIC: Use node index for angle, not Math.random().
+  // Math.random() made the layout non-deterministic: same input gave
+  // 1-7 crossings across runs for CH. Deterministic placement ensures
+  // everyone sees the same layout, and tests are reproducible.
+  let disconnectedIndex = 0;
+  const disconnectedCount = nodes.filter(n => !positions.has(n.id)).length;
   nodes.forEach(node => {
     if (!positions.has(node.id)) {
-      // Place at random offset from center (fallback)
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 500 + Math.random() * 200;
+      // Deterministic angle: spread disconnected nodes evenly around circle
+      const angle = (disconnectedIndex / Math.max(1, disconnectedCount)) * Math.PI * 2;
+      const dist = 500 + (disconnectedIndex % 5) * 50; // Deterministic variation
       positions.set(node.id, {
         x: Math.cos(angle) * dist,
         y: Math.sin(angle) * dist,
       });
+      disconnectedIndex++;
     }
   });
   
@@ -366,8 +373,10 @@ export function refinePolygon(positions, links, minSeparation) {
           b.y += uy * push;
           moved = true;
         } else if (dist <= 0.001) {
-          // Coincident nodes: push apart in random direction
-          const angle = Math.random() * Math.PI * 2;
+          // Coincident nodes: push apart in DETERMINISTIC direction.
+          // Math.random() made layout non-deterministic (CH: 1-7 crossings across runs).
+          // Fixed angle 0 (horizontal) ensures same input → same output.
+          const angle = 0;
           const push = minSeparation / 2;
           a.x -= Math.cos(angle) * push;
           a.y -= Math.sin(angle) * push;
