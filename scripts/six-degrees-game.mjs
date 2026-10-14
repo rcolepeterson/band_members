@@ -1513,16 +1513,37 @@ function initGameUI() {
   async function shareDailyText(btn, text) {
     const label = btn.textContent;
     if (dailyRun) gaEvent('share_clicked', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used });
+    // Copy to clipboard FIRST, always. Facebook and Instagram strip pre-filled
+    // text from the native share sheet (their policy, not a bug we can fix),
+    // so the clipboard is the reliable path: one paste restores the full
+    // result + link even when the app drops everything from the sheet.
+    // (Aaron, 2026-10-14: FB share opened an empty compose box.)
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    } catch {}
     // Phones get the share sheet; everywhere else copies, like Wordle.
     let coarse = false;
     try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch {}
     if (coarse && navigator.share) {
-      try { await navigator.share({ text }); return; } catch (err) {
-        if (err && err.name === 'AbortError') return;
+      try {
+        // Pass url separately: Facebook ignores `text` but renders the URL
+        // as a link preview from the /game OG tags. The text keeps its own
+        // bare link line for the clipboard/paste path.
+        await navigator.share({ title: '6° Rock', text, url: 'https://sixdegreesofrock.com/game?s=1' });
+        showToast(copied ? 'Shared! If the app dropped the text, just paste — it’s copied.' : 'Shared!', 'good');
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') {
+          // Sheet dismissed; the clipboard still has the result.
+          if (copied) showToast('Results copied — paste them into your post.', 'good');
+          return;
+        }
       }
     }
     try {
-      await navigator.clipboard.writeText(text);
+      if (!copied) await navigator.clipboard.writeText(text);
       showToast('Copied results to clipboard', 'good');
       btn.textContent = 'Copied!';
     } catch {
