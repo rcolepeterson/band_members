@@ -406,6 +406,8 @@ test('GA4: /game loads the tag, and the five game events fire once per occurrenc
   assert.match(src, /gaEvent\('game_completed', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used, par: dailyRun\.par \}, dailyRun\.id\)/);
   assert.match(src, /gaEvent\('game_gave_up', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used \}, dailyRun\.id\)/);
   assert.match(src, /hint_type: type === 'eliminate' \? 'cut_option' : 'check_band'/);
+  assert.match(src, /gaEvent\('game_left_midway', \{ puzzle_id: gaPuzzleId\(run\), moves_used: run\.hops_used, par: run\.par \}, run\.id\)/, 'leaving mid-puzzle, once per run');
+  assert.match(src, /run\.status !== 'active' \|\| !\(run\.hops_used > 0\)/, 'only an unfinished puzzle with a move made');
   assert.match(src, /gaEvent\('share_clicked', \{ puzzle_id: gaPuzzleId\(dailyRun\), moves_used: dailyRun\.hops_used \}\)/, 'one per click, no once-key');
 });
 
@@ -417,7 +419,7 @@ test('analytics follow-ups: team browsers tagged internal, share links tagged, r
     assert.match(html, /gtag\('config', 'G-E2SNSPFHGB', gaConfig\)/);
   }
   const game = readFileSync(new URL('../game/index.html', import.meta.url), 'utf8');
-  assert.match(game, /\?utm_source=share&utm_medium=share_text/, 'a visit from a shared link reports source "share"');
+  assert.match(game, /\?utm_source=share&utm_medium=social/, 'a visit from a shared link reports source "share", channel Organic Social');
   assert.ok(src.includes("`${shareOrigin()}/game?s=1${code ? `&r=${code}` : ''}`"), 'share links keep ?s=1');
   const retention = readFileSync(new URL('../netlify/functions/game_retention.mjs', import.meta.url), 'utf8');
   assert.match(retention, /path: '\/api\/game-retention'/);
