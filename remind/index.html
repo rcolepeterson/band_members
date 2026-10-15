@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <!-- /remind/ (Cole, 2026-10-15): a page to post on Facebook and the like.
+       It sells the game in two lines and takes an email for the daily
+       reminder right there, no puzzle or account first. Same signup as the
+       game's reminder box (/api/reminder-signup, double opt-in); signed-in
+       visitors turn on "Remind me daily" instead. -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-E2SNSPFHGB"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    var gaConfig = {};
+    try {
+      if (/[?&]internal=1\b/.test(location.search)) localStorage.setItem('sdr-internal', '1');
+      if (/[?&]internal=0\b/.test(location.search)) localStorage.removeItem('sdr-internal');
+      if (localStorage.getItem('sdr-internal') === '1') gaConfig.traffic_type = 'internal';
+    } catch (e) {}
+    gtag('config', 'G-E2SNSPFHGB', gaConfig);
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>6° Daily Reminder | Six Degrees of Rock</title>
+  <meta name="description" content="A new rock puzzle every morning: connect two famous bands through the musicians they share. Get one email when it's live. Free, no account." />
+  <link rel="canonical" href="https://sixdegreesofrock.com/remind/" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/game-icon-180.png" />
+  <meta name="theme-color" content="#05080d" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Six Degrees of Rock" />
+  <meta property="og:title" content="6° — a new rock puzzle every morning" />
+  <meta property="og:description" content="Connect two famous bands through the musicians they share. Get one email when it's live. Free, no account." />
+  <meta property="og:url" content="https://sixdegreesofrock.com/remind/" />
+  <meta property="og:image" content="https://sixdegreesofrock.com/game-og.png?v=3" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Six Degrees of Rock: a new rock puzzle every day." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="6° — a new rock puzzle every morning" />
+  <meta name="twitter:description" content="Connect two famous bands through the musicians they share. Get one email when it's live. Free, no account." />
+  <meta name="twitter:image" content="https://sixdegreesofrock.com/game-og.png?v=3" />
+
+  <link rel="preload" href="/vendor/fonts/boska-700.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/vendor/fonts.css" />
+  <style>
+    /* Same tokens and front-door look as /game/. */
+    @font-face{font-family:'Boska';src:url('/vendor/fonts/boska-700.woff2') format('woff2');
+      font-weight:700;font-style:normal;font-display:block}
+    :root{
+      --text-xs:clamp(0.8125rem,0.7625rem + 0.25vw,0.9375rem);
+      --text-base:clamp(1.0625rem,1.0125rem + 0.25vw,1.1875rem);
+      --space-1:0.25rem;--space-2:0.5rem;--space-3:0.75rem;--space-4:1rem;--space-6:1.5rem;--space-8:2rem;
+      --color-bg:#04070b;--color-border:rgba(225,244,255,0.24);
+      --color-text:#edf7ff;--color-text-muted:#c2d5e2;--color-text-inverse:#0f1319;
+      --color-primary:#8fe8f6;--color-primary-hover:#68bfd2;--color-error:#f2a7a7;
+      --radius-full:9999px;
+      --font-display:'Boska',Georgia,serif;--font-body:'Satoshi',system-ui,sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{-webkit-font-smoothing:antialiased;color-scheme:dark}
+    body{min-height:100dvh;font-family:var(--font-body);font-size:var(--text-base);line-height:1.6;
+      background:var(--color-bg);color:var(--color-text)}
+    button{cursor:pointer;border:none;background:none;font:inherit;color:inherit}
+    input{font:inherit;color:inherit}
+    .page{position:relative;min-height:100dvh;display:flex;flex-direction:column;align-items:center;
+      padding:var(--space-8) var(--space-4) var(--space-6);text-align:center;overflow:hidden}
+    .page::before{content:'';position:absolute;inset:0;pointer-events:none;
+      background:radial-gradient(circle at 50% 30%,rgba(126,145,160,0.20) 0%,rgba(82,174,182,0.14) 26%,transparent 55%)}
+    .inner{position:relative;flex:1;width:100%;max-width:360px;display:flex;flex-direction:column;
+      align-items:center;justify-content:center}
+    .logo{font-family:var(--font-display);font-weight:800;font-size:clamp(5.5rem,30vw,8rem);line-height:1}
+    .line{font-size:clamp(1.15rem,5.2vw,1.35rem);line-height:1.4;margin-top:var(--space-4);max-width:17em}
+    .kicker{display:block;font-weight:700;margin-bottom:var(--space-1)}
+    .ask{margin-top:var(--space-8);font-weight:700}
+    form,.signed-in{display:flex;flex-direction:column;gap:var(--space-3);width:min(100%,300px);margin-top:var(--space-3)}
+    form[hidden],.signed-in[hidden]{display:none}
+    input[type=email]{min-height:54px;border-radius:var(--radius-full);border:1px solid var(--color-border);
+      background:rgba(9,16,24,0.58);padding:0 var(--space-6);text-align:center}
+    input[type=email]:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px}
+    .primary{min-height:54px;border-radius:var(--radius-full);font-weight:700;font-size:1.1rem;
+      background:var(--color-primary);color:var(--color-text-inverse)}
+    .primary:hover{background:var(--color-primary-hover)}
+    .primary:disabled{opacity:.6;cursor:default}
+    .primary:focus-visible,.play:focus-visible{outline:2px solid var(--color-primary);outline-offset:3px}
+    .fine{margin-top:var(--space-3);font-size:var(--text-xs);color:var(--color-text-muted);max-width:22em}
+    .status{margin-top:var(--space-3);min-height:1.6em;max-width:20em}
+    .status.is-error{color:var(--color-error)}
+    .play{display:inline-flex;align-items:center;justify-content:center;min-height:48px;margin-top:var(--space-6);
+      padding:0 var(--space-6);border-radius:var(--radius-full);border:1px solid var(--color-border);
+      color:var(--color-text);text-decoration:none;font-weight:700}
+    .play:hover{border-color:rgba(143,232,246,.6)}
+    .credit{position:relative;margin-top:var(--space-6);font-size:var(--text-xs);color:var(--color-text-muted)}
+    .credit a{color:inherit;text-decoration:underline;text-decoration-color:rgba(194,213,226,.35);text-underline-offset:3px}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="inner">
+      <h1 class="logo" aria-label="6 degrees">6&deg;</h1>
+      <p class="line"><span class="kicker">A daily rock puzzle.</span> Connect two famous bands through the musicians they share. A new one every morning.</p>
+
+      <p class="ask" id="ask">Get it in your inbox</p>
+      <form id="remind-form" novalidate aria-labelledby="ask">
+        <input type="email" id="email" name="email" autocomplete="email" inputmode="email"
+               placeholder="you@email.com" aria-label="Your email" required />
+        <button type="submit" class="primary">Remind me daily</button>
+      </form>
+      <div class="signed-in" id="signed-in" hidden>
+        <button type="button" class="primary" id="remind-account">Remind me daily</button>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <p class="fine" id="fine">One email each morning when the puzzle is live, skipped on days you&rsquo;ve played. Free, no account. Unsubscribe in one tap.</p>
+
+      <a class="play" href="/game/">Play today&rsquo;s puzzle</a>
+    </div>
+    <p class="credit"><a href="/privacy.html">Privacy</a> &middot; <a href="/">Six Degrees of Rock</a></p>
+  </main>
+  <script>
+    (function () {
+      var form = document.getElementById('remind-form');
+      var input = document.getElementById('email');
+      var status = document.getElementById('status');
+      var signedInBox = document.getElementById('signed-in');
+      var accountBtn = document.getElementById('remind-account');
+
+      function say(text, isError) {
+        status.textContent = text;
+        status.classList.toggle('is-error', !!isError);
+      }
+      function track(method) {
+        try { gtag('event', 'reminder_signup', { method: method, where: 'remind_page' }); } catch (e) {}
+      }
+
+      // Signed in on this device (same check as the game): one tap, no email.
+      var token = null;
+      try {
+        var user = JSON.parse(localStorage.getItem('bmft-user') || 'null');
+        if (user && typeof user.token === 'string' && user.token.length >= 8 && user.email) token = user.token;
+      } catch (e) {}
+      if (token) {
+        form.hidden = true;
+        signedInBox.hidden = false;
+        accountBtn.addEventListener('click', function () {
+          accountBtn.disabled = true;
+          fetch('/api/notification-prefs', {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
+            body: JSON.stringify({ daily_reminder: true })
+          }).then(function (res) {
+            if (!res.ok) throw new Error('save failed');
+            signedInBox.hidden = true;
+            say('You’re set. We’ll email you each morning when the puzzle is live.');
+            track('account');
+          }).catch(function () {
+            accountBtn.disabled = false;
+            say('Couldn’t save that. Try again in a minute.', true);
+          });
+        });
+        return;
+      }
+
+      // Guests: the same guest id the game uses on this device, so playing
+      // later counts as "already played" for the reminder.
+      function guestSessionId() {
+        try {
+          var id = localStorage.getItem('sdr-guest-session');
+          if (!id) {
+            id = 'g_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
+            localStorage.setItem('sdr-guest-session', id);
+          }
+          return id;
+        } catch (e) { return 'g_fallback_' + Date.now(); }
+      }
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var email = input.value.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          say('Enter your email address.', true);
+          input.focus();
+          return;
+        }
+        var btn = form.querySelector('button');
+        btn.disabled = true;
+        say('');
+        fetch('/api/reminder-signup', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email: email, guest_session_id: guestSessionId() })
+        }).then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (data) {
+            if (!res.ok || data.ok === false) throw new Error((data && data.error) || 'failed');
+            return data;
+          });
+        }).then(function (data) {
+          form.hidden = true;
+          try { localStorage.setItem('sdr-guest-reminder', 'pending'); } catch (e) {}
+          say(data.status === 'already_on'
+            ? 'You’re already on the list. See you tomorrow morning.'
+            : 'Check your email and tap the link to start your reminders.');
+          track('guest');
+        }).catch(function (err) {
+          btn.disabled = false;
+          say(/real email/.test(err.message) ? 'That email doesn’t look right.'
+            : /Too many/.test(err.message) ? 'Too many tries. Try again later.'
+            : 'Couldn’t save that. Try again in a minute.', true);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

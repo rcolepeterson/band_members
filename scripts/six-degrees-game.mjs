@@ -1819,6 +1819,7 @@ function initGameUI() {
     });
     if (!res.ok) throw new Error('save failed');
     reminderState = Promise.resolve(true);
+    gaEvent('reminder_signup', { method: 'account', where: 'game' });
     window.dispatchEvent(new Event('sdr-reminder-on'));
   }
   function reminderIsOn() {
@@ -1858,6 +1859,7 @@ function initGameUI() {
       try {
         await dailyFetch('/api/reminder-signup', { method: 'POST', body: JSON.stringify({ email }) });
         try { localStorage.setItem(GUEST_REMINDER_KEY, 'pending'); } catch {}
+        gaEvent('reminder_signup', { method: 'guest', where: 'game' });
         window.dispatchEvent(new Event('sdr-reminder-on'));
         form.replaceChildren(document.createTextNode('Check your email and tap the link to start your reminders.'));
       } catch (err) {
