@@ -391,6 +391,14 @@ export function compactPolygon(positions, links, minSeparation) {
   }
 
   for (let iter = 0; iter < 20; iter++) {
+    // Compute global centroid for a gentle bias term
+    let gcx = 0, gcy = 0;
+    for (const id of ids) {
+      const p = positions.get(id);
+      gcx += p.x; gcy += p.y;
+    }
+    gcx /= ids.length; gcy /= ids.length;
+
     let moved = false;
     for (const id of ids) {
       const p = positions.get(id);
@@ -408,7 +416,13 @@ export function compactPolygon(positions, links, minSeparation) {
       if (valid === 0) continue;
       nx /= valid; ny /= valid;
 
-      const dx = nx - p.x, dy = ny - p.y;
+      // Blend in 25% global-centroid pull so peripheral bands (e.g. Ka-Chunk
+      // whose neighbors are also peripheral) still drift toward center.
+      // (Aaron, 2026-10-15: Ka-Chunk too far right.)
+      const bx = nx * 0.75 + gcx * 0.25;
+      const by = ny * 0.75 + gcy * 0.25;
+
+      const dx = bx - p.x, dy = by - p.y;
       const dist = Math.hypot(dx, dy);
       if (dist < 1) continue;
 
