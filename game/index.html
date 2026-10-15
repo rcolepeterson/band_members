@@ -28,7 +28,10 @@
     // visit from a share is reported as source "share" without long utm
     // tags in the share text or the address bar.
     if (/[?&]s=1\b/.test(location.search)) {
-      gaConfig.page_location = location.origin + location.pathname + '?utm_source=share&utm_medium=share_text';
+      // utm_medium=social (2026-10-15): GA files it under Organic Social
+      // with source "share". share_text isn't a medium GA knows, so share
+      // visits used to land in "Unassigned".
+      gaConfig.page_location = location.origin + location.pathname + '?utm_source=share&utm_medium=social';
     }
     gtag('config', 'G-E2SNSPFHGB', gaConfig);
   </script>

@@ -1580,6 +1580,16 @@ function initGameUI() {
   function gaCountsRun(run) {
     return Boolean(run && run.id != null) && (practiceMode || (run.run_number || 1) === 1);
   }
+  // GA4 (2026-10-15): who walks away mid-puzzle, and after how many moves.
+  // Sent once per run when the page is hidden (tab closed, app switched)
+  // with at least one move made and the puzzle unfinished. Someone who comes
+  // back and finishes still counts here once, and in game_completed.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') return;
+    const run = dailyRun;
+    if (!run || run.status !== 'active' || !(run.hops_used > 0) || !gaCountsRun(run)) return;
+    gaEvent('game_left_midway', { puzzle_id: gaPuzzleId(run), moves_used: run.hops_used, par: run.par }, run.id);
+  });
   function gaHint(run, type) {
     if (!gaCountsRun(run)) return;
     gaEvent('hint_used', {
