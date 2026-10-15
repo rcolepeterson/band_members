@@ -320,8 +320,96 @@ export function polygonLayout({ nodes, links, anchorId, minSeparation = 30 }) {
   // REFINEMENT: separation + crossing reduction
   // This is the polygon equivalent of the ring layout's refineRingAngles + relaxLayout
   refinePolygon(positions, links, minSeparation);
+
+  // COMPACTION: pull nodes toward centroid to tighten the layout.
+  // The camera auto-fits the graph bounds, so absolute scale is invisible —
+  // only the SHAPE matters. This reduces empty space while preserving
+  // zero crossings and minimum separation. (Aaron, 2026-10-15: Home was
+  // too spread out; radius reduction had no visual effect due to auto-fit.)
+  compactPolygon(positions, links, minSeparation);
   
   return positions;
+}
+
+/**
+ * Compaction pass: pull nodes toward the centroid to tighten the layout.
+ * Preserves zero crossings and minimum separation — only accepts moves that
+ * don't increase crossings and don't violate minSeparation.
+ * The camera auto-fits graph bounds, so this changes the visible SHAPE
+ * (less empty space), not just the absolute scale.
+ */
+export function compactPolygon(positions, links, minSeparation) {
+  const ids = [...positions.keys()];
+  if (ids.length < 3) return;
+
+  const getId = (l, key) => typeof l[key] === 'object' ? l[key].id : l[key];
+
+  // Helper: count crossings (reuse the module's countCrossings if available)
+  const countX = () => {
+    let c = 0;
+    for (let i = 0; i < links.length; i++) {
+      for (let j = i + 1; j < links.length; j++) {
+        const a1 = positions.get(getId(links[i], 'source'));
+        const a2 = positions.get(getId(links[i], 'target'));
+        const b1 = positions.get(getId(links[j], 'source'));
+        const b2 = positions.get(getId(links[j], 'target'));
+        if (!a1 || !a2 || !b1 || !b2) continue;
+        // Skip if they share an endpoint
+        const idsA = [getId(links[i], 'source'), getId(links[i], 'target')];
+        const idsB = [getId(links[j], 'source'), getId(links[j], 'target')];
+        if (idsA.some(id => idsB.includes(id))) continue;
+        if (segmentsIntersect(a1, a2, b1, b2)) c++;
+      }
+    }
+    return c;
+  };
+
+  const minDist = () => {
+    let m = Infinity;
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = positions.get(ids[i]), b = positions.get(ids[j]);
+        m = Math.min(m, Math.hypot(a.x - b.x, a.y - b.y));
+      }
+    }
+    return m;
+  };
+
+  // Don't try to compact if there are already crossings — that's Phase 5's job
+  const startCrossings = countX();
+  if (startCrossings > 0) return;
+
+  for (let iter = 0; iter < 20; iter++) {
+    // Compute centroid
+    let cx = 0, cy = 0;
+    for (const id of ids) {
+      const p = positions.get(id);
+      cx += p.x; cy += p.y;
+    }
+    cx /= ids.length; cy /= ids.length;
+
+    let moved = false;
+    for (const id of ids) {
+      const p = positions.get(id);
+      const dx = cx - p.x, dy = cy - p.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 1) continue;
+
+      // Try moving 15% closer to centroid
+      const step = 0.15;
+      const nx = p.x + dx * step, ny = p.y + dy * step;
+      const ox = p.x, oy = p.y;
+      p.x = nx; p.y = ny;
+
+      // Accept only if no new crossings and no separation violation
+      if (countX() === 0 && minDist() >= minSeparation * 0.95) {
+        moved = true;
+      } else {
+        p.x = ox; p.y = oy; // revert
+      }
+    }
+    if (!moved) break;
+  }
 }
 
 /**
