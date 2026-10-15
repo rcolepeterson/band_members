@@ -7,6 +7,8 @@ import { readFileSync } from 'node:fs';
 
 import {
   buildDailyReminderEmail,
+  buildReminderConfirmEmail,
+  selectReminderRecipients,
   reminderUnsubscribeUrl,
   runDailyReminders,
   REMINDER_SEND_CAP,
@@ -59,7 +61,10 @@ test('who gets it: opted in, not a guest, not reminded today, not already playin
   assert.match(q, /u\.is_guest = false/);
   assert.match(q, /from daily_reminder_log l where l\.user_id = u\.id and l\.chain_date = \$\{date\}/);
   assert.match(q, /from daily_runs r where r\.user_id = u\.id and r\.chain_date = \$\{date\}/);
-  assert.match(q, /!isPlaceholderEmail\(r\.email\)/);
+  assert.match(q, /isPlaceholderEmail\(r\.email\)\) return false;/);
+  // Guests count only after confirming, with the same skip-if-played rule.
+  assert.match(q, /from guest_reminders g\s+where g\.confirmed_at is not null/);
+  assert.match(q, /from daily_runs r where r\.user_id = g\.user_id and r\.chain_date = \$\{date\}/);
 });
 
 test('the opt-in defaults to off', () => {
@@ -145,11 +150,83 @@ test('the game asks once, after a finished puzzle, signed-in players only', () =
 test('under the countdown: "Email me when it\'s live" until they opt in', () => {
   const engine = read('../scripts/six-degrees-game.mjs');
   const link = engine.match(/function reminderLinkEl\(\) \{[\s\S]*?\n  \}\n/)[0];
-  assert.match(link, /if \(!isSignedIn\(\)\) return null;/, 'never for guests');
+  // Guests get an email box on tap instead (2026-10-15).
+  assert.match(link, /if \(practiceMode \|\| guestReminderAsked\(\)\) return null;/);
+  assert.match(link, /const form = guestReminderFormEl\(''\);/);
   assert.match(link, /Email me when it\\u2019s live/);
   assert.match(link, /hidden>/, 'hidden until the server says reminders are off');
   assert.match(link, /if \(on === false\) p\.hidden = false;/);
   // Both finished screens (won, and out of moves / gave up) carry it, daily only.
   const calls = engine.match(/finish\.appendChild\(nextChainCountdownEl\(\)\);\n\s*const remind = reminderLinkEl\(\);/g) || [];
   assert.equal(calls.length, 2);
+});
+
+// --- Guests (Cole, 2026-10-15): reminder with just an email, double opt-in.
+import { signUp, confirmUrlFor, CONFIRM_RESEND_MS } from '../netlify/functions/reminder_signup.mjs';
+
+function guestSql({ guest = { id: 'g1' }, existing = null } = {}) {
+  const writes = [];
+  const sql = async (strings, ...values) => {
+    const q = strings.join('?');
+    if (q.includes('from users where guest_session_id')) return guest ? [guest] : [];
+    if (q.includes('select * from guest_reminders')) return existing ? [existing] : [];
+    if (q.includes('insert into guest_reminders')) { writes.push(values); return []; }
+    return [];
+  };
+  return { sql, writes };
+}
+
+test('a guest gets a confirmation email first, nothing else', async () => {
+  const { sql, writes } = guestSql();
+  const sent = [];
+  const r = await signUp(sql, { email: 'fan@example.com', guestSessionId: 'g_abc12345', send: async (m) => { sent.push(m); return { ok: true }; } });
+  assert.equal(r.status, 'check_email');
+  assert.equal(writes.length, 1, 'saved unconfirmed');
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, 'fan@example.com');
+  assert.equal(sent[0].subject, 'Confirm your daily 6° reminder');
+  assert.ok(sent[0].text.includes(confirmUrlFor(writes[0][2])), 'the link carries the saved confirm token');
+});
+
+test('no guest row, no signup; no repeat confirmation inside the hour', async () => {
+  assert.equal((await signUp(guestSql({ guest: null }).sql, { email: 'a@b.co', guestSessionId: 'g_x', send: async () => ({ ok: true }) })).error, 'play a puzzle first');
+  let sends = 0;
+  const recent = { email: 'a@b.co', confirm_sent_at: new Date(Date.now() - 60_000).toISOString(), confirmed_at: null };
+  assert.equal((await signUp(guestSql({ existing: recent }).sql, { email: 'a@b.co', guestSessionId: 'g_x', send: async () => { sends += 1; return { ok: true }; } })).status, 'check_email');
+  const on = { email: 'a@b.co', confirmed_at: new Date().toISOString() };
+  assert.equal((await signUp(guestSql({ existing: on }).sql, { email: 'a@b.co', guestSessionId: 'g_x', send: async () => { sends += 1; return { ok: true }; } })).status, 'already_on');
+  assert.equal(sends, 0);
+  assert.equal(CONFIRM_RESEND_MS, 3600000);
+});
+
+test('a confirmed guest is a recipient; an address is emailed once even if it is both', async () => {
+  __resetReminderSchemaForTests();
+  const sql = async (strings) => {
+    const q = strings.join('?');
+    if (q.includes('from users u')) return [user('a', 'fan@example.com')];
+    if (q.includes('from guest_reminders g')) return [{ id: 'g1', email: 'FAN@example.com', unsubscribe_token: 't1' }, { id: 'g2', email: 'guest@example.com', unsubscribe_token: 't2' }];
+    return [];
+  };
+  const rows = await selectReminderRecipients(sql, '2026-10-15');
+  assert.deepEqual(rows.map((r) => r.id), ['a', 'g2']);
+});
+
+test('the confirm email and the unsubscribe that forgets a guest', () => {
+  const { text, html } = buildReminderConfirmEmail({ confirmUrl: 'https://x/confirm' });
+  assert.ok(text.includes('https://x/confirm') && html.includes('href="https://x/confirm"'));
+  assert.match(text, /Didn't ask for this\? Ignore it/);
+  const unsub = read('../netlify/functions/unsubscribe.mjs');
+  assert.match(unsub, /if \(!rows\.length && dailyOnly\) \{[\s\S]*?delete from guest_reminders where unsubscribe_token = \$\{token\}/);
+  const signup = read('../netlify/functions/reminder_signup.mjs');
+  assert.match(signup, /bucket: `reminder-signup:ip:\$\{clientIp\(req\)\}`, limit: 5/);
+  assert.match(signup, /domain\.endsWith\('\.local'\)/, 'never our own placeholder addresses');
+  assert.match(read('../netlify/functions/migrate.mjs'), /create table if not exists guest_reminders/);
+  assert.match(read('../privacy.html'), /Daily puzzle reminder\./);
+});
+
+test('the game offers guests the email box once, after a daily', () => {
+  const engine = read('../scripts/six-degrees-game.mjs');
+  assert.match(engine, /if \(!practiceMode && shouldAskGuestForReminder\(\)\) \{[\s\S]{0,120}guestReminderFormEl\('Or just get a reminder tomorrow:'\)/);
+  assert.match(engine, /await dailyFetch\('\/api\/reminder-signup', \{ method: 'POST', body: JSON\.stringify\(\{ email \}\) \}\);/);
+  assert.match(engine, /Check your email and tap the link to start your reminders\./);
 });

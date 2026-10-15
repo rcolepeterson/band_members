@@ -903,6 +903,7 @@ function initGameUI() {
       .sd-countdown{text-align:center;font-size:.85rem;color:var(--color-text-muted);margin:8px 0 0}
       .sd-countdown strong{color:var(--color-text);font-variant-numeric:tabular-nums;letter-spacing:.04em}
       .sd-remind-link{margin-top:4px}.sd-remind-link[hidden]{display:none}
+      .sd-remind-form{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;margin-top:8px}.sd-remind-form input{flex:1 1 180px;max-width:240px;min-height:40px;padding:6px 10px;border-radius:8px;border:1px solid var(--color-border,#3a352c);background:transparent;color:inherit;font:inherit}.sd-remind-form button{min-height:40px}
       .sd-link{flex:none;color:var(--color-text-faint);font-size:.8rem}
       .sd-via{display:inline-flex;flex-direction:column;align-items:center;gap:1px;line-height:1.1;max-width:110px;text-align:center}
       .sd-ico{width:1.05em;height:1.05em;flex:none;vertical-align:-0.18em}
@@ -1774,6 +1775,10 @@ function initGameUI() {
         const nudge = el('<p class="sd-guest"><button type="button" class="sd-linkbtn">Create a free account</button> to save your streak and stats!</p>');
         nudge.querySelector('button').addEventListener('click', requestDailySignup);
         c.appendChild(nudge);
+        if (!practiceMode && shouldAskGuestForReminder()) {
+          try { localStorage.setItem(REMINDER_PROMPT_KEY, '1'); } catch {}
+          c.appendChild(guestReminderFormEl('Or just get a reminder tomorrow:'));
+        }
       } else if (!practiceMode && shouldAskForReminder()) {
         // Once, after any finished puzzle: the moment people think "tomorrow".
         try { localStorage.setItem(REMINDER_PROMPT_KEY, '1'); } catch {}
@@ -1816,11 +1821,61 @@ function initGameUI() {
     return reminderState;
   }
 
+  // Guests get the reminder with just an email (Cole, 2026-10-15). The
+  // server emails a confirmation link first; reminders start once it's
+  // clicked (reminder_signup.mjs). This device remembers it asked.
+  const GUEST_REMINDER_KEY = 'sdr-guest-reminder';
+  function guestReminderAsked() {
+    try { return Boolean(localStorage.getItem(GUEST_REMINDER_KEY)); } catch { return false; }
+  }
+  function shouldAskGuestForReminder() {
+    try { return !isSignedIn() && !guestReminderAsked() && !localStorage.getItem(REMINDER_PROMPT_KEY); } catch { return false; }
+  }
+  function guestReminderFormEl(lead) {
+    const form = el('<form class="sd-guest sd-reminder sd-remind-form" novalidate>'
+      + '<span></span>'
+      + '<input type="email" name="email" autocomplete="email" inputmode="email" placeholder="you@email.com" aria-label="Your email" required>'
+      + '<button type="submit" class="sd-linkbtn">Remind me</button></form>');
+    form.querySelector('span').textContent = lead;
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const input = form.querySelector('input');
+      const btn = form.querySelector('button');
+      const email = input.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { input.focus(); input.setCustomValidity('Enter your email'); input.reportValidity(); return; }
+      input.setCustomValidity('');
+      btn.disabled = true;
+      try {
+        await dailyFetch('/api/reminder-signup', { method: 'POST', body: JSON.stringify({ email }) });
+        try { localStorage.setItem(GUEST_REMINDER_KEY, 'pending'); } catch {}
+        window.dispatchEvent(new Event('sdr-reminder-on'));
+        form.replaceChildren(document.createTextNode('Check your email and tap the link to start your reminders.'));
+      } catch (err) {
+        btn.disabled = false;
+        const msg = err && /real email/.test(err.message) ? 'That email doesn\u2019t look right.' : 'Couldn\u2019t save that. Try again in a minute.';
+        let note = form.querySelector('.sd-remind-err');
+        if (!note) { note = el('<span class="sd-remind-err"></span>'); form.appendChild(note); }
+        note.textContent = msg;
+      }
+    });
+    return form;
+  }
+
   // "Email me when it's live" under the countdown (Cole, 2026-10-11): stays
   // until they opt in, signed-in players only. Hidden while we check, and
   // if the check fails, so nobody is asked who already said yes.
   function reminderLinkEl() {
-    if (!isSignedIn()) return null;
+    if (!isSignedIn()) {
+      if (practiceMode || guestReminderAsked()) return null;
+      const p = el('<p class="sd-countdown sd-remind-link"><button type="button" class="sd-linkbtn">Email me when it\u2019s live</button></p>');
+      window.addEventListener('sdr-reminder-on', () => { if (p.isConnected && p.querySelector('button')) p.hidden = true; }, { once: true });
+      p.querySelector('button').addEventListener('click', () => {
+        const form = guestReminderFormEl('');
+        p.replaceWith(form);
+        form.querySelector('input').focus();
+      });
+      return p;
+    }
     const p = el('<p class="sd-countdown sd-remind-link" hidden><button type="button" class="sd-linkbtn">Email me when it\u2019s live</button></p>');
     reminderIsOn().then((on) => { if (on === false) p.hidden = false; });
     // Said yes in the results popup: this one goes too.

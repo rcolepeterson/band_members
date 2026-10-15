@@ -557,6 +557,19 @@ export default async (req) => {
         primary key (user_id, chain_date)
       )
     `;
+    // Guests can get the reminder too (2026-10-15): an email on their guest
+    // row, used only after they click the confirmation link.
+    await sql`
+      create table if not exists guest_reminders (
+        user_id           uuid primary key references users(id) on delete cascade,
+        email             text not null,
+        confirm_token     text not null unique,
+        unsubscribe_token text not null unique,
+        confirmed_at      timestamptz,
+        confirm_sent_at   timestamptz,
+        created_at        timestamptz not null default now()
+      )
+    `;
     results.push('daily reminder prefs + log ready');
 
     await sql`drop trigger if exists notification_prefs_set_updated_at on notification_prefs`;
