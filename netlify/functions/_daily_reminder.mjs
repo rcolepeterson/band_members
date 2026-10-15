@@ -52,6 +52,17 @@ export function ensureReminderSchema(sql) {
           primary key (user_id, chain_date)
         )
       `;
+      await sql`
+        create table if not exists guest_reminders (
+          user_id           uuid primary key references users(id) on delete cascade,
+          email             text not null,
+          confirm_token     text not null unique,
+          unsubscribe_token text not null unique,
+          confirmed_at      timestamptz,
+          confirm_sent_at   timestamptz,
+          created_at        timestamptz not null default now()
+        )
+      `;
     })().catch((err) => { schemaReady = null; throw err; });
   }
   return schemaReady;
@@ -82,7 +93,10 @@ export function buildDailyReminderEmail({ date, unsubscribeUrl }) {
   return { subject, html, text };
 }
 
-// Opted in, real account, not reminded today, hasn't started today's puzzle.
+// Opted in, not reminded today, hasn't started today's puzzle: accounts
+// that turned it on, and guests who confirmed an email (their plays are on
+// their guest row, so "already played" works for them too). One email per
+// address even if someone is both.
 export async function selectReminderRecipients(sql, date) {
   const rows = await sql`
     select u.id, u.email, p.unsubscribe_token
@@ -95,7 +109,40 @@ export async function selectReminderRecipients(sql, date) {
       and not exists (select 1 from daily_runs r where r.user_id = u.id and r.chain_date = ${date})
     order by u.created_at
   `;
-  return rows.filter((r) => r.email && !isPlaceholderEmail(r.email));
+  const guests = await sql`
+    select g.user_id as id, g.email, g.unsubscribe_token
+    from guest_reminders g
+    where g.confirmed_at is not null
+      and not exists (select 1 from daily_reminder_log l where l.user_id = g.user_id and l.chain_date = ${date})
+      and not exists (select 1 from daily_runs r where r.user_id = g.user_id and r.chain_date = ${date})
+    order by g.created_at
+  `;
+  const seen = new Set();
+  return [...rows, ...guests].filter((r) => {
+    if (!r.email || isPlaceholderEmail(r.email)) return false;
+    const key = String(r.email).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+// A guest's "remind me" asks them to confirm first, so nobody can sign up
+// someone else's address.
+export function buildReminderConfirmEmail({ confirmUrl }) {
+  const subject = 'Confirm your daily 6° reminder';
+  const text =
+    `Tap to get one email each morning when the new 6° puzzle is live:\n` +
+    `${confirmUrl}\n\n` +
+    `Didn't ask for this? Ignore it and you won't hear from us.\n`;
+  const html =
+    `<div style="font-family: Georgia, serif; color: #e8e4da; background: #14120e; padding: 32px; max-width: 560px;">` +
+    `<p style="font-size: 18px; line-height: 1.6; margin: 0 0 12px;">One email each morning when the new 6° puzzle is live.</p>` +
+    `<p style="margin: 0;"><a href="${confirmUrl}" style="color: #c9a96a;">Yes, remind me</a></p>` +
+    `<hr style="border: none; border-top: 1px solid #3a352c; margin: 24px 0;" />` +
+    `<p style="font-size: 12px; color: #8a8478;">Didn\u2019t ask for this? Ignore it and you won\u2019t hear from us.</p>` +
+    `</div>`;
+  return { subject, html, text };
 }
 
 export async function runDailyReminders(sql, { date = pacificDate(), dryRun = false, sendEmail } = {}) {

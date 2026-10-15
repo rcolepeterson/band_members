@@ -76,6 +76,17 @@ export default async (req) => {
       where unsubscribe_token = ${token}
       limit 1
     `;
+    if (!rows.length && dailyOnly) {
+      // A guest's reminder (guest_reminders): stopping it forgets the email.
+      const gone = await sql`delete from guest_reminders where unsubscribe_token = ${token} returning user_id`;
+      if (gone.length) {
+        return page({
+          title: 'Unsubscribed — Six Degrees of Rock',
+          heading: 'No more daily reminders.',
+          body: 'You won\u2019t get the 6\u00b0 puzzle reminder again, and we\u2019ve deleted your email. Today\u2019s puzzle is always at <a href="https://sixdegreesofrock.com/game/">sixdegreesofrock.com/game</a>.',
+        });
+      }
+    }
     if (!rows.length) {
       return page({
         title: 'Unsubscribe — Six Degrees of Rawk',
