@@ -158,7 +158,7 @@ export function polygonLayout({ nodes, links, anchorId, minSeparation = 30 }) {
       // ORDER BANDS: Place bands that share members ADJACENT, not opposite
       // This prevents shared vertices (like Matt) from having edges that cross
       // e.g., BBRU and Ka-Chunk share Matt, so they should be adjacent, not opposite corners
-      radius = Math.max(minSeparation * 3, N * minSeparation * 0.8);
+      radius = Math.max(minSeparation * 2, N * minSeparation * 0.5);
       const dxToParent = current.parentX - currentPos.x;
       const dyToParent = current.parentY - currentPos.y;
       const angleToParent = Math.atan2(dyToParent, dxToParent);
