@@ -379,27 +379,44 @@ export function compactPolygon(positions, links, minSeparation) {
   const startCrossings = countX();
   if (startCrossings > 0) return;
 
-  for (let iter = 0; iter < 20; iter++) {
-    // Compute centroid
-    let cx = 0, cy = 0;
-    for (const id of ids) {
-      const p = positions.get(id);
-      cx += p.x; cy += p.y;
+  // Build neighbor map for band-aware compaction
+  const neighbors = new Map();
+  for (const id of ids) neighbors.set(id, []);
+  for (const l of links) {
+    const a = getId(l, 'source'), b = getId(l, 'target');
+    if (neighbors.has(a) && neighbors.has(b)) {
+      neighbors.get(a).push(b);
+      neighbors.get(b).push(a);
     }
-    cx /= ids.length; cy /= ids.length;
+  }
 
+  for (let iter = 0; iter < 20; iter++) {
     let moved = false;
     for (const id of ids) {
       const p = positions.get(id);
-      const dx = cx - p.x, dy = cy - p.y;
+      const nbrs = neighbors.get(id);
+      if (!nbrs || nbrs.length === 0) continue;
+
+      // Pull toward centroid of NEIGHBORS (not global centroid).
+      // This keeps members near their bands while tightening the overall shape.
+      // (Aaron, 2026-10-15: global pull ripped Elijah/Cameron away from their bands.)
+      let nx = 0, ny = 0, valid = 0;
+      for (const nid of nbrs) {
+        const np = positions.get(nid);
+        if (np) { nx += np.x; ny += np.y; valid++; }
+      }
+      if (valid === 0) continue;
+      nx /= valid; ny /= valid;
+
+      const dx = nx - p.x, dy = ny - p.y;
       const dist = Math.hypot(dx, dy);
       if (dist < 1) continue;
 
-      // Try moving 15% closer to centroid
+      // Try moving 15% closer to neighbor-centroid
       const step = 0.15;
-      const nx = p.x + dx * step, ny = p.y + dy * step;
+      const tx = p.x + dx * step, ty = p.y + dy * step;
       const ox = p.x, oy = p.y;
-      p.x = nx; p.y = ny;
+      p.x = tx; p.y = ty;
 
       // Accept only if no new crossings and no separation violation
       if (countX() === 0 && minDist() >= minSeparation * 0.95) {
