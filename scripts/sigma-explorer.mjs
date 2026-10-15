@@ -1181,7 +1181,7 @@ export function initSigmaExplorer({
   // Member (musician) names for the suggestion dropdown: same treatment as
   // bands above, so typing "chris sh" suggests Chris Shinn. (2026-10-12)
   const allMemberDisplayNames = [...new Set(
-    master.nodes.filter(node => node.type === 'member').map(node => displayNameForId(node.id))
+  master.nodes.filter(node => node.type === 'person').map(node => displayNameForId(node.id))
   )];
   const foldedMemberDisplayNames = allMemberDisplayNames.map(name => foldDiacritics(name).toLowerCase());
   // Also computed once per filter, not per view: which nodes can reach which
