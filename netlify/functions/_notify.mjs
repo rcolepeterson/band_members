@@ -116,7 +116,7 @@ export async function ensureNotifyPrefs(sql, userId) {
 export async function getTouchedRecipients(sql, bandId, actorUserId) {
   const bandIdStr = String(bandId);
   const rows = await sql`
-    select distinct u.id, u.email, u.name
+    select distinct u.id, u.email, u.notify_email, u.name
     from users u
     where u.id <> ${actorUserId}
       and (
@@ -165,7 +165,10 @@ async function notifyOneRecipient(sql, bandId, bandName, recipient, mailer, even
     bandName,
     unsubscribeUrl: unsubscribeUrlFor(prefs.unsubscribe_token),
   });
-  const result = await mailer.sendEmail({ to: recipient.email, ...email });
+  // Use notify_email override if set (e.g. Aaron's business email for
+  // system notifications, separate from player sign-in email)
+  const toEmail = recipient.notify_email || recipient.email;
+  const result = await mailer.sendEmail({ to: toEmail, ...email });
   if (!result.ok) {
     console.warn('notify: send failed for user', recipient.id, result.error);
     return { sent: false, reason: 'send failed' };
@@ -221,7 +224,7 @@ export async function notifyBandTouched(
 
 export async function getMemberFollowRecipients(sql, memberId, actorUserId) {
   const rows = await sql`
-    select distinct u.id, u.email, u.name
+    select distinct u.id, u.email, u.notify_email, u.name
     from users u
     where u.id <> ${actorUserId}
       and u.id in (select user_id from member_follows where member_id = ${memberId})
@@ -264,7 +267,8 @@ async function notifyOneMemberRecipient(sql, memberId, memberName, recipient, ma
     unsubscribeUrl: unsubscribeUrlFor(prefs.unsubscribe_token),
     eventLabel: eventLabels[eventType] || 'was recently updated',
   });
-  const result = await mailer.sendEmail({ to: recipient.email, ...email });
+  const toEmail = recipient.notify_email || recipient.email;
+  const result = await mailer.sendEmail({ to: toEmail, ...email });
   if (!result.ok) {
     console.warn('notify member: send failed for user', recipient.id, result.error);
     return { sent: false, reason: 'send failed' };
