@@ -6650,7 +6650,7 @@ function downloadPngBlob(blob) {
         const genre = normalizeGenre(row.genre);
         const instrument1 = (row['Instrument 1'] || row['Intrument 1'] || '').trim();
         const instrument2 = (row['Instrument 2'] || row['Intrument 2'] || '').trim();
-        const bio = (row.bio || row.Bio || row.notes || row.Notes || '').trim();
+        const bio = (row.memberBio || row.Bio || row.notes || row.Notes || '').trim();
         // Band lifespan (goes on the band node) vs. member tenure at this
         // specific band (goes on the link). Both are optional. Accept a few
         // common column-name variants so hand-edited CSVs keep working.
@@ -6821,6 +6821,7 @@ function downloadPngBlob(blob) {
           'Intrument 2': instrument2,
           yearsActive: band.years_active || '',
           bio: band.bio || '',
+          memberBio: member.bio || '',
           personYearsActive: member.years_active || '',
           memberYearsActive: membership.tenure || '',
           bandCreatedAt: band.created_at || ''
