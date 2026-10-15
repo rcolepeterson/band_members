@@ -1,7 +1,8 @@
 // Guest sign-up for the daily 6° reminder (Cole, 2026-10-15).
 //
 // POST /api/reminder-signup  { email, guest_session_id }
-//   A guest who just played asks for the reminder with only an email. We
+//   A guest (after a puzzle, or on /remind/ before ever playing) asks for
+//   the reminder with only an email. We
 //   save it on their guest row and send a confirmation link; nothing else
 //   is sent until they click it (double opt-in), so nobody can sign up
 //   someone else's address.
@@ -23,6 +24,7 @@ import {
   methodNotAllowed,
   normalizeEmail,
   isPlausibleEmail,
+  generateToken,
 } from './_db.mjs';
 import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
 import { sendEmail, isMailerConfigured, SITE_URL } from './_mailer.mjs';
@@ -81,8 +83,22 @@ export async function signUp(sql, { email, guestSessionId, send = sendEmail, now
   const guests = await sql`
     select id from users where guest_session_id = ${guestSessionId} and is_guest = true limit 1
   `;
-  const guest = guests && guests[0];
-  if (!guest) return { error: 'play a puzzle first' };
+  let guest = guests && guests[0];
+  if (!guest) {
+    // Signed up from /remind/ before ever playing (2026-10-15): make the
+    // guest row the game would have made (same as game_daily_play.mjs), so
+    // when they play on this device, "already played today" still applies.
+    const made = await sql`
+      insert into users (is_guest, guest_session_id, credits, token, email, name)
+      values (true, ${guestSessionId}, 50, ${generateToken()}, ${`guest_${guestSessionId}@guest.local`}, 'Guest')
+      on conflict do nothing
+      returning id
+    `;
+    guest = (made && made[0]) || (await sql`
+      select id from users where guest_session_id = ${guestSessionId} and is_guest = true limit 1
+    `)[0];
+  }
+  if (!guest) return { error: 'could not save that' };
 
   const existing = (await sql`select * from guest_reminders where user_id = ${guest.id} limit 1`)[0];
   if (existing && existing.email === email && existing.confirmed_at) return { status: 'already_on' };
@@ -139,7 +155,7 @@ export default async (req) => {
     return badRequest('enter a real email address');
   }
   if (typeof guestSessionId !== 'string' || guestSessionId.length < 8 || guestSessionId.length > 64) {
-    return badRequest('play a puzzle first');
+    return badRequest('missing guest session');
   }
   if (!isMailerConfigured()) return serverError('email is not set up');
 

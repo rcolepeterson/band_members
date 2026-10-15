@@ -169,6 +169,7 @@ function guestSql({ guest = { id: 'g1' }, existing = null } = {}) {
   const sql = async (strings, ...values) => {
     const q = strings.join('?');
     if (q.includes('from users where guest_session_id')) return guest ? [guest] : [];
+    if (q.includes('insert into users')) { writes.push(['user', ...values]); return [{ id: 'made' }]; }
     if (q.includes('select * from guest_reminders')) return existing ? [existing] : [];
     if (q.includes('insert into guest_reminders')) { writes.push(values); return []; }
     return [];
@@ -188,8 +189,16 @@ test('a guest gets a confirmation email first, nothing else', async () => {
   assert.ok(sent[0].text.includes(confirmUrlFor(writes[0][2])), 'the link carries the saved confirm token');
 });
 
-test('no guest row, no signup; no repeat confirmation inside the hour', async () => {
-  assert.equal((await signUp(guestSql({ guest: null }).sql, { email: 'a@b.co', guestSessionId: 'g_x', send: async () => ({ ok: true }) })).error, 'play a puzzle first');
+test('signing up before ever playing (/remind/) makes the guest row first', async () => {
+  const { sql, writes } = guestSql({ guest: null });
+  const r = await signUp(sql, { email: 'a@b.co', guestSessionId: 'g_new12345', send: async () => ({ ok: true }) });
+  assert.equal(r.status, 'check_email');
+  assert.equal(writes[0][0], 'user', 'a guest row like the game makes');
+  assert.equal(writes[0][1], 'g_new12345');
+  assert.equal(writes[1][0], 'made', 'the reminder hangs off that row');
+});
+
+test('no repeat confirmation inside the hour', async () => {
   let sends = 0;
   const recent = { email: 'a@b.co', confirm_sent_at: new Date(Date.now() - 60_000).toISOString(), confirmed_at: null };
   assert.equal((await signUp(guestSql({ existing: recent }).sql, { email: 'a@b.co', guestSessionId: 'g_x', send: async () => { sends += 1; return { ok: true }; } })).status, 'check_email');
