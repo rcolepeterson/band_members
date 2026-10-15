@@ -756,6 +756,11 @@ export function refinePolygon(positions, links, minSeparation) {
   // grid-search each involved node's position space.
   // (Proven: Home 2° has a valid 0-crossing position at Matt=(160,0) that
   // greedy never finds. Aaron's manual drags confirm zero is achievable.)
+  //
+  // PERFORMANCE GUARD: Grid search is O(candidates × grid_cells × score_cost).
+  // On large views (3°+ with 40+ nodes) this freezes the page. Skip Phase 5
+  // when the node count exceeds the threshold — Phases 1-4 still run.
+  const PHASE5_MAX_NODES = 35;
   let phase5Crossings = countCrossings(positions, links);
   // Check separation violations too
   let minDist5 = Infinity;
@@ -765,7 +770,7 @@ export function refinePolygon(positions, links, minSeparation) {
       minDist5 = Math.min(minDist5, Math.hypot(a.x - b.x, a.y - b.y));
     }
   }
-  if (phase5Crossings > 0 || minDist5 < minSeparation) {
+  if ((phase5Crossings > 0 || minDist5 < minSeparation) && ids.length <= PHASE5_MAX_NODES) {
     // Find nodes involved in crossings OR separation violations
     const involved = new Set();
     const si = (p1, p2, p3, p4) => {
