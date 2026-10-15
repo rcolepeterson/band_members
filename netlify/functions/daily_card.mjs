@@ -78,7 +78,7 @@ export async function renderDailyCard({ result, start, target, host = 'sixdegree
   const img = PImage.make(WIDTH * SUPER, HEIGHT * SUPER);
   const ctx = img.getContext('2d');
   ctx.scale(SUPER, SUPER);
-  ctx.fillStyle = COLORS.background;
+  ctx.fillStyle = '#0c1a2e'; // midnight space blue (brand) — was COLORS.background #070b10
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
   // Title and result: "6° Rock #14" then "Solved in 4 moves".
