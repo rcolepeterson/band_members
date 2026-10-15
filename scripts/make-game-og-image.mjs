@@ -6,6 +6,11 @@
 // showing today's matchup would be a server-rendered follow-up.
 //
 // Regenerate:  node scripts/make-game-og-image.mjs
+//              node scripts/make-game-og-image.mjs remind   (remind-og.png)
+//
+// The remind variant (Cole, 2026-10-15) is /remind/'s card: same look, but
+// the words and a button say "get the reminder", so a post of that link
+// doesn't read as just another link to the site.
 import { createWriteStream } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -80,11 +85,34 @@ const gap = 30;
 const rowW = picks.length * size + (picks.length - 1) * gap;
 picks.forEach((color, i) => pick((W - rowW) / 2 + size / 2 + i * (size + gap), 150, size, color));
 
-centered('SIX DEGREES OF ROCK', 340, 26, ACCENT, 9);
-centered('A new rock puzzle every day', 428, 60, TEXT);
-centered('Connect two bands through the musicians they share.', 500, 28, MUTED);
-centered('sixdegreesofrock.com/game', 560, 22, FAINT, 1);
+const remind = process.argv[2] === 'remind';
+if (remind) {
+  centered('6\u00b0  DAILY ROCK PUZZLE', 330, 26, ACCENT, 9);
+  centered('Get it in your inbox', 412, 58, TEXT);
+  centered('One email each morning. Free, no account.', 470, 26, MUTED);
+  // A button, so it reads as something to sign up for.
+  const bw = 360;
+  const bh = 64;
+  const bx = (W - bw) / 2;
+  const by = 500;
+  const r = bh / 2;
+  // A pill as a box and two round ends (pureimage can't join arcs into
+  // one path).
+  ctx.fillStyle = ACCENT;
+  ctx.fillRect(bx + r, by, bw - 2 * r, bh);
+  for (const cx of [bx + r, bx + bw - r]) {
+    ctx.beginPath();
+    ctx.arc(cx, by + r, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  centered('Remind me daily', by + 43, 24, BG);
+} else {
+  centered('SIX DEGREES OF ROCK', 340, 26, ACCENT, 9);
+  centered('A new rock puzzle every day', 428, 60, TEXT);
+  centered('Connect two bands through the musicians they share.', 500, 28, MUTED);
+  centered('sixdegreesofrock.com/game', 560, 22, FAINT, 1);
+}
 
-const out = join(ROOT, 'game-og.png');
+const out = join(ROOT, remind ? 'remind-og.png' : 'game-og.png');
 await PImage.encodePNGToStream(img, createWriteStream(out));
 console.log('wrote', out);

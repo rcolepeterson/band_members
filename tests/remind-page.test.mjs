@@ -8,9 +8,16 @@ const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const page = read('../remind/index.html');
 
 test('it previews as an ad for the game when posted', () => {
-  assert.match(page, /<meta property="og:title" content="6° — a new rock puzzle every morning" \/>/);
+  assert.match(page, /<meta property="og:title" content="Get the daily 6° rock puzzle in your inbox" \/>/);
+  assert.match(page, /<meta name="twitter:title" content="Get the daily 6° rock puzzle in your inbox" \/>/);
   assert.match(page, /<meta property="og:url" content="https:\/\/sixdegreesofrock\.com\/remind\/" \/>/);
-  assert.match(page, /<meta property="og:image" content="https:\/\/sixdegreesofrock\.com\/game-og\.png\?v=3" \/>/);
+  // Its own picture, not the game's, so it reads as "get the reminder".
+  assert.match(page, /<meta property="og:image" content="https:\/\/sixdegreesofrock\.com\/remind-og\.png\?v=1" \/>/);
+  assert.match(page, /<meta name="twitter:image" content="https:\/\/sixdegreesofrock\.com\/remind-og\.png\?v=1" \/>/);
+  assert.ok(!page.includes('game-og.png'));
+  const png = readFileSync(new URL('../remind-og.png', import.meta.url));
+  assert.equal(png.readUInt32BE(16), 1200);
+  assert.equal(png.readUInt32BE(20), 630);
   assert.match(page, /<meta name="twitter:card" content="summary_large_image" \/>/);
   assert.match(page, /<title>6° Daily Reminder \| Six Degrees of Rock<\/title>/);
 });
