@@ -111,7 +111,7 @@ export function buildContributorThankYouEmail({ contributorName, bandName, actio
   const subject = `You're in the rock universe \u{1F918}`;
   const text =
     `Hey ${safeName},\n\n` +
-    `Just wanted to say thanks \u2014 you ${verb} ${safeBand} in the Six Degrees of Rock universe. ` +
+    `Just wanted to say thanks \u2014 you ${verb} ${safeBand} to the Six Degrees of Rock universe. ` +
     `That connection is now part of a 16,000+ node graph that music fans explore every day.\n\n` +
     `Every band added makes the universe richer. Every member threaded connects scenes people didn't know were linked.\n\n` +
     `Thanks for being part of it.\n\n` +
@@ -122,7 +122,7 @@ export function buildContributorThankYouEmail({ contributorName, bandName, actio
     `<div style="font-family: Georgia, serif; color: #e8e4da; background: #14120e; padding: 32px; max-width: 560px;">` +
     `<p style="font-size: 18px; line-height: 1.6;">Hey ${escapeHtml(safeName)},</p>` +
     `<p style="font-size: 16px; line-height: 1.6;">Just wanted to say thanks \u2014 you ${verb} ` +
-    `<strong style="color: #c9a96a;">${escapeHtml(safeBand)}</strong> in the Six Degrees of Rock universe. ` +
+    `<strong style="color: #c9a96a;">${escapeHtml(safeBand)}</strong> to the Six Degrees of Rock universe. ` +
     `That connection is now part of a 16,000+ node graph that music fans explore every day.</p>` +
     `<p style="font-size: 16px; line-height: 1.6;">Every band added makes the universe richer. ` +
     `Every member threaded connects scenes people didn't know were linked.</p>` +
