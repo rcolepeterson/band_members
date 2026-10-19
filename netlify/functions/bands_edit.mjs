@@ -42,7 +42,7 @@ import {
 } from './_db.mjs';
 import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
 import { sameBandIdentity, compactIdentityKey } from './_bands_write.mjs';
-import { notifyBandTouched, EVENT_BAND_BADGE_ADDED, EVENT_BAND_EDITED } from './_notify.mjs';
+import { notifyBandTouched, sendContributorThankYou, EVENT_BAND_BADGE_ADDED, EVENT_BAND_EDITED } from './_notify.mjs';
 import {
   normalizeLinksInput,
   diffBandLinks,
@@ -360,6 +360,19 @@ export default async (req, context) => {
         ? EVENT_BAND_BADGE_ADDED
         : EVENT_BAND_EDITED,
     });
+
+    // Contributor thank-you (Aaron, 2026-10-19): thanks the person who
+    // edited the band. Max once per 24h per person. Never throws/blocks.
+    // Admin-token edits have no user to thank.
+    if (user) {
+      await sendContributorThankYou(sql, {
+        contributorId: user.id,
+        contributorEmail: user.email,
+        contributorName: user.name,
+        bandName: updatedBand.name,
+        action: 'updated',
+      });
+    }
 
     return ok({ band: updatedBand, changes, links: linksChanged });
   } catch (err) {

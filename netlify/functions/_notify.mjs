@@ -314,3 +314,53 @@ export async function notifyMemberTouched(
     return { ok: false, sent: 0 };
   }
 }
+
+// Contributor thank-you email (Aaron, 2026-10-19): thanks the person who
+// added or edited a band. Max once per 24h per contributor.
+//
+// Failure contract: never throws, never blocks the write. Returns { sent }.
+export async function sendContributorThankYou(sql, {
+  contributorId,
+  contributorEmail,
+  contributorName,
+  bandName,
+  action = 'added',
+  mailer = null,
+} = {}) {
+  try {
+    if (!contributorId || !contributorEmail) return { ok: true, sent: 0, skipped: 'no contributor' };
+    const { isMailerConfigured, buildContributorThankYouEmail, sendEmail: defaultSendEmail } =
+      await import('./_mailer.mjs');
+    if (!isMailerConfigured()) {
+      return { ok: true, sent: 0, skipped: 'mailer not configured' };
+    }
+    const send = mailer || defaultSendEmail;
+
+    // 24h cooldown per contributor (not per band — one thank-you per day max).
+    const recent = await sql`
+      select 1 from contributor_thankyou_log
+      where user_id = ${contributorId}
+        and sent_at > now() - interval '24 hours'
+      limit 1
+    `;
+    if (recent && recent.length) {
+      return { ok: true, sent: 0, skipped: 'cooldown' };
+    }
+
+    const { subject, html, text } = buildContributorThankYouEmail({
+      contributorName, bandName, action,
+    });
+    const result = await send({ to: contributorEmail, subject, html, text });
+    if (result && result.ok !== false) {
+      await sql`
+        insert into contributor_thankyou_log (user_id, sent_at)
+        values (${contributorId}, now())
+      `;
+      return { ok: true, sent: 1 };
+    }
+    return { ok: true, sent: 0, skipped: 'send failed' };
+  } catch (err) {
+    console.warn('sendContributorThankYou failed (non-fatal)', err && err.message);
+    return { ok: false, sent: 0 };
+  }
+}

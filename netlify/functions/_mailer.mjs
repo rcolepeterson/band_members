@@ -101,6 +101,39 @@ export function buildMemberUpdateEmail({ memberName, unsubscribeUrl, eventLabel 
   return { subject, html, text };
 }
 
+// Contributor thank-you email (Aaron, 2026-10-19): sent to the person who
+// added or edited a band, thanking them for building the rock universe.
+// Max once per day per person (cooldown enforced by the caller).
+export function buildContributorThankYouEmail({ contributorName, bandName, action }) {
+  const safeName = String(contributorName || 'there').slice(0, 100).split(' ')[0];
+  const safeBand = String(bandName || 'a band').slice(0, 200);
+  const verb = action === 'added' ? 'added' : 'updated';
+  const subject = `You're in the rock universe \u{1F918}`;
+  const text =
+    `Hey ${safeName},\n\n` +
+    `Just wanted to say thanks \u2014 you ${verb} ${safeBand} in the Six Degrees of Rock universe. ` +
+    `That connection is now part of a 16,000+ node graph that music fans explore every day.\n\n` +
+    `Every band added makes the universe richer. Every member threaded connects scenes people didn't know were linked.\n\n` +
+    `Thanks for being part of it.\n\n` +
+    `\u2014 Aaron\n` +
+    `Founder, Six Degrees of Rock\n` +
+    `${SITE_URL}\n`;
+  const html =
+    `<div style="font-family: Georgia, serif; color: #e8e4da; background: #14120e; padding: 32px; max-width: 560px;">` +
+    `<p style="font-size: 18px; line-height: 1.6;">Hey ${escapeHtml(safeName)},</p>` +
+    `<p style="font-size: 16px; line-height: 1.6;">Just wanted to say thanks \u2014 you ${verb} ` +
+    `<strong style="color: #c9a96a;">${escapeHtml(safeBand)}</strong> in the Six Degrees of Rock universe. ` +
+    `That connection is now part of a 16,000+ node graph that music fans explore every day.</p>` +
+    `<p style="font-size: 16px; line-height: 1.6;">Every band added makes the universe richer. ` +
+    `Every member threaded connects scenes people didn't know were linked.</p>` +
+    `<p style="font-size: 16px; line-height: 1.6;">Thanks for being part of it.</p>` +
+    `<p style="font-size: 16px; line-height: 1.6;">\u2014 Aaron<br/>` +
+    `<span style="color: #8a8478;">Founder, Six Degrees of Rock</span><br/>` +
+    `<a href="${SITE_URL}" style="color: #c9a96a;">${SITE_URL}</a></p>` +
+    `</div>`;
+  return { subject, html, text };
+}
+
 // Send one email via Resend. `to` is a single address string.
 // `from` overrides the default from-line (e.g. the onboarding email goes
 // out as Aaron); the address itself stays on the verified domain.
