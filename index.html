@@ -403,6 +403,12 @@
     #existing-member-band-list{justify-content:flex-start;gap:var(--space-2)}
     #existing-member-band-list span{background:rgba(79,152,163,0.12);border:1px solid rgba(79,152,163,0.22);padding:0.35rem 0.6rem;border-radius:999px}
 
+    /* Pill-layout fix (2026-10-18): #submission-form .footer-strip forces
+       display:block, which killed the flex wrapping on these chip lists and
+       left the pills crowding each other. Restore flex for the chip lists. */
+    #submission-form #existing-member-band-list.footer-strip,
+    #submission-form #existing-band-member-list.footer-strip{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:var(--space-2);padding-top:var(--space-2)}
+
   
     #selected-node-connections,#selected-band-members,#existing-band-member-list,#existing-member-band-list{align-items:center;flex-wrap:wrap}
     #selected-node-connections span{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);padding:0.35rem 0.6rem;border-radius:999px}
@@ -7089,25 +7095,55 @@ function downloadPngBlob(blob) {
     // a native datalist, so the user can pick the right person instead of
     // typing blind. The disambiguation picker still handles exact-name
     // duplicates on top of this.
+    //
+    // Band names in the dropdown (2026-10-18): each suggestion shows the
+    // person's connected bands ("Matt Ashman — Black Box Recovery Unit,
+    // Camp Hero") so the user knows for sure which one is which without
+    // scrolling. Selecting fills just the name; the bands are display-only.
     function rebuildAddMemberDatalist() {
       const datalist = document.getElementById('add-member-suggestions');
       if (!datalist || !graphState || !graphState.master) return;
+      const master = graphState.master;
+      // One-pass person -> band names map (avoids a links-scan per person).
+      const nodeById = new Map(master.nodes.map(n => [n.id, n]));
+      const bandsByPersonId = new Map();
+      (master.links || []).forEach(link => {
+        const s = typeof link.source === 'object' ? link.source.id : link.source;
+        const t = typeof link.target === 'object' ? link.target.id : link.target;
+        const sNode = nodeById.get(s);
+        const tNode = nodeById.get(t);
+        let personId = null;
+        let bandName = null;
+        if (sNode && sNode.type === 'person' && tNode && tNode.type === 'band') {
+          personId = s; bandName = tNode.name || t;
+        } else if (sNode && sNode.type === 'band' && tNode && tNode.type === 'person') {
+          personId = t; bandName = sNode.name || s;
+        } else {
+          return;
+        }
+        if (!bandsByPersonId.has(personId)) bandsByPersonId.set(personId, []);
+        const arr = bandsByPersonId.get(personId);
+        if (!arr.includes(bandName)) arr.push(bandName);
+      });
       const seen = new Set();
-      const names = [];
-      graphState.master.nodes.forEach(node => {
+      const entries = [];
+      master.nodes.forEach(node => {
         if (node.type !== 'person') return;
         const name = nodeName(node);
         const key = normalizeKey(name);
         if (!name || seen.has(key)) return;
         seen.add(key);
-        names.push(name);
+        entries.push({ name, bands: bandsByPersonId.get(node.id) || [] });
       });
-      names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+      entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
       datalist.innerHTML = '';
       const frag = document.createDocumentFragment();
-      names.forEach(name => {
+      entries.forEach(({ name, bands }) => {
         const option = document.createElement('option');
         option.value = name;
+        // Display text carries the bands; the value (name only) is what
+        // lands in the field on selection.
+        option.textContent = bands.length ? `${name} — ${bands.join(', ')}` : name;
         frag.appendChild(option);
       });
       datalist.appendChild(frag);
@@ -10971,15 +11007,53 @@ function downloadPngBlob(blob) {
     // each person with their connected bands. The user picks the right person
     // or chooses "New person". The selection is stored as data-selected-member-id
     // on the #member-name input; empty means create-new.
+    //
+    // Similar-name matching (2026-10-18): exact matching alone missed
+    // "Matt Ashman" vs "Matthew Ashman" — same last name, first name a
+    // prefix — so the picker never fired and the user got no warning.
+    // Now matches on last name + first-name prefix, so near-duplicates
+    // surface the "do you mean...?" picker instead of silently creating
+    // a third or fourth Ashman.
+    function findSimilarPeople(typed) {
+      if (!typed || !graphState || !graphState.master) return [];
+      const typedKey = normalizeKey(typed);
+      const typedTokens = typedKey.split(/\s+/).filter(Boolean);
+      if (typedTokens.length < 2) {
+        // Single token: exact match only, to avoid noisy last-name hits.
+        return graphState.master.nodes.filter(node =>
+          node.type === 'person' && normalizeKey(nodeName(node)) === typedKey);
+      }
+      const typedFirst = typedTokens[0];
+      const typedLast = typedTokens[typedTokens.length - 1];
+      return graphState.master.nodes.filter(node => {
+        if (node.type !== 'person') return false;
+        const nameKey = normalizeKey(nodeName(node));
+        if (nameKey === typedKey) return true;
+        const tokens = nameKey.split(/\s+/).filter(Boolean);
+        if (tokens.length < 2) return false;
+        const first = tokens[0];
+        const last = tokens[tokens.length - 1];
+        if (last !== typedLast) return false;
+        return first === typedFirst ||
+          first.startsWith(typedFirst) || typedFirst.startsWith(first);
+      });
+    }
+
     function updateMemberDisambiguation(matchedPeople, typedName) {
       const memberField = document.getElementById('member-name');
       if (!memberField) return;
       let picker = document.getElementById('member-disambiguation');
+      const typedKey = normalizeKey(typedName);
+      const isExact = person => normalizeKey(nodeName(person)) === typedKey;
       // Clear any existing picker if 0 or 1 match (no ambiguity).
       if (matchedPeople.length <= 1) {
         if (picker) picker.remove();
-        // Single match: auto-select it (preserves old auto-thread behavior).
-        memberField.dataset.selectedMemberId = matchedPeople.length === 1 ? matchedPeople[0].id : '';
+        memberField.classList.remove('field-error');
+        // Single match: auto-select it ONLY on exact match (preserves old
+        // auto-thread behavior). Never auto-select a fuzzy-only match —
+        // "Matt Ashman" must not silently thread onto "Matthew Ashman".
+        const exact = matchedPeople.filter(isExact);
+        memberField.dataset.selectedMemberId = exact.length === 1 ? exact[0].id : '';
         return;
       }
       if (!picker) {
@@ -11006,12 +11080,16 @@ function downloadPngBlob(blob) {
         const bands = getNodeConnections(person.id).map(id => nodeName(id)).join(', ') || 'no bands yet';
         const opt = document.createElement('option');
         opt.value = person.id;
-        opt.textContent = `${nodeName(person)} — ${bands}`;
+        const similarTag = isExact(person) ? '' : ' (similar name)';
+        opt.textContent = `${nodeName(person)}${similarTag} — ${bands}`;
         picker.appendChild(opt);
       });
       // Preserve selection if the same person is still in the list.
       picker.value = matchedPeople.some(p => p.id === currentValue) ? currentValue : '';
       memberField.dataset.selectedMemberId = picker.value;
+      // Gold the field (not a block): makes the user aware there are already
+      // similar names in the graph — there might be a 3rd or 4th Ashman.
+      memberField.classList.add('field-error');
     }
 
     function populateCardsFromTreeContext() {
@@ -11033,12 +11111,13 @@ function downloadPngBlob(blob) {
       let matchedNode = null;
       let matchedPeople = [];
       if (member) {
-        matchedPeople = graphState.master.nodes.filter(node => node.type === 'person' && normalizeKey(nodeName(node)) === normalizeKey(member));
-        matchedNode = matchedPeople[0] || null;
+        matchedPeople = findSimilarPeople(member);
+        matchedNode = matchedPeople.find(p => normalizeKey(nodeName(p)) === normalizeKey(member)) || null;
       }
-      // Disambiguation (2026-10-12): if multiple people share the typed name,
-      // show a picker so the user selects the right person or creates a new one.
-      // The selection is stored on the member-name input as data-selected-member-id.
+      // Disambiguation (2026-10-12, fuzzy 2026-10-18): if people with the
+      // same or similar name exist, show a picker so the user selects the
+      // right person or creates a new one. The selection is stored on the
+      // member-name input as data-selected-member-id.
       updateMemberDisambiguation(matchedPeople, member);
       if (!matchedNode && band) {
         matchedNode = graphState.master.nodes.find(node => node.type === 'band' && normalizeKey(nodeName(node)) === normalizeKey(band) && (!scene || normalizeKey(locationLabel(node) || '') === normalizeKey(scene)));
