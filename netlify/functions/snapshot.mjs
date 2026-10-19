@@ -6,6 +6,7 @@
 //
 // Body (all optional):
 //   { ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, fb_group_members,
+//     game_share_taps,
 //     ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events,
 //     notes }
 //
@@ -87,6 +88,7 @@ export default async (req) => {
       insert into daily_snapshots
         (snapshot_date, node_count, user_count, follows_count, bands_added,
          ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, fb_group_members,
+         game_share_taps,
          ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events,
          notes)
       values (
@@ -100,6 +102,7 @@ export default async (req) => {
         ${num(body.fb_sixdegrees)},
         ${num(body.fb_aaron)},
         ${num(body.fb_group_members)},
+        ${num(body.game_share_taps)},
         ${num(body.ga_active_users)},
         ${num(body.ga_new_users)},
         ${num(body.ga_avg_engagement_seconds)},
@@ -116,6 +119,7 @@ export default async (req) => {
         fb_sixdegrees = coalesce(excluded.fb_sixdegrees, daily_snapshots.fb_sixdegrees),
         fb_aaron = coalesce(excluded.fb_aaron, daily_snapshots.fb_aaron),
         fb_group_members = coalesce(excluded.fb_group_members, daily_snapshots.fb_group_members),
+        game_share_taps = coalesce(excluded.game_share_taps, daily_snapshots.game_share_taps),
         ga_active_users = coalesce(excluded.ga_active_users, daily_snapshots.ga_active_users),
         ga_new_users = coalesce(excluded.ga_new_users, daily_snapshots.ga_new_users),
         ga_avg_engagement_seconds = coalesce(excluded.ga_avg_engagement_seconds, daily_snapshots.ga_avg_engagement_seconds),

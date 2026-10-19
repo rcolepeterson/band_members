@@ -31,6 +31,7 @@ export default async (req) => {
       rows = await sql`
         select snapshot_date, node_count, user_count, follows_count, bands_added,
                ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, fb_group_members,
+               game_share_taps,
                ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events, notes
         from daily_snapshots
         where snapshot_date >= ${since}::date
@@ -40,6 +41,7 @@ export default async (req) => {
       rows = await sql`
         select snapshot_date, node_count, user_count, follows_count, bands_added,
                ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, fb_group_members,
+               game_share_taps,
                ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events, notes
         from daily_snapshots
         order by snapshot_date asc
