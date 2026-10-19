@@ -3889,7 +3889,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                     <div class="member-row" data-member-row>
                       <button type="button" class="member-row-remove" data-remove-row aria-label="Remove this member" tabindex="-1" hidden>&times;</button>
                       <div class="member-row-fields">
-                        <div class="form-span-2"><label for="member-name">Member name</label><input id="member-name" class="member-name-input" name="member-name" type="text" placeholder="Jeff Ament" /></div>
+                        <div class="form-span-2"><label for="member-name">Member name</label><input id="member-name" class="member-name-input" name="member-name" type="text" placeholder="Jeff Ament" list="add-member-suggestions" autocomplete="off" /></div>
                         <div><label for="instrument-name">Instrument</label><input id="instrument-name" class="instrument-input" name="instrument-name" type="text" list="instrument-suggestions" placeholder="Bass, vocals, drums…" autocomplete="off" /></div>
                         <div><label for="relation-type">Member weight</label><select id="relation-type" class="relation-input" name="relation-type"><option value="1">1 — Founder / core member</option><option value="2" selected>2 — Member</option><option value="3">3 — Touring member</option></select></div>
                       </div>
@@ -3897,6 +3897,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                   </div>
                   <button type="button" class="member-add-btn" id="add-member-row-btn">+ Add another member</button>
                   <datalist id="instrument-suggestions"></datalist>
+                  <datalist id="add-member-suggestions"></datalist>
                 </div>
                 <div><label for="years-active">Years active</label><input id="years-active" name="years-active" type="text" placeholder="1990–1993" /></div>
                 <div><label for="band-label">Label</label><input id="band-label" name="band-label" type="text" placeholder="Sub Pop, Epic, SST…" /></div>
@@ -7064,12 +7065,49 @@ function downloadPngBlob(blob) {
       const datalist = document.getElementById('instrument-suggestions');
       if (!datalist) return;
       const values = Array.from(instrumentSuggestions.values())
+        .filter(value => {
+          // Final sweep (2026-10-18): never render year-like values, even if
+          // one slipped into the map through an unexpected path.
+          if (/^\d{4}\s*[-–—/]\s*\d{2,4}$/.test(value)) return false;
+          if (/^\d{4}$/.test(value)) return false;
+          if (/\b(19|20)\d{2}\b/.test(value) && value.length <= 11) return false;
+          return true;
+        })
         .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
       datalist.innerHTML = '';
       const frag = document.createDocumentFragment();
       values.forEach(value => {
         const option = document.createElement('option');
         option.value = value;
+        frag.appendChild(option);
+      });
+      datalist.appendChild(frag);
+    }
+
+    // Member-name autocomplete for the add-band form (2026-10-18): typing a
+    // name like "Matt Ashman" now suggests existing people from the tree via
+    // a native datalist, so the user can pick the right person instead of
+    // typing blind. The disambiguation picker still handles exact-name
+    // duplicates on top of this.
+    function rebuildAddMemberDatalist() {
+      const datalist = document.getElementById('add-member-suggestions');
+      if (!datalist || !graphState || !graphState.master) return;
+      const seen = new Set();
+      const names = [];
+      graphState.master.nodes.forEach(node => {
+        if (node.type !== 'person') return;
+        const name = nodeName(node);
+        const key = normalizeKey(name);
+        if (!name || seen.has(key)) return;
+        seen.add(key);
+        names.push(name);
+      });
+      names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+      datalist.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      names.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
         frag.appendChild(option);
       });
       datalist.appendChild(frag);
@@ -11558,6 +11596,8 @@ function downloadPngBlob(blob) {
         renderCountryChips();
         syncCountryChipButtons();
         renderGraph();
+        // Keep the member-name autocomplete fresh after a new person lands.
+        rebuildAddMemberDatalist();
         return applied;
       };
 
@@ -12470,6 +12510,8 @@ function downloadPngBlob(blob) {
           graphState = { master };
           publishMasterGraph(master);
           renderGraph();
+          // Keep the member-name autocomplete fresh after edits.
+          rebuildAddMemberDatalist();
           // Post-save nav fix (2026-10-18): a stale "No Rawk Found" overlay
           // from a pre-save empty search must not survive a successful edit.
           const emptyStateAfterEdit = document.getElementById('graph-empty-state');
@@ -12718,6 +12760,8 @@ function downloadPngBlob(blob) {
       rebuildGenreDatalist();
       graphState = { master };
       publishMasterGraph(master);
+      // Member-name autocomplete for the add-band form.
+      rebuildAddMemberDatalist();
 
       // PR 4b: fetch every band's cached verification status in one batch
       // call, BEFORE the first renderGraph() below, so silver-star badges
