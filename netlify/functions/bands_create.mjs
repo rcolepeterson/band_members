@@ -37,7 +37,7 @@ import {
   findUserByToken,
 } from './_db.mjs';
 import { consume, tooManyRequests, LIMITS as RATE_LIMITS } from './_rate_limit.mjs';
-import { notifyBandTouched } from './_notify.mjs';
+import { notifyBandTouched, sendContributorThankYou } from './_notify.mjs';
 import { createBandInNeon } from './_bands_write.mjs';
 import { normalizeLinksInput } from './_links.mjs';
 
@@ -218,6 +218,16 @@ export default async (req) => {
       bandId: result.band.id,
       bandName: result.band.name,
       actorUserId: user.id,
+    });
+
+    // Contributor thank-you (Aaron, 2026-10-19): thanks the person who
+    // added the band. Max once per 24h per person. Never throws/blocks.
+    await sendContributorThankYou(sql, {
+      contributorId: user.id,
+      contributorEmail: user.email,
+      contributorName: user.name,
+      bandName: result.band.name,
+      action: 'added',
     });
 
     return ok({
