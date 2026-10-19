@@ -3890,7 +3890,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                       <button type="button" class="member-row-remove" data-remove-row aria-label="Remove this member" tabindex="-1" hidden>&times;</button>
                       <div class="member-row-fields">
                         <div class="form-span-2"><label for="member-name">Member name</label><input id="member-name" class="member-name-input" name="member-name" type="text" placeholder="Jeff Ament" /></div>
-                        <div><label for="instrument-name">Instrument</label><input id="instrument-name" class="instrument-input" name="instrument-name" type="text" list="instrument-suggestions" placeholder="Bass, vocals, drums…" /></div>
+                        <div><label for="instrument-name">Instrument</label><input id="instrument-name" class="instrument-input" name="instrument-name" type="text" list="instrument-suggestions" placeholder="Bass, vocals, drums…" autocomplete="off" /></div>
                         <div><label for="relation-type">Member weight</label><select id="relation-type" class="relation-input" name="relation-type"><option value="1">1 — Founder / core member</option><option value="2" selected>2 — Member</option><option value="3">3 — Touring member</option></select></div>
                       </div>
                     </div>
@@ -6650,6 +6650,9 @@ function downloadPngBlob(blob) {
         const genre = normalizeGenre(row.genre);
         const instrument1 = (row['Instrument 1'] || row['Intrument 1'] || '').trim();
         const instrument2 = (row['Instrument 2'] || row['Intrument 2'] || '').trim();
+        // Person bio: use the member's own bio (row.memberBio), NOT row.bio
+        // which is the band's bio. Fixes members showing the first band's
+        // bio on their cards.
         const bio = (row.memberBio || row.Bio || row.notes || row.Notes || '').trim();
         // Band lifespan (goes on the band node) vs. member tenure at this
         // specific band (goes on the link). Both are optional. Accept a few
@@ -7021,6 +7024,13 @@ function downloadPngBlob(blob) {
       String(raw).split(',').forEach(part => {
         const value = part.trim();
         if (!value) return;
+        // Year-filter (2026-10-18): junk rows where a year range landed in an
+        // instrument column were surfacing as "instruments" in the datalist
+        // (e.g. "1990–1993"). Skip anything that looks like a year or year
+        // range so the dropdown only suggests real instruments.
+        if (/^\d{4}\s*[-–—/]\s*\d{2,4}$/.test(value)) return;
+        if (/^\d{4}$/.test(value)) return;
+        if (/\b(19|20)\d{2}\b/.test(value) && value.length <= 11) return;
         const key = value.toLowerCase();
         if (!instrumentSuggestions.has(key)) instrumentSuggestions.set(key, value);
       });
@@ -10952,7 +10962,10 @@ function downloadPngBlob(blob) {
       prompt.textContent = `New person named "${typedName}"`;
       picker.appendChild(prompt);
       matchedPeople.forEach(person => {
-        const bands = getNodeConnections(person.id).join(', ') || 'no bands yet';
+        // Resolve connection ids to display names (2026-10-18): raw ids can
+        // carry city suffixes ("Lazy Susan — Seattle, WA") or the
+        // " (musician)" suffix, which read as nonsense in the picker.
+        const bands = getNodeConnections(person.id).map(id => nodeName(id)).join(', ') || 'no bands yet';
         const opt = document.createElement('option');
         opt.value = person.id;
         opt.textContent = `${nodeName(person)} — ${bands}`;
@@ -11009,10 +11022,11 @@ function downloadPngBlob(blob) {
       }
 
       const connections = getNodeConnections(matchedNode.id);
+      const connectionNames = connections.map(id => nodeName(id));
       previewName.textContent = nodeName(matchedNode);
       previewCopy.textContent = matchedNode.type === 'person'
-        ? `Existing member found in the tree. Connected bands: ${connections.join(', ') || 'none yet'}.`
-        : `Existing band found in the tree. Connected members: ${connections.join(', ') || 'none yet'}.`;
+        ? `Existing member found in the tree. Connected bands: ${connectionNames.join(', ') || 'none yet'}.`
+        : `Existing band found in the tree. Connected members: ${connectionNames.join(', ') || 'none yet'}.`;
       previewSource.textContent = `Pulled from current tree · ${matchedNode.type}`;
       previewScene.textContent = locationLabel(matchedNode) || previewScene.textContent || '—';
       previewInstrument.textContent = [matchedNode.instrument1, matchedNode.instrument2].filter(Boolean).join(', ') || previewInstrument.textContent || '—';
@@ -11300,8 +11314,19 @@ function downloadPngBlob(blob) {
       });
     })();
 
+    // Typing-lag fix (2026-10-18): the member-name field was running the full
+    // preview pipeline (validation + full-graph person scan + card render) on
+    // every keystroke with no debounce, which read as a ~2s pause per key on
+    // desktop Chrome/Edge. 'input' now debounces 250ms; change/blur stay
+    // immediate so tabbing out or picking a select still previews instantly.
+    let submissionPreviewDebounce = null;
+    function debouncedUpdateSubmissionPreview() {
+      clearTimeout(submissionPreviewDebounce);
+      submissionPreviewDebounce = setTimeout(updateSubmissionPreview, 250);
+    }
+
     document.querySelectorAll('#submission-form input, #submission-form select, #submission-form textarea').forEach(el => {
-      el.addEventListener('input', updateSubmissionPreview);
+      el.addEventListener('input', debouncedUpdateSubmissionPreview);
       el.addEventListener('change', updateSubmissionPreview);
       el.addEventListener('blur', updateSubmissionPreview);
     });
@@ -11344,7 +11369,7 @@ function downloadPngBlob(blob) {
       const removeBtn = row.querySelector('[data-remove-row]');
       if (removeBtn) removeBtn.hidden = false;
       row.querySelectorAll('input, select, textarea').forEach(el => {
-        el.addEventListener('input', updateSubmissionPreview);
+        el.addEventListener('input', debouncedUpdateSubmissionPreview);
         el.addEventListener('change', updateSubmissionPreview);
         el.addEventListener('blur', updateSubmissionPreview);
       });
@@ -11571,6 +11596,11 @@ function downloadPngBlob(blob) {
         document.getElementById('submission-state').value = 'WA';
         updateSubmissionPreview();
         setSubmissionMode(false);
+        // Post-save nav fix (2026-10-18): after a successful add the graph
+        // re-renders with the new node, so a stale "No Rawk Found" overlay
+        // from the pre-save search must not linger.
+        const emptyStateAfterSave = document.getElementById('graph-empty-state');
+        if (emptyStateAfterSave) emptyStateAfterSave.hidden = true;
       };
 
       const saveButton = document.getElementById('save-draft-btn');
@@ -11800,6 +11830,7 @@ function downloadPngBlob(blob) {
       instr1Input.className = 'edit-member-instrument1-input';
       instr1Input.value = isExisting ? (data.member.instrument1 || '') : '';
       instr1Input.placeholder = 'Guitar';
+      instr1Input.setAttribute('autocomplete', 'off');
       instr1Wrap.appendChild(instr1Label);
       instr1Wrap.appendChild(instr1Input);
 
@@ -11811,6 +11842,7 @@ function downloadPngBlob(blob) {
       instr2Input.className = 'edit-member-instrument2-input';
       instr2Input.value = isExisting ? (data.member.instrument2 || '') : '';
       instr2Input.placeholder = 'Vocals';
+      instr2Input.setAttribute('autocomplete', 'off');
       instr2Wrap.appendChild(instr2Label);
       instr2Wrap.appendChild(instr2Input);
 
@@ -12438,6 +12470,10 @@ function downloadPngBlob(blob) {
           graphState = { master };
           publishMasterGraph(master);
           renderGraph();
+          // Post-save nav fix (2026-10-18): a stale "No Rawk Found" overlay
+          // from a pre-save empty search must not survive a successful edit.
+          const emptyStateAfterEdit = document.getElementById('graph-empty-state');
+          if (emptyStateAfterEdit) emptyStateAfterEdit.hidden = true;
         });
 
         // Phase 3: the card re-resolves the band (and its links) from the
