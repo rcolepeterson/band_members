@@ -142,41 +142,43 @@
     .scorebar {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      padding: 14px 20px 12px;
+      gap: 12px;
+      padding: 22px 22px 20px;
       border-bottom: 1px solid rgba(225,244,255,.12);
       background: rgba(3,7,11,.54);
     }
-    .player { display: flex; align-items: center; gap: 9px; min-width: 0; color: #c2d5e2; font-size: .9rem; white-space: nowrap; overflow: hidden; }
+    .player { display: flex; align-items: center; gap: 11px; min-width: 0; color: #c2d5e2; font-size: 1.18rem; white-space: nowrap; overflow: hidden; }
     .player .pname { overflow: hidden; text-overflow: ellipsis; }
-    .player .pcount { color: #8fa4b5; font-size: .8rem; font-variant-numeric: tabular-nums; }
-    .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #6e8191; box-shadow: 0 0 0 4px rgba(110,129,145,.12); }
+    .player .pcount { color: #8fa4b5; font-size: .98rem; font-variant-numeric: tabular-nums; }
+    .dot { flex: none; width: 11px; height: 11px; border-radius: 50%; background: #6e8191; box-shadow: 0 0 0 5px rgba(110,129,145,.12); }
     .player.active { color: #fff; font-weight: 700; }
     .player.active .pcount { color: #ffd097; }
-    .player.active .dot { background: var(--card-amber); box-shadow: 0 0 0 4px rgba(255,180,84,.13); }
+    .player.active .dot { background: var(--card-amber); box-shadow: 0 0 0 5px rgba(255,180,84,.13); }
     .player.winner { color: var(--card-amber); font-weight: 700; }
-    .turnbar { display: flex; justify-content: center; padding: 10px 16px 0; }
-    .turn-pill { color: var(--card-amber); font-size: .76rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .turnbar { display: flex; justify-content: center; padding: 12px 16px 0; }
+    .turn-pill { color: var(--card-amber); font-size: .88rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 
     .playfield { padding: 18px 28px 26px; }
     .stage {
       display: grid;
-      grid-template-columns: 150px minmax(0, 1fr) 150px;
+      grid-template-columns: minmax(0, 244px) minmax(0, 1fr) 150px;
       gap: 26px;
       align-items: start;
       max-width: 900px;
       margin: 0 auto;
     }
+    #reveal-slot { width: 100%; max-width: 244px; }
     .pile-zone { display: grid; justify-items: center; gap: 9px; padding-top: 6px; }
     .pile-label { color: #8fa4b5; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; text-align: center; }
     .pile-note { color: #71889b; font-size: .74rem; text-align: center; }
     .reveal-card {
       position: relative;
-      width: 118px;
+      width: 100%;
       aspect-ratio: 63 / 88;
-      padding: 9px;
+      overflow: hidden;
+      padding: 13px;
       border: 1px solid rgba(143,232,246,.4);
-      border-radius: 10px;
+      border-radius: 12px;
       background: #0b1118;
       color: #d9ecf5;
       text-align: left;
@@ -187,12 +189,9 @@
     .reveal-card:hover:not(:disabled) { transform: translateY(-3px); filter: brightness(1.18); }
     .reveal-card.can-draw { border-color: var(--card-amber); box-shadow: -4px 4px 0 #121f2c, -8px 8px 0 #1a2b3b, 0 0 0 2px rgba(255,180,84,.25), 0 16px 28px rgba(0,0,0,.38); }
     .reveal-card:disabled { cursor: default; }
-    .reveal-card .rv-name { display: block; margin-top: 5px; color: #73d5ee; font-size: .8rem; font-weight: 700; line-height: 1.15; }
-    .reveal-card .rv-meta { display: block; margin-top: 3px; color: #8fa4b5; font-size: .62rem; line-height: 1.3; }
-    .reveal-card .rv-joker { color: var(--card-amber); font-size: 1.5rem; font-weight: 700; line-height: 1; }
     .reveal-empty {
-      width: 118px; aspect-ratio: 63 / 88; display: grid; place-items: center;
-      border: 1px dashed rgba(225,244,255,.22); border-radius: 10px; color: #71889b; font-size: .72rem; text-align: center; padding: 10px;
+      width: 100%; aspect-ratio: 63 / 88; display: grid; place-items: center;
+      border: 1px dashed rgba(225,244,255,.22); border-radius: 12px; color: #71889b; font-size: .8rem; text-align: center; padding: 12px;
     }
     .played-stack {
       width: 92px; height: 118px;
@@ -223,11 +222,11 @@
     }
     .band-card.playable { border-color: rgba(143,232,246,.78); box-shadow: 0 18px 44px rgba(0,0,0,.56), 0 0 0 2px rgba(143,232,246,.12); }
     .band-card.joker-as { border-color: rgba(255,180,84,.75); box-shadow: 0 18px 44px rgba(0,0,0,.56), 0 0 0 2px rgba(255,180,84,.16); }
-    .card-top { position: relative; z-index: 1; display: flex; justify-content: space-between; gap: 10px; align-items: start; }
+    .card-top { position: relative; z-index: 1; display: flex; justify-content: space-between; gap: 10px; align-items: center; height: 20px; }
     .card-no { color: #718796; font-size: .62rem; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
     .type-chip { padding: 1px 7px; border: 1px solid rgba(192,210,222,.24); border-radius: 999px; color: #9dafbc; font-size: .59rem; white-space: nowrap; }
     .type-chip.gold { border-color: rgba(255,180,84,.5); color: var(--card-amber); }
-    .constellation { position: relative; z-index: 1; display: block; width: 100%; height: 31%; margin: 7px 0 5px; color: #36bce7; overflow: visible; }
+    .constellation { position: relative; z-index: 1; display: block; width: 100%; height: 74px; margin: 7px 0 5px; color: #36bce7; overflow: hidden; }
     .constellation line { stroke: currentColor; stroke-width: .65; opacity: .72; }
     .constellation circle { fill: #9feaff; stroke: #0c5168; stroke-width: .85; }
     .constellation .hub { fill: #34c8f5; stroke: #b7f1ff; stroke-width: .9; }
@@ -235,7 +234,7 @@
     .constellation.gold circle { fill: #ffe1ae; stroke: #6b4a10; }
     .constellation.gold .hub { fill: var(--card-amber); stroke: #fff0d6; }
     .face-divider { height: 1px; margin: 6px 0 8px; background: rgba(212,231,242,.13); }
-    .band-name { position: relative; z-index: 1; margin: 0 0 2px; color: #73d5ee; font-size: clamp(1.08rem, 2vw, 1.38rem); line-height: 1.05; font-weight: 700; letter-spacing: -.025em; }
+    .band-name { position: relative; z-index: 1; height: calc(1.05em * 2); overflow: hidden; margin: 0 0 2px; color: #73d5ee; font-size: clamp(1.08rem, 2vw, 1.38rem); line-height: 1.05; font-weight: 700; letter-spacing: -.025em; }
     .band-name.gold { color: var(--card-amber); }
     .band-meta { position: relative; z-index: 1; color: #a7b6c1; font-size: .68rem; }
     .years { position: relative; z-index: 1; display: flex; gap: 8px; margin-top: 7px; color: #d7e2e9; font-size: .65rem; }
@@ -292,7 +291,7 @@
     .hand-card.joker { border-color: rgba(255,180,84,.55); background: linear-gradient(170deg, #1d2733, #0a0d12 60%, #171208); }
     .hand-card.joker.playable { border-color: var(--card-amber); }
     .hand-card.joker.playable::before { background: var(--card-amber); }
-    .hand-card .constellation { height: 24%; margin-block: 5px 3px; }
+    .hand-card .constellation { height: 44px; margin-block: 5px 3px; }
     .hand-card .band-name { margin-top: 0; font-size: .94rem; }
     .hand-card .band-meta { font-size: .6rem; }
     .hand-card .years { margin-top: 5px; font-size: .56rem; }
@@ -441,11 +440,13 @@
     @media (max-width: 820px) {
       .intro { grid-template-columns: 1fr; gap: 22px; padding-top: 38px; }
       .playfield { padding: 16px 14px 22px; }
-      .stage { grid-template-columns: 96px minmax(0, 1fr) 96px; gap: 12px; }
-      .reveal-card, .reveal-empty { width: 88px; }
-      .reveal-card .rv-name { font-size: .68rem; }
+      .stage { grid-template-columns: 1fr 1fr; grid-template-areas: 'reveal top' 'played played'; gap: 14px; }
+      .stage .pile-zone:first-child { grid-area: reveal; }
+      .top-zone { grid-area: top; }
+      .stage .pile-zone:last-child { grid-area: played; }
+      #reveal-slot { max-width: 232px; }
       .played-stack { width: 68px; height: 88px; font-size: 1.15rem; }
-      .band-card { max-width: 216px; }
+      .band-card { max-width: 232px; }
       .card-study { grid-template-columns: 1fr; gap: 34px; padding-bottom: 58px; }
       .study-copy { max-width: 650px; }
       .joker-feature { grid-template-columns: 1fr; gap: 16px; padding-top: 58px; }
@@ -461,11 +462,13 @@
       .study-cards { gap: 10px; }
       .physical-card { border-radius: 10px; }
       .back-mark { font-size: 3.9rem; }
-      .scorebar { grid-template-columns: 1fr 1fr; padding: 12px; gap: 8px 14px; }
+      .scorebar { grid-template-columns: 1fr 1fr; padding: 18px 14px 16px; gap: 12px 16px; }
+      .player { font-size: 1.05rem; }
+      .player .pcount { font-size: .9rem; }
       .playfield { padding-inline: 10px; }
-      .stage { grid-template-columns: 76px minmax(0, 1fr) 76px; gap: 8px; }
-      .reveal-card, .reveal-empty { width: 70px; padding: 7px; }
-      .reveal-card .rv-meta { display: none; }
+      .stage { gap: 10px; }
+      #reveal-slot { max-width: 218px; }
+      .reveal-card { padding: 10px; }
       .played-stack { width: 56px; height: 76px; }
       .pile-label { font-size: .62rem; }
       .pile-note { font-size: .66rem; }
@@ -848,12 +851,12 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         if (canDraw) btn.classList.add('can-draw');
         btn.disabled = !canDraw;
         if (next.joker) {
-          btn.setAttribute('aria-label', 'Reveal pile top card: Ricky Vac Joker');
-          btn.innerHTML = '<span class="card-no">6* JOKER</span><span class="rv-joker">6*</span><span class="rv-name" style="color:var(--card-amber)">Ricky Vac</span><span class="rv-meta">Joker · plays on anything</span>';
+          btn.setAttribute('aria-label', 'Reveal pile top card: Ricky Vac Joker' + (canDraw ? '. Activate to draw it.' : ''));
+          btn.innerHTML = jokerFaceHTML();
         } else {
           var b = BANDS[next.band];
           btn.setAttribute('aria-label', 'Reveal pile top card: ' + b.n + (canDraw ? '. Activate to draw it.' : ''));
-          btn.innerHTML = '<span class="card-no">6* ' + pad3(next.band + 1) + '</span><span class="rv-name">' + esc(b.n) + '</span><span class="rv-meta">' + esc(metaLine(b) || b.y || '') + '<br />' + b.m.length + ' members</span>';
+          btn.innerHTML = bandFaceHTML(next.band, {});
         }
         btn.addEventListener('click', humanDraw);
         revealSlot.appendChild(btn);
