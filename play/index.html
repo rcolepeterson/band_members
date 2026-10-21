@@ -391,11 +391,13 @@
           <div class="social-row">
             <a class="social" href="https://www.instagram.com/sixdegreesofrock">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="0.6" fill="currentColor"/></svg>
-              <span><span class="s-name">Instagram</span><span class="s-sub">@sixdegreesofrock</span></span>
+              <span><span class="s-name">Instagram</span><span class="s-sub">Daily chains, scores &amp; reels</span></span>
             </a>
-            <a class="social" href="mailto:aaron@sixdegreesofrock.com">
+            <!-- No plain-text address or mailto in the source: the address is
+                 assembled by script on tap so harvester bots can't scrape it. -->
+            <a class="social" id="email-link" href="#" rel="nofollow">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/></svg>
-              <span><span class="s-name">Email</span><span class="s-sub">aaron@sixdegreesofrock.com</span></span>
+              <span><span class="s-name">Email</span><span class="s-sub">Say hello</span></span>
             </a>
           </div>
           <p class="group-note">Sharing scores on Facebook? Find the group <strong>&ldquo;Six Degrees of Rock &mdash; Daily Game&rdquo;</strong> &mdash; chains, scores, and chain talk, posted by players.</p>
@@ -409,5 +411,15 @@
         <p>Every band is closer than you think.</p>
       </footer>
     </div>
+
+    <script>
+      // Build the mailto only when a human taps the Email card, so the
+      // address never appears whole anywhere in the page source.
+      document.getElementById('email-link').addEventListener('click', function (e) {
+        e.preventDefault();
+        var parts = ['aaron', 'sixdegreesofrock', 'com'];
+        window.location.href = 'mailto:' + parts[0] + '@' + parts[1] + '.' + parts[2];
+      });
+    </script>
   </body>
 </html>
