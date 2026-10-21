@@ -96,7 +96,7 @@
     .face-logic strong { display: block; color: var(--ink); font-size: .92rem; }
     .study-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: center; justify-items: center; }
     .physical-card {
-      width: min(100%, 264px);
+      width: min(100%, 300px);
       aspect-ratio: 63 / 88;
       overflow: hidden;
       border: 1px solid rgba(126,207,225,.38);
@@ -161,18 +161,20 @@
     .playfield { padding: 18px 28px 26px; }
     .stage {
       display: grid;
-      grid-template-columns: minmax(0, 244px) minmax(0, 1fr) 150px;
+      grid-template-columns: minmax(0, 310px) minmax(0, 1fr) 150px;
       gap: 26px;
       align-items: start;
       max-width: 900px;
       margin: 0 auto;
     }
-    #reveal-slot { width: 100%; max-width: 244px; }
+    #reveal-slot { width: 100%; max-width: 310px; }
     .pile-zone { display: grid; justify-items: center; gap: 9px; padding-top: 6px; }
     .pile-label { color: #8fa4b5; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; text-align: center; }
     .pile-note { color: #71889b; font-size: .74rem; text-align: center; }
     .reveal-card {
       position: relative;
+      display: flex;
+      flex-direction: column;
       width: 100%;
       aspect-ratio: 63 / 88;
       overflow: hidden;
@@ -208,9 +210,11 @@
 
     .band-card {
       position: relative;
+      display: flex;
+      flex-direction: column;
       aspect-ratio: 63 / 88;
       width: 100%;
-      max-width: 244px;
+      max-width: 310px;
       justify-self: center;
       overflow: hidden;
       padding: 13px;
@@ -226,29 +230,31 @@
     .card-no { color: #718796; font-size: .62rem; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
     .type-chip { padding: 1px 7px; border: 1px solid rgba(192,210,222,.24); border-radius: 999px; color: #9dafbc; font-size: .59rem; white-space: nowrap; }
     .type-chip.gold { border-color: rgba(255,180,84,.5); color: var(--card-amber); }
-    .constellation { position: relative; z-index: 1; display: block; width: 100%; height: 74px; margin: 7px 0 5px; color: #36bce7; overflow: hidden; }
+    .constellation { position: relative; z-index: 1; display: block; width: 100%; height: auto; aspect-ratio: 220 / 137; margin: 7px 0 5px; color: #36bce7; overflow: hidden; }
+    .band-card > :not(.members), .hand-card > :not(.members), .reveal-card > :not(.members) { flex: none; }
     .constellation line { stroke: currentColor; stroke-width: .65; opacity: .72; }
     .constellation circle { fill: #9feaff; stroke: #0c5168; stroke-width: .85; }
     .constellation .hub { fill: #34c8f5; stroke: #b7f1ff; stroke-width: .9; }
     .constellation.gold { color: #c78f2d; }
     .constellation.gold circle { fill: #ffe1ae; stroke: #6b4a10; }
     .constellation.gold .hub { fill: var(--card-amber); stroke: #fff0d6; }
-    .face-divider { height: 1px; margin: 6px 0 8px; background: rgba(212,231,242,.13); }
+    .face-divider { height: 1px; margin: 3px 0 4px; background: rgba(212,231,242,.13); }
     .band-name { position: relative; z-index: 1; height: calc(1.05em * 2); overflow: hidden; margin: 0 0 2px; color: #73d5ee; font-size: clamp(1.08rem, 2vw, 1.38rem); line-height: 1.05; font-weight: 700; letter-spacing: -.025em; }
     .band-name.gold { color: var(--card-amber); }
-    .band-meta { position: relative; z-index: 1; color: #a7b6c1; font-size: .68rem; }
-    .years { position: relative; z-index: 1; display: flex; gap: 8px; margin-top: 7px; color: #d7e2e9; font-size: .65rem; }
-    .years span { color: #7f909c; letter-spacing: .07em; text-transform: uppercase; }
-    .member-label { position: relative; z-index: 1; margin: 8px 0 5px; color: #8197a8; font-size: .6rem; letter-spacing: .09em; text-transform: uppercase; }
-    .members { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 4px; }
-    .member { min-width: 0; padding: 3px 6px; border: 1px solid rgba(255,255,255,.13); border-radius: 999px; background: rgba(255,255,255,.06); color: #e6ecf3; font-size: .57rem; line-height: 1.15; text-align: center; overflow-wrap: anywhere; }
+    .band-meta { position: relative; z-index: 1; height: 1.5em; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #a7b6c1; font-size: .68rem; }
+    .years { position: relative; z-index: 1; display: flex; gap: 8px; height: 1.5em; line-height: 1.5; overflow: hidden; margin-top: 5px; color: #d7e2e9; font-size: .65rem; }
+    .years .years-label { flex: none; color: #7f909c; letter-spacing: .07em; text-transform: uppercase; }
+    .years .years-val { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .member-label { position: relative; z-index: 1; margin: 6px 0 3px; color: #8197a8; font-size: .6rem; letter-spacing: .09em; text-transform: uppercase; }
+    .members { position: relative; z-index: 1; flex: 1 1 auto; min-height: 0; overflow: hidden; align-content: flex-start; display: flex; flex-wrap: wrap; gap: 3px; }
+    .member { min-width: 0; padding: 2px 6px; border: 1px solid rgba(255,255,255,.13); border-radius: 999px; background: rgba(255,255,255,.06); color: #e6ecf3; font-size: .57rem; line-height: 1.15; text-align: center; overflow-wrap: anywhere; }
     .member.match { border-color: rgba(255,180,84,.42); background: rgba(255,180,84,.1); color: #ffd097; }
     .member.more { border-style: dashed; color: #8fa4b5; }
     .play-note { position: absolute; z-index: 2; right: 12px; bottom: 9px; left: 12px; display: none; color: var(--card-cyan); font-size: .62rem; font-weight: 700; }
     .band-card.playable .play-note { display: block; }
     .band-card.is-new { animation: deal .42s cubic-bezier(.16,1,.3,1) both; }
     @keyframes deal { from { opacity: 0; transform: translateY(-18px) rotate(-4deg); } }
-    .joker-big { position: relative; z-index: 1; margin: 12px 0 2px; color: var(--card-amber); font-family: var(--font-display); font-size: 3.6rem; line-height: .8; }
+    .joker-big { position: relative; z-index: 1; display: grid; place-items: center; width: 100%; aspect-ratio: 220 / 137; margin: 7px 0 5px; color: var(--card-amber); font-family: var(--font-display); font-size: 3.6rem; line-height: .8; }
 
     .instruction { min-height: 42px; margin: 22px auto 10px; max-width: 720px; text-align: center; color: #c2d5e2; font-size: .92rem; }
     .instruction strong { color: #fff; }
@@ -261,9 +267,10 @@
     .reset { border: 0; padding: 4px 0; color: var(--card-cyan); background: transparent; cursor: pointer; font-size: .8rem; }
     .hand {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
       justify-content: center;
-      align-items: stretch;
+      align-items: start;
+      padding-top: 12px;
       gap: 12px;
       max-width: 980px;
       margin: 0 auto;
@@ -271,6 +278,8 @@
     }
     .hand-card {
       position: relative;
+      display: flex;
+      flex-direction: column;
       width: 100%;
       min-width: 0;
       aspect-ratio: 63 / 88;
@@ -291,17 +300,16 @@
     .hand-card.joker { border-color: rgba(255,180,84,.55); background: linear-gradient(170deg, #1d2733, #0a0d12 60%, #171208); }
     .hand-card.joker.playable { border-color: var(--card-amber); }
     .hand-card.joker.playable::before { background: var(--card-amber); }
-    .hand-card .constellation { height: 44px; margin-block: 5px 3px; }
     .hand-card .band-name { margin-top: 0; font-size: .94rem; }
     .hand-card .band-meta { font-size: .6rem; }
-    .hand-card .years { margin-top: 5px; font-size: .56rem; }
-    .hand-card .member-label { margin-top: 6px; font-size: .55rem; }
+    .hand-card .years { font-size: .56rem; }
+    .hand-card .member-label { font-size: .55rem; }
     .hand-card .members { gap: 3px; }
     .hand-card .member { padding: 2px 4px; font-size: .51rem; }
     .hand-card .play-note { display: none; right: 10px; left: 10px; bottom: 8px; font-size: .58rem; }
     .hand-card.playable { padding-bottom: 28px; }
     .hand-card.playable .play-note { display: block; }
-    .hand-card .joker-big { font-size: 2.5rem; margin-top: 8px; }
+    .hand-card .joker-big { font-size: 2.5rem; }
     .hand-card.is-new { animation: deal .42s cubic-bezier(.16,1,.3,1) both; }
     .hand-card.shake { animation: shake .32s ease; }
     @keyframes shake { 20%,60% { transform: translateX(-4px); } 40%,80% { transform: translateX(4px); } }
@@ -444,9 +452,9 @@
       .stage .pile-zone:first-child { grid-area: reveal; }
       .top-zone { grid-area: top; }
       .stage .pile-zone:last-child { grid-area: played; }
-      #reveal-slot { max-width: 232px; }
+      #reveal-slot { max-width: 300px; }
       .played-stack { width: 68px; height: 88px; font-size: 1.15rem; }
-      .band-card { max-width: 232px; }
+      .band-card { max-width: 300px; }
       .card-study { grid-template-columns: 1fr; gap: 34px; padding-bottom: 58px; }
       .study-copy { max-width: 650px; }
       .joker-feature { grid-template-columns: 1fr; gap: 16px; padding-top: 58px; }
@@ -466,16 +474,18 @@
       .player { font-size: 1.05rem; }
       .player .pcount { font-size: .9rem; }
       .playfield { padding-inline: 10px; }
-      .stage { gap: 10px; }
-      #reveal-slot { max-width: 218px; }
+      .stage { grid-template-columns: 1fr; grid-template-areas: 'reveal' 'top' 'played'; gap: 10px; }
+      #reveal-slot { max-width: 310px; }
       .reveal-card { padding: 10px; }
       .played-stack { width: 56px; height: 76px; }
       .pile-label { font-size: .62rem; }
       .pile-note { font-size: .66rem; }
-      .band-card { max-width: 218px; padding: 11px; }
-      .band-card .member { padding: 3px 4px; font-size: .56rem; }
+      .band-card { max-width: 310px; padding: 11px; }
+      .band-card .member { padding: 2px 4px; font-size: .56rem; }
       .instruction { margin-top: 16px; font-size: .84rem; }
-      .hand { grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 9px; }
+      .study-cards { grid-template-columns: 1fr; }
+      .hand { grid-template-columns: 1fr; gap: 14px; }
+      .hand-card { max-width: 320px; justify-self: center; }
       .hand-card { padding: 9px; }
       .joker-feature { padding-inline: 4px; }
       .joker-stack { min-height: 350px; }
@@ -516,14 +526,14 @@
       <div class="study-cards" aria-label="Proposed playing side and card back">
         <article class="physical-card band-card" aria-label="Foo Fighters playing side">
           <div class="card-top"><span class="card-no">6* 001</span><span class="type-chip">Band</span></div>
-          <svg class="constellation" viewBox="0 0 220 92" aria-label="Constellation artwork study for Foo Fighters">
-            <line x1="110" y1="48" x2="29" y2="21"/><line x1="110" y1="48" x2="62" y2="76"/><line x1="110" y1="48" x2="95" y2="12"/><line x1="110" y1="48" x2="151" y2="15"/><line x1="110" y1="48" x2="192" y2="31"/><line x1="110" y1="48" x2="169" y2="77"/><line x1="110" y1="48" x2="114" y2="84"/>
-            <circle cx="29" cy="21" r="2.6"/><circle cx="62" cy="76" r="2.6"/><circle cx="95" cy="12" r="2.6"/><circle cx="151" cy="15" r="2.6"/><circle cx="192" cy="31" r="2.6"/><circle cx="169" cy="77" r="2.6"/><circle cx="114" cy="84" r="2.6"/><circle class="hub" cx="110" cy="48" r="4.4"/>
+          <svg class="constellation" viewBox="0 0 220 137" aria-label="Constellation artwork study for Foo Fighters">
+            <line x1="110" y1="72" x2="29" y2="31"/><line x1="110" y1="72" x2="62" y2="113"/><line x1="110" y1="72" x2="95" y2="18"/><line x1="110" y1="72" x2="151" y2="22"/><line x1="110" y1="72" x2="192" y2="46"/><line x1="110" y1="72" x2="169" y2="115"/><line x1="110" y1="72" x2="114" y2="125"/>
+            <circle cx="29" cy="31" r="2.6"/><circle cx="62" cy="113" r="2.6"/><circle cx="95" cy="18" r="2.6"/><circle cx="151" cy="22" r="2.6"/><circle cx="192" cy="46" r="2.6"/><circle cx="169" cy="115" r="2.6"/><circle cx="114" cy="125" r="2.6"/><circle class="hub" cx="110" cy="72" r="4.4"/>
           </svg>
           <div class="face-divider"></div>
           <div class="band-name">Foo Fighters</div>
           <div class="band-meta">Alternative Rock · Seattle, WA</div>
-          <div class="years"><span>Years active</span>1994–present</div>
+          <div class="years"><span class="years-label">Years active</span><span class="years-val">1994–present</span></div>
           <div class="member-label">Members · 9</div>
           <div class="members"><span class="member">Dave Grohl</span><span class="member">Taylor Hawkins</span><span class="member">Chris Shiflett</span><span class="member">Nate Mendel</span><span class="member">Pat Smear</span><span class="member">Rami Jaffee</span><span class="member">Franz Stahl</span><span class="member">Ilan Rubin</span><span class="member">William Goldsmith</span></div>
         </article>
@@ -762,13 +772,13 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         var lines = '', dots = '';
         for (var k = 0; k < sats; k++) {
           var ang = (Math.PI * 2 * k) / sats + rnd() * 0.5;
-          var rx = 34 + rnd() * 48, ry = 20 + rnd() * 15;
-          var x = Math.round(110 + Math.cos(ang) * rx), y = Math.round(46 + Math.sin(ang) * ry);
-          x = Math.max(8, Math.min(212, x)); y = Math.max(7, Math.min(85, y));
-          lines += '<line x1="110" y1="46" x2="' + x + '" y2="' + y + '"/>';
+          var rx = 34 + rnd() * 48, ry = 30 + rnd() * 26;
+          var x = Math.round(110 + Math.cos(ang) * rx), y = Math.round(68 + Math.sin(ang) * ry);
+          x = Math.max(8, Math.min(212, x)); y = Math.max(8, Math.min(129, y));
+          lines += '<line x1="110" y1="68" x2="' + x + '" y2="' + y + '"/>';
           dots += '<circle cx="' + x + '" cy="' + y + '" r="2.6"/>';
         }
-        return '<svg class="constellation' + (gold ? ' gold' : '') + '" viewBox="0 0 220 92" aria-hidden="true">' + lines + dots + '<circle class="hub" cx="110" cy="46" r="4.4"/></svg>';
+        return '<svg class="constellation' + (gold ? ' gold' : '') + '" viewBox="0 0 220 137" aria-hidden="true">' + lines + dots + '<circle class="hub" cx="110" cy="68" r="4.4"/></svg>';
       }
       function memberChips(bandIdx, matchSet) {
         var b = BANDS[bandIdx];
@@ -793,8 +803,8 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         var html = '<div class="card-top"><span class="card-no">6* ' + (opts.no || pad3(bandIdx + 1)) + '</span><span class="type-chip' + (opts.gold ? ' gold' : '') + '">' + (opts.chip || 'Band') + '</span></div>';
         html += constellationSVG(bandIdx, opts.gold);
         html += '<div class="face-divider"></div><div class="band-name' + (opts.gold ? ' gold' : '') + '">' + esc(b.n) + '</div>';
-        if (meta) html += '<div class="band-meta">' + esc(meta) + '</div>';
-        if (b.y) html += '<div class="years"><span>' + (opts.yearsLabel || 'Years active') + '</span>' + esc(b.y) + '</div>';
+        html += '<div class="band-meta">' + esc(meta) + '</div>';
+        html += '<div class="years"><span class="years-label">' + (opts.yearsLabel || 'Years active') + '</span><span class="years-val">' + esc(b.y || '') + '</span></div>';
         html += '<div class="member-label">Members · ' + b.m.length + '</div><div class="members">' + memberChips(bandIdx, opts.matchSet) + '</div>';
         return html;
       }
