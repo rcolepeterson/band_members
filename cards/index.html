@@ -485,7 +485,15 @@
       .joker-copy { max-width: 650px; }
       .rules { grid-template-columns: 1fr; gap: 34px; padding: 54px 0 66px; }
     }
-    @media (max-width: 520px) {
+    /* Phone mode — ONE condition for every phone feature (table shell, tray,
+       overlays, rules popup + Rules button, Ricky sheet), mirrored by
+       PHONE_QUERY in the script: a coarse pointer exists (any-pointer, so a
+       stylus phone whose PRIMARY pointer reports fine — Galaxy S Pen — still
+       counts) and the viewport is phone-sized in either axis: portrait up to
+       950 wide (large phones, foldables, small tablets) or any screen up to
+       600 tall (landscape phones). A mouse-only desktop never matches, at any
+       window size. */
+    @media (any-pointer: coarse) and (max-width: 950px), (any-pointer: coarse) and (max-height: 600px) {
       .wrap { width: min(100% - 20px, 1180px); }
       .intro { padding: 30px 4px 22px; }
       .intro-copy { font-size: .96rem; }
@@ -521,7 +529,7 @@
       .stats-strip { gap: 6px 18px; padding: 12px; }
     }
     /* ---------- phone: one-screen table, bottom tray + tap-to-inspect ---------- */
-    @media (max-width: 520px) {
+    @media (any-pointer: coarse) and (max-width: 950px), (any-pointer: coarse) and (max-height: 600px) {
       .table-shell { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
       .scorebar { flex: none; padding: 12px 14px 10px; }
       .turnbar { flex: none; padding: 8px 16px 0; }
@@ -544,7 +552,7 @@
       .hand-label { flex: none; margin: auto auto 6px; width: 100%; padding-top: 8px; }
       .rules-btn { display: inline-block; }
       .hand { flex: 0 1 auto; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; width: 100%; max-width: none; min-height: 0; overflow-y: auto; padding: 12px 2px 2px; margin: 0; }
-      .hand-card { max-width: none; justify-self: stretch; padding: 7px 5px; border-radius: 9px; }
+      .hand-card { max-width: none; max-height: 160px; justify-self: stretch; padding: 7px 5px; border-radius: 9px; }
       .hand-card.playable { padding-bottom: 7px; }
       .hand-card .play-note { display: none !important; }
       .hand-card.playable::before { top: -8px; right: 6px; padding: 2px 6px; font-size: .56rem; }
@@ -573,6 +581,63 @@
       .joker-option { padding: 7px 9px; }
       .joker-option .jo-name { font-size: .8rem; }
       .modal-cancel { flex: none; }
+    }
+    /* ---------- phone landscape: fit the one-screen table into a short viewport ---------- */
+    @media (any-pointer: coarse) and (orientation: landscape) and (max-height: 600px) {
+      .scorebar { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 12px; padding: 5px 14px; }
+      .player { gap: 7px; font-size: .9rem; }
+      .player .pcount { font-size: .78rem; }
+      .dot { width: 8px; height: 8px; box-shadow: 0 0 0 3px rgba(110,129,145,.12); }
+      .player.active .dot { box-shadow: 0 0 0 3px rgba(255,180,84,.13); }
+      .turnbar { padding: 3px 16px 0; }
+      .turn-pill { font-size: .72rem; }
+      .playfield { padding: 5px 12px 6px; }
+      .stage { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'reveal top played'; align-items: center; gap: 14px; }
+      .stage .pile-zone { gap: 4px; padding-top: 0; }
+      .pile-label { display: none; }
+      #reveal-slot { width: min(190px, 26dvh); }
+      #top-slot { flex: none; width: min(190px, 26dvh); }
+      .stage .band-card, .stage .reveal-card { max-width: none; padding: 8px; }
+      .stage .card-top { height: 14px; }
+      .stage .card-no { font-size: .5rem; }
+      .stage .type-chip { padding: 0 5px; font-size: .5rem; }
+      .stage .constellation { margin: 3px 0 2px; }
+      .stage .face-divider { margin: 1px 0 2px; }
+      .stage .band-name { font-size: .88rem; }
+      .stage .band-meta { font-size: .6rem; }
+      .stage .years { display: none; }
+      .stage .member-label { margin: 3px 0 2px; font-size: .52rem; }
+      .stage .member { padding: 0 4px; font-size: .54rem; }
+      .top-zone { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 12px; }
+      .last-play { max-width: 200px; text-align: left; font-size: .76rem; line-height: 1.35; }
+      .stage .pile-zone:last-child { flex-direction: column; gap: 6px; }
+      .played-stack { height: 28px; font-size: .92rem; }
+      .pile-note { display: none; }
+      .instruction { min-height: 0; margin: 3px auto 0; font-size: .74rem; }
+      .hand-label { margin: auto auto 4px; padding-top: 4px; font-size: .74rem; }
+      .rules-btn { padding: 3px 11px; font-size: .72rem; }
+      .hand { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px; padding-top: 6px; }
+      .hand.cols-5, .hand.cols-6 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+      .hand-card { aspect-ratio: auto; height: clamp(74px, 20dvh, 120px); max-height: none; padding: 5px 4px; border-radius: 8px; }
+      .hand-card.playable::before { top: -7px; right: 5px; padding: 1px 5px; font-size: .52rem; }
+      .face-mini .card-top { height: 11px; }
+      .face-mini .card-no { font-size: .44rem; }
+      .face-mini .constellation { height: 16px; margin: 2px 0 1px; }
+      .face-mini .mini-mark { height: 16px; aspect-ratio: auto; margin: 2px 0 1px; font-size: .95rem; }
+      .face-mini .band-name { font-size: .56rem; }
+      .face-mini .mini-count { font-size: .5rem; }
+      .face-mini .mini-via { font-size: .5rem; -webkit-line-clamp: 1; }
+      .stats-strip { padding: 5px 12px; font-size: .68rem; gap: 4px 12px; }
+      .modal-backdrop { padding: 10px; }
+      .modal { padding: 14px 18px; }
+      .modal h3 { font-size: 1.35rem; }
+      .rules-steps { overflow-y: auto; min-height: 0; margin-bottom: 12px; }
+      .rules-steps li { padding: 6px 0; font-size: .84rem; }
+      .rules-play { flex: none; }
+      .inspect-sheet { gap: 8px; }
+      .inspect-card { width: auto; max-width: 92vw; height: calc(100dvh - 86px); }
+      .gameover-card { padding: 18px 22px; }
+      .gameover-title { font-size: 1.8rem; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
@@ -1289,7 +1354,11 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
 
       /* ---------- phone tap-to-inspect overlay ---------- */
       var inspectCard = null;
-      function isPhone() { return window.matchMedia('(max-width: 520px)').matches; }
+      /* Phone mode: the SAME single condition as the CSS phone blocks —
+         any coarse pointer (touch or stylus; an S Pen phone's primary
+         pointer can report fine) + phone-sized in either axis. */
+      var PHONE_QUERY = '(any-pointer: coarse) and (max-width: 950px), (any-pointer: coarse) and (max-height: 600px)';
+      function isPhone() { return window.matchMedia(PHONE_QUERY).matches; }
       function openInspect(card) {
         if (!G) return;
         inspectCard = card;
