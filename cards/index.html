@@ -230,7 +230,7 @@
     .card-no { color: #718796; font-size: .62rem; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
     .type-chip { padding: 1px 7px; border: 1px solid rgba(192,210,222,.24); border-radius: 999px; color: #9dafbc; font-size: .59rem; white-space: nowrap; }
     .type-chip.gold { border-color: rgba(255,180,84,.5); color: var(--card-amber); }
-    .constellation { position: relative; z-index: 1; display: block; width: 100%; height: auto; aspect-ratio: 220 / 100; margin: 7px 0 5px; color: #36bce7; overflow: hidden; }
+    .constellation { position: relative; z-index: 1; display: block; width: 100%; height: auto; aspect-ratio: 220 / 77; margin: 7px 0 5px; color: #36bce7; overflow: hidden; }
     .band-card > :not(.members), .hand-card > :not(.members), .reveal-card > :not(.members) { flex: none; }
     .constellation line { stroke: currentColor; stroke-width: .65; opacity: .72; }
     .constellation circle { fill: #9feaff; stroke: #0c5168; stroke-width: .85; }
@@ -254,7 +254,7 @@
     .band-card.playable .play-note { display: block; }
     .band-card.is-new { animation: deal .42s cubic-bezier(.16,1,.3,1) both; }
     @keyframes deal { from { opacity: 0; transform: translateY(-18px) rotate(-4deg); } }
-    .joker-big { position: relative; z-index: 1; display: grid; place-items: center; width: 100%; aspect-ratio: 220 / 100; margin: 7px 0 5px; color: var(--card-amber); font-family: var(--font-display); font-size: 3.6rem; line-height: .8; }
+    .joker-big { position: relative; z-index: 1; display: grid; place-items: center; width: 100%; aspect-ratio: 220 / 77; margin: 7px 0 5px; color: var(--card-amber); font-family: var(--font-display); font-size: 3.6rem; line-height: .8; }
 
     .instruction { min-height: 42px; margin: 22px auto 10px; max-width: 720px; text-align: center; color: #c2d5e2; font-size: .92rem; }
     .instruction strong { color: #fff; }
@@ -265,6 +265,9 @@
 
     .hand-label { display: flex; justify-content: space-between; align-items: center; max-width: 980px; margin: 20px auto 10px; color: #8fa4b5; font-size: .8rem; }
     .reset { border: 0; padding: 4px 0; color: var(--card-cyan); background: transparent; cursor: pointer; font-size: .8rem; }
+    .hand-actions { display: flex; align-items: center; gap: 16px; }
+    .rules-btn { display: none; padding: 5px 13px; border: 1px solid rgba(143,232,246,.45); border-radius: 999px; background: rgba(143,232,246,.07); color: var(--card-cyan); font-size: .78rem; font-weight: 700; cursor: pointer; }
+    .rules-btn:hover { background: rgba(143,232,246,.15); }
     .hand {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
@@ -311,6 +314,15 @@
     .hand-card.playable .play-note { display: block; }
     .hand-card .joker-big { font-size: 2.5rem; }
     .hand-card.is-new { animation: deal .42s cubic-bezier(.16,1,.3,1) both; }
+    .hand-card > .face-full { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: 100%; }
+    .face-full > :not(.members) { flex: none; }
+    .face-mini { display: none; }
+    .inspect-backdrop { z-index: 46; }
+    .inspect-sheet { display: grid; justify-items: center; gap: 16px; width: min(360px, 100%); }
+    .inspect-card { width: min(320px, 84vw); }
+    .inspect-actions { display: flex; align-items: center; gap: 18px; }
+    .inspect-actions .modal-cancel { margin-top: 0; padding: 8px 2px; }
+    .inspect-actions [hidden] { display: none; }
     .hand-card.shake { animation: shake .32s ease; }
     @keyframes shake { 20%,60% { transform: translateX(-4px); } 40%,80% { transform: translateX(4px); } }
     .hand-empty { grid-column: 1 / -1; text-align: center; color: #71889b; font-size: .85rem; padding: 22px 0; }
@@ -374,6 +386,17 @@
     .joker-option .jo-name { display: block; font-weight: 700; font-size: .88rem; color: #73d5ee; }
     .joker-option .jo-meta { display: block; margin-top: 2px; color: #8fa4b5; font-size: .72rem; }
     .modal-cancel { margin-top: 16px; padding: 8px 4px; border: 0; background: transparent; color: var(--card-cyan); cursor: pointer; }
+
+    .rules-backdrop { z-index: 48; }
+    .rules-sheet { width: min(420px, 100%); }
+    .rules-steps { margin: 0 0 20px; padding: 0; list-style: none; counter-reset: rsteps; }
+    .rules-steps li { counter-increment: rsteps; display: grid; grid-template-columns: 30px 1fr; gap: 10px; padding: 9px 0; border-bottom: 1px solid rgba(225,244,255,.1); color: #a9bac8; font-size: .9rem; line-height: 1.45; }
+    .rules-steps li:last-child { border-bottom: 0; }
+    .rules-steps li::before { content: counter(rsteps, decimal-leading-zero); color: var(--card-cyan); font-weight: 700; font-size: .78rem; padding-top: 2px; }
+    .rules-steps strong { color: #fff; }
+    .rules-play { width: 100%; }
+    .rules-noshow { display: flex; align-items: center; gap: 8px; margin-top: 14px; color: #8fa4b5; font-size: .8rem; cursor: pointer; }
+    .rules-noshow input { width: 15px; height: 15px; margin: 0; accent-color: var(--card-amber); cursor: pointer; }
 
     .rules { display: grid; grid-template-columns: 1fr 1.25fr; gap: 70px; padding: 72px 0 86px; }
     .rules h2 { margin: 0 0 14px; font-family: var(--font-display); font-size: clamp(2rem, 4vw, 3.4rem); font-weight: 500; line-height: 1; letter-spacing: -.03em; }
@@ -497,6 +520,60 @@
       .rules { padding-inline: 4px; }
       .stats-strip { gap: 6px 18px; padding: 12px; }
     }
+    /* ---------- phone: one-screen table, bottom tray + tap-to-inspect ---------- */
+    @media (max-width: 520px) {
+      .table-shell { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+      .scorebar { flex: none; padding: 12px 14px 10px; }
+      .turnbar { flex: none; padding: 8px 16px 0; }
+      .turn-pill { font-size: .8rem; }
+      .playfield { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 10px 10px 12px; overflow: hidden; }
+      .stage { flex: none; grid-template-columns: 1fr 1fr; grid-template-areas: 'reveal top' 'played played'; gap: 10px; max-width: none; }
+      .stage .pile-zone:first-child { grid-area: reveal; }
+      .top-zone { grid-area: top; gap: 8px; }
+      .stage .pile-zone:last-child { grid-area: played; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 10px; padding-top: 0; }
+      #reveal-slot { max-width: none; width: 100%; }
+      .stage .band-card, .stage .reveal-card { max-width: 176px; padding: 10px; }
+      .stage .band-name { font-size: 1.05rem; }
+      .stage .member { padding: 1px 5px; font-size: .58rem; }
+      .stage .member-label { margin: 4px 0 2px; }
+      .stage .years { margin-top: 3px; }
+      .played-stack { width: auto; height: 30px; padding: 0 14px; font-size: 1rem; box-shadow: -3px 3px 0 #101a26, -6px 6px 0 #16222f; }
+      .last-play { font-size: .76rem; line-height: 1.35; }
+      .instruction { flex: none; min-height: 30px; margin: 10px auto 2px; font-size: .8rem; }
+      .log { display: none; }
+      .hand-label { flex: none; margin: auto auto 6px; width: 100%; padding-top: 8px; }
+      .rules-btn { display: inline-block; }
+      .hand { flex: 0 1 auto; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; width: 100%; max-width: none; min-height: 0; overflow-y: auto; padding: 12px 2px 2px; margin: 0; }
+      .hand-card { max-width: none; justify-self: stretch; padding: 7px 5px; border-radius: 9px; }
+      .hand-card.playable { padding-bottom: 7px; }
+      .hand-card .play-note { display: none !important; }
+      .hand-card.playable::before { top: -8px; right: 6px; padding: 2px 6px; font-size: .56rem; }
+      .hand-card > .face-full { display: none; }
+      .face-mini { display: flex; flex-direction: column; flex: 1 1 auto; width: 100%; height: 100%; min-height: 0; }
+      .face-mini .card-top { height: 14px; }
+      .face-mini .card-no { font-size: .48rem; }
+      .face-mini .constellation { margin: 4px 0 3px; }
+      .face-mini .band-name { height: auto; max-height: calc(1.08em * 2); margin: 1px 0 2px; font-size: .62rem; line-height: 1.08; }
+      .face-mini .mini-count { margin-top: auto; color: #a7b6c1; font-size: .54rem; letter-spacing: .02em; white-space: nowrap; }
+      .face-mini .mini-via { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--card-amber); font-size: .54rem; font-weight: 700; line-height: 1.25; }
+      .face-mini .mini-mark { display: grid; place-items: center; width: 100%; aspect-ratio: 220 / 77; margin: 4px 0 3px; color: var(--card-amber); font-family: var(--font-display); font-size: 1.5rem; line-height: .8; }
+      .hand.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .hand.cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+      .hand.cols-5 .face-mini .band-name { font-size: .58rem; }
+      .hand.cols-6 .face-mini .card-top { height: 11px; }
+      .hand.cols-6 .face-mini .card-no { font-size: .42rem; }
+      .hand.cols-6 .face-mini .band-name { font-size: .54rem; }
+      .hand.cols-6 .face-mini .mini-count { font-size: .46rem; }
+      .hand.cols-6 .face-mini .mini-via { font-size: .48rem; }
+      .stats-strip { flex: none; padding: 9px 12px; font-size: .72rem; gap: 5px 14px; }
+      .stats-strip .stats-note { display: none; }
+      .modal { max-height: 94dvh; display: flex; flex-direction: column; padding: 18px; }
+      .modal input[type="search"] { flex: none; }
+      .joker-options { grid-template-columns: 1fr 1fr; overflow-y: auto; min-height: 0; }
+      .joker-option { padding: 7px 9px; }
+      .joker-option .jo-name { font-size: .8rem; }
+      .modal-cancel { flex: none; }
+    }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
     }
@@ -526,9 +603,9 @@
       <div class="study-cards" aria-label="Proposed playing side and card back">
         <article class="physical-card band-card" aria-label="Foo Fighters playing side">
           <div class="card-top"><span class="card-no">6* 001</span><span class="type-chip">Band</span></div>
-          <svg class="constellation" viewBox="0 0 220 100" aria-label="Constellation artwork study for Foo Fighters">
-            <line x1="110" y1="50" x2="29" y2="22"/><line x1="110" y1="50" x2="62" y2="82"/><line x1="110" y1="50" x2="95" y2="13"/><line x1="110" y1="50" x2="140" y2="15"/><line x1="110" y1="50" x2="192" y2="32"/><line x1="110" y1="50" x2="165" y2="84"/><line x1="110" y1="50" x2="112" y2="90"/><line x1="110" y1="50" x2="30" y2="70"/><line x1="110" y1="50" x2="200" y2="68"/>
-            <circle cx="29" cy="22" r="2.6"/><circle cx="62" cy="82" r="2.6"/><circle cx="95" cy="13" r="2.6"/><circle cx="140" cy="15" r="2.6"/><circle cx="192" cy="32" r="2.6"/><circle cx="165" cy="84" r="2.6"/><circle cx="112" cy="90" r="2.6"/><circle cx="30" cy="70" r="2.6"/><circle cx="200" cy="68" r="2.6"/><circle class="hub" cx="110" cy="50" r="4.4"/>
+          <svg class="constellation" viewBox="0 0 220 77" aria-label="Constellation artwork study for Foo Fighters">
+            <line x1="110" y1="38.5" x2="29" y2="17"/><line x1="110" y1="38.5" x2="62" y2="63"/><line x1="110" y1="38.5" x2="95" y2="10"/><line x1="110" y1="38.5" x2="140" y2="12"/><line x1="110" y1="38.5" x2="192" y2="25"/><line x1="110" y1="38.5" x2="165" y2="65"/><line x1="110" y1="38.5" x2="112" y2="69"/><line x1="110" y1="38.5" x2="30" y2="54"/><line x1="110" y1="38.5" x2="200" y2="52"/>
+            <circle cx="29" cy="17" r="2.6"/><circle cx="62" cy="63" r="2.6"/><circle cx="95" cy="10" r="2.6"/><circle cx="140" cy="12" r="2.6"/><circle cx="192" cy="25" r="2.6"/><circle cx="165" cy="65" r="2.6"/><circle cx="112" cy="69" r="2.6"/><circle cx="30" cy="54" r="2.6"/><circle cx="200" cy="52" r="2.6"/><circle class="hub" cx="110" cy="38.5" r="4.4"/>
           </svg>
           <div class="face-divider"></div>
           <div class="band-name">Foo Fighters</div>
@@ -574,7 +651,7 @@
         <p class="instruction" id="instruction" aria-live="polite"></p>
         <ul class="log" id="log" aria-label="Recent plays"></ul>
 
-        <div class="hand-label"><span id="hand-count">Your hand</span><button class="reset" id="new-game" type="button">New game</button></div>
+        <div class="hand-label"><span id="hand-count">Your hand</span><span class="hand-actions"><button class="rules-btn" id="rules-btn" type="button">Rules</button><button class="reset" id="new-game" type="button">New game</button></span></div>
         <div class="hand" id="hand"></div>
       </div>
 
@@ -650,6 +727,16 @@
     </section>
   </main>
 
+  <div class="modal-backdrop inspect-backdrop" id="inspect-modal" hidden>
+    <div class="inspect-sheet">
+      <div id="inspect-slot"></div>
+      <div class="inspect-actions">
+        <button class="deal-btn" id="inspect-play" type="button">Play this card</button>
+        <button class="modal-cancel" id="inspect-close" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop" id="joker-modal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="joker-modal-title">
       <h3 id="joker-modal-title">Ricky Vac becomes…</h3>
@@ -657,6 +744,22 @@
       <input type="search" id="joker-search" placeholder="Search the 52 bands" aria-label="Search the 52 bands" />
       <div class="joker-options" id="joker-options"></div>
       <button class="modal-cancel" id="joker-cancel" type="button">Keep the Joker in hand</button>
+    </div>
+  </div>
+
+  <div class="modal-backdrop rules-backdrop" id="rules-modal" hidden>
+    <div class="modal rules-sheet" role="dialog" aria-modal="true" aria-labelledby="rules-modal-title">
+      <h3 id="rules-modal-title">How to play</h3>
+      <p>You, Mara, Dev and Kit — seven cards each.</p>
+      <ol class="rules-steps">
+        <li><span><strong>Match the top band.</strong> Play a band that shares a musician with the card on top — the connection is named as it lands.</span></li>
+        <li><span><strong>Tap to look, tap PLAY to play.</strong> One tap shows a card’s full face, roster and all. The PLAY button sends it to the pile.</span></li>
+        <li><span><strong>Nothing connects? Draw.</strong> Take the face-up reveal pile’s top card, one at a time, until a card in your hand connects.</span></li>
+        <li><span><strong>Ricky Vac is wild.</strong> The Joker plays on anything — name any band in the deck and he becomes it for the rest of the game.</span></li>
+        <li><span><strong>First empty hand wins.</strong></span></li>
+      </ol>
+      <button class="deal-btn rules-play" id="rules-play" type="button">Play</button>
+      <label class="rules-noshow"><input type="checkbox" id="rules-noshow" /> Don’t show again</label>
     </div>
   </div>
 
@@ -688,6 +791,13 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       var modal = document.getElementById('joker-modal');
       var jokerSearch = document.getElementById('joker-search');
       var jokerOptions = document.getElementById('joker-options');
+      var inspectModal = document.getElementById('inspect-modal');
+      var inspectSlot = document.getElementById('inspect-slot');
+      var inspectPlayBtn = document.getElementById('inspect-play');
+      var rulesModal = document.getElementById('rules-modal');
+      var rulesPlayBtn = document.getElementById('rules-play');
+      var rulesNoshow = document.getElementById('rules-noshow');
+      var rulesBtn = document.getElementById('rules-btn');
 
       var session = { games: 0, turnsTotal: 0, stalls: 0, ricky: 0 };
       var G = null;       // game state
@@ -773,13 +883,13 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         var lines = '', dots = '';
         for (var k = 0; k < sats; k++) {
           var ang = (Math.PI * 2 * k) / sats + rnd() * 0.4;
-          var rx = 32 + rnd() * 52, ry = 15 + rnd() * 30;
-          var x = Math.round(110 + Math.cos(ang) * rx), y = Math.round(50 + Math.sin(ang) * ry);
-          x = Math.max(8, Math.min(212, x)); y = Math.max(7, Math.min(93, y));
-          lines += '<line x1="110" y1="50" x2="' + x + '" y2="' + y + '"/>';
+          var rx = 32 + rnd() * 52, ry = 11 + rnd() * 21;
+          var x = Math.round(110 + Math.cos(ang) * rx), y = Math.round(38.5 + Math.sin(ang) * ry);
+          x = Math.max(8, Math.min(212, x)); y = Math.max(5, Math.min(72, y));
+          lines += '<line x1="110" y1="38.5" x2="' + x + '" y2="' + y + '"/>';
           dots += '<circle cx="' + x + '" cy="' + y + '" r="2.6"/>';
         }
-        return '<svg class="constellation' + (gold ? ' gold' : '') + '" viewBox="0 0 220 100" aria-hidden="true">' + lines + dots + '<circle class="hub" cx="110" cy="50" r="4.4"/></svg>';
+        return '<svg class="constellation' + (gold ? ' gold' : '') + '" viewBox="0 0 220 77" aria-hidden="true">' + lines + dots + '<circle class="hub" cx="110" cy="38.5" r="4.4"/></svg>';
       }
       function memberChips(bandIdx, matchSet) {
         var b = BANDS[bandIdx];
@@ -807,6 +917,24 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         html += '<div class="band-meta">' + esc(meta) + '</div>';
         html += '<div class="years"><span class="years-label">' + (opts.yearsLabel || 'Years active') + '</span><span class="years-val">' + esc(b.y || '') + '</span></div>';
         html += '<div class="member-label">Members · ' + b.m.length + '</div><div class="members">' + memberChips(bandIdx, opts.matchSet) + '</div>';
+        return html;
+      }
+      function miniFaceHTML(card, shared, playable) {
+        // Phone tray summary face: number, 25% sky, name, members count — no roster.
+        if (card.joker) {
+          return '<div class="face-mini" aria-hidden="true"><div class="card-top"><span class="card-no">6* JOKER</span></div>' +
+            '<div class="mini-mark">6*</div>' +
+            '<div class="band-name gold">Ricky Vac</div>' +
+            '<div class="mini-count">Wild thread</div>' +
+            '<div class="mini-via">Plays on anything</div></div>';
+        }
+        var b = BANDS[card.band];
+        var html = '<div class="face-mini" aria-hidden="true"><div class="card-top"><span class="card-no">6* ' + pad3(card.band + 1) + '</span></div>';
+        html += constellationSVG(card.band, false);
+        html += '<div class="band-name">' + esc(b.n) + '</div>';
+        html += '<div class="mini-count">Members · ' + b.m.length + '</div>';
+        if (playable && shared.length) html += '<div class="mini-via">via ' + esc(PEOPLE[shared[0]]) + (shared.length > 1 ? ' +' + (shared.length - 1) : '') + '</div>';
+        html += '</div>';
         return html;
       }
       function jokerFaceHTML() {
@@ -877,6 +1005,8 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         handEl.innerHTML = '';
         var hand = G.hands[0];
         handCount.textContent = 'Your hand · ' + hand.length + (hand.length === 1 ? ' card' : ' cards');
+        handEl.classList.toggle('cols-5', hand.length >= 9 && hand.length <= 10);
+        handEl.classList.toggle('cols-6', hand.length >= 11);
         if (!hand.length) {
           var d = document.createElement('div');
           d.className = 'hand-empty';
@@ -895,12 +1025,12 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           if (card.joker) {
             btn.classList.add('joker');
             btn.setAttribute('aria-label', 'Play Ricky Vac Joker');
-            btn.innerHTML = jokerFaceHTML();
+            btn.innerHTML = '<div class="face-full">' + jokerFaceHTML() + '</div>' + miniFaceHTML(card, shared, playable);
           } else {
             btn.setAttribute('aria-label', (playable ? 'Play ' : '') + BANDS[card.band].n);
             var matchSet = {};
             shared.forEach(function (p) { matchSet[p] = true; });
-            btn.innerHTML = bandFaceHTML(card.band, { matchSet: matchSet, yearsLabel: 'Active' });
+            btn.innerHTML = '<div class="face-full">' + bandFaceHTML(card.band, { matchSet: matchSet, yearsLabel: 'Active' }) + '</div>' + miniFaceHTML(card, shared, playable);
             if (playable && shared.length) {
               var note = document.createElement('div');
               note.className = 'play-note';
@@ -910,7 +1040,10 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           }
           if (playable) btn.classList.add('playable');
           if (card.fresh) { btn.classList.add('is-new'); card.fresh = false; }
-          btn.addEventListener('click', function () { humanPlay(card, btn); });
+          btn.addEventListener('click', function () {
+            if (isPhone()) openInspect(card);
+            else humanPlay(card, btn);
+          });
           handEl.appendChild(btn);
         });
       }
@@ -920,7 +1053,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         document.getElementById('stat-stalls').textContent = session.stalls;
         document.getElementById('stat-ricky').textContent = session.ricky;
       }
-      function renderAll() { renderScorebar(); renderTop(); renderReveal(); renderHand(); }
+      function renderAll() { closeInspect(); renderScorebar(); renderTop(); renderReveal(); renderHand(); }
       function setInstruction(html) { instruction.innerHTML = html; }
       function log(html) {
         var li = document.createElement('li');
@@ -1147,7 +1280,79 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       jokerSearch.addEventListener('input', function () { renderJokerOptions(jokerSearch.value); });
       document.getElementById('joker-cancel').addEventListener('click', closeJokerPicker);
       modal.addEventListener('click', function (e) { if (e.target === modal) closeJokerPicker(); });
-      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.hidden) closeJokerPicker(); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        if (!modal.hidden) closeJokerPicker();
+        if (!inspectModal.hidden) closeInspect();
+        if (!rulesModal.hidden) closeRules();
+      });
+
+      /* ---------- phone tap-to-inspect overlay ---------- */
+      var inspectCard = null;
+      function isPhone() { return window.matchMedia('(max-width: 520px)').matches; }
+      function openInspect(card) {
+        if (!G) return;
+        inspectCard = card;
+        var set = rosterSetOf(topBandIdx());
+        var playable = isPlayable(card, set);
+        var el = document.createElement('article');
+        el.className = 'band-card inspect-card';
+        if (card.joker) {
+          el.classList.add('joker-as');
+          el.setAttribute('aria-label', 'Ricky Vac Joker — full card face');
+          el.innerHTML = jokerFaceHTML();
+        } else {
+          var matchSet = {};
+          sharedWith(card, set).forEach(function (p) { matchSet[p] = true; });
+          el.setAttribute('aria-label', BANDS[card.band].n + ' — full card face');
+          el.innerHTML = bandFaceHTML(card.band, { matchSet: matchSet });
+        }
+        inspectSlot.innerHTML = '';
+        inspectSlot.appendChild(el);
+        var canPlay = !G.over && G.turn === 0 && !G.lock && playable;
+        inspectPlayBtn.hidden = !canPlay;
+        inspectPlayBtn.textContent = card.joker ? 'Play Ricky Vac…' : 'Play this card';
+        inspectModal.hidden = false;
+      }
+      function closeInspect() {
+        if (inspectModal && !inspectModal.hidden) inspectModal.hidden = true;
+        inspectCard = null;
+      }
+      inspectPlayBtn.addEventListener('click', function () {
+        var card = inspectCard;
+        closeInspect();
+        if (!card || !G || G.over || G.turn !== 0 || G.lock) return;
+        if (card.joker) { openJokerPicker(card); return; }
+        var set = rosterSetOf(topBandIdx());
+        var shared = sharedWith(card, set);
+        if (!shared.length) return;
+        G.lock = true;
+        doPlay(0, card, null, shared[0]);
+      });
+      document.getElementById('inspect-close').addEventListener('click', closeInspect);
+      inspectModal.addEventListener('click', function (e) { if (e.target === inspectModal) closeInspect(); });
+
+      /* ---------- phone rules popup ----------
+         Phone only: opens on load unless the player opted out, and reopens
+         any time from the Rules button on the table. Purely presentational —
+         it never touches game state. Storage is guarded like the beacon. */
+      function rulesSeen() {
+        try { return window.localStorage.getItem('cards_rules_seen') === '1'; } catch (e) { return false; }
+      }
+      function openRules() {
+        rulesNoshow.checked = rulesSeen();
+        rulesModal.hidden = false;
+      }
+      function closeRules() {
+        try {
+          if (rulesNoshow.checked) window.localStorage.setItem('cards_rules_seen', '1');
+          else window.localStorage.removeItem('cards_rules_seen');
+        } catch (e) { /* storage blocked: just close */ }
+        rulesModal.hidden = true;
+      }
+      rulesPlayBtn.addEventListener('click', closeRules);
+      rulesBtn.addEventListener('click', openRules);
+      rulesModal.addEventListener('click', function (e) { if (e.target === rulesModal) closeRules(); });
 
       /* ---------- CPU ---------- */
       function cpuChooseBand(seat) {
@@ -1213,6 +1418,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       document.getElementById('new-game').addEventListener('click', newGame);
       document.getElementById('play-again').addEventListener('click', newGame);
       newGame();
+      if (isPhone() && !rulesSeen()) openRules();
     }());
   </script>
 </body>
