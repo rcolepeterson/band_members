@@ -230,7 +230,7 @@
     .card-no { color: #718796; font-size: .62rem; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
     .type-chip { padding: 1px 7px; border: 1px solid rgba(192,210,222,.24); border-radius: 999px; color: #9dafbc; font-size: .59rem; white-space: nowrap; }
     .type-chip.gold { border-color: rgba(255,180,84,.5); color: var(--card-amber); }
-    .constellation { position: relative; z-index: 1; display: block; width: 100%; height: auto; aspect-ratio: 220 / 137; margin: 7px 0 5px; color: #36bce7; overflow: hidden; }
+    .constellation { position: relative; z-index: 1; display: block; width: 100%; height: auto; aspect-ratio: 220 / 100; margin: 7px 0 5px; color: #36bce7; overflow: hidden; }
     .band-card > :not(.members), .hand-card > :not(.members), .reveal-card > :not(.members) { flex: none; }
     .constellation line { stroke: currentColor; stroke-width: .65; opacity: .72; }
     .constellation circle { fill: #9feaff; stroke: #0c5168; stroke-width: .85; }
@@ -247,14 +247,14 @@
     .years .years-val { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .member-label { position: relative; z-index: 1; margin: 6px 0 3px; color: #8197a8; font-size: .6rem; letter-spacing: .09em; text-transform: uppercase; }
     .members { position: relative; z-index: 1; flex: 1 1 auto; min-height: 0; overflow: hidden; align-content: flex-start; display: flex; flex-wrap: wrap; gap: 3px; }
-    .member { min-width: 0; padding: 2px 6px; border: 1px solid rgba(255,255,255,.13); border-radius: 999px; background: rgba(255,255,255,.06); color: #e6ecf3; font-size: .57rem; line-height: 1.15; text-align: center; overflow-wrap: anywhere; }
+    .member { min-width: 0; padding: 2px 7px; border: 1px solid rgba(255,255,255,.13); border-radius: 999px; background: rgba(255,255,255,.06); color: #e6ecf3; font-size: .66rem; line-height: 1.2; text-align: center; overflow-wrap: anywhere; }
     .member.match { border-color: rgba(255,180,84,.42); background: rgba(255,180,84,.1); color: #ffd097; }
     .member.more { border-style: dashed; color: #8fa4b5; }
     .play-note { position: absolute; z-index: 2; right: 12px; bottom: 9px; left: 12px; display: none; color: var(--card-cyan); font-size: .62rem; font-weight: 700; }
     .band-card.playable .play-note { display: block; }
     .band-card.is-new { animation: deal .42s cubic-bezier(.16,1,.3,1) both; }
     @keyframes deal { from { opacity: 0; transform: translateY(-18px) rotate(-4deg); } }
-    .joker-big { position: relative; z-index: 1; display: grid; place-items: center; width: 100%; aspect-ratio: 220 / 137; margin: 7px 0 5px; color: var(--card-amber); font-family: var(--font-display); font-size: 3.6rem; line-height: .8; }
+    .joker-big { position: relative; z-index: 1; display: grid; place-items: center; width: 100%; aspect-ratio: 220 / 100; margin: 7px 0 5px; color: var(--card-amber); font-family: var(--font-display); font-size: 3.6rem; line-height: .8; }
 
     .instruction { min-height: 42px; margin: 22px auto 10px; max-width: 720px; text-align: center; color: #c2d5e2; font-size: .92rem; }
     .instruction strong { color: #fff; }
@@ -305,7 +305,7 @@
     .hand-card .years { font-size: .56rem; }
     .hand-card .member-label { font-size: .55rem; }
     .hand-card .members { gap: 3px; }
-    .hand-card .member { padding: 2px 4px; font-size: .51rem; }
+    .hand-card .member { padding: 2px 6px; font-size: .6rem; }
     .hand-card .play-note { display: none; right: 10px; left: 10px; bottom: 8px; font-size: .58rem; }
     .hand-card.playable { padding-bottom: 28px; }
     .hand-card.playable .play-note { display: block; }
@@ -481,7 +481,7 @@
       .pile-label { font-size: .62rem; }
       .pile-note { font-size: .66rem; }
       .band-card { max-width: 310px; padding: 11px; }
-      .band-card .member { padding: 2px 4px; font-size: .56rem; }
+      .band-card .member { padding: 2px 6px; font-size: .62rem; }
       .instruction { margin-top: 16px; font-size: .84rem; }
       .study-cards { grid-template-columns: 1fr; }
       .hand { grid-template-columns: 1fr; gap: 14px; }
@@ -516,7 +516,7 @@
       <div class="study-copy">
         <p class="prototype-label">Front + back study</p>
         <h2 id="face-title">Everything needed to make the play.</h2>
-        <p>The constellation owns the top half without becoming decoration. The lower panel keeps the site card’s hierarchy, so the player can scan the band, era and member names in one pass.</p>
+        <p>The constellation owns the top third without becoming decoration. The lower panel keeps the site card’s hierarchy, so the player can scan the band, era and member names in one pass.</p>
         <ol class="face-logic">
           <li><b>01</b><div><strong>Constellation first</strong>This layout study reserves the art field for each band’s own graph-derived constellation, so connection density becomes visible at a glance.</div></li>
           <li><b>02</b><div><strong>Site-card information</strong>Band name, genre · city, years active, then the member chips players actually use.</div></li>
@@ -526,9 +526,9 @@
       <div class="study-cards" aria-label="Proposed playing side and card back">
         <article class="physical-card band-card" aria-label="Foo Fighters playing side">
           <div class="card-top"><span class="card-no">6* 001</span><span class="type-chip">Band</span></div>
-          <svg class="constellation" viewBox="0 0 220 137" aria-label="Constellation artwork study for Foo Fighters">
-            <line x1="110" y1="72" x2="29" y2="31"/><line x1="110" y1="72" x2="62" y2="113"/><line x1="110" y1="72" x2="95" y2="18"/><line x1="110" y1="72" x2="151" y2="22"/><line x1="110" y1="72" x2="192" y2="46"/><line x1="110" y1="72" x2="169" y2="115"/><line x1="110" y1="72" x2="114" y2="125"/>
-            <circle cx="29" cy="31" r="2.6"/><circle cx="62" cy="113" r="2.6"/><circle cx="95" cy="18" r="2.6"/><circle cx="151" cy="22" r="2.6"/><circle cx="192" cy="46" r="2.6"/><circle cx="169" cy="115" r="2.6"/><circle cx="114" cy="125" r="2.6"/><circle class="hub" cx="110" cy="72" r="4.4"/>
+          <svg class="constellation" viewBox="0 0 220 100" aria-label="Constellation artwork study for Foo Fighters">
+            <line x1="110" y1="50" x2="29" y2="22"/><line x1="110" y1="50" x2="62" y2="82"/><line x1="110" y1="50" x2="95" y2="13"/><line x1="110" y1="50" x2="140" y2="15"/><line x1="110" y1="50" x2="192" y2="32"/><line x1="110" y1="50" x2="165" y2="84"/><line x1="110" y1="50" x2="112" y2="90"/><line x1="110" y1="50" x2="30" y2="70"/><line x1="110" y1="50" x2="200" y2="68"/>
+            <circle cx="29" cy="22" r="2.6"/><circle cx="62" cy="82" r="2.6"/><circle cx="95" cy="13" r="2.6"/><circle cx="140" cy="15" r="2.6"/><circle cx="192" cy="32" r="2.6"/><circle cx="165" cy="84" r="2.6"/><circle cx="112" cy="90" r="2.6"/><circle cx="30" cy="70" r="2.6"/><circle cx="200" cy="68" r="2.6"/><circle class="hub" cx="110" cy="50" r="4.4"/>
           </svg>
           <div class="face-divider"></div>
           <div class="band-name">Foo Fighters</div>
@@ -768,17 +768,18 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         for (var i = 0; i < b.n.length; i++) { h ^= b.n.charCodeAt(i); h = (h * 16777619) >>> 0; }
         var seed = h;
         function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
-        var sats = Math.max(3, Math.min(8, Math.round(b.m.length / 3)));
+        // One satellite per printed member: the constellation IS the roster.
+        var sats = b.m.length;
         var lines = '', dots = '';
         for (var k = 0; k < sats; k++) {
-          var ang = (Math.PI * 2 * k) / sats + rnd() * 0.5;
-          var rx = 34 + rnd() * 48, ry = 30 + rnd() * 26;
-          var x = Math.round(110 + Math.cos(ang) * rx), y = Math.round(68 + Math.sin(ang) * ry);
-          x = Math.max(8, Math.min(212, x)); y = Math.max(8, Math.min(129, y));
-          lines += '<line x1="110" y1="68" x2="' + x + '" y2="' + y + '"/>';
+          var ang = (Math.PI * 2 * k) / sats + rnd() * 0.4;
+          var rx = 32 + rnd() * 52, ry = 15 + rnd() * 30;
+          var x = Math.round(110 + Math.cos(ang) * rx), y = Math.round(50 + Math.sin(ang) * ry);
+          x = Math.max(8, Math.min(212, x)); y = Math.max(7, Math.min(93, y));
+          lines += '<line x1="110" y1="50" x2="' + x + '" y2="' + y + '"/>';
           dots += '<circle cx="' + x + '" cy="' + y + '" r="2.6"/>';
         }
-        return '<svg class="constellation' + (gold ? ' gold' : '') + '" viewBox="0 0 220 137" aria-hidden="true">' + lines + dots + '<circle class="hub" cx="110" cy="68" r="4.4"/></svg>';
+        return '<svg class="constellation' + (gold ? ' gold' : '') + '" viewBox="0 0 220 100" aria-hidden="true">' + lines + dots + '<circle class="hub" cx="110" cy="50" r="4.4"/></svg>';
       }
       function memberChips(bandIdx, matchSet) {
         var b = BANDS[bandIdx];
