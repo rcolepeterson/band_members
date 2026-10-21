@@ -349,7 +349,6 @@
       color: #8fa4b5; font-size: .82rem;
     }
     .stats-strip .stats-title { color: #c2d5e2; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; font-size: .72rem; }
-    .stats-strip .beta-tag { padding: 2px 9px; border: 1px solid rgba(255,180,84,.55); border-radius: 999px; color: var(--card-amber); }
 
     .game-footer { display: flex; justify-content: space-between; gap: 16px; padding: 20px 4px 0; }
     .game-footer a { color: var(--cyan); text-decoration: none; font-size: .92rem; font-weight: 600; }
@@ -520,6 +519,52 @@
       .joker-copy { max-width: 650px; }
       .rules { grid-template-columns: 1fr; gap: 34px; padding: 54px 0 66px; }
     }
+    /* ---------- v11: desktop presence — taller bars, larger text, denser hand ---------- */
+    .wrap { width: min(1400px, calc(100% - 32px)); }
+    .table-shell { margin-top: 4px; }
+    .table-topbar { padding: 6px 16px 0; }
+    .options-btn { padding: 7px 16px; font-size: .85rem; }
+    .scorebar { padding: 10px 26px 8px; gap: 14px; }
+    .player { font-size: 1.42rem; gap: 13px; }
+    .player .pcount { font-size: 1.08rem; }
+    .dot { width: 13px; height: 13px; }
+    .turnbar { padding-top: 4px; }
+    .turn-pill { font-size: 1rem; }
+    .playfield { padding: 6px 24px; }
+    .stage { grid-template-columns: minmax(0, 200px) minmax(0, 1fr) 130px; gap: 22px; max-width: 820px; }
+    #reveal-slot { max-width: 200px; }
+    .stage .band-card { max-width: 200px; }
+    /* Stage faces compact vertically so the printed roster keeps its room
+       at the smaller card size: shorter sky, tighter face rhythm, and
+       tighter roster pills that wrap into the freed rows. */
+    .stage .band-card, .stage .reveal-card { padding: 11px; }
+    .stage .card-top { height: 15px; }
+    .stage .constellation { width: 72%; margin: 3px auto 2px; }
+    .stage .face-divider { margin: 2px 0; }
+    .stage .band-name { margin-bottom: 0; }
+    .stage .years { margin-top: 0; }
+    .stage .member-label { margin: 3px 0 1px; }
+    .stage .member { padding: 1px 5px; font-size: .6rem; }
+    .instruction { margin: 8px auto 4px; min-height: 30px; max-width: 860px; font-size: 1rem; }
+    /* The fit budget is measured mid-game too: the recent-plays log shows
+       the latest two entries on desktop so a long game can't grow the page
+       past the one-window target (phone already hides the log). */
+    .log li:nth-child(n+3) { display: none; }
+    .hand-label { max-width: none; margin: 6px auto 4px; font-size: .9rem; }
+    .hand { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; max-width: 1280px; padding-top: 6px; }
+    .hand-card { padding: 9px; }
+    .hand-card .constellation { width: 84%; margin: 4px auto 3px; }
+    .hand-card .band-name { height: auto; }
+    .hand-card .years { margin-top: 2px; }
+    .hand-card .member-label { margin: 4px 0 2px; }
+    .hand-card .member { padding: 1px 5px; font-size: .58rem; }
+    .hand-card.playable { padding-bottom: 30px; }
+    .stats-strip { padding: 7px 26px; gap: 10px 30px; font-size: 1rem; }
+    .game-footer { padding-top: 12px; }
+    @media (max-width: 1200px) { .hand { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+    @media (max-width: 1000px) { .hand { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+    @media (max-width: 850px) { .hand { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
     /* Phone mode — ONE condition for every phone feature (table shell, tray,
        overlays, rules popup + Rules button, Ricky sheet), mirrored by
        PHONE_QUERY in the script: a coarse pointer exists (any-pointer, so a
@@ -647,8 +692,13 @@
       .hand.cols-6 .face-mini .band-name { font-size: .54rem; }
       .hand.cols-6 .face-mini .mini-count { font-size: .46rem; }
       .hand.cols-6 .face-mini .mini-via { font-size: .48rem; }
-      .stats-strip { flex: none; padding: 7px 12px; font-size: .72rem; gap: 5px 14px; }
+      .stats-strip { flex: none; padding: 5px 12px; font-size: .72rem; gap: 5px 14px; }
       .stats-strip .stats-note { display: none; }
+      /* Footer links ride inside the shell as its last row on phone, so the
+         whole first frame — player bar through site links — fits the visible
+         viewport with zero scrolling (placeFooter in the script moves it). */
+      .game-footer { flex: none; width: auto; margin: 0; padding: 5px 12px 7px; border-top: 1px solid rgba(225,244,255,.09); background: rgba(3,7,11,.54); }
+      .game-footer a { font-size: .8rem; }
       .modal { max-height: 94dvh; display: flex; flex-direction: column; padding: 18px; }
       .modal input[type="search"] { flex: none; }
       .joker-options { grid-template-columns: 1fr 1fr; overflow-y: auto; min-height: 0; }
@@ -707,6 +757,7 @@
       .face-mini .mini-count { font-size: .5rem; }
       .face-mini .mini-via { font-size: .5rem; -webkit-line-clamp: 1; }
       .stats-strip { padding: 5px 12px; font-size: .68rem; gap: 4px 12px; }
+      .game-footer { padding: 3px 12px 5px; }
       .modal-backdrop { padding: 10px; }
       .modal { padding: 14px 18px; }
       .modal h3 { font-size: 1.35rem; }
@@ -771,8 +822,7 @@
       </div>
 
       <div class="stats-strip" aria-label="Session playtest statistics">
-        <span class="stats-title beta-tag">Beta</span>
-        <span>Session playtest</span>
+        <span class="stats-title">Session playtest</span>
         <span>Games finished <strong id="stat-games">0</strong></span>
         <span>Avg turns <strong id="stat-turns">—</strong></span>
         <span>Stalls <strong id="stat-stalls">0</strong></span>
@@ -1736,10 +1786,11 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       }
 
       /* ---------- session stats live inside the shell on every layout ----------
-         The phone shell is a strict visible-viewport budget (100svh) and the
-         BETA stats strip is part of that first frame, so the strip stays as
-         the shell's last row on phone and desktop alike — nothing to scroll
-         to, nothing hidden under the browser chrome. */
+         The phone shell is a strict visible-viewport budget (100svh): the
+         stats strip is part of that first frame on phone and desktop alike,
+         and on phone the footer links row joins the shell as its very last
+         row — nothing to scroll to, nothing hidden under the browser chrome.
+         On desktop the footer sits below the shell as before. */
       var statsStrip = document.querySelector('.stats-strip');
       var tableShell = document.querySelector('.table-shell');
       function placeStats() {
@@ -1748,8 +1799,18 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         if (statsStrip.parentNode !== tableShell) tableShell.appendChild(statsStrip);
       }
       placeStats();
+      var gameFooter = document.querySelector('.game-footer');
+      function placeFooter() {
+        if (!gameFooter || !tableShell) return;
+        if (isPhone()) {
+          if (gameFooter.parentNode !== tableShell) tableShell.appendChild(gameFooter);
+        } else if (gameFooter.parentNode === tableShell && tableShell.parentNode) {
+          tableShell.parentNode.insertBefore(gameFooter, tableShell.nextSibling);
+        }
+      }
+      placeFooter();
       var phoneMq = window.matchMedia(PHONE_QUERY);
-      function onPhoneChange() { placeStats(); if (G) renderAll(); }
+      function onPhoneChange() { placeStats(); placeFooter(); if (G) renderAll(); }
       if (phoneMq.addEventListener) phoneMq.addEventListener('change', onPhoneChange);
       else if (phoneMq.addListener) phoneMq.addListener(onPhoneChange);
 
