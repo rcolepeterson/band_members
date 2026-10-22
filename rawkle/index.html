@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="Rawkle by Six Degrees — guess the band. One famous band a day, six tries. A Six Degrees of Rock game." />
+    <link rel="icon" href="/favicon-32.png" />
+    <meta property="og:title" content="Rawkle by Six Degrees" />
+    <meta property="og:description" content="Guess the band. One famous band a day, six tries." />
+    <meta property="og:image" content="https://sixdegreesofrock.com/og-image.png" />
+    <title>Rawkle by Six Degrees — Guess the Band</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Narrow:wght@500;600&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #04070d;
+        --bg-deep: #02040a;
+        --panel: rgba(13, 24, 40, 0.72);
+        --panel-solid: #0a1524;
+        --hairline: rgba(148, 190, 233, 0.16);
+        --hairline-strong: rgba(148, 190, 233, 0.32);
+        --ink: #e8eef6;
+        --ink-dim: #9fb2c6;
+        --ink-faint: #64788e;
+        --gold: #ffb454;
+        --blue: #27b8ff;
+        --absent: #1b2940;
+        --absent-ink: #5d7189;
+        --tile-border: rgba(148, 190, 233, 0.35);
+        --radius: 14px;
+        --tile: 44px;
+        --gap: 5px;
+      }
+      html { background: var(--bg-deep); }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(1100px 620px at 50% -140px, rgba(39, 120, 190, 0.20), transparent 62%),
+          radial-gradient(700px 480px at 88% 30%, rgba(255, 180, 84, 0.05), transparent 60%),
+          linear-gradient(180deg, #060b16 0%, var(--bg) 34%, var(--bg-deep) 100%);
+        color: var(--ink);
+        font-family: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+      }
+      .stars {
+        position: fixed; inset: 0; pointer-events: none; z-index: 0;
+        background-image:
+          radial-gradient(1px 1px at 12% 18%, rgba(255,255,255,0.55) 50%, transparent 51%),
+          radial-gradient(1px 1px at 78% 9%, rgba(255,255,255,0.4) 50%, transparent 51%),
+          radial-gradient(1.5px 1.5px at 34% 42%, rgba(255,255,255,0.35) 50%, transparent 51%),
+          radial-gradient(1px 1px at 63% 58%, rgba(255,255,255,0.3) 50%, transparent 51%),
+          radial-gradient(1px 1px at 91% 44%, rgba(255,255,255,0.45) 50%, transparent 51%),
+          radial-gradient(1.5px 1.5px at 22% 71%, rgba(255,255,255,0.28) 50%, transparent 51%),
+          radial-gradient(1px 1px at 48% 84%, rgba(255,255,255,0.38) 50%, transparent 51%),
+          radial-gradient(1px 1px at 84% 78%, rgba(255,255,255,0.32) 50%, transparent 51%);
+      }
+      .wrap { position: relative; z-index: 1; max-width: 600px; margin: 0 auto; padding: 26px 16px 48px; }
+
+      header { text-align: center; margin-bottom: 8px; }
+      .mark { width: 54px; height: 54px; margin: 0 auto 10px; display: block; }
+      .wordmark { font-size: 12px; font-weight: 600; letter-spacing: 0.42em; text-indent: 0.42em; color: var(--ink-dim); text-transform: uppercase; margin: 0 0 8px; }
+      h1 { font-size: 40px; font-weight: 800; letter-spacing: 0.06em; margin: 0; line-height: 1.05; }
+      h1 .star { color: var(--gold); }
+      .byline { font-family: "Archivo Narrow", "Archivo", sans-serif; font-size: 15px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); margin: 6px 0 0; }
+      .puzzle-line { font-size: 13.5px; color: var(--ink-dim); margin: 12px 0 0; }
+      .puzzle-line strong { color: var(--ink); font-weight: 600; }
+      .practice-badge { display: none; font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; border: 1px solid rgba(255,180,84,0.45); color: var(--gold); vertical-align: 2px; margin-left: 8px; }
+      body.practice .practice-badge { display: inline-block; }
+
+      .howto {
+        background: var(--panel); border: 1px solid var(--hairline); border-radius: var(--radius);
+        padding: 14px 16px; margin: 18px auto 4px; max-width: 520px; text-align: left;
+      }
+      .howto summary { cursor: pointer; font-weight: 700; font-size: 14.5px; letter-spacing: 0.02em; }
+      .howto p { font-size: 14px; line-height: 1.5; color: var(--ink-dim); margin: 8px 0 0; }
+      .howto p strong { color: var(--ink); }
+      .howto .ex { display: flex; gap: 4px; margin: 10px 0 2px; align-items: center; }
+      .howto .ex .t { width: 26px; height: 26px; font-size: 14px; }
+      .howto .ex-note { font-size: 12.5px; color: var(--ink-faint); margin-left: 8px; }
+
+      #message { min-height: 22px; text-align: center; font-size: 15px; font-weight: 600; color: var(--gold); margin: 14px 0 4px; }
+      #message.dim { color: var(--ink-dim); font-weight: 500; }
+
+      #board { display: flex; flex-direction: column; gap: var(--gap); align-items: center; margin: 10px auto 6px; }
+      .row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; max-width: 560px; }
+      .word { display: flex; gap: var(--gap); flex-wrap: nowrap; }
+      .t {
+        width: var(--tile); height: var(--tile);
+        display: flex; align-items: center; justify-content: center;
+        font-size: calc(var(--tile) * 0.52); font-weight: 700; text-transform: uppercase;
+        border: 2px solid var(--tile-border); border-radius: 8px;
+        background: rgba(10, 21, 36, 0.6); color: var(--ink);
+        user-select: none;
+      }
+      .t.filled { border-color: var(--hairline-strong); }
+      .t.correct { background: var(--gold); border-color: var(--gold); color: #23160a; }
+      .t.present { background: var(--blue); border-color: var(--blue); color: #06202f; }
+      .t.absent { background: var(--absent); border-color: var(--absent); color: var(--absent-ink); }
+      @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.12); } 100% { transform: scale(1); } }
+      .t.pop { animation: pop 120ms ease; }
+      @keyframes shake { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(2px); } 30%, 50%, 70% { transform: translateX(-3px); } 40%, 60% { transform: translateX(3px); } }
+      .row.shake { animation: shake 400ms ease; }
+
+      #keyboard { max-width: 520px; margin: 18px auto 0; display: flex; flex-direction: column; gap: 6px; }
+      .krow { display: flex; gap: 6px; justify-content: center; }
+      .key {
+        flex: 1 1 0; max-width: 46px; height: 54px; border: 0; border-radius: 8px;
+        background: #27374d; color: var(--ink); font-family: inherit; font-size: 15px; font-weight: 700;
+        text-transform: uppercase; cursor: pointer; padding: 0;
+      }
+      .key.wide { flex: 1.6 1 0; max-width: 74px; font-size: 12px; letter-spacing: 0.04em; }
+      .key.correct { background: var(--gold); color: #23160a; }
+      .key.present { background: var(--blue); color: #06202f; }
+      .key.absent { background: #131e30; color: var(--absent-ink); }
+      .key:active { filter: brightness(1.25); }
+
+      #endcard {
+        display: none; background: var(--panel); border: 1px solid rgba(255,180,84,0.45); border-radius: var(--radius);
+        padding: 20px 18px; margin: 22px auto 0; max-width: 520px; text-align: center;
+      }
+      #endcard.show { display: block; }
+      #endcard .answer { font-size: 26px; font-weight: 800; margin: 0 0 4px; }
+      #endcard .verdict { font-size: 15px; color: var(--ink-dim); margin: 0 0 6px; }
+      #endcard .statsline { font-size: 13.5px; color: var(--ink-faint); margin: 0 0 16px; }
+      .btnrow { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+      .btn {
+        display: inline-block; border: 1px solid var(--hairline-strong); background: rgba(19,34,56,0.82); color: var(--ink);
+        font: inherit; font-size: 14.5px; font-weight: 600; padding: 11px 16px; border-radius: 999px; cursor: pointer; text-decoration: none;
+      }
+      .btn.gold { background: var(--gold); border-color: var(--gold); color: #23160a; }
+      .btn:hover { filter: brightness(1.12); }
+
+      .actions { text-align: center; margin-top: 20px; }
+      .actions .btn { font-size: 13.5px; padding: 9px 14px; }
+
+      footer { text-align: center; margin-top: 38px; padding-top: 22px; border-top: 1px solid var(--hairline); }
+      footer .f-mark { font-size: 15px; font-weight: 700; letter-spacing: 0.3em; text-indent: 0.3em; color: var(--ink-dim); margin: 0 0 8px; }
+      footer p { font-size: 13px; color: var(--ink-faint); margin: 0 0 6px; }
+      footer a { color: var(--ink-dim); text-decoration: none; border-bottom: 1px solid var(--hairline-strong); }
+      footer a:hover { color: var(--ink); }
+
+      @media (max-width: 480px) {
+        h1 { font-size: 34px; }
+        .key { height: 50px; font-size: 14px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .t.pop, .row.shake { animation: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stars" aria-hidden="true"></div>
+    <div class="wrap">
+      <header>
+        <svg class="mark" viewBox="0 0 80 80" fill="none" aria-hidden="true">
+          <circle cx="40" cy="40" r="37" stroke="rgba(148,190,233,0.35)" stroke-width="1"/>
+          <g stroke="#27b8ff" stroke-width="1.4">
+            <line x1="40" y1="40" x2="40" y2="10"/><line x1="40" y1="40" x2="66" y2="25"/><line x1="40" y1="40" x2="66" y2="55"/>
+            <line x1="40" y1="40" x2="40" y2="70"/><line x1="40" y1="40" x2="14" y2="55"/><line x1="40" y1="40" x2="14" y2="25"/>
+          </g>
+          <g fill="#27b8ff">
+            <circle cx="40" cy="10" r="2.4"/><circle cx="66" cy="25" r="2.4"/><circle cx="66" cy="55" r="2.4"/>
+            <circle cx="40" cy="70" r="2.4"/><circle cx="14" cy="55" r="2.4"/><circle cx="14" cy="25" r="2.4"/>
+          </g>
+          <circle cx="40" cy="40" r="6.5" fill="#ffb454"/>
+          <circle cx="40" cy="40" r="11" stroke="rgba(255,180,84,0.5)" stroke-width="1"/>
+        </svg>
+        <p class="wordmark">Six Degrees of Rock</p>
+        <h1>RAWKLE</h1>
+        <p class="byline">Rawkle by Six Degrees</p>
+        <p class="puzzle-line"><strong id="puzzle-no"></strong> &middot; <span id="puzzle-date"></span><span class="practice-badge">Practice</span></p>
+      </header>
+
+      <details class="howto" id="howto">
+        <summary>How to play</summary>
+        <p><strong>Guess the band in 6 tries.</strong> One band a day &mdash; the same band for everyone. Every answer is a band that went <strong>Gold or Platinum</strong>. No obscure locals.</p>
+        <p>Type a guess that <strong>fits the tiles</strong> &mdash; same words, same spaces &mdash; and hit Enter. Punctuation doesn&rsquo;t count: it becomes a space, so Guns N&rsquo; Roses plays as GUNS N ROSES. A guess counts if it fills every tile; it costs a try either way.</p>
+        <div class="ex" aria-hidden="true">
+          <span class="t correct">W</span><span class="t present">H</span><span class="t absent">I</span><span class="t">T</span><span class="t">E</span>
+          <span class="ex-note">Gold = right letter, right spot. Blue = in the name, wrong spot. Dark = not in the name.</span>
+        </div>
+        <p>New band at midnight Pacific. Win, and the band opens in the graph &mdash; see who they&rsquo;re connected to.</p>
+      </details>
+
+      <p id="message" role="status" aria-live="polite"></p>
+      <div id="board" aria-label="Guess board"></div>
+
+      <div id="endcard">
+        <p class="answer" id="end-answer"></p>
+        <p class="verdict" id="end-verdict"></p>
+        <p class="statsline" id="end-stats"></p>
+        <div class="btnrow">
+          <button class="btn gold" id="share-btn" type="button">Share result</button>
+          <a class="btn" id="graph-btn" href="https://sixdegreesofrock.com" target="_blank" rel="noopener">See them in the graph</a>
+        </div>
+      </div>
+
+      <div id="keyboard" aria-label="Keyboard"></div>
+
+      <div class="actions">
+        <button class="btn" id="practice-btn" type="button">Practice round</button>
+        <button class="btn" id="daily-btn" type="button" style="display:none">Back to today&rsquo;s band</button>
+      </div>
+
+      <footer>
+        <p class="f-mark">6*</p>
+        <p><a href="https://sixdegreesofrock.com">sixdegreesofrock.com</a> &middot; <a href="/play">More games</a> &middot; <a href="/game">Daily Chain</a> &middot; <a href="/cards">Card Game</a></p>
+        <p>Every band is closer than you think.</p>
+      </footer>
+    </div>
+
+    <script>
+      "use strict";
+      /* ================================================================
+         RAWKLE by Six Degrees — guess the band.
+         Answer pool: bands with at least one RIAA Gold album (most are
+         Platinum or better), curated by hand. No obscure locals — that
+         is Aaron's rule. Display names keep their real punctuation;
+         the BOARD name normalizes it away (punctuation becomes a
+         space, accents flatten to plain letters).
+         ================================================================ */
+      var BANDS = [
+        "AC/DC", "Aerosmith", "Alabama", "Alice Cooper", "Alice in Chains",
+        "America", "Anthrax", "Arcade Fire", "Arctic Monkeys", "Asia", "AWOLNATION",
+        "Bad Company", "Badfinger", "Bastille", "Beastie Boys", "Bee Gees",
+        "Black Sabbath", "Blind Faith", "Blondie", "Blue Öyster Cult", "Blur", "Bon Jovi",
+        "Boston", "Bread", "Breaking Benjamin", "Buffalo Springfield", "BulletBoys", "Bush",
+        "Cage the Elephant", "Charlie Daniels Band", "Cheap Trick", "Chicago", "Cinderella", "Coldplay",
+        "Collective Soul", "Commodores", "Counting Crows", "Creed", "Crosby, Stills & Nash", "Damn Yankees",
+        "Dave Matthews Band", "Deep Purple", "Def Leppard", "Deftones", "Depeche Mode", "Derek and the Dominos",
+        "Dio", "Dire Straits", "Disturbed", "Dokken", "Dream Theater", "Duran Duran",
+        "Earth, Wind & Fire", "Eagles", "Electric Light Orchestra", "Emerson, Lake & Palmer",
+        "Extreme", "Faces", "Faith No More", "Fall Out Boy", "Firehouse", "Fleetwood Mac",
+        "Focus", "Foghat", "Foo Fighters", "Foreigner", "Foster the People", "fun.",
+        "Genesis", "Godsmack", "Golden Earring", "Good Charlotte", "Goo Goo Dolls", "Grand Funk Railroad",
+        "Grateful Dead", "Great White", "Green Day", "Guns N' Roses", "Hall & Oates", "Heart",
+        "Humble Pie", "Imagine Dragons", "Incubus", "INXS", "Iron Maiden", "Jane's Addiction",
+        "Jefferson Airplane", "Jethro Tull", "Jimmy Eat World", "Journey", "Judas Priest", "Kansas",
+        "King Crimson", "Kings of Leon", "KISS", "Kool & the Gang", "Korn",
+        "Lamb of God", "Led Zeppelin", "Limp Bizkit", "Linkin Park", "Little Feat", "Live",
+        "Los Lobos", "Loverboy", "Lynyrd Skynyrd", "Mad Season", "Manfred Mann's Earth Band", "Marilyn Manson",
+        "Marshall Tucker Band", "Matchbox Twenty", "Megadeth", "Metallica", "MGMT", "Ministry",
+        "Montrose", "Mötley Crüe", "Motörhead", "Mott the Hoople", "Mr. Big", "Mumford & Sons",
+        "Muse", "My Chemical Romance", "Nazareth", "Nickelback", "Night Ranger", "Nine Inch Nails",
+        "Nirvana", "No Doubt", "Oasis", "Of Monsters and Men", "Ohio Players", "OneRepublic",
+        "Panic! at the Disco", "Pantera", "Papa Roach", "Paramore", "Parliament", "Pearl Jam",
+        "Phish", "Pink Floyd", "Pixies", "Poison", "Primus", "Public Enemy",
+        "Queen", "Queens of the Stone Age", "Quiet Riot", "R.E.M.", "Radiohead", "Rainbow",
+        "Ratt", "Red Hot Chili Peppers", "REO Speedwagon", "Run-DMC", "Rush", "Santana",
+        "Scorpions", "Shinedown", "Simple Plan", "Skid Row", "Slaughter", "Slayer",
+        "Slipknot", "Smashing Pumpkins", "Smash Mouth", "Soundgarden", "Staind", "Steely Dan",
+        "Steve Miller Band", "Stone Temple Pilots", "Styx", "Sublime", "Sugar Ray", "Supertramp",
+        "Survivor", "Sweet", "System of a Down", "T. Rex", "Talking Heads", "Temple of the Dog",
+        "Tesla", "The Allman Brothers Band", "The Band", "The Beach Boys", "The Beatles",
+        "The Black Crowes", "The Black Keys", "The Cars", "The Cure", "The Doobie Brothers", "The Doors",
+        "The Flaming Lips", "The Killers", "The Kinks", "The Lumineers", "The Monkees", "The Moody Blues",
+        "The Offspring", "The Police", "The Raconteurs", "The Rolling Stones", "The Strokes", "The Wallflowers",
+        "The White Stripes", "The Who", "Third Eye Blind", "Three Days Grace", "Three Dog Night",
+        "Tool", "Toto", "Traffic", "Train", "Triumph", "Twisted Sister",
+        "Twenty One Pilots", "Uriah Heep", "Van Halen", "Vampire Weekend", "W.A.S.P.", "Walk the Moon",
+        "War", "Warrant", "Weather Report", "Weezer", "White Lion", "White Zombie",
+        "Whitesnake", "Wilco", "Yes", "ZZ Top"
+      ];
+
+      /* Rule check applied even to famous names: Enuff Z'Nuff and
+         Black Flag are NOT answers — no RIAA Gold album. The Gold
+         floor has no exceptions in this pool. */
+
+      /* ---------- name handling ----------
+         Board form: A-Z letters and single spaces only. Every
+         punctuation mark becomes a space (Aaron's rule), accents
+         flatten (Ö -> O, Ü -> U), runs of spaces collapse. */
+      function boardName(display) {
+        return display
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toUpperCase()
+          .replace(/[^A-Z]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      /* ---------- deterministic daily order ----------
+         One seeded shuffle of the pool, same for every player and
+         every device. SEED was picked so the launch window
+         (2026-10-22 / 2026-10-23) lands on strong, familiar bands. */
+      var SEED = 20261023;
+      function mulberry32(a) {
+        return function () {
+          a |= 0; a = (a + 0x6D2B79F5) | 0;
+          var t = Math.imul(a ^ (a >>> 15), 1 | a);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+      var ORDER = BANDS.map(function (_, i) { return i; });
+      (function shuffle() {
+        var rnd = mulberry32(SEED);
+        for (var i = ORDER.length - 1; i > 0; i--) {
+          var j = Math.floor(rnd() * (i + 1));
+          var tmp = ORDER[i]; ORDER[i] = ORDER[j]; ORDER[j] = tmp;
+        }
+      })();
+
+      /* ---------- dates (Pacific) ---------- */
+      function pacificToday() {
+        var parts = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/Los_Angeles", year: "numeric", month: "numeric", day: "numeric"
+        }).formatToParts(new Date());
+        var o = {};
+        parts.forEach(function (p) { o[p.type] = parseInt(p.value, 10); });
+        return { y: o.year, m: o.month, d: o.day };
+      }
+      function dayNumber(y, m, d) { return Math.floor(Date.UTC(y, m - 1, d) / 86400000); }
+      var today = pacificToday();
+      var todayNum = dayNumber(today.y, today.m, today.d);
+      var LAUNCH_NUM = dayNumber(2026, 10, 23); /* puzzle #1 */
+      var puzzleNo = todayNum - LAUNCH_NUM + 1;
+      var dateKey = today.y + "-" + String(today.m).padStart(2, "0") + "-" + String(today.d).padStart(2, "0");
+      var dailyIndex = ORDER[((todayNum % ORDER.length) + ORDER.length) % ORDER.length];
+
+      /* ---------- game state ---------- */
+      var MAX_TRIES = 6;
+      var mode = "daily"; /* "daily" | "practice" */
+      var answerDisplay = BANDS[dailyIndex];
+      var answer = boardName(answerDisplay);
+      var guesses = [];      /* submitted board-form guesses */
+      var current = "";      /* letters typed for the in-progress guess */
+      var status = "playing"; /* "playing" | "won" | "lost" */
+      var keyState = {};     /* letter -> "correct" | "present" | "absent" */
+
+      var STATE_KEY = "rawkle-state-v1";
+      var STATS_KEY = "rawkle-stats-v1";
+
+      function loadStats() {
+        try { return JSON.parse(localStorage.getItem(STATS_KEY)) || null; }
+        catch (e) { return null; }
+      }
+      function freshStats() { return { played: 0, wins: 0, streak: 0, maxStreak: 0, lastDate: "", dist: [0, 0, 0, 0, 0, 0] }; }
+      function recordResult(won, tries) {
+        var s = loadStats() || freshStats();
+        if (s.lastDate === dateKey) return s; /* already counted today */
+        s.played += 1;
+        if (won) {
+          s.wins += 1; s.streak += 1; s.maxStreak = Math.max(s.maxStreak, s.streak);
+          s.dist[tries - 1] += 1;
+        } else { s.streak = 0; }
+        s.lastDate = dateKey;
+        try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch (e) {}
+        return s;
+      }
+      function saveDailyState() {
+        try {
+          localStorage.setItem(STATE_KEY, JSON.stringify({
+            date: dateKey, guesses: guesses, status: status
+          }));
+        } catch (e) {}
+      }
+      function restoreDailyState() {
+        try {
+          var s = JSON.parse(localStorage.getItem(STATE_KEY));
+          if (s && s.date === dateKey && Array.isArray(s.guesses)) {
+            guesses = s.guesses.filter(function (g) { return boardName(g) === g && g.length === answer.length; });
+            status = s.status === "won" || s.status === "lost" ? s.status : "playing";
+            if (status === "playing" && guesses.length >= MAX_TRIES) status = "lost";
+          }
+        } catch (e) {}
+      }
+
+      /* ---------- scoring ----------
+         Standard two-pass Wordle scoring, duplicate letters handled:
+         exact matches lock first, then "present" is granted only up
+         to the count of that letter left in the answer. Spaces are
+         part of the pattern and always line up, so scoring runs on
+         the letter sequence with spaces stripped from both sides. */
+      function lettersOf(board) { return board.replace(/ /g, ""); }
+      function scoreGuess(guessBoard, answerBoard) {
+        var g = lettersOf(guessBoard), a = lettersOf(answerBoard);
+        var out = new Array(g.length).fill("absent");
+        var left = {};
+        var i, ch;
+        for (i = 0; i < a.length; i++) {
+          if (g[i] === a[i]) { out[i] = "correct"; }
+          else { left[a[i]] = (left[a[i]] || 0) + 1; }
+        }
+        for (i = 0; i < g.length; i++) {
+          if (out[i] === "correct") continue;
+          ch = g[i];
+          if (left[ch] > 0) { out[i] = "present"; left[ch] -= 1; }
+        }
+        return out;
+      }
+      function updateKeys(guessBoard, scored) {
+        var g = lettersOf(guessBoard);
+        var rank = { absent: 1, present: 2, correct: 3 };
+        for (var i = 0; i < g.length; i++) {
+          var ch = g[i], st = scored[i];
+          if (!keyState[ch] || rank[st] > rank[keyState[ch]]) keyState[ch] = st;
+        }
+      }
+
+      /* ---------- rendering ---------- */
+      var boardEl = document.getElementById("board");
+      var msgEl = document.getElementById("message");
+      var endEl = document.getElementById("endcard");
+
+      function tileSizeFor(board) {
+        var longest = board.split(" ").reduce(function (m, w) { return Math.max(m, w.length); }, 0);
+        var avail = Math.min(window.innerWidth - 32, 560);
+        var size = Math.floor((avail - (longest - 1) * 5) / longest);
+        return Math.max(20, Math.min(46, size));
+      }
+      function setTileSize() {
+        document.documentElement.style.setProperty("--tile", tileSizeFor(answer) + "px");
+      }
+
+      function buildBoard() {
+        boardEl.innerHTML = "";
+        setTileSize();
+        var rows = [];
+        for (var r = 0; r < MAX_TRIES; r++) {
+          var rowEl = document.createElement("div");
+          rowEl.className = "row";
+          var letterIdx = 0;
+          answer.split(" ").forEach(function (word) {
+            var wordEl = document.createElement("div");
+            wordEl.className = "word";
+            for (var k = 0; k < word.length; k++) {
+              var t = document.createElement("div");
+              t.className = "t";
+              t.dataset.idx = letterIdx;
+              wordEl.appendChild(t);
+              letterIdx += 1;
+            }
+            rowEl.appendChild(wordEl);
+          });
+          boardEl.appendChild(rowEl);
+          rows.push(rowEl);
+        }
+        /* paint submitted guesses */
+        guesses.forEach(function (g, gi) {
+          var scored = scoreGuess(g, answer);
+          var letters = lettersOf(g);
+          var tiles = rows[gi].querySelectorAll(".t");
+          tiles.forEach(function (t, ti) {
+            t.textContent = letters[ti] || "";
+            if (letters[ti]) t.classList.add("filled", scored[ti]);
+          });
+        });
+        /* paint in-progress guess */
+        if (status === "playing" && guesses.length < MAX_TRIES) {
+          var curTiles = rows[guesses.length].querySelectorAll(".t");
+          curTiles.forEach(function (t, ti) {
+            var ch = current[ti] || "";
+            t.textContent = ch;
+            if (ch) t.classList.add("filled");
+          });
+        }
+      }
+
+      function buildKeyboard() {
+        var kb = document.getElementById("keyboard");
+        kb.innerHTML = "";
+        var rows = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
+        rows.forEach(function (rowStr, ri) {
+          var rowEl = document.createElement("div");
+          rowEl.className = "krow";
+          if (ri === 2) rowEl.appendChild(makeKey("Enter", "wide", "enter"));
+          rowStr.split("").forEach(function (ch) {
+            rowEl.appendChild(makeKey(ch, "", ch));
+          });
+          if (ri === 2) rowEl.appendChild(makeKey("⌫", "wide", "back"));
+          kb.appendChild(rowEl);
+        });
+        paintKeys();
+      }
+      function makeKey(label, cls, action) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = ("key " + cls).trim();
+        b.textContent = label;
+        b.dataset.action = action;
+        b.addEventListener("click", function () { handleKey(action); });
+        return b;
+      }
+      function paintKeys() {
+        document.querySelectorAll(".key").forEach(function (k) {
+          var a = k.dataset.action;
+          if (a && a.length === 1 && keyState[a]) {
+            k.classList.remove("correct", "present", "absent");
+            k.classList.add(keyState[a]);
+          }
+        });
+      }
+
+      function message(text, dim) {
+        msgEl.textContent = text || "";
+        msgEl.className = dim ? "dim" : "";
+      }
+
+      /* ---------- input ---------- */
+      function handleKey(action) {
+        if (status !== "playing") return;
+        var total = lettersOf(answer).length;
+        if (action === "enter") { submitGuess(); return; }
+        if (action === "back") { current = current.slice(0, -1); buildBoard(); return; }
+        if (/^[A-Z]$/.test(action) && current.length < total) {
+          current += action;
+          buildBoard();
+          var tiles = boardEl.children[guesses.length].querySelectorAll(".t");
+          if (tiles[current.length - 1]) tiles[current.length - 1].classList.add("pop");
+        }
+      }
+      document.addEventListener("keydown", function (e) {
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.key === "Enter") handleKey("enter");
+        else if (e.key === "Backspace") handleKey("back");
+        else if (/^[a-zA-Z]$/.test(e.key)) handleKey(e.key.toUpperCase());
+      });
+
+      function submitGuess() {
+        var total = lettersOf(answer).length;
+        if (current.length < total) {
+          var rowEl = boardEl.children[guesses.length];
+          if (rowEl) { rowEl.classList.remove("shake"); void rowEl.offsetWidth; rowEl.classList.add("shake"); }
+          message("Fill every tile first.");
+          return;
+        }
+        /* rebuild the guess in board form: letters laid over the
+           answer's word pattern (spaces are fixed, never typed) */
+        var guessBoard = "";
+        var pos = 0;
+        answer.split(" ").forEach(function (word, wi) {
+          if (wi > 0) guessBoard += " ";
+          guessBoard += current.slice(pos, pos + word.length);
+          pos += word.length;
+        });
+        var scored = scoreGuess(guessBoard, answer);
+        guesses.push(guessBoard);
+        updateKeys(guessBoard, scored);
+        current = "";
+        if (guessBoard === answer) {
+          status = "won";
+        } else if (guesses.length >= MAX_TRIES) {
+          status = "lost";
+        }
+        if (mode === "daily") saveDailyState();
+        buildBoard();
+        paintKeys();
+        if (status !== "playing") finishRound();
+        else message("");
+      }
+
+      /* ---------- end of round ---------- */
+      var WIN_LINES = {
+        1: "In one. Take the day.",
+        2: "Two tries. Sharp.",
+        3: "Three tries. Clean solve.",
+        4: "Four tries. Got there.",
+        5: "Five tries. Still counts.",
+        6: "Last try. A win is a win."
+      };
+      function finishRound() {
+        var stats = null;
+        if (mode === "daily") stats = recordResult(status === "won", guesses.length);
+        document.getElementById("end-answer").textContent = answerDisplay;
+        document.getElementById("end-verdict").textContent =
+          status === "won"
+            ? WIN_LINES[guesses.length] + (mode === "practice" ? " (Practice round — doesn't count.)" : "")
+            : "Out of tries. Today's band was " + answerDisplay + "." + (mode === "practice" ? " (Practice.)" : "");
+        var sl = document.getElementById("end-stats");
+        if (stats) {
+          var pct = stats.played ? Math.round((stats.wins / stats.played) * 100) : 0;
+          sl.textContent = "Played " + stats.played + " · Won " + pct + "% · Streak " + stats.streak + " · Best streak " + stats.maxStreak;
+        } else { sl.textContent = ""; }
+        document.getElementById("graph-btn").href =
+          "https://sixdegreesofrock.com/?band=" + encodeURIComponent(answerDisplay);
+        document.getElementById("graph-btn").textContent = "See " + answerDisplay + " in the graph";
+        endEl.classList.add("show");
+        message("");
+      }
+
+      function shareText() {
+        var head = mode === "practice"
+          ? "Rawkle by Six Degrees (practice)"
+          : puzzleNo > 0
+            ? "Rawkle by Six Degrees #" + puzzleNo
+            : "Rawkle by Six Degrees — preview";
+        var score = status === "won" ? guesses.length + "/" + MAX_TRIES : "X/" + MAX_TRIES;
+        var lines = [head + " — " + score, ""];
+        guesses.forEach(function (g) {
+          var scored = scoreGuess(g, answer);
+          var li = 0;
+          var rowTxt = g.split(" ").map(function (word) {
+            var out = "";
+            for (var k = 0; k < word.length; k++) {
+              var st = scored[li++];
+              out += st === "correct" ? "★" : st === "present" ? "☆" : "✕";
+            }
+            return out;
+          }).join("  ");
+          lines.push(rowTxt);
+        });
+        lines.push("", "sixdegreesofrock.com/rawkle");
+        return lines.join("\n");
+      }
+      document.getElementById("share-btn").addEventListener("click", function () {
+        var text = shareText();
+        if (navigator.share) {
+          navigator.share({ text: text }).catch(function () {});
+        } else if (navigator.clipboard) {
+          navigator.clipboard.writeText(text).then(function () {
+            message("Result copied — paste it anywhere.");
+          }).catch(function () { message("Copy failed — screenshot it instead."); });
+        }
+      });
+
+      /* ---------- practice / daily switching ---------- */
+      function startRound(newMode, display) {
+        mode = newMode;
+        answerDisplay = display;
+        answer = boardName(display);
+        guesses = [];
+        current = "";
+        status = "playing";
+        keyState = {};
+        document.body.classList.toggle("practice", mode === "practice");
+        document.getElementById("daily-btn").style.display = mode === "practice" ? "" : "none";
+        endEl.classList.remove("show");
+        message(mode === "practice" ? "Practice round — a random Gold-or-better band." : "", true);
+        buildBoard();
+        buildKeyboard();
+      }
+      document.getElementById("practice-btn").addEventListener("click", function () {
+        var pick = BANDS[Math.floor(Math.random() * BANDS.length)];
+        if (boardName(pick) === answer && BANDS.length > 1) {
+          pick = BANDS[(BANDS.indexOf(pick) + 1) % BANDS.length];
+        }
+        startRound("practice", pick);
+      });
+      document.getElementById("daily-btn").addEventListener("click", function () {
+        startRound("daily", BANDS[dailyIndex]);
+        restoreDailyState();
+        buildBoard();
+        /* re-apply key colours from the restored guesses */
+        keyState = {};
+        guesses.forEach(function (g) { updateKeys(g, scoreGuess(g, answer)); });
+        paintKeys();
+        if (status !== "playing") finishRound();
+      });
+
+      /* ---------- boot ---------- */
+      document.getElementById("puzzle-no").textContent = puzzleNo > 0 ? "Rawkle #" + puzzleNo : "Rawkle — preview";
+      document.getElementById("puzzle-date").textContent =
+        new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(new Date());
+      if (!localStorage.getItem(STATS_KEY)) {
+        document.getElementById("howto").setAttribute("open", "");
+      }
+      restoreDailyState();
+      /* rebuild keyboard colours from restored guesses */
+      guesses.forEach(function (g) { updateKeys(g, scoreGuess(g, answer)); });
+      buildBoard();
+      buildKeyboard();
+      if (status !== "playing") finishRound();
+      window.addEventListener("resize", setTileSize);
+    </script>
+  </body>
+</html>
