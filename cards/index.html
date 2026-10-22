@@ -590,6 +590,21 @@
     .feedback-btn { display: inline-block; padding: 10px 20px; border: 1px solid rgba(255,180,84,.55); border-radius: 999px; background: rgba(255,180,84,.1); color: var(--card-amber); font-size: .88rem; font-weight: 700; text-decoration: none; }
     .feedback-btn:hover { background: rgba(255,180,84,.2); }
 
+    /* ---------- v13: FREEZE — Josh Freese, the ice-blue special ---------- */
+    .constellation.ice { color: #4aa8dd; }
+    .constellation.ice circle { fill: #cfeeff; stroke: #1d5f86; }
+    .constellation.ice .hub { fill: #7fd4ff; stroke: #e6f7ff; }
+    .band-name.ice { color: #aee6ff; }
+    .type-chip.ice { border-color: rgba(127,212,255,.5); color: #aee6ff; }
+    .hand-card.freeze { border-color: rgba(127,212,255,.5); background: linear-gradient(170deg, #16283a, #081018 60%, #0a1826); }
+    .hand-card.freeze.playable::before { background: #7fd4ff; }
+    .band-card.freeze-card { border-color: rgba(127,212,255,.55); }
+    .reveal-card.freeze-top { border-color: rgba(127,212,255,.6); }
+    .face-mini .mini-via.ice { color: #aee6ff; }
+    .freeze-rule { position: relative; z-index: 1; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(127,212,255,.3); color: #aee6ff; font-size: .68rem; font-weight: 700; line-height: 1.4; }
+    .freeze-tag { display: inline-block; padding: 1px 8px; border: 1px solid rgba(127,212,255,.55); border-radius: 999px; color: #aee6ff; font-size: .68rem; font-weight: 800; letter-spacing: .06em; }
+    .log .freeze-log { color: #aee6ff; font-weight: 700; }
+
     /* Phone mode — ONE condition for every phone feature (table shell, tray,
        overlays, rules popup + Rules button, Ricky sheet), mirrored by
        PHONE_QUERY in the script: a coarse pointer exists (any-pointer, so a
@@ -854,6 +869,7 @@
         <span>Avg turns <strong id="stat-turns">—</strong></span>
         <span>Stalls <strong id="stat-stalls">0</strong></span>
         <span>Ricky plays <strong id="stat-ricky">0</strong></span>
+        <span>Freeze plays <strong id="stat-freeze">0</strong></span>
         <span class="stats-note">This session only. A stall is a turn that starts with nothing playable in hand — the moments the deck stops flowing, counted so we can read them before anything goes to print.</span>
       </div>
     </section>
@@ -895,6 +911,7 @@
         <li><span><strong>Tap to look, tap PLAY to play.</strong> One tap shows a card’s full face, roster and all. The PLAY button sends it to the pile.</span></li>
         <li><span><strong>Nothing connects? Draw.</strong> Take the face-up reveal pile’s top card, one at a time, until a card in your hand connects.</span></li>
         <li><span><strong>Ricky Vac is wild.</strong> The Joker plays on anything — name any band in the deck and he becomes it for the rest of the game.</span></li>
+        <li><span><strong>FREEZE blocks Josh.</strong> Play it instead of a band card and the next player can’t connect through Josh Freese on their turn.</span></li>
         <li><span><strong>First empty hand wins.</strong></span></li>
       </ol>
       <button class="deal-btn rules-play" id="rules-play" type="button">Play</button>
@@ -916,6 +933,7 @@
           <li><div><strong>Draw until you can move</strong><span>The draw pile sits face up. If nothing in your hand connects, take its top card, one at a time, until a playable band is in your hand—then play it.</span></div></li>
           <li><div><strong>Keep the chain alive</strong><span>When the reveal pile runs dry, the played stack shuffles back in beneath the top card. If a seat still cannot connect, it passes and the chain moves on.</span></div></li>
           <li><div><strong>Play the Joker</strong><span>Ricky Vac plays on anything. Name any band in the deck and the Joker becomes that band, including its members, for the rest of the game.</span></div></li>
+          <li><div><strong>Play FREEZE</strong><span>FREEZE — Josh Freese plays instead of a band card and changes nothing on top. The next player cannot connect through Josh Freese on their turn; a card that also shares another member still plays, and Ricky is never blocked.</span></div></li>
           <li><div><strong>Empty your hand</strong><span>The first player to play their final card wins.</span></div></li>
         </ol>
         <div class="decision-note"><strong>Standard card, no custom shape:</strong> every card—including both Jokers—uses the familiar 63 × 88 mm trading-card proportion shared by Pokémon and Magic cards—easy to sleeve, shuffle, store, and print. The playing side follows the main site’s band-card hierarchy: constellation, band, genre · city, years active, then the lineup. This build plays exactly like the printed deck: legality runs on each card’s printed roster — the names on the face, in printed order — and nothing else. Where the full graph holds more members than the card prints, the face notes them as “+N more in the graph”; those names flavor the card but never make a play legal.</div>
@@ -976,7 +994,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       var rulesBtn = document.getElementById('rules-btn');
       var teachHint = document.getElementById('teach-hint');
 
-      var session = { games: 0, turnsTotal: 0, stalls: 0, ricky: 0 };
+      var session = { games: 0, turnsTotal: 0, stalls: 0, ricky: 0, freeze: 0 };
       var G = null;       // game state
       var timers = [];
 
@@ -1001,7 +1019,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       function beacon(payload) {
         try {
           payload.anon = ANON_ID;
-          payload.deck = 'deck2-schema-v1';
+          payload.deck = 'deck2-schema-v2-freeze';
           fetch('/api/cards-stats', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1027,16 +1045,24 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       function pad3(n) { return ('00' + n).slice(-3); }
       function topBandIdx() { return G.top.asBand !== null ? G.top.asBand : G.top.card.band; }
       function topRoster() { return BANDS[topBandIdx()].m; }
+      var FREESE = 9; // PEOPLE index of Josh Freese — the deck's busiest thread
       function sharedWith(card, rosterSet) {
-        if (card.joker) return [];
+        if (card.joker || card.freeze) return [];
         var out = [];
         var m = BANDS[card.band].m;
         for (var i = 0; i < m.length; i++) if (rosterSet[m[i]]) out.push(m[i]);
         return out;
       }
-      function isPlayable(card, rosterSet) {
-        if (card.joker) return true;
-        return sharedWith(card, rosterSet).length > 0;
+      // Connections a seat may legally use right now: while a seat is frozen,
+      // Josh Freese alone never makes a card playable and never shows as its via.
+      function legalShared(card, rosterSet, seat) {
+        var out = sharedWith(card, rosterSet);
+        if (G && G.frozenSeat === seat) out = out.filter(function (p) { return p !== FREESE; });
+        return out;
+      }
+      function isPlayable(card, rosterSet, seat) {
+        if (card.joker || card.freeze) return true;
+        return legalShared(card, rosterSet, seat).length > 0;
       }
       function rosterSetOf(bandIdx) {
         var s = {}; var m = BANDS[bandIdx].m;
@@ -1045,7 +1071,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       }
       function anyPlayable(seat) {
         var set = rosterSetOf(topBandIdx());
-        return G.hands[seat].some(function (c) { return isPlayable(c, set); });
+        return G.hands[seat].some(function (c) { return isPlayable(c, set, seat); });
       }
 
       /* ---------- card face rendering ---------- */
@@ -1098,6 +1124,13 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       }
       function miniFaceHTML(card, shared, playable) {
         // Phone tray summary face: number, 25% sky, name, members count — no roster.
+        if (card.freeze) {
+          return '<div class="face-mini" aria-hidden="true"><div class="card-top"><span class="card-no">6* FREEZE</span></div>' +
+            freezeConstellationSVG() +
+            '<div class="band-name ice">FREEZE</div>' +
+            '<div class="mini-count">Josh Freese · Special</div>' +
+            '<div class="mini-via ice">Blocks the next player’s Josh Freese connections</div></div>';
+        }
         if (card.joker) {
           return '<div class="face-mini" aria-hidden="true"><div class="card-top"><span class="card-no">6* JOKER</span></div>' +
             '<div class="mini-mark">6*</div>' +
@@ -1143,6 +1176,45 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           '<div class="band-meta">Richard “Ricky Vac” Vaculig</div>' +
           '<div class="band-meta" style="margin-top:5px">Frontman · Ricky Vac and the Rock-a-Ways</div>' +
           '<div class="play-note" style="color:var(--card-amber)">Wild thread · plays on anything</div>';
+      }
+
+      /* ---------- FREEZE faces ----------
+         The Freeze sky is Freese's own person-web: one satellite per band in
+         the deck that carries him — the densest constellation in the game,
+         drawn from the same roster data the cards play by. */
+      function freeseBands() { return BANDS.filter(function (b) { return b.m.indexOf(FREESE) >= 0; }); }
+      function freezeConstellationSVG() {
+        var n = freeseBands().length;
+        var seed = 987654321;
+        function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+        var lines = '', dots = '';
+        for (var k = 0; k < n; k++) {
+          var ang = (Math.PI * 2 * k) / n + rnd() * 0.3;
+          var rx = 34 + rnd() * 62, ry = 11 + rnd() * 23;
+          var x = Math.round(110 + Math.cos(ang) * rx), y = Math.round(38.5 + Math.sin(ang) * ry);
+          x = Math.max(6, Math.min(214, x)); y = Math.max(4, Math.min(73, y));
+          lines += '<line x1="110" y1="38.5" x2="' + x + '" y2="' + y + '"/>';
+          dots += '<circle cx="' + x + '" cy="' + y + '" r="2.2"/>';
+        }
+        return '<svg class="constellation ice" viewBox="0 0 220 77" aria-hidden="true">' + lines + dots + '<circle class="hub" cx="110" cy="38.5" r="4.6"/></svg>';
+      }
+      function freezeFaceHTML() {
+        var bands = freeseBands();
+        var chips = bands.slice(0, 14).map(function (b) { return '<span class="member">' + esc(b.n) + '</span>'; }).join('');
+        if (bands.length > 14) chips += '<span class="member more">+' + (bands.length - 14) + ' more bands</span>';
+        return '<div class="card-top"><span class="card-no">6* FREEZE</span><span class="type-chip ice">Special</span></div>' +
+          freezeConstellationSVG() +
+          '<div class="face-divider"></div><div class="band-name ice">FREEZE</div>' +
+          '<div class="band-meta">Josh Freese</div>' +
+          '<div class="years"><span class="years-label">Effect</span><span class="years-val">Blocks the next player</span></div>' +
+          '<div class="member-label">His web · ' + bands.length + ' bands in this deck</div><div class="members">' + chips + '</div>' +
+          '<div class="freeze-rule">Blocks the next player’s Josh Freese connections. A card that also connects another way still plays — Ricky is never blocked.</div>';
+      }
+      function compactFreezeHTML() {
+        return '<div class="card-top"><span class="card-no">6* FREEZE</span><span class="type-chip ice">Special</span></div>' +
+          freezeConstellationSVG() +
+          '<div class="band-name ice">FREEZE</div>' +
+          '<div class="stage-counts"><span class="stage-members">Josh Freese · blocks the next player</span></div>';
       }
 
       /* ---------- rendering ---------- */
@@ -1209,7 +1281,10 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           // draw is on, otherwise it opens the full face in the inspect overlay.
           btn.classList.add('stage-compact');
           btn.disabled = false;
-          if (next.joker) {
+          if (next.freeze) {
+            btn.setAttribute('aria-label', 'Reveal pile top card: FREEZE — Josh Freese' + (canDraw ? '. Activate to draw it.' : '. Activate to view the full card.'));
+            btn.innerHTML = compactFreezeHTML();
+          } else if (next.joker) {
             btn.setAttribute('aria-label', 'Reveal pile top card: Ricky Vac Joker' + (canDraw ? '. Activate to draw it.' : '. Activate to view the full card.'));
             btn.innerHTML = compactJokerHTML();
           } else {
@@ -1225,7 +1300,11 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           return;
         }
         btn.disabled = !canDraw;
-        if (next.joker) {
+        if (next.freeze) {
+          btn.classList.add('freeze-top');
+          btn.setAttribute('aria-label', 'Reveal pile top card: FREEZE — Josh Freese' + (canDraw ? '. Activate to draw it.' : ''));
+          btn.innerHTML = freezeFaceHTML();
+        } else if (next.joker) {
           btn.setAttribute('aria-label', 'Reveal pile top card: Ricky Vac Joker' + (canDraw ? '. Activate to draw it.' : ''));
           btn.innerHTML = jokerFaceHTML();
         } else {
@@ -1259,11 +1338,14 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           var btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'hand-card';
-          var shared = sharedWith(card, set);
-          var playable = isPlayable(card, set);
+          var shared = legalShared(card, set, 0);
+          var playable = isPlayable(card, set, 0);
           // One grammar on every device: the hand is a tray of uniform
           // minis — click looks (inspect overlay), PLAY commits.
-          if (card.joker) {
+          if (card.freeze) {
+            btn.classList.add('freeze');
+            btn.setAttribute('aria-label', 'FREEZE — Josh Freese blocker — tap to view the full card');
+          } else if (card.joker) {
             btn.classList.add('joker');
             btn.setAttribute('aria-label', 'Ricky Vac Joker — tap to view the full card');
           } else {
@@ -1282,6 +1364,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         document.getElementById('stat-turns').textContent = session.games ? (session.turnsTotal / session.games).toFixed(1) : '—';
         document.getElementById('stat-stalls').textContent = session.stalls;
         document.getElementById('stat-ricky').textContent = session.ricky;
+        document.getElementById('stat-freeze').textContent = session.freeze;
       }
       function renderAll() { closeInspect(); renderScorebar(); renderTop(); renderReveal(); renderHand(); }
       function setInstruction(html) { instruction.innerHTML = html; }
@@ -1297,6 +1380,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       function buildDeck() {
         var deck = BANDS.map(function (b, i) { return { band: i, joker: false }; });
         deck.push({ band: -1, joker: true }, { band: -1, joker: true });
+        deck.push({ band: -2, joker: false, freeze: true }, { band: -2, joker: false, freeze: true });
         return shuffle(deck);
       }
       function newGame() {
@@ -1307,7 +1391,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         for (var r = 0; r < HAND_SIZE; r++)
           for (var s = 0; s < 4; s++) hands[s].push(deck.pop());
         var starter = deck.pop();
-        while (starter.joker) { // a Joker never opens the chain: bury it and flip again
+        while (starter.joker || starter.freeze) { // specials never open the chain: bury them and flip again
           deck.splice(Math.floor(Math.random() * (deck.length + 1)), 0, starter);
           starter = deck.pop();
         }
@@ -1324,7 +1408,9 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           over: false,
           winner: -1,
           lock: false,
-          turnStalled: false
+          turnStalled: false,
+          frozenSeat: null,
+          freezePlays: 0
         };
         beacon({ type: 'start' });
         logEl.innerHTML = '';
@@ -1344,24 +1430,33 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         renderScorebar();
         if (G.turn === 0) {
           G.lock = false;
-          turnPill.textContent = 'Your turn';
+          var frozenMe = G.frozenSeat === 0;
+          turnPill.textContent = frozenMe ? 'Your turn — frozen' : 'Your turn';
           renderReveal(); renderHand();
           var topName = BANDS[topBandIdx()].n;
-          if (G.turnStalled) {
+          if (frozenMe) {
+            if (G.turnStalled) {
+              setInstruction('<strong>You’re frozen — Josh Freese is blocked.</strong> Nothing else in your hand connects to ' + esc(topName) + '. Draw from the reveal pile until a non-Freese connection turns up.');
+            } else {
+              setInstruction('<strong>You’re frozen — Josh Freese is blocked this turn.</strong> Play a lit card that connects another way — or play FREEZE back.');
+            }
+          } else if (G.turnStalled) {
             setInstruction('<strong>Nothing in your hand connects to ' + esc(topName) + '.</strong> Draw from the reveal pile, one card at a time, until a playable band turns up.');
           } else {
             setInstruction('<strong>Your move.</strong> Play a card that shares a musician with ' + esc(topName) + ' — playable cards are lit.');
           }
         } else {
           G.lock = true;
-          turnPill.textContent = SEATS[G.turn] + ' is playing';
+          turnPill.textContent = SEATS[G.turn] + (G.frozenSeat === G.turn ? ' is frozen' : ' is playing');
           renderReveal(); renderHand();
-          setInstruction('<strong>' + SEATS[G.turn] + '’s turn</strong> — the chain sits on ' + esc(BANDS[topBandIdx()].n) + '.');
+          setInstruction('<strong>' + SEATS[G.turn] + '’s turn</strong> — the chain sits on ' + esc(BANDS[topBandIdx()].n) + '.' + (G.frozenSeat === G.turn ? ' Josh Freese connections are blocked.' : ''));
           later(function () { cpuTurn(G.turn); }, 850);
         }
       }
       function endTurn() {
         if (G.over) return;
+        // A freeze lasts exactly one seat: it expires as that seat's turn ends.
+        if (G.frozenSeat === G.turn) G.frozenSeat = null;
         G.turn = (G.turn + 1) % 4;
         beginTurn();
       }
@@ -1401,6 +1496,31 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           setLastPlay('<strong>' + name + '</strong> played <strong>' + esc(BANDS[card.band].n) + '</strong>.');
           log(name + ' played ' + esc(BANDS[card.band].n) + '.');
         }
+        renderAll();
+        if (!hand.length) { gameOver(seat); return; }
+        endTurn();
+      }
+      /* FREEZE — Josh Freese: played instead of a band card. The chain top
+         does not change; the next seat simply loses every Freese-only
+         connection for their one turn. It sheds like any card — played as
+         a last card, it wins. Ricky is never a Freese connection, so the
+         Joker always escapes a freeze. */
+      function doPlayFreeze(seat, card) {
+        var hand = G.hands[seat];
+        var idx = hand.indexOf(card);
+        if (idx < 0) return;
+        hand.splice(idx, 1);
+        G.played.push(card);
+        session.freeze++; G.freezePlays++; renderStats();
+        var target = (seat + 1) % 4;
+        G.frozenSeat = target;
+        var name = SEATS[seat];
+        var msg;
+        if (target === 0) msg = '<strong>' + name + '</strong> froze <strong>you</strong> — Josh Freese is blocked this turn.';
+        else if (seat === 0) msg = '<strong>You</strong> froze <strong>' + SEATS[target] + '</strong> — no Josh Freese connections on their turn.';
+        else msg = '<strong>' + name + '</strong> froze <strong>' + SEATS[target] + '</strong> — no Josh Freese connections on their turn.';
+        setLastPlay('<span class="freeze-tag">FREEZE</span> ' + msg);
+        log('<span class="freeze-log">FREEZE</span> — ' + name + ' froze ' + (target === 0 ? 'you' : SEATS[target]) + ': no Josh Freese connections on ' + (target === 0 ? 'your' : 'their') + ' turn.');
         renderAll();
         if (!hand.length) { gameOver(seat); return; }
         endTurn();
@@ -1464,13 +1584,14 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       function humanPlay(card, el) {
         if (!G || G.over || G.turn !== 0 || G.lock) return;
         var set = rosterSetOf(topBandIdx());
-        if (!isPlayable(card, set)) {
+        if (!isPlayable(card, set, 0)) {
           el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
           setInstruction('<strong>No shared member.</strong> ' + (card.joker ? '' : esc(BANDS[card.band].n) + ' cannot follow ' + esc(BANDS[topBandIdx()].n) + '. ') + 'Play a lit card' + (anyPlayable(0) ? '.' : ' — or draw from the reveal pile.'));
           return;
         }
         if (card.joker) { openJokerPicker(card); return; }
-        var shared = sharedWith(card, set);
+        if (card.freeze) { G.lock = true; doPlayFreeze(0, card); return; }
+        var shared = legalShared(card, set, 0);
         G.lock = true;
         doPlay(0, card, null, shared.length ? shared[0] : null);
       }
@@ -1533,16 +1654,20 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         if (!G) return;
         inspectCard = card;
         var set = rosterSetOf(topBandIdx());
-        var playable = isPlayable(card, set);
+        var playable = isPlayable(card, set, 0);
         var el = document.createElement('article');
         el.className = 'band-card inspect-card';
-        if (card.joker) {
+        if (card.freeze) {
+          el.classList.add('freeze-card');
+          el.setAttribute('aria-label', 'FREEZE — Josh Freese — full card face');
+          el.innerHTML = freezeFaceHTML();
+        } else if (card.joker) {
           el.classList.add('joker-as');
           el.setAttribute('aria-label', 'Ricky Vac Joker — full card face');
           el.innerHTML = jokerFaceHTML();
         } else {
           var matchSet = {};
-          sharedWith(card, set).forEach(function (p) { matchSet[p] = true; });
+          legalShared(card, set, 0).forEach(function (p) { matchSet[p] = true; });
           el.setAttribute('aria-label', BANDS[card.band].n + ' — full card face');
           el.innerHTML = bandFaceHTML(card.band, { matchSet: matchSet });
         }
@@ -1550,7 +1675,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         inspectSlot.appendChild(el);
         var canPlay = !G.over && G.turn === 0 && !G.lock && playable;
         inspectPlayBtn.hidden = !canPlay;
-        inspectPlayBtn.textContent = card.joker ? 'Play Ricky Vac…' : 'Play this card';
+        inspectPlayBtn.textContent = card.freeze ? 'Play Freeze' : (card.joker ? 'Play Ricky Vac…' : 'Play this card');
         inspectModal.hidden = false;
       }
       function closeInspect() {
@@ -1577,7 +1702,11 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         } else {
           if (!G.draw.length) return;
           var next = G.draw[0];
-          if (next.joker) {
+          if (next.freeze) {
+            el.classList.add('freeze-card');
+            el.setAttribute('aria-label', 'FREEZE — Josh Freese — full card face');
+            el.innerHTML = freezeFaceHTML();
+          } else if (next.joker) {
             el.classList.add('joker-as');
             el.setAttribute('aria-label', 'Ricky Vac Joker — full card face');
             el.innerHTML = jokerFaceHTML();
@@ -1597,8 +1726,9 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         closeInspect();
         if (!card || !G || G.over || G.turn !== 0 || G.lock) return;
         if (card.joker) { openJokerPicker(card); return; }
+        if (card.freeze) { G.lock = true; doPlayFreeze(0, card); return; }
         var set = rosterSetOf(topBandIdx());
-        var shared = sharedWith(card, set);
+        var shared = legalShared(card, set, 0);
         if (!shared.length) return;
         G.lock = true;
         doPlay(0, card, null, shared[0]);
@@ -1772,8 +1902,14 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         if (!G || G.over || G.turn !== seat) return;
         var set = rosterSetOf(topBandIdx());
         var hand = G.hands[seat];
-        var playable = hand.filter(function (c) { return isPlayable(c, set); });
-        if (!playable.length) {
+        var playable = hand.filter(function (c) { return isPlayable(c, set, seat); });
+        var freezeCards = hand.filter(function (c) { return c.freeze; });
+        var bandPlays = playable.filter(function (c) { return !c.freeze; });
+        // FREEZE heuristic: counter-punch when the next seat is about to go
+        // out; otherwise spend it instead of drawing when no band play exists.
+        if (freezeCards.length && G.hands[(seat + 1) % 4].length <= 2) { doPlayFreeze(seat, freezeCards[0]); return; }
+        if (!bandPlays.length) {
+          if (freezeCards.length) { doPlayFreeze(seat, freezeCards[0]); return; }
           // stall: draw one at a time until something connects
           var drawn = 0;
           var step = function () {
@@ -1783,7 +1919,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
               drawn++;
               renderScorebar(); renderReveal();
               set = rosterSetOf(topBandIdx());
-              if (isPlayable(card, set)) {
+              if (isPlayable(card, set, seat)) {
                 log(SEATS[seat] + ' drew ' + drawn + (drawn === 1 ? ' card' : ' cards') + ' from the reveal pile to find a play.');
                 later(function () { cpuPlay(seat); }, 550);
                 return;
@@ -1803,18 +1939,20 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         if (!G || G.over || G.turn !== seat) return;
         var set = rosterSetOf(topBandIdx());
         var hand = G.hands[seat];
-        var playable = hand.filter(function (c) { return isPlayable(c, set); });
+        var playable = hand.filter(function (c) { return isPlayable(c, set, seat); });
         if (!playable.length) { endTurn(); return; }
-        var bandPlays = playable.filter(function (c) { return !c.joker; });
+        var bandPlays = playable.filter(function (c) { return !c.joker && !c.freeze; });
         var pick;
         if (bandPlays.length) {
           // shed the weakest connector first; keep the strong threads
           pick = bandPlays.reduce(function (a, b) { return BANDS[b.band].lk < BANDS[a.band].lk ? b : a; });
-          var shared = sharedWith(pick, set);
+          var shared = legalShared(pick, set, seat);
           doPlay(seat, pick, null, shared.length ? shared[0] : null);
-        } else {
-          pick = playable[0]; // the Joker is the only way through
+        } else if (playable.some(function (c) { return c.joker; })) {
+          pick = playable.filter(function (c) { return c.joker; })[0]; // the Joker is the only way through
           doPlay(seat, pick, cpuChooseBand(seat), null);
+        } else {
+          doPlayFreeze(seat, playable[0]); // FREEZE is the only card that can move
         }
       }
 
