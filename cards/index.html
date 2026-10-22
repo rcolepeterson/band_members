@@ -565,6 +565,31 @@
     @media (max-width: 1000px) { .hand { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
     @media (max-width: 850px) { .hand { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
+    /* ---------- v12: one tray everywhere — uniform minis, click to look, PLAY to commit ---------- */
+    .table-topbar { gap: 8px; }
+    .game-footer .footer-links { display: flex; gap: 18px; }
+    /* The hand is a tray of minis on every device: fixed height + clipped
+       content means a 10-member band and a 5-member band deal the exact
+       same size tile — rosters live in the inspect overlay, never here. */
+    .hand-card { aspect-ratio: auto; height: 152px; overflow: hidden; }
+    .hand-card.playable { padding-bottom: 9px; }
+    /* The mini clips its content by design, so the Playable pill sits
+       fully inside the tile instead of straddling its top edge. */
+    .hand-card.playable::before { top: 6px; right: 6px; }
+    .hand-card.not-playable { opacity: .52; }
+    .face-mini { display: flex; flex-direction: column; flex: 1 1 auto; width: 100%; height: 100%; min-height: 0; }
+    .face-mini .card-top { height: 15px; }
+    .face-mini .card-no { font-size: .56rem; }
+    .face-mini .constellation { margin: 3px 0 2px; }
+    .face-mini .band-name { height: auto; max-height: calc(1.08em * 2); margin: 1px 0 2px; font-size: .8rem; line-height: 1.08; }
+    .face-mini .mini-count { margin-top: auto; color: #a7b6c1; font-size: .62rem; letter-spacing: .02em; white-space: nowrap; }
+    .face-mini .mini-via { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--card-amber); font-size: .62rem; font-weight: 700; line-height: 1.25; }
+    .face-mini .mini-mark { display: grid; place-items: center; width: 100%; aspect-ratio: 220 / 77; margin: 4px 0 3px; color: var(--card-amber); font-family: var(--font-display); font-size: 2rem; line-height: .8; }
+    .teach-hint { flex: none; margin: 4px auto 0; max-width: 720px; text-align: center; color: #71889b; font-size: .82rem; }
+    .teach-hint[hidden] { display: none; }
+    .feedback-btn { display: inline-block; padding: 10px 20px; border: 1px solid rgba(255,180,84,.55); border-radius: 999px; background: rgba(255,180,84,.1); color: var(--card-amber); font-size: .88rem; font-weight: 700; text-decoration: none; }
+    .feedback-btn:hover { background: rgba(255,180,84,.2); }
+
     /* Phone mode — ONE condition for every phone feature (table shell, tray,
        overlays, rules popup + Rules button, Ricky sheet), mirrored by
        PHONE_QUERY in the script: a coarse pointer exists (any-pointer, so a
@@ -660,11 +685,12 @@
       .stage-compact .mini-mark { display: grid; place-items: center; width: 100%; margin: 4px 0 2px; color: var(--card-amber); font-family: var(--font-display); font-size: 1.55rem; line-height: .85; }
       .played-stack { width: auto; height: 26px; padding: 0 14px; font-size: .95rem; box-shadow: -3px 3px 0 #101a26, -6px 6px 0 #16222f; }
       .instruction { flex: none; min-height: 18px; margin: 5px auto 0; font-size: .8rem; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .teach-hint { margin-top: 3px; max-width: 100%; font-size: .72rem; line-height: 1.35; }
       .log { display: none; }
       .hand-label { order: 2; flex: none; margin: 4px auto 0; width: 100%; padding-top: 5px; border-top: 1px solid rgba(225,244,255,.09); font-size: .78rem; }
       .rules-btn { display: inline-block; }
       .hand { order: 1; flex: 1 1 auto; align-content: center; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; width: 100%; max-width: none; min-height: 0; overflow: hidden; padding: 6px 2px 0; margin: 0; }
-      .hand-card { max-width: none; max-height: none; justify-self: stretch; aspect-ratio: 63 / 82; padding: 6px 5px; border-radius: 9px; overflow: hidden; }
+      .hand-card { max-width: none; max-height: none; justify-self: stretch; aspect-ratio: 63 / 82; height: auto; padding: 6px 5px; border-radius: 9px; overflow: hidden; }
       /* Overlap beats scroll: when a grown hand would need a third row on a
          short screen, the minis fan like tableau cards — number, sky and
          name stay readable up top, and playable minis lift clear of the fan
@@ -781,7 +807,7 @@
 
 
     <section class="table-shell wrap" aria-label="Playable Six Degrees card game">
-      <div class="table-topbar"><button class="options-btn" id="options-btn-top" type="button">Options</button></div>
+      <div class="table-topbar"><button class="options-btn" id="how-btn-top" type="button">How to play</button><button class="options-btn" id="options-btn-top" type="button">Options</button></div>
       <div class="scorebar" id="scorebar"></div>
       <div class="turnbar"><span class="turn-pill" id="turn-pill">Dealing…</span></div>
 
@@ -806,9 +832,10 @@
         </div>
 
         <p class="instruction" id="instruction" aria-live="polite"></p>
+        <p class="teach-hint" id="teach-hint" hidden>Tap a card to see its members — play one that shares a name with the card in the middle. The card’s PLAY button sends it to the pile.</p>
         <ul class="log" id="log" aria-label="Recent plays"></ul>
 
-        <div class="hand-label"><span id="hand-count">Your hand</span><span class="hand-actions"><button class="rules-btn" id="rules-btn" type="button">Rules</button><button class="options-btn" id="options-btn" type="button">Options</button><button class="reset" id="new-game" type="button">New game</button></span></div>
+        <div class="hand-label"><span id="hand-count">Your hand</span><span class="hand-actions"><button class="rules-btn" id="rules-btn" type="button">How to play</button><button class="options-btn" id="options-btn" type="button">Options</button><button class="reset" id="new-game" type="button">New game</button></span></div>
         <div class="hand" id="hand"></div>
       </div>
 
@@ -833,7 +860,7 @@
 
     <nav class="game-footer wrap" aria-label="Site links">
       <a href="/">← sixdegreesofrock.com</a>
-      <a href="/play">More games</a>
+      <span class="footer-links"><a href="mailto:aaron@sixdegreesofrock.com?subject=6*%20Card%20Game%20feedback&amp;body=Device%3A%20%0AWhat%20happened%3A%20%0AWhat%20I%20expected%3A%20">Feedback</a><a href="/play">More games</a></span>
     </nav>
 
 
@@ -904,6 +931,10 @@
       <ul class="music-list" id="music-list"></ul>
       <audio id="music-audio" preload="none"></audio>
 
+      <h4 class="options-section-title">Feedback</h4>
+      <p>Bug, idea, or a connection the game got wrong? Send it in — your mail app opens with the note started, and the game stays right where you left it.</p>
+      <a class="feedback-btn" href="mailto:aaron@sixdegreesofrock.com?subject=6*%20Card%20Game%20feedback&amp;body=Device%3A%20%0AWhat%20happened%3A%20%0AWhat%20I%20expected%3A%20">Email feedback</a>
+
       <button class="modal-cancel" id="options-close" type="button">Close</button>
     </div>
   </div>
@@ -943,6 +974,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       var rulesPlayBtn = document.getElementById('rules-play');
       var rulesNoshow = document.getElementById('rules-noshow');
       var rulesBtn = document.getElementById('rules-btn');
+      var teachHint = document.getElementById('teach-hint');
 
       var session = { games: 0, turnsTotal: 0, stalls: 0, ricky: 0 };
       var G = null;       // game state
@@ -1229,28 +1261,19 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           btn.className = 'hand-card';
           var shared = sharedWith(card, set);
           var playable = isPlayable(card, set);
+          // One grammar on every device: the hand is a tray of uniform
+          // minis — click looks (inspect overlay), PLAY commits.
           if (card.joker) {
             btn.classList.add('joker');
-            btn.setAttribute('aria-label', 'Play Ricky Vac Joker');
-            btn.innerHTML = '<div class="face-full">' + jokerFaceHTML() + '</div>' + miniFaceHTML(card, shared, playable);
+            btn.setAttribute('aria-label', 'Ricky Vac Joker — tap to view the full card');
           } else {
-            btn.setAttribute('aria-label', (playable ? 'Play ' : '') + BANDS[card.band].n);
-            var matchSet = {};
-            shared.forEach(function (p) { matchSet[p] = true; });
-            btn.innerHTML = '<div class="face-full">' + bandFaceHTML(card.band, { matchSet: matchSet, yearsLabel: 'Active' }) + '</div>' + miniFaceHTML(card, shared, playable);
-            if (playable && shared.length) {
-              var note = document.createElement('div');
-              note.className = 'play-note';
-              note.textContent = 'Connects through ' + PEOPLE[shared[0]] + (shared.length > 1 ? ' +' + (shared.length - 1) : '');
-              btn.appendChild(note);
-            }
+            btn.setAttribute('aria-label', BANDS[card.band].n + ' — tap to view the full card' + (playable ? ' (playable)' : ''));
           }
+          btn.innerHTML = miniFaceHTML(card, shared, playable);
           if (playable) btn.classList.add('playable');
+          else btn.classList.add('not-playable');
           if (card.fresh) { btn.classList.add('is-new'); card.fresh = false; }
-          btn.addEventListener('click', function () {
-            if (isPhone()) openInspect(card);
-            else humanPlay(card, btn);
-          });
+          btn.addEventListener('click', function () { openInspect(card); });
           handEl.appendChild(btn);
         });
       }
@@ -1306,6 +1329,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         beacon({ type: 'start' });
         logEl.innerHTML = '';
         gameoverEl.hidden = true;
+        teachHint.hidden = firstGameDone();
         renderAll();
         renderStats();
         setLastPlay('<strong>' + esc(BANDS[starter.band].n) + '</strong> opens the chain.');
@@ -1396,6 +1420,9 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           duration_s: Math.max(0, Math.round((Date.now() - G.startedAt) / 1000))
         });
         renderStats();
+        // First completed game retires the teach hint for good.
+        try { window.localStorage.setItem('cards_first_game_done', '1'); } catch (e) { /* storage blocked: hint may return next visit */ }
+        teachHint.hidden = true;
         renderScorebar(); renderReveal(); renderHand();
         turnPill.textContent = 'Game over';
         var turnsNote = G.turns + ' turns · ' + (G.played.length + 1) + ' cards in the final chain.';
@@ -1586,6 +1613,11 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       function rulesSeen() {
         try { return window.localStorage.getItem('cards_rules_seen') === '1'; } catch (e) { return false; }
       }
+      /* Teach hint: rides under the turn prompt until the player's first
+         completed game, then never returns. Guarded like every other store. */
+      function firstGameDone() {
+        try { return window.localStorage.getItem('cards_first_game_done') === '1'; } catch (e) { return false; }
+      }
       function openRules() {
         rulesNoshow.checked = rulesSeen();
         rulesModal.hidden = false;
@@ -1599,6 +1631,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       }
       rulesPlayBtn.addEventListener('click', closeRules);
       rulesBtn.addEventListener('click', openRules);
+      document.getElementById('how-btn-top').addEventListener('click', openRules);
       rulesModal.addEventListener('click', function (e) { if (e.target === rulesModal) closeRules(); });
 
       /* ---------- options sheet: full rules + music ----------
