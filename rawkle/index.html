@@ -32,6 +32,7 @@
         --radius: 14px;
         --tile: 44px;
         --gap: 5px;
+        --wgap: 14px;
       }
       html { background: var(--bg-deep); }
       body {
@@ -82,6 +83,7 @@
         background: rgba(19,34,56,0.82); color: var(--ink); cursor: pointer;
       }
       .pill-btn.help { border-color: rgba(255,180,84,0.55); color: var(--gold); }
+      .pill-btn.result { border-color: rgba(255,180,84,0.65); color: var(--gold); font-weight: 700; }
       .pill-btn:hover { filter: brightness(1.15); }
 
       .overlay {
@@ -111,7 +113,7 @@
       #message.dim { color: var(--ink-dim); font-weight: 500; }
 
       #board { display: flex; flex-direction: column; gap: var(--gap); align-items: center; justify-content: center; margin: 2px auto; flex: 1 1 auto; min-height: 0; }
-      .row { display: flex; gap: 14px; justify-content: center; flex-wrap: nowrap; max-width: 100%; }
+      .row { display: flex; gap: var(--wgap); justify-content: center; flex-wrap: nowrap; max-width: 100%; }
       .word { display: flex; gap: var(--gap); flex-wrap: nowrap; }
       .t {
         box-sizing: border-box;
@@ -196,6 +198,7 @@
         <button class="pill-btn help" id="help-btn" type="button">? How to play</button>
         <button class="pill-btn" id="practice-btn" type="button">Practice round</button>
         <button class="pill-btn" id="daily-btn" type="button" style="display:none">Today&rsquo;s band</button>
+        <button class="pill-btn result" id="result-btn" type="button" style="display:none">&#9733; Result</button>
       </div>
 
       <p id="message" role="status" aria-live="polite"></p>
@@ -226,10 +229,10 @@
         <p><strong>Read the shape first.</strong> The line under the title tells you the words and letters &mdash; 3 + 8 means a 3-letter word, a space, then 8 letters. Just type letters: the game jumps the spaces for you.</p>
         <p><strong>Fill every tile, then hit Enter.</strong> There is no guessing one word at a time &mdash; a guess only counts when the whole name is filled in. It doesn&rsquo;t have to be a real band, but a real band that fits the shape is the smartest probe.</p>
         <div class="ex" aria-hidden="true">
-          <span class="t correct">W</span><span class="t present">H</span><span class="t absent">I</span><span class="t">T</span><span class="t">E</span>
+          <span class="t correct">W</span><span class="t present">H</span><span class="t absent">I</span><span class="t absent">T</span><span class="t absent">E</span>
           <span class="ex-note">Gold = right letter, right spot. Blue = in the name, wrong spot. Dark = not in the name at all.</span>
         </div>
-        <p>Names never start with THE &mdash; The Doors play as DOORS. Punctuation becomes a space: Guns N&rsquo; Roses plays as GUNS N ROSES. New band at midnight Pacific &mdash; win, and the band opens in the graph.</p>
+        <p>THE counts &mdash; The Hives play as THE HIVES, and the H is live in both words. Punctuation becomes a space: Guns N&rsquo; Roses plays as GUNS N ROSES. New band at midnight Pacific &mdash; win, and the band opens in the graph.</p>
         <label class="dontshow"><input type="checkbox" id="help-dontshow" /> Don&rsquo;t show this again</label>
         <button class="btn gold play-btn" id="help-play" type="button">Play</button>
         <p class="links"><a href="/game">Daily Chain</a> &middot; <a href="/cards">Card Game</a> &middot; <a href="https://sixdegreesofrock.com">The Graph</a></p>
@@ -304,34 +307,77 @@
           .toUpperCase()
           .replace(/[^A-Z]/g, " ")
           .replace(/\s+/g, " ")
-          .trim()
-          .replace(/^THE /, "");
+          .trim();
       }
 
-      var PARKED_LONG = BANDS.filter(function (n) { return boardName(n).replace(/ /g, "").length > 13; });
-      BANDS = BANDS.filter(function (n) { return boardName(n).replace(/ /g, "").length <= 13; });
-
-      /* ---------- deterministic daily order ----------
-         One seeded shuffle of the pool, same for every player and
-         every device. SEED was picked so the launch window
-         (2026-10-22 / 2026-10-23) lands on strong, familiar bands. */
-      var SEED = 20261023;
-      function mulberry32(a) {
-        return function () {
-          a |= 0; a = (a + 0x6D2B79F5) | 0;
-          var t = Math.imul(a ^ (a >>> 15), 1 | a);
-          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-        };
-      }
-      var ORDER = BANDS.map(function (_, i) { return i; });
-      (function shuffle() {
-        var rnd = mulberry32(SEED);
-        for (var i = ORDER.length - 1; i > 0; i--) {
-          var j = Math.floor(rnd() * (i + 1));
-          var tmp = ORDER[i]; ORDER[i] = ORDER[j]; ORDER[j] = tmp;
-        }
-      })();
+      /* ---------- daily schedule (frozen 2026-10-23) ----------
+         Days 1-199 are the launch order, frozen exactly as the
+         original seeded shuffle dealt them (seed 20261023 over the
+         <=13-letter launch pool), so no scheduled day ever moves.
+         Days 200-232 are the long names parked at launch (14-22
+         letters), shuffled in behind them (seed 20261024) when the
+         length cap came off and THE came back. After day 232 the
+         schedule cycles. Practice draws from the full BANDS list. */
+      var SCHEDULE = [
+        "America", "Iron Maiden", "Jimmy Eat World", "Bon Jovi",
+        "Foo Fighters", "REO Speedwagon", "Great White", "Lamb of God",
+        "The Rolling Stones", "Faces", "Triumph", "Staind",
+        "Fleetwood Mac", "Tesla", "Primus", "Uriah Heep",
+        "Quiet Riot", "Duran Duran", "Third Eye Blind", "Alice in Chains",
+        "ZZ Top", "Papa Roach", "Dio", "Walk the Moon",
+        "The Flaming Lips", "War", "Deep Purple", "Mad Season",
+        "King Crimson", "L.A. Guns", "Ohio Players", "Whitesnake",
+        "Mumford & Sons", "Twisted Sister", "KISS", "White Zombie",
+        "Genesis", "Soundgarden", "Live", "OneRepublic",
+        "Golden Earring", "Survivor", "Muse", "Heart",
+        "Coldplay", "Cinderella", "The Offspring", "Rainbow",
+        "The Wallflowers", "Bee Gees", "The Cure", "Linkin Park",
+        "The Monkees", "Chicago", "Shinedown", "Ratt",
+        "Blondie", "Skid Row", "Pantera", "Motörhead",
+        "Weather Report", "INXS", "Aerosmith", "Faith No More",
+        "Poison", "Bastille", "Smash Mouth", "Three Dog Night",
+        "Dream Theater", "Megadeth", "AC/DC", "Disturbed",
+        "The Black Keys", "Pink Floyd", "Weezer", "Boston",
+        "Bush", "R.E.M.", "Marilyn Manson", "Black Sabbath",
+        "Good Charlotte", "Wilco", "Nirvana", "Run-DMC",
+        "Guns N' Roses", "Slaughter", "Asia", "Montrose",
+        "Godsmack", "Kansas", "Lynyrd Skynyrd", "fun.",
+        "Loverboy", "Extreme", "Commodores", "Arctic Monkeys",
+        "Simple Plan", "The Police", "Alice Cooper", "Kool & the Gang",
+        "Sweet", "Alabama", "Badfinger", "Rush",
+        "Led Zeppelin", "Warrant", "Kings of Leon", "Slipknot",
+        "Green Day", "Beastie Boys", "Focus", "W.A.S.P.",
+        "No Doubt", "Dokken", "Incubus", "Mr. Big",
+        "Nazareth", "Sublime", "Talking Heads", "AWOLNATION",
+        "The Beatles", "The Lumineers", "Foghat", "MGMT",
+        "Toto", "White Lion", "Depeche Mode", "Public Enemy",
+        "Santana", "The Killers", "Limp Bizkit", "Los Lobos",
+        "Goo Goo Dolls", "Cheap Trick", "Metallica", "Fall Out Boy",
+        "The Beach Boys", "Ministry", "Judas Priest", "Earth, Wind & Fire",
+        "Pixies", "Mott the Hoople", "Arcade Fire", "Van Halen",
+        "The Cars", "BulletBoys", "Traffic", "Anthrax",
+        "Scorpions", "Jethro Tull", "Little Feat", "Oasis",
+        "Queen", "Blur", "The Kinks", "System of a Down",
+        "Radiohead", "Creed", "Supertramp", "Nine Inch Nails",
+        "Bread", "Sugar Ray", "Bad Company", "The Moody Blues",
+        "Firehouse", "The Doors", "Slayer", "Eagles",
+        "Night Ranger", "T. Rex", "Hall & Oates", "The Strokes",
+        "Dire Straits", "Paramore", "Journey", "Grateful Dead",
+        "Blind Faith", "Pearl Jam", "Tool", "Nickelback",
+        "Korn", "Parliament", "Counting Crows", "Steely Dan",
+        "The Black Crowes", "Humble Pie", "The White Stripes", "Mötley Crüe",
+        "Phish", "Train", "Def Leppard", "Foreigner",
+        "Styx", "The Who", "Yes", "The Band",
+        "Damn Yankees", "The Raconteurs", "Deftones", "Crosby, Stills & Nash",
+        "Breaking Benjamin", "Imagine Dragons", "Three Days Grace", "Derek and the Dominos",
+        "Buffalo Springfield", "Temple of the Dog", "Cage the Elephant", "Emerson, Lake & Palmer",
+        "Twenty One Pilots", "Collective Soul", "Blue Öyster Cult", "Red Hot Chili Peppers",
+        "Dave Matthews Band", "Jefferson Airplane", "Panic! at the Disco", "Of Monsters and Men",
+        "The Allman Brothers Band", "Charlie Daniels Band", "Smashing Pumpkins", "Queens of the Stone Age",
+        "Vampire Weekend", "Foster the People", "Grand Funk Railroad", "Matchbox Twenty",
+        "Stone Temple Pilots", "The Doobie Brothers", "Manfred Mann's Earth Band", "Steve Miller Band",
+        "Jane's Addiction", "My Chemical Romance", "Marshall Tucker Band", "Electric Light Orchestra"
+      ];
 
       /* ---------- dates (Pacific) ---------- */
       function pacificToday() {
@@ -348,12 +394,14 @@
       var LAUNCH_NUM = dayNumber(2026, 10, 23); /* puzzle #1 */
       var puzzleNo = todayNum - LAUNCH_NUM + 1;
       var dateKey = today.y + "-" + String(today.m).padStart(2, "0") + "-" + String(today.d).padStart(2, "0");
-      var dailyIndex = ORDER[((todayNum % ORDER.length) + ORDER.length) % ORDER.length];
+      var dailyDisplay = puzzleNo > 0
+        ? SCHEDULE[(puzzleNo - 1) % SCHEDULE.length]
+        : SCHEDULE[((todayNum % SCHEDULE.length) + SCHEDULE.length) % SCHEDULE.length];
 
       /* ---------- game state ---------- */
       var MAX_TRIES = 6;
       var mode = "daily"; /* "daily" | "practice" */
-      var answerDisplay = BANDS[dailyIndex];
+      var answerDisplay = dailyDisplay;
       var answer = boardName(answerDisplay);
       var guesses = [];      /* submitted board-form guesses */
       var current = "";      /* letters typed for the in-progress guess */
@@ -434,12 +482,22 @@
       var boardEl = document.getElementById("board");
       var msgEl = document.getElementById("message");
       var endEl = document.getElementById("endcard");
+      var resultBtn = document.getElementById("result-btn");
+      /* The finished round's end card is never a one-way door: while
+         the current round is over, a gold Result pill sits in the
+         toolbar and reopens it (Share / graph / board). It clears
+         when a new round starts. */
+      function syncResultPill() {
+        resultBtn.style.display = status !== "playing" ? "" : "none";
+      }
 
       function tileSizeFor(board) {
         var words = board.split(" ");
         var letters = board.replace(/ /g, "").length;
-        var innerGaps = 5 * (letters - words.length);   /* 5px inside words */
-        var wordGaps = 14 * (words.length - 1);          /* 14px between words */
+        var gapIn = letters > 16 ? 3 : 5;   /* long names squeeze their gaps too */
+        var gapWord = letters > 16 ? 10 : 14;
+        var innerGaps = gapIn * (letters - words.length);
+        var wordGaps = gapWord * (words.length - 1);
         var avail = Math.min(window.innerWidth - 24, 560);
         var size = Math.floor((avail - innerGaps - wordGaps) / letters);
         /* vertical bound: the whole game fits the screen, no scroll.
@@ -453,7 +511,7 @@
         var availV = window.innerHeight - chrome - 46; /* shell padding + the board's row gaps */
         var sizeV = Math.floor(availV / MAX_TRIES);
         if (sizeV > 0) size = Math.min(size, sizeV);
-        return Math.max(14, Math.min(46, size));
+        return Math.max(9, Math.min(46, size));
       }
       function refit() { setTileSize(); }
       function updateCountLine() {
@@ -464,6 +522,9 @@
           lens.length + (lens.length === 1 ? " word" : " words") + "</span>";
       }
       function setTileSize() {
+        var long = answer.replace(/ /g, "").length > 16;
+        document.documentElement.style.setProperty("--gap", (long ? 3 : 5) + "px");
+        document.documentElement.style.setProperty("--wgap", (long ? 10 : 14) + "px");
         document.documentElement.style.setProperty("--tile", tileSizeFor(answer) + "px");
       }
 
@@ -565,6 +626,15 @@
           if (tiles[current.length - 1]) tiles[current.length - 1].classList.add("pop");
         }
       }
+      /* A clicked button keeps focus, and Enter/Space on a focused
+         button fires it again — a mouse player who clicked Practice
+         round, typed a guess on a real keyboard and hit Enter would
+         silently re-roll the round. Blur every button after its
+         click so game keys can never re-trigger one. */
+      document.addEventListener("click", function (e) {
+        var b = e.target.closest ? e.target.closest("button") : null;
+        if (b) b.blur();
+      });
       document.addEventListener("keydown", function (e) {
         if (helpIsOpen()) return;
         if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -633,6 +703,7 @@
           "https://sixdegreesofrock.com/?band=" + encodeURIComponent(answerDisplay);
         document.getElementById("graph-btn").textContent = "See " + answerDisplay + " in the graph";
         endEl.classList.add("show");
+        syncResultPill();
         message("");
       }
 
@@ -660,6 +731,9 @@
         lines.push("", "sixdegreesofrock.com/rawkle");
         return lines.join("\n");
       }
+      document.getElementById("result-btn").addEventListener("click", function () {
+        endEl.classList.add("show");
+      });
       document.getElementById("end-close").addEventListener("click", function () {
         endEl.classList.remove("show");
       });
@@ -686,8 +760,9 @@
         document.body.classList.toggle("practice", mode === "practice");
         document.getElementById("daily-btn").style.display = mode === "practice" ? "" : "none";
         endEl.classList.remove("show");
+        syncResultPill();
         updateCountLine();
-        message(mode === "practice" ? "Practice round — a random Gold-or-better band." : "", true);
+        message("", true);
         buildBoard();
         buildKeyboard();
         refit();
@@ -700,7 +775,7 @@
         startRound("practice", pick);
       });
       document.getElementById("daily-btn").addEventListener("click", function () {
-        startRound("daily", BANDS[dailyIndex]);
+        startRound("daily", dailyDisplay);
         restoreDailyState();
         buildBoard();
         /* re-apply key colours from the restored guesses */
