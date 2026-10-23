@@ -557,19 +557,6 @@ export default async (req) => {
         primary key (user_id, chain_date)
       )
     `;
-    // Guests can get the reminder too (2026-10-15): an email on their guest
-    // row, used only after they click the confirmation link.
-    await sql`
-      create table if not exists guest_reminders (
-        user_id           uuid primary key references users(id) on delete cascade,
-        email             text not null,
-        confirm_token     text not null unique,
-        unsubscribe_token text not null unique,
-        confirmed_at      timestamptz,
-        confirm_sent_at   timestamptz,
-        created_at        timestamptz not null default now()
-      )
-    `;
     results.push('daily reminder prefs + log ready');
 
     await sql`drop trigger if exists notification_prefs_set_updated_at on notification_prefs`;
@@ -722,6 +709,24 @@ export default async (req) => {
     await sql`alter table daily_snapshots add column if not exists ga_avg_engagement_seconds integer`;
     await sql`alter table daily_snapshots add column if not exists ga_events                integer`;
     results.push('daily_snapshots GA columns ready');
+
+    // FB group member count on daily_snapshots (2026-10-13): tracks the
+    // "Six Degrees of Rock — Daily Game" Facebook group. Logged manually
+    // (Aaron reports the count, Nova POSTs it) — no FB API. Idempotent.
+    await sql`alter table daily_snapshots add column if not exists fb_group_members integer`;
+    results.push('daily_snapshots fb_group_members column ready');
+
+    // Game value metrics on daily_snapshots (2026-10-13): Daily Chain numbers
+    // from Cole's analytics email, logged manually (Aaron forwards the email,
+    // Nova POSTs the numbers) — the metrics that matter for calculating
+    // business value. Idempotent — safe on existing deployments.
+    await sql`alter table daily_snapshots add column if not exists game_players         integer`;
+    await sql`alter table daily_snapshots add column if not exists game_retention_pct   integer`;
+    await sql`alter table daily_snapshots add column if not exists game_weekly_players integer`;
+    await sql`alter table daily_snapshots add column if not exists game_repeat_players integer`;
+    await sql`alter table daily_snapshots add column if not exists game_completion_pct integer`;
+    await sql`alter table daily_snapshots add column if not exists game_share_taps     integer`;
+    results.push('daily_snapshots game value columns ready');
 
     // shared_chains table ----------------------------------------------------
     // Game share cards: one row per "Share the chain" tap. The row is the
