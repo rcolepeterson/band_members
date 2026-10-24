@@ -2,7 +2,7 @@
 //
 // WHY THIS EXISTS
 //
-// The "Copy invite link" URL used to be /game/?invite=<token>, whose og: tags
+// The "Copy invite link" URL used to be /daily/?invite=<token>, whose og: tags
 // are the static game-page ones ("Six Degrees — the game"). Pasted into a
 // text thread it unfurled as a generic webpage share — nothing said
 // "challenge." Aaron's bug report, with screenshot, 2026-10-01.
@@ -12,7 +12,7 @@
 // challenge —
 //   "rawker4821 challenged you to a Six Degrees showdown"
 //   "Metallica vs ? — pick a band and try to stump them."
-// — then hand humans off to the real invite landing at /game/?invite=.
+// — then hand humans off to the real invite landing at /daily/?invite=.
 // The token is a 256-bit unguessable secret and the landing is public by
 // design (game_challenge.mjs header), so showing the handle + band pick here
 // reveals nothing the link itself doesn't.
@@ -104,7 +104,7 @@ export function inviteCardHtml({ token, title, description }) {
   const safeToken = escapeHtml(token);
   const safeTitle = escapeHtml(title);
   const safeDesc = escapeHtml(description);
-  const target = `/game/?invite=${encodeURIComponent(token)}`;
+  const target = `/daily/?invite=${encodeURIComponent(token)}`;
   return `<!doctype html>
 <html lang="en">
 <head>

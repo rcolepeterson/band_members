@@ -783,7 +783,7 @@ export default async (req) => {
     // game_challenges table --------------------------------------------------
     // Remote head-to-head: one row per invite. The challenger picks band_a
     // and gets an unguessable token; the invite link is
-    // /game/?invite=<token>. The invitee picks band_b on their own device,
+    // /daily/?invite=<token>. The invitee picks band_b on their own device,
     // which flips the row to 'answered'. Picks are OPEN (the invitee sees
     // band_a before choosing), matching the pass-and-play table behavior.
     // Band refs are the game client's graph node ids (display-name strings,

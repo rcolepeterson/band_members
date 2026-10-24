@@ -23,7 +23,7 @@ import { isPlaceholderEmail } from './_oauth.mjs';
 import { pacificDate } from './_daily.mjs';
 import { dailyPuzzleNumber } from '../../scripts/six-degrees-game.mjs';
 
-export const PLAY_URL = `${SITE_URL}/game/`;
+export const PLAY_URL = `${SITE_URL}/daily/`;
 
 // Shares Resend's 100/day free tier with the band-update emails.
 export const REMINDER_SEND_CAP = 80;

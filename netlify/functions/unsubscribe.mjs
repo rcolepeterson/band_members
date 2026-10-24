@@ -83,7 +83,7 @@ export default async (req) => {
         return page({
           title: 'Unsubscribed — Six Degrees of Rock',
           heading: 'No more daily reminders.',
-          body: 'You won\u2019t get the 6\u00b0 puzzle reminder again, and we\u2019ve deleted your email. Today\u2019s puzzle is always at <a href="https://sixdegreesofrock.com/game/">sixdegreesofrock.com/game</a>.',
+          body: 'You won\u2019t get the 6\u00b0 puzzle reminder again, and we\u2019ve deleted your email. Today\u2019s puzzle is always at <a href="https://sixdegreesofrock.com/daily/">sixdegreesofrock.com/daily</a>.',
         });
       }
     }
@@ -103,7 +103,7 @@ export default async (req) => {
       return page({
         title: 'Unsubscribed — Six Degrees of Rock',
         heading: 'No more daily reminders.',
-        body: 'You won\u2019t get the 6\u00b0 puzzle reminder again. Today\u2019s puzzle is always at <a href="https://sixdegreesofrock.com/game/">sixdegreesofrock.com/game</a>, and you can turn reminders back on from your account menu.',
+        body: 'You won\u2019t get the 6\u00b0 puzzle reminder again. Today\u2019s puzzle is always at <a href="https://sixdegreesofrock.com/daily/">sixdegreesofrock.com/daily</a>, and you can turn reminders back on from your account menu.',
       });
     }
     await sql`
