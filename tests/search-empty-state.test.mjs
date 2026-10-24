@@ -35,7 +35,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const INDEX_HTML = readFileSync(join(__dirname, '..', 'index.html'), 'utf8');
+const INDEX_HTML = readFileSync(join(__dirname, '..', 'graph', 'index.html'), 'utf8');
 
 // ----------------------------------------------------------------------
 // 1. Markup: headline, subtitle, CTA.
