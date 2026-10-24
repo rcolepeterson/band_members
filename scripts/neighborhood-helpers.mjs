@@ -2015,6 +2015,50 @@ export function framingRatio({
 }
 
 /**
+ * Camera ratio + centre that frames a bounding box inside a viewport band
+ * with breathing room on every side. Pure: every input explicit, so unit
+ * tests own the math.
+ *
+ * The box is given in framed/camera units (the space camera x/y live in).
+ * labelUnits expand it on every side before fitting, because label text
+ * runs past node rims and a node-only fit clips names at the edges.
+ *
+ * Larger ratio = zoomed out (more visible). The returned ratio is the
+ * SMALLEST zoom-out that still contains the box: the constellation is
+ * maximized while keeping `margin` of every side clear. The caller picks
+ * the centre from the returned x/y (the expanded box's centre).
+ *
+ * Returns null for degenerate input (empty box, no available space, bad
+ * numbers) so the caller can fall back to its framed-centre fit state.
+ */
+export function landingFit({
+  minX, minY, maxX, maxY,
+  labelUnitsX = 0, labelUnitsY = 0,
+  perPixelX, perPixelY,
+  currentRatio,
+  availW, availH,
+  margin = 0.10,
+} = {}) {
+  const bx0 = minX - labelUnitsX;
+  const bx1 = maxX + labelUnitsX;
+  const by0 = minY - labelUnitsY;
+  const by1 = maxY + labelUnitsY;
+  const bw = bx1 - bx0;
+  const bh = by1 - by0;
+  const aw = availW * (1 - 2 * margin);
+  const ah = availH * (1 - 2 * margin);
+  if (!(bw > 0) || !(bh > 0) || !(aw > 0) || !(ah > 0)) return null;
+  if (![perPixelX, perPixelY, currentRatio].every(v => Number.isFinite(v) && v > 0)) return null;
+  // Screen span of the box at ratio R: span = units * currentRatio / (perPixel * R).
+  // Set span = available -> R = units * currentRatio / (perPixel * available).
+  const rw = (bw * currentRatio) / (perPixelX * aw);
+  const rh = (bh * currentRatio) / (perPixelY * ah);
+  const ratio = Math.max(rw, rh);
+  if (!Number.isFinite(ratio) || !(ratio > 0)) return null;
+  return { x: (bx0 + bx1) / 2, y: (by0 + by1) / 2, ratio };
+}
+
+/**
  * Shrinks node radii as the visible count grows, so expanded views stay
  * legible instead of turning into overlapping blobs. Square-root scaling
  * because spacing shrinks roughly with the square root of the node count when
