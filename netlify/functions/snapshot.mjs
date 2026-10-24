@@ -6,10 +6,10 @@
 //
 // Body (all optional):
 //   { ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, fb_group_members,
-//     ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events,
 //     game_players, game_retention_pct, game_weekly_players,
 //     game_repeat_players, game_completion_pct, game_share_taps,
-//     snapshot_date (YYYY-MM-DD, backfill override), notes }
+//     ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events,
+//     notes }
 //
 // The daily cron on Nova's VM fetches Meta counts via CLI and POSTs them here.
 // Without Meta numbers, the row still captures graph/user growth.
@@ -89,9 +89,9 @@ export default async (req) => {
       insert into daily_snapshots
         (snapshot_date, node_count, user_count, follows_count, bands_added,
          ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, fb_group_members,
-         ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events,
          game_players, game_retention_pct, game_weekly_players,
          game_repeat_players, game_completion_pct, game_share_taps,
+         ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events,
          notes)
       values (
         ${today}::date,
@@ -104,16 +104,16 @@ export default async (req) => {
         ${num(body.fb_sixdegrees)},
         ${num(body.fb_aaron)},
         ${num(body.fb_group_members)},
-        ${num(body.ga_active_users)},
-        ${num(body.ga_new_users)},
-        ${num(body.ga_avg_engagement_seconds)},
-        ${num(body.ga_events)},
         ${num(body.game_players)},
         ${num(body.game_retention_pct)},
         ${num(body.game_weekly_players)},
         ${num(body.game_repeat_players)},
         ${num(body.game_completion_pct)},
         ${num(body.game_share_taps)},
+        ${num(body.ga_active_users)},
+        ${num(body.ga_new_users)},
+        ${num(body.ga_avg_engagement_seconds)},
+        ${num(body.ga_events)},
         ${typeof body.notes === 'string' ? body.notes.slice(0, 500) : null}
       )
       on conflict (snapshot_date) do update set
@@ -126,16 +126,16 @@ export default async (req) => {
         fb_sixdegrees = coalesce(excluded.fb_sixdegrees, daily_snapshots.fb_sixdegrees),
         fb_aaron = coalesce(excluded.fb_aaron, daily_snapshots.fb_aaron),
         fb_group_members = coalesce(excluded.fb_group_members, daily_snapshots.fb_group_members),
-        ga_active_users = coalesce(excluded.ga_active_users, daily_snapshots.ga_active_users),
-        ga_new_users = coalesce(excluded.ga_new_users, daily_snapshots.ga_new_users),
-        ga_avg_engagement_seconds = coalesce(excluded.ga_avg_engagement_seconds, daily_snapshots.ga_avg_engagement_seconds),
-        ga_events = coalesce(excluded.ga_events, daily_snapshots.ga_events),
         game_players = coalesce(excluded.game_players, daily_snapshots.game_players),
         game_retention_pct = coalesce(excluded.game_retention_pct, daily_snapshots.game_retention_pct),
         game_weekly_players = coalesce(excluded.game_weekly_players, daily_snapshots.game_weekly_players),
         game_repeat_players = coalesce(excluded.game_repeat_players, daily_snapshots.game_repeat_players),
         game_completion_pct = coalesce(excluded.game_completion_pct, daily_snapshots.game_completion_pct),
         game_share_taps = coalesce(excluded.game_share_taps, daily_snapshots.game_share_taps),
+        ga_active_users = coalesce(excluded.ga_active_users, daily_snapshots.ga_active_users),
+        ga_new_users = coalesce(excluded.ga_new_users, daily_snapshots.ga_new_users),
+        ga_avg_engagement_seconds = coalesce(excluded.ga_avg_engagement_seconds, daily_snapshots.ga_avg_engagement_seconds),
+        ga_events = coalesce(excluded.ga_events, daily_snapshots.ga_events),
         notes = coalesce(excluded.notes, daily_snapshots.notes)
     `;
 
@@ -147,17 +147,10 @@ export default async (req) => {
       users: finalUserCount,
       follows: finalFollowsCount,
       bands_added: finalBandsAdded,
-      fb_group_members: num(body.fb_group_members),
       ga_active_users: num(body.ga_active_users),
       ga_new_users: num(body.ga_new_users),
       ga_avg_engagement_seconds: num(body.ga_avg_engagement_seconds),
       ga_events: num(body.ga_events),
-      game_players: num(body.game_players),
-      game_retention_pct: num(body.game_retention_pct),
-      game_weekly_players: num(body.game_weekly_players),
-      game_repeat_players: num(body.game_repeat_players),
-      game_completion_pct: num(body.game_completion_pct),
-      game_share_taps: num(body.game_share_taps),
     });
   } catch (err) {
     console.error('snapshot failed', err);
