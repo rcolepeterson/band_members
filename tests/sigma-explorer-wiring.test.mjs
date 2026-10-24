@@ -509,26 +509,29 @@ test('dimmed nodes are opaque so edges cannot show through them', () => {
   assert.doesNotMatch(EXPLORER, /const DIM_NODE_COLOR = 'rgba/);
 });
 
-test('a framed view leaves room for labels', () => {
-  // At camera ratio 1 Sigma frames the nodes exactly and clips the names of
-  // everything near the edge.
+test('landings frame the whole view with breathing room', () => {
+  // 2026-10-24, Aaron's call: every landing frames the whole current view
+  // -- nodes AND labels -- inside the free band with breathing room, so the
+  // constellation never arrives clipped at the screen edges. The old
+  // legibility-region branch showed a clipped region whenever the view
+  // looked crowded; the landing fit supersedes it.
   assert.match(EXPLORER, /const FRAMED_RATIO = 1\.\d+;/);
-  // The framed ratio is compared with a tolerance rather than for equality,
-  // because framingRatio() may return a smaller (zoomed-in) ratio on dense
-  // views and the "already framed" branch must not fire on a float wobble.
-  // Compared through fitRatio() now: the same value has to drive both the framing
-  // call and the "did it fit?" test, or the branch mis-detects.
-  assert.match(EXPLORER, /ratio >= fitRatio\(\) - 1e-6/);
+  assert.match(EXPLORER, /const LANDING_MARGIN = 0\.10;/);
+  assert.match(EXPLORER, /const fit = landingFitState\(\);/);
+  assert.match(EXPLORER, /const fitState = fit/);
+  assert.doesNotMatch(EXPLORER, /ratio >= fitRatio\(\) - 1e-6/);
+  assert.doesNotMatch(EXPLORER, /const ratio = framedRatio\(\);/);
 });
 
-test('the renderer frames views through the tested framing helper', () => {
-  // The renderer must not compute its own camera ratio: framingRatio() in the
-  // helpers is the unit-tested owner of "how far out should this view sit",
-  // and the renderer reaches it through the local framedRatio() wrapper.
-  assert.match(EXPLORER, /framingRatio\(\{/);
-  assert.match(EXPLORER, /function framedRatio\(\)/);
-  assert.match(EXPLORER, /const ratio = framedRatio\(\);/);
-  assert.match(HELPERS, /export function framingRatio/);
+test('the landing fit is owned by the tested helper', () => {
+  // The renderer must not compute its own camera ratio: landingFit() in the
+  // helpers is the unit-tested owner of "what ratio frames this box", and
+  // the renderer reaches it through landingFitState().
+  assert.match(EXPLORER, /landingFit\(/);
+  assert.match(EXPLORER, /function landingFitState\(\)/);
+  assert.match(EXPLORER, /const fit = landingFitState\(\);/);
+  assert.match(HELPERS, /export function landingFit/);
+  assert.doesNotMatch(EXPLORER, /function framedRatio\(\)/);
 });
 
 test('hover is drawn in the theme, not with Sigma default white plate', () => {
@@ -795,13 +798,14 @@ test('the chrome band is measured, and used for centring only', () => {
   assert.match(area, /host\.bottom - footer\.top/);
   // A very short window must still leave a usable band rather than nothing.
   assert.match(area, /Math\.max\(host\.height \* 0\.45/);
-  // Framing and sizing deliberately use the FULL canvas. Measured: handing them
-  // the band instead reads as "fitting would not be legible", so the camera zooms
-  // into a region -- the opening view went from 17 nodes on screen to 8. Nodes
-  // visible beats names hidden.
-  const framed = EXPLORER.slice(EXPLORER.indexOf('function framedRatio()'), EXPLORER.indexOf('function applySizeScale('));
-  assert.match(framed, /const rect = canvasHost\.getBoundingClientRect\(\);/);
-  assert.doesNotMatch(framed, /safeArea\(\)/);
+  // Sizing still uses the FULL canvas (applySizeScale), but the landing fit
+  // measures the free BAND: every landing frames the whole view inside the
+  // band with breathing room (2026-10-24 landing fit).
+  const landing = EXPLORER.slice(EXPLORER.indexOf('function landingFitState()'), EXPLORER.indexOf('function applySizeScale('));
+  assert.match(landing, /safeArea\(\)/);
+  assert.match(landing, /getNodeDisplayData/);
+  assert.match(landing, /viewportToFramedGraph/);
+  assert.match(landing, /landingFit\(\{/);
 });
 
 test('the camera centres the drawing in that band, at the right zoom', () => {
@@ -811,15 +815,15 @@ test('the camera centres the drawing in that band, at the right zoom', () => {
   // expressed at the TARGET zoom -- computing it at the current one overshot by
   // half again as much on a short window.
   assert.match(offset, /perPixel \*= targetRatio \/ current/);
-  assert.match(EXPLORER, /y: 0\.5 \+ cameraOffsetY\(ratio\)/);
-  assert.match(EXPLORER, /y: display\.y \+ cameraOffsetY\(nextRatio\)/);
+  assert.match(EXPLORER, /y: fit\.y \+ cameraOffsetY\(fit\.ratio\)/);
+  assert.match(EXPLORER, /y: 0\.5 \+ cameraOffsetY\(fitRatio\(\)\)/);
 });
 
 test('the fit ratio is deliberately not loosened to clear the chrome', () => {
   // Measured, not assumed: loosening the fit so the whole drawing clears the
   // chrome pulls nodes closer together, and labels then collide with each other
   // instead. On 1440x900 that traded 2 hidden names for 5.
-  const fit = EXPLORER.slice(EXPLORER.indexOf('function fitRatio()'), EXPLORER.indexOf('function framedRatio()'));
+  const fit = EXPLORER.slice(EXPLORER.indexOf('function fitRatio()'), EXPLORER.indexOf('function landingFitState()'));
   assert.match(fit, /return FRAMED_RATIO;/);
 });
 
@@ -1793,13 +1797,15 @@ test('graph page carries no game promotion (migration)', () => {
   assert.match(INDEX_HTML, /id="mobile-game-open-btn" href="\/"/, 'burger 6* points to the hub');
 });
 
-test('landings fit the whole constellation, not the anchor (Decision 8)', () => {
-  // 2026-10-24 migration: every landing arrived zoomed tight on the centre
-  // node (min(0.8, ratio)) and the visitor had to zoom out. Animated
-  // landings now fly to the fit state; tight zoom is user zoom-in only.
+test('landings fit the whole constellation with breathing room (landing fit)', () => {
+  // 2026-10-24: supersedes Decision 8's region branch. Every landing --
+  // first paint, search, deep link, node travel -- frames the whole current
+  // view with breathing room; tight zoom is user zoom-in only.
   assert.doesNotMatch(EXPLORER, /Math\.min\(0\.8, ratio\)/);
-  assert.match(EXPLORER, /const fitState = \{ x: 0\.5, y: 0\.5 \+ cameraOffsetY\(ratio\), ratio, angle: 0 \};/);
-  assert.match(EXPLORER, /if \(animate && ratio >= fitRatio\(\) - 1e-6\)/);
+  assert.match(EXPLORER, /const fit = landingFitState\(\);/);
+  assert.match(EXPLORER, /const fitState = fit/);
+  assert.match(EXPLORER, /x: fit\.x, y: fit\.y \+ cameraOffsetY\(fit\.ratio\), ratio: fit\.ratio, angle: 0/);
+  assert.match(EXPLORER, /x: 0\.5, y: 0\.5 \+ cameraOffsetY\(fitRatio\(\)\), ratio: fitRatio\(\), angle: 0/);
 });
 
 test('narrow viewports draw lighter nodes and edges (desktop feel)', () => {
