@@ -294,6 +294,18 @@ const SMALLEST_NODE_SIZE = Math.min(...Object.values(KIND_STYLE).map(style => st
 const LARGEST_NODE_SIZE = Math.max(...Object.values(KIND_STYLE).map(style => style.size));
 
 const EDGE_COLOR = 'rgba(150,170,190,0.22)';
+// Narrow viewports draw the same constellation heavier than desktop: a small
+// view's sizeScale sits near 1 while a crowded desktop view sits near the 0.6
+// floor, so identical nodes render nearly twice as large on a phone — and the
+// camera fit compounds it. This factor pulls narrow views back to the thinner,
+// mellower desktop feel (2026-10-24, Aaron). 0.65 lands a phone's gold band
+// node at ~8.5px radius, matching a crowded desktop view, while staying above
+// the smallest tappable sizes. Labels are untouched. The 540-wide capture
+// browser counts as narrow, so post images lighten slightly too — Aaron sees
+// that at approval time.
+const MOBILE_WEIGHT_FACTOR = 0.65;
+const MOBILE_EDGE_COLOR = 'rgba(150,170,190,0.17)';
+const NARROW_VIEWPORT_PX = 720;
 const DIM_LABEL_COLOR = 'rgba(150,163,178,0.75)';
 // How much a selected node grows. Used both when drawing and when framing.
 const HIGHLIGHT_GROWTH = 1.25;
@@ -473,25 +485,10 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-wordmark{margin:0;font-size:clamp(15px,2.2vw,26px);font-weight:400;
   letter-spacing:0.18em;text-transform:uppercase;color:#dbe6f2;text-align:center;
   text-shadow:0 0 10px rgba(8,11,17,0.95),0 0 20px rgba(8,11,17,0.8)}
-/* The daily game's way in, under the search. Hairline pill like the rest of
-   the chrome, in the accent colour so it reads as the one thing to press;
-   44px tall for thumbs. */
-#${STAGE_ID} .sigma-daily{display:flex;flex-direction:column;align-items:center;gap:6px}
-#${STAGE_ID} .sigma-daily-cta{display:inline-flex;align-items:center;justify-content:center;
-  min-height:44px;padding:0 22px;border-radius:999px;border:1px solid rgba(143,232,246,0.45);
-  background:rgba(8,12,18,0.94);color:#8fe8f6;font-size:15px;letter-spacing:0.02em;
-  text-decoration:none;white-space:nowrap}
-#${STAGE_ID} .sigma-daily-cta:hover{border-color:rgba(143,232,246,0.85);background:rgba(16,24,34,0.8)}
-#${STAGE_ID} .sigma-daily-cta:focus-visible{outline:2px solid #8fe8f6;outline-offset:3px}
-/* Short screens (iPhone SE 1st gen and smaller): the button alone, so the
-   graph below keeps its room and the home star clears the intro text. */
-@media (max-height:600px){
-  #${STAGE_ID} .sigma-daily-note{display:none}
-}
-/* Out of the way while search suggestions are open over it. */
-#${STAGE_ID} .sigma-prompt:has(.sigma-suggest:not([hidden])) ~ .sigma-daily{visibility:hidden}
-#${STAGE_ID} .sigma-daily-note{margin:0;font-size:13px;color:#9fb1c1;text-align:center;
-  text-shadow:0 0 8px rgba(8,11,17,0.95),0 0 16px rgba(8,11,17,0.8)}
+/* Daily pill REMOVED 2026-10-24 (migration): the graph page carries no game
+   promotion. The pill, its hover/focus rules, and the suggestion-overlay rule
+   below all go with it. */
+/* (Daily-note rules removed with the pill, 2026-10-24 migration.) */
 /* The shortcut row stays deliberately quiet -- hairline border, no fill -- so
    the constellation is the only bright thing until someone reaches for a
    control.
@@ -864,12 +861,8 @@ function buildStage(doc, mount) {
              aria-label="Band and musician suggestions" hidden></div>
       </form>
     </div>
-    <!-- The daily game, under the search (Cole, 2026-10-08): the menu was the
-         only way to it, so new visitors never found it. -->
-    <div class="sigma-daily">
-      <a class="sigma-daily-cta" href="/game/">Play today&rsquo;s 6&deg; puzzle</a>
-      <!-- Note removed 2026-10-12 per Aaron: keep the pill, drop the description text. -->
-    </div>
+    <!-- Daily pill REMOVED 2026-10-24 (migration): the graph page carries no
+         game promotion. The burger 6* icon points back to the splash hub. -->
     </div>
     <!--
       A sibling of .sigma-hero, NOT a child of it -- deliberately. .sigma-hero
@@ -1220,6 +1213,7 @@ export function initSigmaExplorer({
     // tighter spacing than a 40-node one. Scaling size with density keeps the
     // gaps between nodes readable as views grow.
     sizeScale: 1,
+    isNarrowViewport: false, // set by applySizeScale; reduceEdge reads it
     layoutExtent: 0,
     // Exposed so scripts/layout-audit.mjs can catch a phantom overlay: a star
     // drawn for a node that is not in the current view.
@@ -1322,17 +1316,21 @@ export function initSigmaExplorer({
     // transparent at rest, sunk even further when another selection dims the
     // graph -- but fully present when the touring member is the selection.
     const isTouring = attrs.role === MEMBERSHIP_ROLES.TOURING;
+    // Narrow viewports thin the lines with the nodes (see
+    // MOBILE_WEIGHT_FACTOR). Selection stays full-weight: it is transient,
+    // and focus should still pop against the thinned rest.
+    const w = state.isNarrowViewport ? MOBILE_WEIGHT_FACTOR : 1;
     if (!state.highlightEdges.size) {
       return isTouring
-        ? { ...attrs, color: 'rgba(125,142,160,0.28)', size: 0.6 }
-        : { ...attrs, color: EDGE_COLOR };
+        ? { ...attrs, color: 'rgba(125,142,160,0.28)', size: 0.6 * w }
+        : { ...attrs, color: state.isNarrowViewport ? MOBILE_EDGE_COLOR : EDGE_COLOR, size: 1 * w };
     }
     if (state.highlightEdges.has(edge)) {
       return { ...attrs, color: state.highlightColor, size: 2.2, zIndex: 1 };
     }
     return isTouring
-      ? { ...attrs, color: 'rgba(120,134,150,0.05)', size: 0.5 }
-      : { ...attrs, color: 'rgba(120,134,150,0.10)', size: 0.8 };
+      ? { ...attrs, color: 'rgba(120,134,150,0.05)', size: 0.5 * w }
+      : { ...attrs, color: 'rgba(120,134,150,0.10)', size: 0.8 * w };
   }
 
   // -- sizing ---------------------------------------------------------------
@@ -1453,6 +1451,12 @@ export function initSigmaExplorer({
       viewportHeight: rect.height,
       maxNodeSize: LARGEST_NODE_SIZE,
     });
+    // Narrow viewports get the desktop feel (see MOBILE_WEIGHT_FACTOR).
+    // Cached here so reduceEdge reads it without measuring per edge, and
+    // recomputed on every resize alongside sizeScale. A zero width means
+    // pre-layout, not narrow — fall back to desktop weight until resize.
+    state.isNarrowViewport = rect.width > 0 && rect.width <= NARROW_VIEWPORT_PX;
+    if (state.isNarrowViewport) state.sizeScale *= MOBILE_WEIGHT_FACTOR;
     // Label thresholds follow the smallest node ACTUALLY drawn, so shrinking
     // nodes never silently costs a name.
     const labels = labelSettings({
@@ -1662,12 +1666,27 @@ export function initSigmaExplorer({
     //             a usable scale. Now the anchor IS the right thing to centre on:
     //             it is what the visitor came for.
     const ratio = framedRatio();
-    if (animate) {
-      flyTo(anchorId, { animate: true, ratio: Math.min(0.8, ratio) });
+    // Decision 8 (2026-10-24 migration): landings fit the whole constellation.
+    // The old animate branch flew to min(0.8, ratio) on the anchor, so every
+    // landing — first paint, search, deep link, node travel — arrived zoomed
+    // tight on the centre node and the visitor had to zoom out to see the
+    // constellation. Now animated and static landings agree: a view that fits
+    // lands on the fit state (bounding-box centre, fit ratio), animated when
+    // the landing animates. Tight zoom survives only for deliberate user
+    // zoom-in — and for crowded views, where fitting is illegible and the
+    // region branch below still centres on the anchor the visitor came for.
+    const fitState = { x: 0.5, y: 0.5 + cameraOffsetY(ratio), ratio, angle: 0 };
+    if (animate && ratio >= fitRatio() - 1e-6) {
+      const camera = renderer.getCamera();
+      if (typeof camera.animate === 'function') camera.animate(fitState, { duration: 520 }, positionOverlays);
+      else camera.setState(fitState);
+      positionOverlays();
+    } else if (animate) {
+      flyTo(anchorId, { animate: true, ratio });
     } else if (ratio >= fitRatio() - 1e-6) {
       // Centred in the space the chrome leaves free, not in the window: framing
       // to the window put the top of the drawing under the wordmark.
-      renderer.getCamera().setState({ x: 0.5, y: 0.5 + cameraOffsetY(ratio), ratio, angle: 0 });
+      renderer.getCamera().setState(fitState);
       positionOverlays();
     } else {
       flyTo(anchorId, { animate: false, ratio });
