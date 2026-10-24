@@ -203,7 +203,7 @@ export function fmtElapsed(seconds) {
 // "6°" is the game's name (Aaron, 2026-10-11: 6° the game, Six Degrees the
 // graph); "Rock" stays so a stranger in a group text knows what it is.
 //   Rage Against the Machine ➡️ Pearl Jam
-//   sixdegreesofrock.com/game?s=1&r=17-xxxxx   (?s=1: GA counts visits from shares)
+//   sixdegreesofrock.com/daily?s=1&r=17-xxxxx   (?s=1: GA counts visits from shares)
 // Plain words, not "5/4" (Cole, 2026-10-09): the fraction read as a grade
 // and nobody knew the 4 was the shortest path.
 export function dailyShareResultText({ date, start, target, picks = [], moves = picks.length, par, won }) {
@@ -232,7 +232,7 @@ function shareOrigin() {
 }
 export function dailyShareLink({ date, picks = [], won } = {}) {
   const code = dailyResultCode({ date, picks, won });
-  return `${shareOrigin()}/game?s=1${code ? `&r=${code}` : ''}`;
+  return `${shareOrigin()}/daily?s=1${code ? `&r=${code}` : ''}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -1113,7 +1113,7 @@ function initGameUI() {
   let dailyLastMove = null; // { kind, name, from }
 
   // Practice mode: a permanent product feature, not a test hook (Cole,
-  // 2026-10-08). /game?practice=1 plays the same board against the Solo
+  // 2026-10-08). /daily?practice=1 plays the same board against the Solo
   // endpoint with a fresh famous pair every time, and the daily's reveal
   // screen links here so players can keep playing. It's purely for fun:
   // no streak, no hints. The Daily Chain is where streaks and hints live.
@@ -1313,7 +1313,7 @@ function initGameUI() {
     if (!practiceMode) {
       // A warm-up ramp for first-timers (Cole, 2026-10-09): the game is new,
       // so practice is findable before the daily, not only after it.
-      card.querySelector('.sd-drawers').after(el('<p class="sd-practice-link"><a href="/game/?practice=1">New here? Warm up with a practice puzzle \u2192</a></p>'));
+      card.querySelector('.sd-drawers').after(el('<p class="sd-practice-link"><a href="/daily/?practice=1">New here? Warm up with a practice puzzle \u2192</a></p>'));
     }
     // A past day from "Past days" isn't today's puzzle: name it by number.
     if (date && !practiceMode && dailyPuzzleNumber(date)) {
@@ -1332,11 +1332,11 @@ function initGameUI() {
       card.querySelector('.game-daily-archive').hidden = true;
       const banner = el(`<div class="sd-practice-banner" role="note">
         <div><strong>Practice mode</strong><span class="sd-practice-sub">Doesn\u2019t count toward your streak or stats.</span></div>
-        <a class="sd-practice-cta" href="/game">Play today\u2019s daily puzzle \u2192</a>
+        <a class="sd-practice-cta" href="/daily">Play today\u2019s daily puzzle \u2192</a>
       </div>`);
       card.querySelector('.sd-topbar').after(banner);
       const foot = el(`<div class="sd-practice-foot">
-        <a class="sd-practice-cta" href="/game">Play today\u2019s daily puzzle \u2192</a>
+        <a class="sd-practice-cta" href="/daily">Play today\u2019s daily puzzle \u2192</a>
         <p>Practice games don\u2019t count toward your streak or stats.</p>
       </div>`);
       card.querySelector('.sd-drawers').after(foot);
@@ -1531,7 +1531,7 @@ function initGameUI() {
     else document.getElementById('add-band-btn')?.click();
   }
 
-  async function shareDailyText(btn, text, shareUrl = 'https://sixdegreesofrock.com/game?s=1') {
+  async function shareDailyText(btn, text, shareUrl = 'https://sixdegreesofrock.com/daily?s=1') {
     const label = btn.textContent;
     // iOS Safari (Paul, 2026-10-15): navigator.share() and clipboard.writeText()
     // must be called synchronously in the click handler — no awaits before them
@@ -2306,7 +2306,7 @@ function initGameUI() {
         again.addEventListener('click', () => dailyReplay(card));
       } else {
         again.textContent = 'Play a practice puzzle';
-        again.addEventListener('click', () => { window.location.href = '/game/?practice=1'; });
+        again.addEventListener('click', () => { window.location.href = '/daily/?practice=1'; });
       }
       actions.appendChild(results);
       actions.appendChild(again);
@@ -2670,7 +2670,7 @@ function initGameUI() {
       again.addEventListener('click', () => dailyReplay(card));
     } else {
       again.textContent = 'Play a practice puzzle';
-      again.addEventListener('click', () => { window.location.href = '/game/?practice=1'; });
+      again.addEventListener('click', () => { window.location.href = '/daily/?practice=1'; });
     }
     actions.appendChild(again);
     finish.appendChild(actions);
@@ -3959,7 +3959,7 @@ function initGameUI() {
         `${formatLabelFor(m.format)} vs ${opp} — ${myWins}:${opWins} · ${turnLabel}`;
       row.querySelector('[data-open]').addEventListener('click', () => {
         if (isArenaPage()) handleMatch(m.token);
-        else window.location.href = '/game/?match=' + encodeURIComponent(m.token);
+        else window.location.href = '/daily/?match=' + encodeURIComponent(m.token);
       });
       list.appendChild(row);
     }
