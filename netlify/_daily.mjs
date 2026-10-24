@@ -316,6 +316,6 @@ export function dailyShareText({ date, handle, hopsUsed, par, streak, picks }) {
     line,
     row,
     `Streak ${streak} · ${handle || 'a rawker'}`,
-    'sixdegreesofrock.com/game',
+    'sixdegreesofrock.com/daily',
   ].join('\n');
 }
