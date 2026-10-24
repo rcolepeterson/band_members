@@ -55,7 +55,7 @@ const PACKAGE = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 test('index.html loads the explorer as a module and nothing else changes renderer', () => {
   assert.match(
     INDEX_HTML,
-    /<script type="module" src="scripts\/sigma-explorer\.mjs"><\/script>/,
+    /<script type="module" src="\/scripts\/sigma-explorer\.mjs"><\/script>/,
     'the explorer must be loaded as an ES module from index.html'
   );
   assert.match(INDEX_HTML, /<svg id="graph-svg"/);
