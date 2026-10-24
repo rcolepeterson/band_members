@@ -223,7 +223,8 @@ test('/api/bands is cached briefly, errors are not, and writes bypass it client-
   assert.match(neon, /BANDS_CDN_CACHE_CONTROL = 'public, max-age=3600, stale-while-revalidate=3600, durable'/);
   assert.match(neon, /'netlify-cdn-cache-control': BANDS_CDN_CACHE_CONTROL/);
   assert.match(neon, /return serverError\('could not load bands'/, 'errors still go through json() (no-store)');
-  const html = src('index.html');
+  // 2026-10-24 migration: the graph page (and its bands fetch) moved to /graph.
+  const html = src('graph/index.html');
   assert.match(html, /const response = await fetch\(\.\.\.bandsFetchArgs\(\)\);/);
   assert.match(html, /return \['\/api\/bands\?v=' \+ changedAt, \{ cache: 'no-store' \}\];/);
   assert.match(html, /if \(method !== 'GET' && method !== 'HEAD' && BAND_WRITE_PATH\.test\(path\)\)/);

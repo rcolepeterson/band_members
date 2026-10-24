@@ -1,5 +1,5 @@
 // Unit tests for the head-to-head invite link-preview card:
-//   GET /invite/<token>  ->  dynamic og: tags, then handoff to /game/?invite=
+//   GET /invite/<token>  ->  dynamic og: tags, then handoff to /daily/?invite=
 //
 // The card's copy + HTML builders are pure (no DB), so they're tested
 // directly. The live lookup path is verified manually against a deploy,
@@ -82,8 +82,8 @@ test('card HTML carries the og/twitter tags and the handoff', () => {
   assert.match(html, /<meta name="twitter:card" content="summary_large_image" \/>/);
   assert.match(html, /<meta property="og:url" content="https:\/\/sixdegreesofrock\.com\/invite\/abc123" \/>/);
   // Humans land on the real invite flow.
-  assert.match(html, /<meta http-equiv="refresh" content="0;url=\/game\/\?invite=abc123" \/>/);
-  assert.match(html, /<a href="\/game\/\?invite=abc123">Continue to the challenge<\/a>/);
+  assert.match(html, /<meta http-equiv="refresh" content="0;url=\/daily\/\?invite=abc123" \/>/);
+  assert.match(html, /<a href="\/daily\/\?invite=abc123">Continue to the challenge<\/a>/);
 });
 
 test('hostile band names cannot break out of the card markup', () => {

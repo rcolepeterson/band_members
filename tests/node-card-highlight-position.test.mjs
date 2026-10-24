@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const INDEX_HTML = readFileSync(join(__dirname, '..', 'index.html'), 'utf8');
+const INDEX_HTML = readFileSync(join(__dirname, '..', 'graph/index.html'), 'utf8');
 
 // Pull a top-level `function NAME(...) { ... }` out of index.html. Skips the
 // parameter list by paren-matching first so destructured options arguments

@@ -64,7 +64,7 @@ test('a win names start and target, one square per move, no band spoilers', () =
   assert.equal(text, [
     '6° Rock #9 🎸 Solved in 4 moves', // plain words, no timer
     'Nirvana ➡️ Metallica',
-    'sixdegreesofrock.com/game?s=1&r=9-odso', // the score rides in the link too
+    'sixdegreesofrock.com/daily?s=1&r=9-odso', // the score rides in the link too
   ].join('\n'));
   for (const spoiler of ['Foo Fighters', 'Pearl Jam', 'Probot']) assert.ok(!text.includes(spoiler));
 });
@@ -77,7 +77,7 @@ test('a loss says Not solved', () => {
   assert.equal(text, [
     '6° Rock #9 🎸 Not solved',
     'Nirvana ➡️ Metallica',
-    'sixdegreesofrock.com/game?s=1&r=9x-ds',
+    'sixdegreesofrock.com/daily?s=1&r=9x-ds',
   ].join('\n'));
   assert.ok(!/Can you|beat my chain|crack it/.test(text), 'no slogan');
 });
@@ -283,13 +283,13 @@ test('no "tree" jargon in game copy; the music map link comes after the game', (
   assert.ok(src.includes("a.href = '/?band=' + encodeURIComponent(run.start_band.name);"), 'map opens on today\'s start band');
   assert.equal((src.match(/finish\.appendChild\(musicMapLinkEl\(run\)\);/g) || []).length, 2, 'win and loss boards');
   assert.ok(src.includes('const mapLink = musicMapLinkEl(run);'), 'results modal');
-  const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'game/index.html'), 'utf8');
+  const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'daily/index.html'), 'utf8');
   assert.ok(!html.includes('Back to the tree'), 'no exit button in the header');
   assert.match(html, /<a class="arena-wordmark" href="\/">/, 'the wordmark still links home');
 });
 
 test('feedback: out of the header, in the footer and on the results screen', () => {
-  const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'game/index.html'), 'utf8');
+  const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'daily/index.html'), 'utf8');
   const header = html.slice(html.indexOf('<div class="arena-header-actions">'), html.indexOf('</header>'));
   assert.ok(!header.includes('send-feedback-btn'), 'not in the header');
   const footer = html.slice(html.indexOf('<footer class="arena-foot">'), html.indexOf('</footer>'));
@@ -297,8 +297,8 @@ test('feedback: out of the header, in the footer and on the results screen', () 
   assert.ok(src.includes('Something off? <button type="button" class="sd-linkbtn">Send feedback</button>'));
 });
 
-test('/game has its own link-preview image', () => {
-  const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'game/index.html'), 'utf8');
+test('/daily has its own link-preview image', () => {
+  const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'daily/index.html'), 'utf8');
   assert.match(html, /<meta property="og:image" content="https:\/\/sixdegreesofrock\.com\/game-og\.png\?v=3" \/>/);
   assert.match(html, /<meta name="twitter:image" content="https:\/\/sixdegreesofrock\.com\/game-og\.png\?v=3" \/>/);
   const png = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'game-og.png'));
@@ -306,20 +306,21 @@ test('/game has its own link-preview image', () => {
   assert.equal(png.readUInt32BE(20), 630, 'height');
 });
 
-test('SEO: /game canonical is the served URL, structured data on both pages, both in the sitemap', () => {
+test('SEO: /daily canonical is the served URL, structured data on both pages, both in the sitemap', () => {
   const read = (f) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', f), 'utf8');
-  const game = read('game/index.html');
-  // /game 301s to /game/; a canonical pointing at a redirect is a crawl error.
-  assert.match(game, /<link rel="canonical" href="https:\/\/sixdegreesofrock\.com\/game\/" \/>/);
-  assert.match(game, /<meta property="og:url" content="https:\/\/sixdegreesofrock\.com\/game\/" \/>/);
-  for (const [file, html] of [['game', game], ['home', read('index.html')]]) {
+  const game = read('daily/index.html');
+  // Canonical is the slash form, the served document — same rule as before the move.
+  assert.match(game, /<link rel="canonical" href="https:\/\/sixdegreesofrock\.com\/daily\/" \/>/);
+  assert.match(game, /<meta property="og:url" content="https:\/\/sixdegreesofrock\.com\/daily\/" \/>/);
+  for (const [file, html] of [['daily', game], ['graph', read('graph/index.html')]]) {
     const m = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
     assert.ok(m, `${file} has JSON-LD`);
     JSON.parse(m[1]); // must be valid JSON
   }
   const sitemap = read('sitemap.xml');
   assert.match(sitemap, /<loc>https:\/\/sixdegreesofrock\.com\/<\/loc>/);
-  assert.match(sitemap, /<loc>https:\/\/sixdegreesofrock\.com\/game\/<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/sixdegreesofrock\.com\/daily\/<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/sixdegreesofrock\.com\/graph\/<\/loc>/);
 });
 
 test('stats screen: header button, block in the daily results, not in practice', () => {
@@ -334,20 +335,20 @@ test('stats screen: header button, block in the daily results, not in practice',
 test('practice is unmistakable: banner, amber accent, real buttons back to the daily', () => {
   assert.ok(src.includes("card.classList.add('is-practice');"));
   assert.ok(src.includes('<strong>Practice mode</strong>'));
-  assert.equal((src.match(/<a class="sd-practice-cta" href="\/game">Play today\\u2019s daily puzzle \\u2192<\/a>/g) || []).length, 2, 'top and bottom');
+  assert.equal((src.match(/<a class="sd-practice-cta" href="\/daily">Play today\\u2019s daily puzzle \\u2192<\/a>/g) || []).length, 2, 'top and bottom');
   assert.ok(!src.includes('Just for fun: no streaks or hints.'), 'vague footer gone');
   const play = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'netlify/functions/game_daily_play.mjs'), 'utf8');
   assert.match(play, /today_status: \(todayRows && todayRows\[0\] && todayRows\[0\]\.status\) \|\| 'none',/);
 });
 
-test('/game installs to the home screen: manifest, icons, iOS tags', () => {
+test('/daily installs to the home screen: manifest, icons, iOS tags', () => {
   const read = (f) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', f));
-  const html = read('game/index.html').toString();
+  const html = read('daily/index.html').toString();
   assert.match(html, /<link rel="manifest" href="\/game\.webmanifest" \/>/);
   assert.match(html, /<link rel="apple-touch-icon" href="\/game-icon-180\.png" \/>/);
   assert.match(html, /<meta name="apple-mobile-web-app-capable" content="yes" \/>/);
   const m = JSON.parse(read('game.webmanifest'));
-  assert.equal(m.start_url, '/game/');
+  assert.equal(m.start_url, '/daily/');
   assert.equal(m.display, 'standalone');
   for (const size of [180, 192, 512]) {
     const png = read(`game-icon-${size}.png`);
@@ -364,11 +365,11 @@ test('home screen: no automatic banner; a quiet offer after a game only', () => 
   assert.ok(!/install(ing)? (the|an|our) app/i.test(src.slice(src.indexOf('function homeScreenHintEl'), src.indexOf('function homeScreenHintEl') + 2000)), 'no "install an app" wording');
 });
 
-test('/game header says nothing to guests (no "Sign in to play" linking home)', () => {
+test('/daily header says nothing to guests (no "Sign in to play" linking home)', () => {
   const badge = src.slice(src.indexOf('async function renderArenaPlayerBadge'), src.indexOf('const h = await loadMyHandle();', src.indexOf('async function renderArenaPlayerBadge')));
   assert.match(badge, /if \(!isSignedIn\(\)\) \{[\s\S]*badge\.hidden = true;[\s\S]*return;/);
   assert.ok(!badge.includes("'Sign in to play'") && !badge.includes("link.href = '/'"), 'no sign-in label, no link home');
-  const html = readFileSync(new URL('../game/index.html', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../daily/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('.arena-player[hidden]{display:none}'), 'inline-flex must not beat [hidden]');
 });
 
@@ -380,7 +381,7 @@ test('share squares are each move\'s real color, so grids differ by how you play
   assert.equal(perfect.split('\n')[1], 'Journey ➡️ Heart');
   assert.equal(messy.split('\n')[0], '6° Rock #9 🎸 Solved in 5 moves');
   assert.equal(messy.split('\n')[1], 'Journey ➡️ Heart');
-  assert.equal(messy.split('\n').at(-1), 'sixdegreesofrock.com/game?s=1&r=9-odsso');
+  assert.equal(messy.split('\n').at(-1), 'sixdegreesofrock.com/daily?s=1&r=9-odsso');
   assert.ok(!/\d+\/\d+/.test(messy), 'no fraction score');
 });
 
@@ -389,13 +390,13 @@ test('practice is findable: a win offers it, and a warm-up link sits under the d
   const winBoard = src.slice(src.indexOf("if (completed || run.status === 'complete') {"), src.indexOf("if (completed || run.status === 'complete') {") + 2500);
   assert.ok(winBoard.includes("again.textContent = 'Play a practice puzzle';"));
   assert.ok(!winBoard.includes("'Play again'"));
-  assert.ok(src.includes('<p class="sd-practice-link"><a href="/game/?practice=1">New here? Warm up with a practice puzzle \\u2192</a></p>'));
+  assert.ok(src.includes('<p class="sd-practice-link"><a href="/daily/?practice=1">New here? Warm up with a practice puzzle \\u2192</a></p>'));
   assert.match(src, /\.sd-practice-link a\{[^}]*min-height:44px/, 'thumb-sized');
   assert.ok(src.includes('if (practiceLink) practiceLink.hidden = !active;'), 'gone once the daily is finished');
 });
 
 test('GA4: /game loads the tag, and the five game events fire once per occurrence', () => {
-  const html = readFileSync(new URL('../game/index.html', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../daily/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('googletagmanager.com/gtag/js?id=G-E2SNSPFHGB'), 'same GA4 property as the homepage');
   assert.match(html, /ga_debug=1/, 'DebugView switch');
   // Once per run: remembered under the run id, so re-renders and reloads don't repeat.
@@ -412,15 +413,16 @@ test('GA4: /game loads the tag, and the five game events fire once per occurrenc
 });
 
 test('analytics follow-ups: team browsers tagged internal, share links tagged, retention counts', () => {
-  for (const page of ['../index.html', '../game/index.html']) {
+  // 2026-10-24 migration: the GA-tagged pages are the graph and the daily now.
+  for (const page of ['../graph/index.html', '../daily/index.html']) {
     const html = readFileSync(new URL(page, import.meta.url), 'utf8');
     assert.match(html, /localStorage\.setItem\('sdr-internal', '1'\)/, `${page}: ?internal=1 marks this browser`);
     assert.match(html, /gaConfig\.traffic_type = 'internal'/, `${page}: GA's Internal Traffic filter drops it`);
     assert.match(html, /gtag\('config', 'G-E2SNSPFHGB', gaConfig\)/);
   }
-  const game = readFileSync(new URL('../game/index.html', import.meta.url), 'utf8');
+  const game = readFileSync(new URL('../daily/index.html', import.meta.url), 'utf8');
   assert.match(game, /\?utm_source=share&utm_medium=social/, 'a visit from a shared link reports source "share", channel Organic Social');
-  assert.ok(src.includes("`${shareOrigin()}/game?s=1${code ? `&r=${code}` : ''}`"), 'share links keep ?s=1');
+  assert.ok(src.includes("`${shareOrigin()}/daily?s=1${code ? `&r=${code}` : ''}`"), 'share links keep ?s=1');
   const retention = readFileSync(new URL('../netlify/functions/game_retention.mjs', import.meta.url), 'utf8');
   assert.match(retention, /path: '\/api\/game-retention'/);
   assert.match(retention, /max-age=300/, 'cached so it never costs Neon much');

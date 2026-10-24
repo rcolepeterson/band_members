@@ -38,7 +38,7 @@ test('signed-in visitors get one tap, no email box', () => {
 
 test('it says what you get, links to the game, and counts signups', () => {
   assert.match(page, /skipped on days you&rsquo;ve played\. Free, no account\. Unsubscribe in one tap\./);
-  assert.match(page, /<a class="play" href="\/game\/">Play today&rsquo;s puzzle<\/a>/);
+  assert.match(page, /<a class="play" href="\/daily\/">Play today&rsquo;s puzzle<\/a>/);
   assert.match(page, /gtag\('event', 'reminder_signup', \{ method: method, where: 'remind_page' \}\)/);
   assert.match(page, /googletagmanager\.com\/gtag\/js\?id=G-E2SNSPFHGB/);
   const engine = read('../scripts/six-degrees-game.mjs');

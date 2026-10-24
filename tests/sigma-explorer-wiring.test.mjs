@@ -42,7 +42,8 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const INDEX_HTML = readFileSync(join(ROOT, 'index.html'), 'utf8');
+// 2026-10-24 migration: the graph page moved from the root to /graph.
+const INDEX_HTML = readFileSync(join(ROOT, 'graph', 'index.html'), 'utf8');
 const EXPLORER = readFileSync(join(ROOT, 'scripts', 'sigma-explorer.mjs'), 'utf8');
 const HELPERS = readFileSync(join(ROOT, 'scripts', 'neighborhood-helpers.mjs'), 'utf8');
 const PACKAGE = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
@@ -1782,13 +1783,34 @@ test('"Show next group" jumps to a random unvisited group', () => {
   );
 });
 
-test('homepage shows the daily game pill without the Game nav link', () => {
-  // 2026-10-12: Aaron, Cole, Paul agreed to remove the top-right "Game" word
-  // (Cole: "low rent"). The "Play today's 6° puzzle" pill stays; the game is
-  // also reachable via the burger-menu game icon.
-  assert.match(EXPLORER, /<a class="sigma-daily-cta" href="\/game\/">Play today&rsquo;s 6&deg; puzzle<\/a>/);
-  assert.match(EXPLORER, /\.sigma-daily-cta\{[^}]*min-height:44px/, 'thumb-sized');
+test('graph page carries no game promotion (migration)', () => {
+  // 2026-10-24 migration: the "Play today's 6° puzzle" pill is gone and the
+  // burger 6* icon points back to the splash hub. The top-right "Game" word
+  // was already removed 2026-10-12 (Cole: "low rent").
+  assert.doesNotMatch(EXPLORER, /sigma-daily-cta/, 'daily pill removed');
+  assert.doesNotMatch(EXPLORER, /sigma-daily/, 'daily wrapper removed');
   assert.doesNotMatch(INDEX_HTML, /<a class="header-game-link"/, 'Game nav link removed');
+  assert.match(INDEX_HTML, /id="mobile-game-open-btn" href="\/"/, 'burger 6* points to the hub');
+});
+
+test('landings fit the whole constellation, not the anchor (Decision 8)', () => {
+  // 2026-10-24 migration: every landing arrived zoomed tight on the centre
+  // node (min(0.8, ratio)) and the visitor had to zoom out. Animated
+  // landings now fly to the fit state; tight zoom is user zoom-in only.
+  assert.doesNotMatch(EXPLORER, /Math\.min\(0\.8, ratio\)/);
+  assert.match(EXPLORER, /const fitState = \{ x: 0\.5, y: 0\.5 \+ cameraOffsetY\(ratio\), ratio, angle: 0 \};/);
+  assert.match(EXPLORER, /if \(animate && ratio >= fitRatio\(\) - 1e-6\)/);
+});
+
+test('narrow viewports draw lighter nodes and edges (desktop feel)', () => {
+  // 2026-10-24: phones rendered the same constellation nearly twice as heavy
+  // as desktop (sizeScale near 1 on small views vs the 0.6 floor on crowded
+  // desktop views). Narrow views scale back to the desktop feel.
+  assert.match(EXPLORER, /const MOBILE_WEIGHT_FACTOR = 0\.65;/);
+  assert.match(EXPLORER, /state\.sizeScale \*= MOBILE_WEIGHT_FACTOR/);
+  assert.match(EXPLORER, /const w = state\.isNarrowViewport \? MOBILE_WEIGHT_FACTOR : 1;/);
+  assert.match(EXPLORER, /size: 1 \* w/);
+  assert.match(EXPLORER, /MOBILE_EDGE_COLOR/);
 });
 
 test('tester polish: 1 degree, one legal footer, honest dialog name, no dangling dash', () => {

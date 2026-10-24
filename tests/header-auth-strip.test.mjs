@@ -31,7 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const INDEX_HTML = readFileSync(join(__dirname, '..', 'index.html'), 'utf8');
+const INDEX_HTML = readFileSync(join(__dirname, '..', 'graph/index.html'), 'utf8');
 
 function extract(name) {
   // Prefer the async declaration when one exists; a plain search for
@@ -428,7 +428,7 @@ test('the desktop media block stays a vertical-only adjustment', () => {
 });
 
 test('the header shows Sign in or your initials at first paint, not after the map loads', () => {
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../graph/index.html', import.meta.url), 'utf8');
   const early = html.match(/<\/header>\n\s*<script>\n\s*\/\/ Header auth state at first paint[\s\S]*?<\/script>/);
   assert.ok(early, 'inline script right after the header');
   assert.match(early[0], /parsed\.token\.length >= 8/, 'same check as loadCurrentUser');
@@ -437,7 +437,7 @@ test('the header shows Sign in or your initials at first paint, not after the ma
 });
 
 test('the header corner sits in the same place while the map loads and after', () => {
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../graph/index.html', import.meta.url), 'utf8');
   const explorer = readFileSync(new URL('../scripts/sigma-explorer.mjs', import.meta.url), 'utf8');
   const live = explorer.match(/body\.\$\{BODY_ACTIVE_CLASS\} \.site-header\{[^}]*padding:([^;}]+)\}/)[1].trim();
   const boot = html.match(/body\.rbft-sigma-boot \.site-header \{[^}]*padding: ([^;]+);/)[1].trim();
