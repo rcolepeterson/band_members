@@ -916,6 +916,48 @@ test('framing fits the view when legible and zooms in when it is not', async () 
   assert.equal(framingRatio({ extent: 0, viewportWidth: 800, viewportHeight: 600 }), base);
 });
 
+test('landing fit frames the box with breathing room, maximized', async () => {
+  const { landingFit } = await import('../scripts/neighborhood-helpers.mjs');
+  const base = {
+    perPixelX: 0.01, perPixelY: 0.01, currentRatio: 1,
+    availW: 800, availH: 400, margin: 0.10,
+  };
+  // Box 2 wide x 1 tall, centred: both dimensions bind at the same ratio.
+  assert.deepEqual(
+    landingFit({ minX: -1, maxX: 1, minY: -0.5, maxY: 0.5, ...base }),
+    { x: 0, y: 0, ratio: 0.3125 }
+  );
+  // A tall box: height binds, width gets extra breathing room.
+  assert.deepEqual(
+    landingFit({ minX: -0.5, maxX: 0.5, minY: -1, maxY: 1, ...base }),
+    { x: 0, y: 0, ratio: 0.625 }
+  );
+  // Labels expand the box on every side and move its centre with it.
+  assert.deepEqual(
+    landingFit({
+      minX: 2, maxX: 6, minY: -1, maxY: 1,
+      labelUnitsX: 0.5, labelUnitsY: 0.25,
+      perPixelX: 0.01, perPixelY: 0.01, currentRatio: 1,
+      availW: 800, availH: 400, margin: 0,
+    }),
+    { x: 4, y: 0, ratio: 0.625 }
+  );
+  // Margin shrinks the available band, so the ratio zooms out to compensate.
+  assert.equal(
+    landingFit({
+      minX: 2, maxX: 6, minY: -1, maxY: 1,
+      labelUnitsX: 0.5, labelUnitsY: 0.25,
+      perPixelX: 0.01, perPixelY: 0.01, currentRatio: 1,
+      availW: 800, availH: 400, margin: 0.10,
+    }).ratio,
+    0.78125
+  );
+  // Degenerate inputs return null so the caller can fall back.
+  assert.equal(landingFit({ minX: 1, maxX: 1, minY: 0, maxY: 1, ...base }), null);
+  assert.equal(landingFit({ minX: 0, maxX: 1, minY: 0, maxY: 1, availW: 0, availH: 400 }), null);
+  assert.equal(landingFit({ minX: 0, maxX: 1, minY: 0, maxY: 1, ...base, perPixelX: 0 }), null);
+});
+
 // --- a link that asks for a band we do not have ------------------------------
 //
 // A shared link is the main way people arrive, so a stale one -- a band since
