@@ -1,8 +1,8 @@
 // Puts a shared 6° result into its link preview (Cole, 2026-10-14: one-tap share).
 //
 // Facebook and Instagram drop pre-filled share text but always unfurl the
-// link, so the result rides in the link: /game/?s=1&r=<code> (see
-// dailyResultCode in scripts/six-degrees-game.mjs). This rewrites the /game
+// link, so the result rides in the link: /daily/?s=1&r=<code> (see
+// dailyResultCode in scripts/six-degrees-game.mjs). This rewrites the /daily
 // page's preview tags for that one link: the title is the score, the image is
 // /api/daily-card for the same code, and og:url is the link itself so the
 // platform doesn't fold it back into the generic /game preview.
@@ -35,7 +35,7 @@ export default async (request, context) => {
   const title = dailyResultTitle(result);
   const description = 'Connect two famous bands through the musicians they share. A new puzzle every day. Can you beat it?';
   const imageUrl = `${origin}/api/daily-card?r=${code}`;
-  const shareUrl = `${origin}/game/?s=1&amp;r=${code}`;
+  const shareUrl = `${origin}/daily/?s=1&amp;r=${code}`;
 
   let html = await response.text();
   html = replaceMeta(html, 'property', 'og:title', title);
@@ -54,4 +54,8 @@ export default async (request, context) => {
   return new Response(html, { status: response.status, headers });
 };
 
-export const config = { path: '/game/' };
+// 2026-10-24 migration: the Daily Chain moved from /game to /daily. Both
+// paths stay live so old shares keep their previews (the /game redirect
+// sends humans to /daily, but the edge function still answers /game/?s=1&r=
+// for crawlers that fetch the shared link directly).
+export const config = { path: ['/game/', '/daily/'] };
