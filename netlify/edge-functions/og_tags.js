@@ -144,4 +144,7 @@ export default async (request, context) => {
   return new Response(html, { status: response.status, headers });
 };
 
-export const config = { path: '/' };
+// 2026-10-24 migration: band deep links arrive as /?anchor= (root, routed
+// to the graph by the hub) AND as /graph/?anchor= (the graph's own URL).
+// Both forms need the band preview, so the function runs on both paths.
+export const config = { path: ['/', '/graph/'] };
