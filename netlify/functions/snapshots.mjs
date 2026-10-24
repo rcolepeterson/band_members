@@ -31,9 +31,9 @@ export default async (req) => {
       rows = await sql`
         select snapshot_date, node_count, user_count, follows_count, bands_added,
                ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, fb_group_members,
-               ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events,
                game_players, game_retention_pct, game_weekly_players,
-               game_repeat_players, game_completion_pct, game_share_taps, notes
+               game_repeat_players, game_completion_pct, game_share_taps,
+               ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events, notes
         from daily_snapshots
         where snapshot_date >= ${since}::date
         order by snapshot_date asc
@@ -42,9 +42,9 @@ export default async (req) => {
       rows = await sql`
         select snapshot_date, node_count, user_count, follows_count, bands_added,
                ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, fb_group_members,
-               ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events,
                game_players, game_retention_pct, game_weekly_players,
-               game_repeat_players, game_completion_pct, game_share_taps, notes
+               game_repeat_players, game_completion_pct, game_share_taps,
+               ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events, notes
         from daily_snapshots
         order by snapshot_date asc
       `;
