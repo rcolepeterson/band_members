@@ -25,7 +25,31 @@
 [[redirects]]
   # Head-to-head invite previews (Aaron's text-message card, 2026-10-01):
   # /invite/<token> serves the challenge card (dynamic og: tags naming the
-  # challenger and their band pick) and hands humans off to /game/?invite=.
+  # challenger and their band pick) and hands humans off to /daily/?invite=.
   from = "/invite/*"
   to = "/api/game-invite-card?token=:splat"
   status = 200
+
+[[redirects]]
+  # 2026-10-24 migration: the Daily Chain moved from /game to /daily, and
+  # the splash hub moved from /play to the root. Old URLs 301 to the new
+  # ones; Netlify preserves query strings across the hop, so /game/?s=1&r=
+  # and /?game=1-style links keep working through the redirect.
+  from = "/game"
+  to = "/daily/"
+  status = 301
+
+[[redirects]]
+  from = "/game/*"
+  to = "/daily/:splat"
+  status = 301
+
+[[redirects]]
+  from = "/play"
+  to = "/"
+  status = 301
+
+[[redirects]]
+  from = "/play/*"
+  to = "/"
+  status = 301
