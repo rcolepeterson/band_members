@@ -25,7 +25,7 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
-const INDEX_HTML = readFileSync(join(REPO_ROOT, 'index.html'), 'utf8');
+const INDEX_HTML = readFileSync(join(REPO_ROOT, 'graph', 'index.html'), 'utf8');
 const HELPERS_SRC = readFileSync(join(REPO_ROOT, 'scripts', 'recent-filter-helpers.mjs'), 'utf8');
 
 function stripJsComments(src) {

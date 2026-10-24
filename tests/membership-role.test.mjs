@@ -209,7 +209,10 @@ test('threads use ONE quiet hue at rest; touring fades via opacity, not colour',
   // the fade is opacity and weight only -- thinner and more transparent -- never
   // a role hue. No thread ever wears founder/member/touring colours at rest.
   const reduce = EXPLORER.slice(EXPLORER.indexOf('function reduceEdge('), EXPLORER.indexOf('// -- sizing'));
-  assert.match(reduce, /color: EDGE_COLOR/, 'non-touring threads keep the quiet colour');
+  // Narrow viewports use MOBILE_EDGE_COLOR: the same hue at lower opacity
+  // (Aaron's 2026-10-24 mobile-lightening call), so the "one quiet hue" rule
+  // still holds -- the resting thread never wears a role hue.
+  assert.match(reduce, /color: state\.isNarrowViewport \? MOBILE_EDGE_COLOR : EDGE_COLOR/, 'non-touring threads keep the quiet colour');
   assert.doesNotMatch(reduce, /ROLE_EDGE_STYLE/, 'role must not colour a thread');
   assert.doesNotMatch(EXPLORER, /const ROLE_EDGE_STYLE/, 'the role edge palette must be gone, not just unused');
   // The touring fade is transparency + thinness, not a hue.

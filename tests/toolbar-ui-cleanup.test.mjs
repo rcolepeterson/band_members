@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const INDEX_HTML = readFileSync(join(__dirname, '..', 'index.html'), 'utf8');
+const INDEX_HTML = readFileSync(join(__dirname, '..', 'graph', 'index.html'), 'utf8');
 
 test('the Bands-only and Musicians-only view chips are gone from both platforms', () => {
   // Covers the desktop toolbar (.graph-overlay-top) and the mobile
