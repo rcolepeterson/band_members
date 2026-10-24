@@ -65,7 +65,7 @@ import {
   nodeSizeScale,
   layoutExtent,
   labelSettings,
-  framingRatio,
+  landingFit,
 } from './neighborhood-helpers.mjs';
 import { polygonLayout } from './polygon-layout.mjs';
 
@@ -1418,24 +1418,76 @@ export function initSigmaExplorer({
     return FRAMED_RATIO;
   }
 
-  function framedRatio() {
-    // The FULL canvas, deliberately, not the band the chrome leaves free.
-    // Measuring the band here was the obvious move and it was wrong: framingRatio
-    // reads a smaller usable area as "fitting would not be legible" and zooms in
-    // on a region instead, which cut the opening view from 17 nodes on screen to
-    // 8. Nodes visible matters more than names hidden. The band is used for
-    // CENTRING (see cameraOffsetY), so the drawing sits in the clear space
-    // without being shrunk into it.
-    const rect = canvasHost.getBoundingClientRect();
-    return framingRatio({
-      extent: state.layoutExtent,
-      viewportWidth: rect.width,
-      viewportHeight: rect.height,
-      // Selection grows a node by a quarter (see reduceNode), so frame for the
-      // biggest a node can ever be drawn, not its resting size.
-      maxNodeSize: LARGEST_NODE_SIZE * state.sizeScale * HIGHLIGHT_GROWTH,
-      baseRatio: fitRatio(),
+  // Landing fit (2026-10-24, Aaron's call): every landing frames the whole
+  // current view -- nodes AND labels -- inside the free band with breathing
+  // room, so the constellation never arrives clipped at the screen edges.
+  // Manual zoom-in is the visitor's choice after landing; the first land
+  // itself always shows the whole constellation, crowded views included
+  // (they land small; zoom in for detail). This supersedes the old
+  // legibility-region framing, which showed a clipped region whenever the
+  // view looked crowded.
+  //
+  // Margin is 10% of each band dimension -- about half the margins in
+  // Aaron's 2026-10-24 reference screenshot, so the constellation is
+  // maximized while keeping clear breathing room. Labels get their own
+  // allowance (12% of the shorter band side, clamped 48..120px per side)
+  // because label text runs past node rims and the old node-only fit
+  // clipped names at the edges.
+  const LANDING_MARGIN = 0.10;
+  const LANDING_LABEL_ALLOWANCE_FRACTION = 0.12;
+  const LANDING_LABEL_ALLOWANCE_MIN_PX = 48;
+  const LANDING_LABEL_ALLOWANCE_MAX_PX = 120;
+
+  // Camera state { x, y, ratio } that frames the current view, or null when
+  // the view can't be measured yet (no display data). The caller falls back
+  // to the framed-centre fit state on null.
+  function landingFitState() {
+    renderer.refresh();
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let count = 0;
+    viewGraph.forEachNode(id => {
+      const d = renderer.getNodeDisplayData(id);
+      if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return;
+      count++;
+      if (d.x < minX) minX = d.x;
+      if (d.x > maxX) maxX = d.x;
+      if (d.y < minY) minY = d.y;
+      if (d.y > maxY) maxY = d.y;
     });
+    if (!count || !(maxX > minX) || !(maxY > minY)) return null;
+    const area = safeArea();
+    const camera = renderer.getCamera();
+    const currentRatio = camera.getState().ratio || 1;
+    const from = renderer.viewportToFramedGraph({ x: 0, y: 0 });
+    const toX = renderer.viewportToFramedGraph({ x: 100, y: 0 });
+    const toY = renderer.viewportToFramedGraph({ x: 0, y: 100 });
+    const perPixelX = Math.abs((toX.x - from.x) / 100);
+    const perPixelY = Math.abs((toY.y - from.y) / 100);
+    if (!(perPixelX > 0) || !(perPixelY > 0) || !(currentRatio > 0)) return null;
+    const allowancePx = Math.min(
+      LANDING_LABEL_ALLOWANCE_MAX_PX,
+      Math.max(
+        LANDING_LABEL_ALLOWANCE_MIN_PX,
+        LANDING_LABEL_ALLOWANCE_FRACTION * Math.min(area.width, area.height)
+      )
+    );
+    // Label allowance is screen pixels; convert at the current zoom, fit,
+    // then convert once more at the fitted zoom -- one refinement pass, so
+    // the allowance is right at the zoom the visitor actually lands on.
+    const fitWithAllowance = zoomScale => landingFit({
+      minX, minY, maxX, maxY,
+      labelUnitsX: allowancePx * perPixelX * zoomScale,
+      labelUnitsY: allowancePx * perPixelY * zoomScale,
+      perPixelX, perPixelY,
+      currentRatio,
+      availW: area.width,
+      availH: area.height,
+      margin: LANDING_MARGIN,
+    });
+    const first = fitWithAllowance(1);
+    if (!first) return null;
+    const fit = fitWithAllowance(first.ratio / currentRatio) || first;
+    return { x: fit.x, y: fit.y, ratio: fit.ratio };
   }
 
   // Node radii are screen pixels, so how close nodes look depends on the
@@ -1656,40 +1708,22 @@ export function initSigmaExplorer({
     state.maxNodes = maxNodes;
     clearHighlight();
     updateChrome();
-    // Framing, in two cases:
-    //
-    //   FITS      The whole view is legible on this screen, so frame the whole
-    //             view -- centred on its bounding box, not on the anchor. The
-    //             relaxed layout is an asymmetric cloud, so centring on the
-    //             anchor clipped whatever was furthest from it.
-    //   ZOOMED IN Fitting would push nodes into each other, so show a region at
-    //             a usable scale. Now the anchor IS the right thing to centre on:
-    //             it is what the visitor came for.
-    const ratio = framedRatio();
-    // Decision 8 (2026-10-24 migration): landings fit the whole constellation.
-    // The old animate branch flew to min(0.8, ratio) on the anchor, so every
-    // landing — first paint, search, deep link, node travel — arrived zoomed
-    // tight on the centre node and the visitor had to zoom out to see the
-    // constellation. Now animated and static landings agree: a view that fits
-    // lands on the fit state (bounding-box centre, fit ratio), animated when
-    // the landing animates. Tight zoom survives only for deliberate user
-    // zoom-in — and for crowded views, where fitting is illegible and the
-    // region branch below still centres on the anchor the visitor came for.
-    const fitState = { x: 0.5, y: 0.5 + cameraOffsetY(ratio), ratio, angle: 0 };
-    if (animate && ratio >= fitRatio() - 1e-6) {
+    // Every landing frames the whole current view with breathing room --
+    // see landingFitState. Animated and static landings agree; the only
+    // zoom-in is the visitor's own. When the fit can't be measured, fall
+    // back to the framed-centre fit state.
+    const fit = landingFitState();
+    const fitState = fit
+      ? { x: fit.x, y: fit.y + cameraOffsetY(fit.ratio), ratio: fit.ratio, angle: 0 }
+      : { x: 0.5, y: 0.5 + cameraOffsetY(fitRatio()), ratio: fitRatio(), angle: 0 };
+    if (animate) {
       const camera = renderer.getCamera();
       if (typeof camera.animate === 'function') camera.animate(fitState, { duration: 520 }, positionOverlays);
       else camera.setState(fitState);
       positionOverlays();
-    } else if (animate) {
-      flyTo(anchorId, { animate: true, ratio });
-    } else if (ratio >= fitRatio() - 1e-6) {
-      // Centred in the space the chrome leaves free, not in the window: framing
-      // to the window put the top of the drawing under the wordmark.
+    } else {
       renderer.getCamera().setState(fitState);
       positionOverlays();
-    } else {
-      flyTo(anchorId, { animate: false, ratio });
     }
     return true;
   }
@@ -1855,35 +1889,6 @@ export function initSigmaExplorer({
   }
 
   // -- camera ---------------------------------------------------------------
-
-  // "Warp": a single animated camera move to the target. This is the RPG-ish
-  // travel feel, achieved with 2D camera state only.
-  function flyTo(id, { animate = true, ratio = null } = {}) {
-    if (!viewGraph.hasNode(id)) return;
-    const camera = renderer.getCamera();
-    // Sigma normalizes graph coordinates into its own framed space, so a
-    // node's display data is already in camera coordinates: centering on it
-    // is just copying x/y across. Refresh first so a node added moments ago
-    // has display data to read.
-    renderer.refresh();
-    const display = renderer.getNodeDisplayData(id);
-    if (!display) return;
-    const nextRatio = ratio || camera.getState().ratio || 1;
-    const next = {
-      x: display.x,
-      // Same shift: centring on a node means centring it in the free band, not
-      // behind the wordmark.
-      y: display.y + cameraOffsetY(nextRatio),
-      ratio: nextRatio,
-      angle: 0,
-    };
-    if (animate && typeof camera.animate === 'function') {
-      camera.animate(next, { duration: 520 }, positionOverlays);
-    } else {
-      camera.setState(next);
-    }
-    positionOverlays();
-  }
 
   // Keeps the two DOM overlays glued to their WebGL nodes. Called from
   // afterRender, so it runs with the camera in its final state for the frame.
