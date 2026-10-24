@@ -1,9 +1,9 @@
-// Regression tests for the /game/ arena UI.
+// Regression tests for the /daily/ arena UI.
 //
 // History: these began as compact game-modal tests covering both the burger
-// modal (index.html) and the arena. The modal is gone — /game is the single
+// modal (index.html) and the arena. The modal is gone — /daily is the single
 // game surface (branch game-single-surface) — so the mode-card rules are
-// asserted on game/index.html only, plus the single-surface invariants:
+// asserted on daily/index.html only, plus the single-surface invariants:
 // the burger 6* links to /game, the root page carries no modal markup or
 // game engine, deep links redirect to /game, and the challenge queue sits
 // above the game card (no-scroll: your move is the first thing you see).
@@ -17,12 +17,14 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
 const rootHtml = read('index.html');
-const gameHtml = read('game/index.html');
+// 2026-10-24 migration: the graph page (and its burger menu) moved to /graph.
+const graphHtml = read('graph/index.html');
+const gameHtml = read('daily/index.html');
 
 test('mode-tab radios are visually hidden but accessible on the game page', () => {
   // Tabs (not cards): the radio is visually hidden, the label is the tab.
   const m = gameHtml.match(/\.game-mode input\{([^}]*)\}/);
-  assert.ok(m, 'game/index.html: .game-mode input rule exists');
+  assert.ok(m, 'daily/index.html: .game-mode input rule exists');
   assert.match(m[1], /position:\s*absolute/, 'radio taken out of flow');
   assert.match(m[1], /opacity:\s*0/, 'radio visually hidden');
 });
@@ -84,11 +86,13 @@ test('mode-tab descriptions are hidden; the active one shows in .game-mode-desc'
 
 // --- Single game surface (no burger-modal game) ---
 
-test('burger 6* navigates to /game instead of opening a modal', () => {
-  const tag = rootHtml.match(/<[^>]*id="mobile-game-open-btn"[^>]*>/);
+test('burger 6* navigates to the hub instead of opening a modal', () => {
+  // 2026-10-24 migration: the graph page carries no game promotion; the
+  // burger 6* icon points back to the splash hub.
+  const tag = graphHtml.match(/<[^>]*id="mobile-game-open-btn"[^>]*>/);
   assert.ok(tag, '#mobile-game-open-btn exists');
   assert.ok(/^<a[\s>]/.test(tag[0]), '6* is an anchor, not a button');
-  assert.match(tag[0], /href="\/game"/, '6* points at /game');
+  assert.match(tag[0], /href="\//, '6* points at the hub');
   assert.ok(!tag[0].includes('aria-haspopup="dialog"'), 'no dialog affordance');
 });
 
@@ -97,13 +101,13 @@ test('root page carries no game modal and no game engine', () => {
   assert.ok(!rootHtml.includes('six-degrees-game.mjs'), 'game engine not loaded on the main page');
 });
 
-test('root deep links redirect to the game page', () => {
+test('root deep links redirect to the daily page', () => {
   // ?game=1 (old share-card QR codes), ?invite=<token>, ?match=<token>
-  // all land on /game now that the modal is gone.
+  // all land on /daily now that the modal is gone.
   assert.match(rootHtml, /q\.has\('game'\)/, '?game=1 handled');
-  assert.match(rootHtml, /window\.location\.replace\('\/game\/'\)/, '?game=1 redirects to /game/');
-  assert.match(rootHtml, /\/game\/\?invite='/, '?invite= redirects to /game/?invite=');
-  assert.match(rootHtml, /\/game\/\?match='/, '?match= redirects to /game/?match=');
+  assert.match(rootHtml, /window\.location\.replace\('\/daily\/'\)/, '?game=1 redirects to /daily/');
+  assert.match(rootHtml, /\/daily\/\?invite='/, '?invite= redirects to /daily/?invite=');
+  assert.match(rootHtml, /\/daily\/\?match='/, '?match= redirects to /daily/?match=');
 });
 
 test('challenge queue sits above the game card (no-scroll)', () => {

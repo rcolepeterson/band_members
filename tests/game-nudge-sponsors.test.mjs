@@ -77,13 +77,13 @@ test('game module has no sponsor ribbon or placeholder', () => {
 });
 
 test('game card CSS has no sponsor ribbon rules', () => {
-  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+  const html = readFileSync(join(ROOT, 'graph/index.html'), 'utf8');
   assert.ok(!html.includes('.game-sponsor-ribbon'), 'no ribbon CSS');
   assert.ok(!html.includes('.game-sponsor-placeholder'), 'no placeholder CSS');
 });
 
 test('feedback form offers a Game sponsorship type', () => {
-  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+  const html = readFileSync(join(ROOT, 'graph/index.html'), 'utf8');
   assert.ok(
     html.includes('<option value="Game sponsorship">Game sponsorship</option>'),
     'Game sponsorship option exists in #feedback-type'

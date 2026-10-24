@@ -25,7 +25,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const INDEX_HTML = readFileSync(join(__dirname, '..', 'index.html'), 'utf8');
+// 2026-10-24 migration: the graph page moved from the root to /graph.
+const INDEX_HTML = readFileSync(join(__dirname, '..', 'graph', 'index.html'), 'utf8');
 
 // Root font-size is never overridden, so 1rem === the browser default 16px.
 const ROOT_PX = 16;

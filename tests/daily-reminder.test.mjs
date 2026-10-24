@@ -48,9 +48,9 @@ test('the email: short, on brand, a Play link and a reminders-only unsubscribe',
   assert.equal(subject, 'Today’s 6° puzzle is live');
   const [line1, line2] = text.split('\n');
   assert.equal(line1, '6° Rock #13 is up. Two bands, one chain to find.');
-  assert.equal(line2, 'Play: https://sixdegreesofrock.com/game/');
+  assert.equal(line2, 'Play: https://sixdegreesofrock.com/daily/');
   assert.ok(text.includes(unsub));
-  assert.ok(html.includes('href="https://sixdegreesofrock.com/game/"'));
+  assert.ok(html.includes('href="https://sixdegreesofrock.com/daily/"'));
   assert.ok(html.includes('token=abc&amp;list=daily'));
   assert.doesNotMatch(subject + text + html, /Daily Chain/);
 });
@@ -132,7 +132,8 @@ test('the account menu toggle reads and saves daily_reminder', () => {
   const prefs = read('../netlify/functions/notification_prefs.mjs');
   assert.match(prefs, /daily_reminder: prefs\.email_daily_reminder === true/);
   assert.match(prefs, /if \(typeof body\.daily_reminder === 'boolean'\) patch\.daily_reminder = body\.daily_reminder;/);
-  const home = read('../index.html');
+  // 2026-10-24 migration: the account menu lives on the graph page.
+  const home = read('../graph/index.html');
   assert.match(home, /<input type="checkbox" id="user-card-reminder-toggle" \/>\s*<span>Remind me daily<\/span>/);
   assert.match(home, /saveNotifyPref\(\{ daily_reminder: on \}\)/);
   assert.match(home, /reminder\.checked = prefs\.daily_reminder === true;/);

@@ -1,6 +1,6 @@
-// The /game front door (Cole, 2026-10-11): a Wordle-style start screen.
+// The /daily front door (Cole, 2026-10-11): a Wordle-style start screen.
 // Logo, one line, Play (+ Sign in when signed out), today's date and number,
-// "By Six Degrees of Rock". See game/index.html and renderDailyPanel in
+// "By Six Degrees of Rock". See daily/index.html and renderDailyPanel in
 // scripts/six-degrees-game.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,9 +9,9 @@ import { readFileSync } from 'node:fs';
 
 import { frontDoorPlayLabel, dailyPuzzleNumber, DAILY_EPOCH } from '../scripts/six-degrees-game.mjs';
 
-const page = readFileSync(new URL('../game/index.html', import.meta.url), 'utf8');
+const page = readFileSync(new URL('../daily/index.html', import.meta.url), 'utf8');
 const engine = readFileSync(new URL('../scripts/six-degrees-game.mjs', import.meta.url), 'utf8');
-const home = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const home = readFileSync(new URL('../graph/index.html', import.meta.url), 'utf8');
 
 // Runs the head script that decides whether the front door shows.
 function doorShows(search, pending = {}) {
@@ -84,7 +84,7 @@ test('sign-up from the game opens on the homepage and comes back', () => {
   assert.match(page, /window\.openSignupPopover = function \(\) \{ window\.location\.href = '\/\?signin=game'; \};/);
   // The homepage opens its sign-in panel, then sends a signed-in player back.
   assert.match(home, /signin=game\(&\|\$\)\/\.test\(location\.search\) && !loadCurrentUser\(\)\) \{\n\s*setTimeout\(\(\) => \{ try \{ openSignInFlow\(\); \}/);
-  assert.match(home, /sessionStorage\.setItem\('sdr_pending_daily', '1'\); \} catch \(_\) \{\}\n\s*window\.location\.replace\('\/game\/'\);/);
+  assert.match(home, /sessionStorage\.setItem\('sdr_pending_daily', '1'\); \} catch \(_\) \{\}\n\s*window\.location\.replace\('\/daily\/'\);/);
 });
 
 test('6° naming: share text, puzzle label, past days', async () => {

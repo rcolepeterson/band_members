@@ -31,32 +31,32 @@ test('anything else in the code is rejected, so nothing from the URL reaches the
 });
 
 test('the share link carries the code and keeps ?s=1 for analytics', () => {
-  assert.equal(dailyShareLink({ date: '2026-10-14', picks, won: true }), 'https://sixdegreesofrock.com/game?s=1&r=15-odso');
-  assert.equal(dailyShareLink({}), 'https://sixdegreesofrock.com/game?s=1');
+  assert.equal(dailyShareLink({ date: '2026-10-14', picks, won: true }), 'https://sixdegreesofrock.com/daily?s=1&r=15-odso');
+  assert.equal(dailyShareLink({}), 'https://sixdegreesofrock.com/daily?s=1');
   assert.equal(dailyDateForNumber(15), '2026-10-14');
   assert.equal(dailyDateForNumber(1), '2026-09-30');
 });
 
-const gamePage = read('../game/index.html');
+const gamePage = read('../daily/index.html');
 const ctx = { next: async () => new Response(gamePage, { headers: { 'content-type': 'text/html; charset=utf-8' } }) };
 
 test('a shared result previews its score, picture and own link', async () => {
-  const res = await ogDaily(new Request('https://sixdegreesofrock.com/game/?s=1&r=15-odso'), ctx);
+  const res = await ogDaily(new Request('https://sixdegreesofrock.com/daily/?s=1&r=15-odso'), ctx);
   const html = await res.text();
   assert.match(html, /<meta property="og:title" content="6° Rock #15 · Solved in 4 moves"/);
   assert.match(html, /<meta name="twitter:title" content="6° Rock #15 · Solved in 4 moves"/);
   assert.match(html, /<meta property="og:image" content="https:\/\/sixdegreesofrock\.com\/api\/daily-card\?r=15-odso"/);
   assert.match(html, /<meta name="twitter:image" content="https:\/\/sixdegreesofrock\.com\/api\/daily-card\?r=15-odso"/);
-  // Its own og:url, or Facebook folds it back into the generic /game preview.
-  assert.match(html, /<meta property="og:url" content="https:\/\/sixdegreesofrock\.com\/game\/\?s=1&amp;r=15-odso"/);
+  // Its own og:url, or Facebook folds it back into the generic /daily preview.
+  assert.match(html, /<meta property="og:url" content="https:\/\/sixdegreesofrock\.com\/daily\/\?s=1&amp;r=15-odso"/);
   assert.equal(res.headers.get('cache-control'), 'public, max-age=0, must-revalidate');
 });
 
-test('an ordinary /game visit, or a bad code, is passed through untouched', async () => {
-  assert.equal(await ogDaily(new Request('https://sixdegreesofrock.com/game/'), ctx), undefined);
-  assert.equal(await ogDaily(new Request('https://sixdegreesofrock.com/game/?s=1'), ctx), undefined);
-  assert.equal(await ogDaily(new Request('https://sixdegreesofrock.com/game/?r=%22%3E%3Cscript%3E'), ctx), undefined);
-  assert.match(read('../netlify/edge-functions/og_daily.js'), /export const config = \{ path: '\/game\/' \};/);
+test('an ordinary /daily visit, or a bad code, is passed through untouched', async () => {
+  assert.equal(await ogDaily(new Request('https://sixdegreesofrock.com/daily/'), ctx), undefined);
+  assert.equal(await ogDaily(new Request('https://sixdegreesofrock.com/daily/?s=1'), ctx), undefined);
+  assert.equal(await ogDaily(new Request('https://sixdegreesofrock.com/daily/?r=%22%3E%3Cscript%3E'), ctx), undefined);
+  assert.match(read('../netlify/edge-functions/og_daily.js'), /export const config = \{ path: \['\/game\/', '\/daily\/'\] \};/);
 });
 
 test('the card draws a PNG, and ships with its font', async () => {

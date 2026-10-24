@@ -197,7 +197,8 @@ test('an unknown anchor still draws a card rather than failing', async () => {
 
 // --- the edge function -------------------------------------------------------
 
-const HTML = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+// 2026-10-24 migration: the page whose OG tags get rewritten is the graph page.
+const HTML = readFileSync(new URL('../graph/index.html', import.meta.url), 'utf8');
 
 function ctxFor(html = HTML) {
   return {

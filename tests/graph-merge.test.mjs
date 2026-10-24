@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const html = fs.readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.html'),
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'graph/index.html'),
   'utf8'
 );
 

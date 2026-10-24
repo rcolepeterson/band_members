@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const HTML = readFileSync(join(ROOT, 'index.html'), 'utf8');
+const HTML = readFileSync(join(ROOT, 'graph/index.html'), 'utf8');
 
 /** All <style> blocks concatenated, with comments stripped. */
 function styleText(html) {

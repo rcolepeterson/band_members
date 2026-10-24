@@ -5,7 +5,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const home = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+// 2026-10-24 migration: the graph page (and its Your-card flow) moved to /graph.
+const home = readFileSync(new URL('../graph/index.html', import.meta.url), 'utf8');
 const engine = readFileSync(new URL('../scripts/six-degrees-game.mjs', import.meta.url), 'utf8');
 
 test('the account menu has Your card, all optional, saved with PATCH /api/me', () => {

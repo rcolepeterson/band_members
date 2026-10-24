@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const INDEX_HTML = readFileSync(join(__dirname, '..', 'index.html'), 'utf8');
+const INDEX_HTML = readFileSync(join(__dirname, '..', 'graph/index.html'), 'utf8');
 
 // Handlers increasingly live in external ES modules (e.g. the Six Degrees
 // game wires its chips from scripts/six-degrees-game.mjs), which an

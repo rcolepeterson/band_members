@@ -41,7 +41,7 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EXPLORER = readFileSync(join(__dirname, '..', 'scripts', 'sigma-explorer.mjs'), 'utf8');
-const INDEX_HTML = readFileSync(join(__dirname, '..', 'index.html'), 'utf8');
+const INDEX_HTML = readFileSync(join(__dirname, '..', 'graph/index.html'), 'utf8');
 
 // The phone block that owns the stage chrome.
 //
