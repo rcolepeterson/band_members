@@ -70,12 +70,12 @@ async function confirm(sql, token) {
   if (!rows.length) {
     return page({
       heading: 'That link doesn’t look right.',
-      body: 'It may be old. Ask for the reminder again after your next puzzle at <a href="https://sixdegreesofrock.com/game/">sixdegreesofrock.com/game</a>.',
+      body: 'It may be old. Ask for the reminder again after your next puzzle at <a href="https://sixdegreesofrock.com/daily/">sixdegreesofrock.com/daily</a>.',
     });
   }
   return page({
     heading: 'You’re set.',
-    body: 'One email each morning when the new 6° puzzle is live, skipped on days you’ve already played. <a href="https://sixdegreesofrock.com/game/">Play today’s puzzle</a>',
+    body: 'One email each morning when the new 6° puzzle is live, skipped on days you’ve already played. <a href="https://sixdegreesofrock.com/daily/">Play today’s puzzle</a>',
   });
 }
 

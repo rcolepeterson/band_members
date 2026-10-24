@@ -29,7 +29,7 @@ export const DRIP_CREDITS = 100;
 export const FROM_NAME = 'Aaron — Six Degrees of Rawk';
 export const FROM_LINE = `${FROM_NAME} <${MAIL_FROM_ADDRESS}>`;
 
-export const PLAY_URL = `${SITE_URL}/game/`;
+export const PLAY_URL = `${SITE_URL}/daily/`;
 
 function lifelines(credits) {
   return Math.floor(credits / 10);

@@ -1245,7 +1245,7 @@ function initGameUI() {
     const hops = run.hops_used;
     const par = run.par;
     const shareText = (gaveUp && gaveUp.share_text) ||
-      `Six Degrees Daily Chain — ${run.chain_date}\nThe tree beat me today — par was ${par}, and I was ${hops} hops deep.\nsixdegreesofrock.com/game`;
+      `Six Degrees Daily Chain — ${run.chain_date}\nThe tree beat me today — par was ${par}, and I was ${hops} hops deep.\nsixdegreesofrock.com/daily`;
     const share = el(`<div class="game-daily-share">
       <p class="game-daily-share-line"></p>
       <div class="game-result-actions"><button type="button" class="tool-chip" data-share>Share image</button><button type="button" class="tool-chip" data-copy>Copy share text</button></div>
@@ -1301,7 +1301,7 @@ function initGameUI() {
       'Gold is optimal, robin\u2019s egg is valid, black is lost in space.';
     const copyBtn = share.querySelector('[data-copy]');
     const shareText = completed.share_text ||
-      `Daily Chain ${dailyRun.chain_date} — ${hops} hops (par ${par}), streak ${streak}. Play: https://sixdegreesofrock.com/game/`;
+      `Daily Chain ${dailyRun.chain_date} — ${hops} hops (par ${par}), streak ${streak}. Play: https://sixdegreesofrock.com/daily/`;
     copyBtn.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(shareText);
