@@ -24,8 +24,8 @@ test('no popup toast for a pick or a peek', () => {
 
 test('static bar is solid pick colors, not pale tints', () => {
   assert.ok(src.includes('.sd-result.is-good{border-color:var(--sd-good);background:var(--sd-good);color:#fff}'), 'gold bar');
-  assert.ok(src.includes('.sd-result.is-ok{border-color:var(--sd-ok);background:var(--sd-ok);color:#16130a}'), 'silver bar');
-  assert.ok(src.includes('.sd-result.is-bad{border-color:var(--sd-bad);background:var(--sd-bad);color:#fff}'), 'blue bar');
+  assert.ok(src.includes('.sd-result.is-ok{border-color:var(--sd-ok);background:var(--sd-ok);color:#16130a}'), 'robin-blue bar');
+  assert.ok(src.includes('.sd-result.is-bad{border-color:var(--sd-dead);background:var(--sd-dead);color:#fff}'), 'black bar');
 });
 
 test('static bar text is two or three words', () => {
@@ -39,14 +39,14 @@ test('static bar text is two or three words', () => {
 
 test('band pills and rail dots use solid pick colors', () => {
   assert.ok(src.includes('.game-chain-good{border-color:var(--sd-good);background:var(--sd-good);color:#fff}'), 'gold pill');
-  assert.ok(src.includes('.game-chain-ok{border-color:var(--sd-ok);background:var(--sd-ok);color:#16130a}'), 'silver pill');
+  assert.ok(src.includes('.game-chain-ok{border-color:var(--sd-ok);background:var(--sd-ok);color:#16130a}'), 'robin-blue pill');
   assert.ok(src.includes('.sd-chain-node.is-good .sd-chain-dot{border-color:var(--sd-good);background:var(--sd-good)}'), 'gold dot');
-  assert.ok(src.includes('.sd-chain-node.is-ok .sd-chain-dot{border-color:var(--sd-ok);background:var(--sd-ok)}'), 'silver dot');
-  assert.ok(src.includes('.sd-chain-node.is-bad .sd-chain-dot{border-color:var(--sd-bad);background:var(--sd-bad)}'), 'blue dot');
+  assert.ok(src.includes('.sd-chain-node.is-ok .sd-chain-dot{border-color:var(--sd-ok);background:var(--sd-ok)}'), 'robin-blue dot');
+  assert.ok(src.includes('.sd-chain-node.is-bad .sd-chain-dot{border-color:var(--sd-dead);background:var(--sd-dead)}'), 'black dot');
   assert.ok(src.includes('const dotKind ='), 'results chain assigns a dot kind');
   assert.ok(src.includes('Gold: shares a member'), 'how-to says gold, not green');
-  assert.ok(src.includes('Silver: shares a member'), 'how-to says silver, not yellow');
-  assert.ok(src.includes('Blue: no shared member'), 'how-to says blue, not red');
+  assert.ok(src.includes('Robin blue: shares a member'), 'how-to says robin blue, not silver');
+  assert.ok(src.includes('Black: no shared member'), 'how-to says black, not blue');
 });
 
 test('clock starts on first pick, pauses while hidden, never on paint', () => {
@@ -59,4 +59,12 @@ test('clock starts on first pick, pauses while hidden, never on paint', () => {
   assert.ok(src.includes('dailyClockResume(run)'), 'visible resumes');
   assert.ok(src.includes("':active-ms'"), 'accumulated active time stored');
   assert.ok(src.includes("':final-s'"), 'final time frozen at results');
+});
+
+// Locked pick hexes: robin blue for long-way, black for dead end (server PICK_HEX).
+test('pick hexes match the locked scheme', () => {
+  assert.ok(src.includes("robin: '#9adbe8'"), 'robin hex is server robin blue');
+  assert.ok(src.includes("black: '#151515'"), 'black hex is server black');
+  assert.ok(src.includes('--sd-ok:#9adbe8'), 'sd-ok is robin blue');
+  assert.ok(src.includes('--sd-dead:#151515'), 'sd-dead is black');
 });
