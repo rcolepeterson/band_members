@@ -847,7 +847,7 @@ function initGameUI() {
       .game-chain-pill{padding:6px 12px;border-radius:999px;font-size:.82rem;font-weight:600;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis}
       .game-chain-anchor{border:1px solid rgba(82,174,182,.7);background:rgba(82,174,182,.16);color:#fff}
       .game-chain-filled{border:1px solid rgba(82,174,182,.45);background:rgba(82,174,182,.08);color:#fff}
-      .game-chain-deadend{border:1px solid #74c9d0;background:#74c9d0;color:#fff;text-decoration:line-through;text-decoration-thickness:1px}
+      .game-chain-deadend{border:1px solid #151515;background:#151515;color:#fff;text-decoration:line-through;text-decoration-thickness:1px}
       .game-chain-blank{border:1px dashed rgba(255,255,255,.28);background:transparent;color:#777;min-width:44px;text-align:center}
       .game-daily-reveal{font-size:.9rem;color:#bbb;margin:10px 0;line-height:1.7}
       .game-daily-reveal strong{color:#fff;font-weight:600}
@@ -882,7 +882,7 @@ function initGameUI() {
       /* --- Daily board, Wordle-simple (Cole, 2026-10-08) -------------------
          One goal, one chain, one question, four big buttons. Everything else
          (hints, streak, credits, past days) sits in quiet drawers below. */
-      .sd-board,.sd-modal,.sd-toast{--sd-good:#c9a83a;--sd-ok:#c0c0c0;--sd-bad:#74c9d0}
+      .sd-board,.sd-modal,.sd-toast{--sd-good:#c9a83a;--sd-ok:#9adbe8;--sd-bad:#74c9d0;--sd-dead:#151515}
       .sd-topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px}
       .sd-topbar .game-daily-head{margin:0}
       .sd-icon{flex:none;width:36px;height:36px;border-radius:999px;border:1px solid var(--color-border);background:transparent;color:inherit;font:inherit;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
@@ -920,7 +920,7 @@ function initGameUI() {
       .sd-chain-dot{flex:none;width:12px;height:12px;border-radius:50%;background:var(--color-bg);border:2px solid var(--sd-good);position:relative;z-index:1}
       .sd-chain-node.is-good .sd-chain-dot{border-color:var(--sd-good);background:var(--sd-good)}
       .sd-chain-node.is-ok .sd-chain-dot{border-color:var(--sd-ok);background:var(--sd-ok)}
-      .sd-chain-node.is-bad .sd-chain-dot{border-color:var(--sd-bad);background:var(--sd-bad)}
+      .sd-chain-node.is-bad .sd-chain-dot{border-color:var(--sd-dead);background:var(--sd-dead)}
       .sd-chain-node.is-anchor .sd-chain-dot{border-color:var(--color-primary);background:var(--color-primary)}
       .sd-chain-list .game-chain-pill{max-width:none;margin:0}
       .sd-chain-via{padding-left:26px;font-size:.82rem;line-height:1.35;max-width:100%}
@@ -971,7 +971,7 @@ function initGameUI() {
       .sd-via-name{font-size:.68rem;font-style:italic;color:var(--color-text-muted);white-space:normal}
       .game-chain-good{border-color:var(--sd-good);background:var(--sd-good);color:#fff}
       .game-chain-ok{border-color:var(--sd-ok);background:var(--sd-ok);color:#16130a}
-      .sd-board .game-chain-deadend,.sd-modal .game-chain-deadend{border-color:var(--sd-bad);background:var(--sd-bad);color:#fff;text-decoration:line-through;text-decoration-thickness:1px}
+      .sd-board .game-chain-deadend,.sd-modal .game-chain-deadend{border-color:var(--sd-dead);background:var(--sd-dead);color:#fff;text-decoration:line-through;text-decoration-thickness:1px}
       .game-chain-current{box-shadow:0 0 0 2px var(--color-bg),0 0 0 4px var(--color-primary)}
       .sd-pop{animation:sd-pop .45s cubic-bezier(.2,1.4,.4,1)}
       .sd-prompt{text-align:center;font-size:1.02rem;color:var(--color-text);margin:14px 0 10px;line-height:1.45}
@@ -984,7 +984,7 @@ function initGameUI() {
       .sd-board .game-daily-option.is-pending{border-color:var(--color-primary)}
       .game-daily-option.is-good{border-color:var(--sd-good);background:var(--sd-good);color:#fff}
       .game-daily-option.is-ok{border-color:var(--sd-ok);background:var(--sd-ok);color:#16130a}
-      .game-daily-option.is-bad{border-color:var(--sd-bad);background:var(--sd-bad);color:#fff;animation:sd-shake .4s}
+      .game-daily-option.is-bad{border-color:var(--sd-dead);background:var(--sd-dead);color:#fff;animation:sd-shake .4s}
       .sd-board .game-daily-note{text-align:center;min-height:1.2em}
       .sd-finish-line{text-align:center;font-size:1.02rem;margin:14px 0 8px}
       .sd-finish-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:6px 0}
@@ -999,7 +999,7 @@ function initGameUI() {
       .sd-result{text-align:center;font-size:.95rem;font-weight:700;line-height:1.45;padding:9px 14px;margin:8px 0 0;border-radius:12px;border:1px solid transparent}
       .sd-result.is-good{border-color:var(--sd-good);background:var(--sd-good);color:#fff}
       .sd-result.is-ok{border-color:var(--sd-ok);background:var(--sd-ok);color:#16130a}
-      .sd-result.is-bad{border-color:var(--sd-bad);background:var(--sd-bad);color:#fff}
+      .sd-result.is-bad{border-color:var(--sd-dead);background:var(--sd-dead);color:#fff}
       .sd-toast.is-bad{background:var(--sd-bad);color:#fff}
       .sd-toast.is-good{background:var(--sd-good);color:#fff}
       .sd-modal{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -1014,6 +1014,8 @@ function initGameUI() {
       .sd-howto-ex{display:flex;flex-direction:column;gap:12px;margin:14px 0;padding:14px 0;border-top:1px solid var(--color-divider);border-bottom:1px solid var(--color-divider)}
       .sd-howto-ex .game-chain-pill{display:inline-block;margin-bottom:4px}
       .sd-howto-ex p{margin:0;font-size:.9rem;color:var(--color-text-muted)}
+      .sd-noshow{display:flex;align-items:center;gap:8px;margin-top:14px;color:var(--color-text-muted);font-size:.82rem;cursor:pointer}
+      .sd-noshow input{width:15px;height:15px;margin:0;accent-color:var(--sd-good);cursor:pointer}
       .sd-result-chain{text-align:center;font-size:1rem;line-height:1.9;margin:14px 0 6px;word-break:break-word}
       .sd-result-stats{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 24px;margin:14px 0 18px}
       .sd-stat{text-align:center}
@@ -1058,9 +1060,9 @@ function initGameUI() {
     document.head.appendChild(st);
   }
 
-  // Pick colors (Cole, 2026-10-08; bars and pills match them, 2026-10-25):
-  // gold is the shortest path, silver the long way round, blue a dead end.
-  const DAILY_PICK_HEX = { gold: '#c9a83a', robin: '#c0c0c0', black: '#74c9d0' };
+  // Pick colors (locked scheme: gold / robin blue / black; bars and pills match them, 2026-10-25):
+  // gold is the shortest path, robin blue the long way round, black a dead end.
+  const DAILY_PICK_HEX = { gold: '#c9a83a', robin: '#9adbe8', black: '#151515' };
   // Same mapping as the server's pickColor(kind).
   function pickColor(kind) {
     if (kind === 'optimal') return 'gold';
@@ -1388,8 +1390,10 @@ function initGameUI() {
       paintDailyBoard(card);
       // First visit: show the rules once, the way Wordle does.
       if (dailyRun && dailyRun.status === 'active' && dailyRun.hops_used === 0) {
-        let seen = true;
-        try { seen = !!localStorage.getItem('sdr-howto-seen'); localStorage.setItem('sdr-howto-seen', '1'); } catch {}
+        // Shared rules-card behavior (Cards/Rawkle): show on arrival until
+        // the player checks "Don't show this again" in the card itself.
+        let seen = false;
+        try { seen = !!localStorage.getItem('sdr-howto-seen'); } catch {}
         if (!seen) openHowToPlay();
       }
     } catch (err) {
@@ -1484,8 +1488,8 @@ function initGameUI() {
       const ex = el('<div class="sd-howto-ex"><p><strong>Say you’re on Nirvana:</strong></p></div>');
       for (const [cls, name, says] of [
         ['game-chain-good', 'Foo Fighters', 'Gold: shares a member and it’s on the shortest path.'],
-        ['game-chain-ok', 'Sweet 75', 'Silver: shares a member, but it’s the long way round.'],
-        ['game-chain-deadend', 'Pearl Jam', 'Blue: no shared member. A dead end, and it costs a move.'],
+        ['game-chain-ok', 'Sweet 75', 'Robin blue: shares a member, but it’s the long way round.'],
+        ['game-chain-deadend', 'Pearl Jam', 'Black: no shared member. A dead end, and it costs a move.'],
       ]) {
         const row = el(`<div><span class="game-chain-pill game-chain-filled ${cls}"></span><p></p></div>`);
         row.querySelector('span').textContent = name;
@@ -1494,6 +1498,14 @@ function initGameUI() {
       }
       c.appendChild(ex);
       c.appendChild(el('<p class="sd-modal-sub">A new puzzle every day. Same puzzle for everyone.</p>'));
+      const noshow = el('<label class="sd-noshow"><input type="checkbox" /> Don’t show this again</label>');
+      noshow.querySelector('input').addEventListener('change', (e) => {
+        try {
+          if (e.target.checked) localStorage.setItem('sdr-howto-seen', '1');
+          else localStorage.removeItem('sdr-howto-seen');
+        } catch {}
+      });
+      c.appendChild(noshow);
       const play = el('<button type="button" class="sd-primary" style="margin-top:14px">Play</button>');
       play.addEventListener('click', closeSdModal);
       c.appendChild(play);
@@ -1822,10 +1834,13 @@ function initGameUI() {
       c.appendChild(mapLink);
       // While we're testing: ask right when people have an opinion. Easy to
       // drop after launch; the footer link stays either way.
+      // Shared end-card footer (all three games): one splash link + Feedback, nothing else.
       if (typeof window.openFeedbackPopover === 'function') {
-        const fb = el('<p class="sd-feedback">Something off? <button type="button" class="sd-linkbtn">Send feedback</button></p>');
+        const fb = el('<p class="sd-feedback"><a href="/">sixdegreesofrock.com</a> \u00b7 <button type="button" class="sd-linkbtn">Feedback</button></p>');
         fb.querySelector('button').addEventListener('click', () => { closeSdModal(); window.openFeedbackPopover(); });
         c.appendChild(fb);
+      } else {
+        c.appendChild(el('<p class="sd-feedback"><a href="/">sixdegreesofrock.com</a> \u00b7 <a href="mailto:aaron@sixdegreesofrock.com?subject=6*%20Daily%20Chain%20feedback">Feedback</a></p>'));
       }
       if (completed.freeze_used) {
         c.appendChild(el('<p class="sd-modal-sub">A Seattle Freeze bridged your missed day. Streak intact.</p>'));
