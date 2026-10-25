@@ -44,11 +44,18 @@ export default async (req) => {
   let token = '';
   // ?list=daily (the 6° reminder's footer) stops reminders only; anything
   // else is the band-update list, as before.
+  // ?list=rawkle / ?list=cards (the game reminders' footers) stop that
+  // game only: the address is deleted from game_reminders, same as a
+  // guest's Daily reminder. The wording lives here, next to Daily's, so
+  // the unsubscribe path stays one file.
   let dailyOnly = false;
+  let gameList = '';
   try {
     const params = new URL(req.url).searchParams;
     token = (params.get('token') || '').trim();
     dailyOnly = params.get('list') === 'daily';
+    const list = params.get('list') || '';
+    gameList = (list === 'rawkle' || list === 'cards') ? list : '';
   } catch {
     token = '';
   }
@@ -71,6 +78,29 @@ export default async (req) => {
 
   const sql = getSql();
   try {
+    if (gameList) {
+      // A game reminder: stopping it forgets the email, and a token that
+      // matches nothing gets the same not-found page as every other list
+      // (no enumeration), without ever touching notification_prefs.
+      const gone = await sql`delete from game_reminders where unsubscribe_token = ${token} and game = ${gameList} returning email`;
+      if (gone.length) {
+        const playUrl = gameList === 'rawkle' ? 'https://sixdegreesofrock.com/rawkle' : 'https://sixdegreesofrock.com/cards';
+        const heading = gameList === 'rawkle' ? 'No more Rawkle reminders.' : 'No more card game reminders.';
+        const body = gameList === 'rawkle'
+          ? `You won’t get the Rawkle reminder again, and we’ve deleted your email. Today’s band is always at <a href="${playUrl}">sixdegreesofrock.com/rawkle</a>.`
+          : `You won’t get the card game reminder again, and we’ve deleted your email. The game is always at <a href="${playUrl}">sixdegreesofrock.com/cards</a>.`;
+        return page({
+          title: 'Unsubscribed — Six Degrees of Rock',
+          heading,
+          body,
+        });
+      }
+      return page({
+        title: 'Unsubscribe — Six Degrees of Rock',
+        heading: 'That link doesn’t look right.',
+        body: 'We couldn’t find that unsubscribe link. It may have already been used.',
+      });
+    }
     const rows = await sql`
       select user_id, email_enabled from notification_prefs
       where unsubscribe_token = ${token}
