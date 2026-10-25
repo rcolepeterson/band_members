@@ -338,6 +338,15 @@
     .gameover-kicker { margin: 0 0 8px; color: var(--card-amber); font-size: .74rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
     .gameover-title { margin: 0 0 8px; font-family: var(--font-display); font-size: 2.3rem; font-weight: 500; line-height: 1; color: #fff; }
     .gameover-sub { margin: 0 0 20px; color: #a9bac8; font-size: .92rem; }
+    /* Daily reminder signup, on the game-over card (same pipe as Rawkle). */
+    .gameover-remind { margin-top: 22px; padding-top: 16px; border-top: 1px solid rgba(255,180,84,.25); }
+    .gameover-remind-head { margin: 0 0 4px; color: #fff; font-weight: 700; font-size: .95rem; }
+    .gameover-remind-sub { margin: 0 0 12px; color: #a9bac8; font-size: .85rem; }
+    .gameover-remind-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .gameover-remind-row input { flex: 1 1 190px; max-width: 250px; background: rgba(3,7,11,.7); border: 1px solid rgba(143,232,246,.35); border-radius: 999px; color: #fff; font: inherit; font-size: .9rem; padding: 10px 16px; }
+    .gameover-remind-row input:focus { outline: 2px solid var(--card-amber); outline-offset: 1px; }
+    .gameover-remind-status { margin: 10px 0 0; color: #a9bac8; font-size: .85rem; min-height: 1.2em; }
+    .gameover-remind-status.ok { color: var(--card-amber); }
     .deal-btn { padding: 11px 22px; border: 1px solid var(--card-amber); border-radius: 999px; background: rgba(255,180,84,.12); color: var(--card-amber); font-weight: 700; cursor: pointer; }
     .deal-btn:hover { background: rgba(255,180,84,.22); }
 
@@ -860,6 +869,15 @@
           <p class="gameover-title" id="gameover-title">You win.</p>
           <p class="gameover-sub" id="gameover-sub"></p>
           <button class="deal-btn" id="play-again" type="button">Deal a new game</button>
+          <div class="gameover-remind" id="remind-block">
+            <p class="gameover-remind-head">Never miss a game night</p>
+            <p class="gameover-remind-sub">One email each morning to deal a hand. No account needed.</p>
+            <div class="gameover-remind-row">
+              <input id="remind-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" aria-label="Email for the daily card game reminder" />
+              <button class="deal-btn" id="remind-btn" type="button">Remind me</button>
+            </div>
+            <p class="gameover-remind-status" id="remind-status"></p>
+          </div>
         </div>
       </div>
 
@@ -1987,6 +2005,48 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
 
       document.getElementById('new-game').addEventListener('click', newGame);
       document.getElementById('play-again').addEventListener('click', newGame);
+      /* Daily reminder signup: email-only, double opt-in (same pipe as
+         Rawkle — /api/game-reminder-signup). Nothing arrives until the
+         confirmation link in the email is clicked. */
+      document.getElementById('remind-btn').addEventListener('click', function () {
+        var input = document.getElementById('remind-email');
+        var status = document.getElementById('remind-status');
+        var btn = document.getElementById('remind-btn');
+        var email = (input.value || '').trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          status.textContent = 'Enter a real email address.';
+          status.className = 'gameover-remind-status';
+          input.focus();
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Sending…';
+        status.textContent = '';
+        status.className = 'gameover-remind-status';
+        fetch('/api/game-reminder-signup', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email: email, game: 'cards' })
+        }).then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); }).then(function (r) {
+          if (r.ok && r.data.status === 'already_on') {
+            status.textContent = 'You’re already on the list ✓ — see you tomorrow morning.';
+            status.className = 'gameover-remind-status ok';
+          } else if (r.ok && r.data.status === 'check_email') {
+            status.textContent = 'Check your email to confirm — nothing arrives until you tap the link.';
+            status.className = 'gameover-remind-status ok';
+          } else {
+            status.textContent = 'Couldn’t save that — try again in a bit.';
+            status.className = 'gameover-remind-status';
+            btn.disabled = false;
+            btn.textContent = 'Remind me';
+          }
+        }).catch(function () {
+          status.textContent = 'Couldn’t reach the server — try again in a bit.';
+          status.className = 'gameover-remind-status';
+          btn.disabled = false;
+          btn.textContent = 'Remind me';
+        });
+      });
       newGame();
       if (!rulesSeen()) openRules();
     }());
