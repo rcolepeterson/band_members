@@ -124,7 +124,7 @@ test('out of moves: the board paints no choices, only the reveal', () => {
 test('the last move stays on the board in words until the next tap', () => {
   assert.ok(src.includes('<p class="sd-result" aria-live="polite" hidden></p>'), 'result line in the board');
   assert.match(src, /dailyLastMove = data\.completed \? null : \{ kind, name: pickedName, from: fromName, members, extra \}/);
-  assert.ok(src.includes('is a dead end: no shared member with ${from}. −1 move.'));
+  assert.ok(src.includes("return '✗ Dead end'"), 'short glance bar, not a sentence');
   assert.match(src, /sdToastTimer = setTimeout\(\(\) => t\.classList\.remove\('is-on'\), 3000\)/, 'toast lasts 3s');
   assert.ok(src.includes("t.onclick = () => { clearTimeout(sdToastTimer); t.classList.remove('is-on'); };"), 'tap dismisses');
 });
@@ -172,7 +172,7 @@ test('results show your chain band by band; share text stays spoiler-free', () =
 test('Check a band (formerly Ask the tree) is obvious: drawer closes, choices glow, cancellable, answer on the board', () => {
   assert.ok(src.includes("peek.addEventListener('click', () => armDailyAsk(card));"));
   assert.match(src, /function armDailyAsk\(card\) \{[\s\S]{0,400}drawer\.open = false;[\s\S]{0,200}classList\.add\('is-asking'\)/);
-  assert.ok(src.includes('`${data.hint.option.name} is on the shortest path.`'));
+  assert.ok(src.includes("const answer = yes ? 'Shortest path' : 'Not shortest path'"));
   assert.ok(src.includes("optsBox.classList.remove('is-busy', 'is-asking');"));
 });
 
@@ -229,9 +229,9 @@ test('musician names: compact on the chain row, full in sentences', async () => 
   assert.equal(fmtMembersLong(['A', 'B', 'C', 'D', 'E']), 'A, B, C and 2 more');
 });
 
-test('long-way-round copy names the exact extra moves', () => {
-  assert.ok(src.includes('`✓ Valid connection! But a shorter route exists${cost}.${via}`'));
-  assert.ok(src.includes('const extra = distBefore != null && distAfter != null ? distAfter + 1 - distBefore : null;'));
+test('long-way-round bar is short; over-par still shows as extra blank pills', () => {
+  assert.ok(src.includes("return '✓ Long way round'"));
+  assert.ok(src.includes("picks.filter((p) => p.kind && p.kind !== 'optimal' && p.kind !== 'deadend')"));
 });
 
 test('rawk, not Wordle: guitar picks on screen, line icons instead of emoji', () => {
