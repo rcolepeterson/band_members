@@ -847,7 +847,7 @@ function initGameUI() {
       .game-chain-pill{padding:6px 12px;border-radius:999px;font-size:.82rem;font-weight:600;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis}
       .game-chain-anchor{border:1px solid rgba(82,174,182,.7);background:rgba(82,174,182,.16);color:#fff}
       .game-chain-filled{border:1px solid rgba(82,174,182,.45);background:rgba(82,174,182,.08);color:#fff}
-      .game-chain-deadend{border:1px solid rgba(200,90,90,.6);background:rgba(200,90,90,.1);color:#f0b0b0}
+      .game-chain-deadend{border:1px solid #74c9d0;background:#74c9d0;color:#fff;text-decoration:line-through;text-decoration-thickness:1px}
       .game-chain-blank{border:1px dashed rgba(255,255,255,.28);background:transparent;color:#777;min-width:44px;text-align:center}
       .game-daily-reveal{font-size:.9rem;color:#bbb;margin:10px 0;line-height:1.7}
       .game-daily-reveal strong{color:#fff;font-weight:600}
@@ -918,6 +918,9 @@ function initGameUI() {
       .sd-chain-list::before{content:'';position:absolute;left:5px;top:16px;bottom:16px;width:2px;border-radius:2px;background:rgba(143,232,246,.22)}
       .sd-chain-node{display:flex;align-items:center;gap:14px;position:relative}
       .sd-chain-dot{flex:none;width:12px;height:12px;border-radius:50%;background:var(--color-bg);border:2px solid var(--sd-good);position:relative;z-index:1}
+      .sd-chain-node.is-good .sd-chain-dot{border-color:var(--sd-good);background:var(--sd-good)}
+      .sd-chain-node.is-ok .sd-chain-dot{border-color:var(--sd-ok);background:var(--sd-ok)}
+      .sd-chain-node.is-bad .sd-chain-dot{border-color:var(--sd-bad);background:var(--sd-bad)}
       .sd-chain-node.is-anchor .sd-chain-dot{border-color:var(--color-primary);background:var(--color-primary)}
       .sd-chain-list .game-chain-pill{max-width:none;margin:0}
       .sd-chain-via{padding-left:26px;font-size:.82rem;line-height:1.35;max-width:100%}
@@ -966,9 +969,9 @@ function initGameUI() {
       .sd-home-screen strong{color:var(--color-text);font-weight:600}
       .sd-misses{text-align:center;font-size:.82rem;color:#f0b8b2;margin:-4px 0 8px}
       .sd-via-name{font-size:.68rem;font-style:italic;color:var(--color-text-muted);white-space:normal}
-      .game-chain-good{border-color:var(--sd-good);background:color-mix(in srgb,var(--sd-good) 22%,transparent)}
-      .game-chain-ok{border-color:var(--sd-ok);background:color-mix(in srgb,var(--sd-ok) 20%,transparent)}
-      .sd-board .game-chain-deadend,.sd-modal .game-chain-deadend{border-color:var(--sd-bad);background:color-mix(in srgb,var(--sd-bad) 18%,transparent);color:#f3c4bf;text-decoration:line-through;text-decoration-thickness:1px}
+      .game-chain-good{border-color:var(--sd-good);background:var(--sd-good);color:#fff}
+      .game-chain-ok{border-color:var(--sd-ok);background:var(--sd-ok);color:#16130a}
+      .sd-board .game-chain-deadend,.sd-modal .game-chain-deadend{border-color:var(--sd-bad);background:var(--sd-bad);color:#fff;text-decoration:line-through;text-decoration-thickness:1px}
       .game-chain-current{box-shadow:0 0 0 2px var(--color-bg),0 0 0 4px var(--color-primary)}
       .sd-pop{animation:sd-pop .45s cubic-bezier(.2,1.4,.4,1)}
       .sd-prompt{text-align:center;font-size:1.02rem;color:var(--color-text);margin:14px 0 10px;line-height:1.45}
@@ -993,10 +996,10 @@ function initGameUI() {
       .sd-drawer .game-daily-econ{margin:2px 0 8px}
       .sd-toast{position:fixed;left:50%;top:84px;transform:translate(-50%,-8px);z-index:1100;max-width:calc(100vw - 32px);padding:10px 16px;border-radius:12px;background:#f2f6f9;color:#0f1319;font-weight:700;font-size:.95rem;box-shadow:0 10px 30px rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;text-align:center}
       .sd-toast.is-on{opacity:1;transform:translate(-50%,0);pointer-events:auto;cursor:pointer}
-      .sd-result{text-align:center;font-size:.95rem;line-height:1.45;padding:9px 14px;margin:8px 0 0;border-radius:12px;border:1px solid transparent}
-      .sd-result.is-good{border-color:color-mix(in srgb,var(--sd-good) 60%,transparent);background:color-mix(in srgb,var(--sd-good) 14%,transparent);color:#cdeedb}
-      .sd-result.is-ok{border-color:color-mix(in srgb,var(--sd-ok) 60%,transparent);background:color-mix(in srgb,var(--sd-ok) 14%,transparent);color:#f1e3b4}
-      .sd-result.is-bad{border-color:color-mix(in srgb,var(--sd-bad) 60%,transparent);background:color-mix(in srgb,var(--sd-bad) 14%,transparent);color:#f6cdc8}
+      .sd-result{text-align:center;font-size:.95rem;font-weight:700;line-height:1.45;padding:9px 14px;margin:8px 0 0;border-radius:12px;border:1px solid transparent}
+      .sd-result.is-good{border-color:var(--sd-good);background:var(--sd-good);color:#fff}
+      .sd-result.is-ok{border-color:var(--sd-ok);background:var(--sd-ok);color:#16130a}
+      .sd-result.is-bad{border-color:var(--sd-bad);background:var(--sd-bad);color:#fff}
       .sd-toast.is-bad{background:var(--sd-bad);color:#fff}
       .sd-toast.is-good{background:var(--sd-good);color:#fff}
       .sd-modal{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -1055,9 +1058,8 @@ function initGameUI() {
     document.head.appendChild(st);
   }
 
-  // Pick colors follow the board's traffic lights (Cole, 2026-10-08): green
-  // is the shortest path, yellow the long way round, red a dead end. The
-  // Brand palette: gold for optimal, silver for solid, blue for misses.
+  // Pick colors (Cole, 2026-10-08; bars and pills match them, 2026-10-25):
+  // gold is the shortest path, silver the long way round, blue a dead end.
   const DAILY_PICK_HEX = { gold: '#c9a83a', robin: '#c0c0c0', black: '#74c9d0' };
   // Same mapping as the server's pickColor(kind).
   function pickColor(kind) {
@@ -1481,9 +1483,9 @@ function initGameUI() {
       c.appendChild(ul);
       const ex = el('<div class="sd-howto-ex"><p><strong>Say you’re on Nirvana:</strong></p></div>');
       for (const [cls, name, says] of [
-        ['game-chain-good', 'Foo Fighters', 'Green: shares a member and it’s on the shortest path.'],
-        ['game-chain-ok', 'Sweet 75', 'Yellow: shares a member, but it’s the long way round.'],
-        ['game-chain-deadend', 'Pearl Jam', 'Red: no shared member. A dead end, and it costs a move.'],
+        ['game-chain-good', 'Foo Fighters', 'Gold: shares a member and it’s on the shortest path.'],
+        ['game-chain-ok', 'Sweet 75', 'Silver: shares a member, but it’s the long way round.'],
+        ['game-chain-deadend', 'Pearl Jam', 'Blue: no shared member. A dead end, and it costs a move.'],
       ]) {
         const row = el(`<div><span class="game-chain-pill game-chain-filled ${cls}"></span><p></p></div>`);
         row.querySelector('span').textContent = name;
@@ -1498,28 +1500,75 @@ function initGameUI() {
     });
   }
 
-  // Timer for the share text: starts when a fresh run is first seen, stops
-  // when the results open. Lives in localStorage so a reload doesn't reset it.
+  // Timer (Aaron, 2026-10-25): starts on the FIRST PICK, not on first
+  // paint — opening the puzzle and playing later used to inflate the
+  // results time (20m 35s for a <3 min run). It pauses while the tab is
+  // hidden, so time away never counts, and it survives reloads in
+  // localStorage (accumulated active ms + the current segment's start).
+  // Old first-paint starts are intentionally ignored; a run finished
+  // before this change falls back to its old frozen start/end, so its
+  // results time is preserved.
   function dailyClockKey(run) {
     return practiceMode ? `sdr-practice-clock:${run.id}` : `sdr-daily-clock:${run.chain_date}:${run.run_number || 1}`;
   }
-  function dailyClockMark(run) {
-    if (!run || run.status !== 'active' || run.hops_used !== 0) return;
-    try {
-      const k = dailyClockKey(run);
-      if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now()));
-    } catch {}
+  function dailyClockRead(run, suffix) {
+    try { const v = Number(localStorage.getItem(dailyClockKey(run) + suffix)); return Number.isFinite(v) ? v : 0; }
+    catch { return 0; }
+  }
+  function dailyClockWrite(run, suffix, value) {
+    try { localStorage.setItem(dailyClockKey(run) + suffix, String(value)); } catch {}
+  }
+  function dailyClockClear(run, suffix) {
+    try { localStorage.removeItem(dailyClockKey(run) + suffix); } catch {}
+  }
+  function dailyClockStart(run) {
+    if (!run || run.status !== 'active') return;
+    // Already started, paused, or finished: never restart.
+    if (dailyClockRead(run, ':active-ms') || dailyClockRead(run, ':seg-ms') || dailyClockRead(run, ':final-s')) return;
+    dailyClockWrite(run, ':seg-ms', Date.now());
+  }
+  function dailyClockPause(run) {
+    if (!run) return;
+    const seg = dailyClockRead(run, ':seg-ms');
+    if (!seg) return;
+    dailyClockWrite(run, ':active-ms', dailyClockRead(run, ':active-ms') + (Date.now() - seg));
+    dailyClockClear(run, ':seg-ms');
+  }
+  function dailyClockResume(run) {
+    if (!run || run.status !== 'active') return;
+    if (dailyClockRead(run, ':final-s') || dailyClockRead(run, ':seg-ms')) return;
+    // Resume only a clock that already started on a pick; returning to a
+    // board you only peeked at must not start it.
+    if (!dailyClockRead(run, ':active-ms')) return;
+    dailyClockWrite(run, ':seg-ms', Date.now());
   }
   function dailyElapsed(run) {
+    if (!run) return null;
     try {
-      const k = dailyClockKey(run);
-      const start = Number(localStorage.getItem(k));
-      if (!start) return null;
-      let end = Number(localStorage.getItem(k + ':end'));
-      if (!end) { end = Date.now(); localStorage.setItem(k + ':end', String(end)); }
-      return (end - start) / 1000;
+      const final = dailyClockRead(run, ':final-s');
+      if (final) return final;
+      const acc = dailyClockRead(run, ':active-ms');
+      const seg = dailyClockRead(run, ':seg-ms');
+      if (acc || seg) {
+        const total = (acc + (seg ? Date.now() - seg : 0)) / 1000;
+        dailyClockWrite(run, ':final-s', total);
+        dailyClockClear(run, ':seg-ms');
+        return total;
+      }
+      // Legacy fallback for runs finished before the first-pick change.
+      const oldStart = Number(localStorage.getItem(dailyClockKey(run)));
+      const oldEnd = Number(localStorage.getItem(dailyClockKey(run) + ':end'));
+      if (oldStart && oldEnd) return (oldEnd - oldStart) / 1000;
+      return null;
     } catch { return null; }
   }
+  document.addEventListener('visibilitychange', () => {
+    const run = dailyRun;
+    if (!run) return;
+    if (document.visibilityState === 'hidden') dailyClockPause(run);
+    else dailyClockResume(run);
+  });
+  document.addEventListener('pagehide', () => { if (dailyRun) dailyClockPause(dailyRun); });
 
   // Guests reach sign-up the same way the old daily gate did: the main page
   // owns the sign-up flow. ?signin=game opens it there and sends the player
@@ -1936,13 +1985,14 @@ function initGameUI() {
     } catch { return false; }
   }
 
-  function dailyMoveText({ kind, name, from, members = [], extra = null }) {
-    if (kind === 'deadend') return `✗ ${name} is a dead end: no shared member with ${from}. −1 move.`;
-    const via = members.length ? ` ${fmtMembersLong(members)} played in both.` : '';
-    if (kind === 'optimal') return `✓ ${name} connects. You\u2019re on the shortest path!${via}`;
-    // The long way round costs at least one move; say exactly how many.
-    const cost = extra > 0 ? ` (+${extra} extra move${extra === 1 ? '' : 's'})` : '';
-    return `✓ Valid connection! But a shorter route exists${cost}.${via}`;
+  // Aaron, 2026-10-25: the static bar is a glance check, not a sentence.
+  // Color + two or three words carry it; the band name is already in the
+  // pill row above, and the over-par cost still shows there as extra
+  // blank pills, plus moves vs shortest in the results modal.
+  function dailyMoveText({ kind }) {
+    if (kind === 'deadend') return '✗ Dead end';
+    if (kind === 'optimal') return '✓ Shortest path';
+    return '✓ Long way round';
   }
 
   // The arrow between two bands, with WHO links them above it (Cole,
@@ -2022,8 +2072,11 @@ function initGameUI() {
           list.appendChild(via);
         }
       }
-      const li = el(`<li class="sd-chain-node${n.anchor ? ' is-anchor' : ''}"><span class="sd-chain-dot" aria-hidden="true"></span></li>`);
-      const cls = n.anchor ? 'game-chain-anchor' : n.kind === 'optimal' ? 'game-chain-filled game-chain-good' : 'game-chain-filled game-chain-ok';
+      const dotKind = n.anchor ? 'is-anchor' : n.kind === 'deadend' ? 'is-bad' : n.kind === 'optimal' ? 'is-good' : 'is-ok';
+      const li = el(`<li class="sd-chain-node ${dotKind}"><span class="sd-chain-dot" aria-hidden="true"></span></li>`);
+      const cls = n.anchor ? 'game-chain-anchor'
+        : n.kind === 'deadend' ? 'game-chain-filled game-chain-deadend'
+        : n.kind === 'optimal' ? 'game-chain-filled game-chain-good' : 'game-chain-filled game-chain-ok';
       const pill = el(`<span class="game-chain-pill ${cls}"></span>`);
       pill.textContent = n.name;
       li.appendChild(pill);
@@ -2242,9 +2295,9 @@ function initGameUI() {
     // Chain pills replace the old text trail (Aaron: the text was confusing).
     paintChainPills(card, run);
     paintPlayerLine(card, run);
-    dailyClockMark(run);
+    // No clock mark here: the clock starts on the first pick, not on paint.
 
-    // What your last tap did, in words, until the next tap.
+    // What your last tap did, at a glance, until the next tap.
     const resultLine = q('.sd-result');
     const showResult = !!(active && dailyLastMove);
     resultLine.hidden = !showResult;
@@ -2511,20 +2564,22 @@ function initGameUI() {
         }
         paintDailyBoard(card);
         const yes = data.hint && data.hint.on_optimal_path;
-        const answer = yes
-          ? `${data.hint.option.name} is on the shortest path.`
-          : `${data.hint.option.name} is not on the shortest path.`;
+        // Same glance rule as a pick: the static bar is the only
+        // verification, no popup toast duplicating it.
+        const answer = yes ? 'Shortest path' : 'Not shortest path';
         const line = card.querySelector('.sd-result');
         line.hidden = false;
         line.className = 'sd-result is-' + (yes ? 'good' : 'ok');
         line.replaceChildren(iconText(lineIcon('tree'), answer));
-        showToast(answer, yes ? 'good' : null);
       } catch (err) {
         btn.disabled = false;
         note.textContent = err.message;
       }
       return;
     }
+    // A real pick, not a peek: this is where the clock starts. A peek
+    // above returns before here, so checking a band never starts it.
+    dailyClockStart(dailyRun);
     const optsBox = card.querySelector('.game-daily-options');
     const fromName = dailyRun && dailyRun.current_band ? dailyRun.current_band.name : '';
     const fromId = dailyRun && dailyRun.current_band ? dailyRun.current_band.id : null;
@@ -2560,14 +2615,9 @@ function initGameUI() {
       const extra = distBefore != null && distAfter != null ? distAfter + 1 - distBefore : null;
       const members = (dailyRun.connections || {})[`${fromId}|${optionId}`] || [];
       dailyLastMove = data.completed ? null : { kind, name: pickedName, from: fromName, members, extra };
-      if (!data.completed) {
-        showToast(
-          kind === 'deadend' ? '✗ Dead end. No shared member. −1 move'
-            : kind === 'optimal' ? '✓ Connected. Shortest path!'
-            : '✓ Connected, but the long way round',
-          kind === 'deadend' ? 'bad' : 'good',
-        );
-      }
+      // Aaron, 2026-10-25: no popup toast for a pick. The tapped button
+      // colors first, then the repaint shows the static .sd-result bar
+      // (solid pick color + two or three words) as the only verification.
       await pause(kind === 'deadend' ? 1000 : 800);
       if (data.completed) {
         if (gaCountsRun(dailyRun)) {
