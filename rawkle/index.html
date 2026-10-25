@@ -8,7 +8,15 @@
     <link rel="icon" href="/favicon-32.png" />
     <meta property="og:title" content="Rawkle by Six Degrees" />
     <meta property="og:description" content="Guess the band. One famous band a day, six tries." />
-    <meta property="og:image" content="https://sixdegreesofrock.com/og-image.png" />
+    <meta property="og:image" content="https://sixdegreesofrock.com/rawkle-og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Rawkle by Six Degrees — guess the band" />
+    <meta property="og:url" content="https://sixdegreesofrock.com/rawkle" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Rawkle by Six Degrees" />
+    <meta name="twitter:description" content="Guess the band. One famous band a day, six tries." />
+    <meta name="twitter:image" content="https://sixdegreesofrock.com/rawkle-og.png" />
     <title>Rawkle by Six Degrees — Guess the Band</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -157,6 +165,15 @@
       }
       .btn.gold { background: var(--gold); border-color: var(--gold); color: #23160a; }
       .btn:hover { filter: brightness(1.12); }
+      /* Daily reminder signup, on the end card (same pipe as the card game). */
+      .remind { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--hairline); text-align: center; }
+      .remind-head { font-size: 14.5px; font-weight: 700; color: var(--ink); margin: 0 0 2px; }
+      .remind-sub { font-size: 13px; color: var(--ink-dim); margin: 0 0 10px; }
+      .remind-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+      .remind-row input { flex: 1 1 200px; max-width: 260px; background: rgba(2,4,10,0.6); border: 1px solid var(--hairline-strong); border-radius: 999px; color: var(--ink); font: inherit; font-size: 14.5px; padding: 11px 16px; }
+      .remind-row input:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
+      .remind-status { font-size: 13px; color: var(--ink-dim); margin: 8px 0 0; min-height: 18px; }
+      .remind-status.ok { color: var(--gold); }
 
       .site-footer { flex: 0 0 auto; text-align: center; font-size: 12px; color: var(--ink-faint); padding: 7px 0 1px; }
       .site-footer a { color: var(--ink-dim); text-decoration: none; }
@@ -213,6 +230,15 @@
             <button class="btn gold" id="share-btn" type="button">Share result</button>
             <a class="btn" id="graph-btn" href="https://sixdegreesofrock.com" target="_blank" rel="noopener">See them in the graph</a>
             <button class="btn" id="end-close" type="button">See the board</button>
+          </div>
+          <div class="remind" id="remind-block">
+            <p class="remind-head">Never miss a Rawkle</p>
+            <p class="remind-sub">One email each morning when the new band drops. No account needed.</p>
+            <div class="remind-row">
+              <input id="remind-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" aria-label="Email for the daily Rawkle reminder" />
+              <button class="btn gold" id="remind-btn" type="button">Remind me</button>
+            </div>
+            <p class="remind-status" id="remind-status"></p>
           </div>
         </div>
       </div>
@@ -702,11 +728,31 @@
         document.getElementById("graph-btn").href =
           "https://sixdegreesofrock.com/?band=" + encodeURIComponent(answerDisplay);
         document.getElementById("graph-btn").textContent = "See " + answerDisplay + " in the graph";
+        var rs = document.getElementById("remind-status");
+        if (rs) { rs.textContent = ""; rs.className = "remind-status"; }
+        var rb = document.getElementById("remind-btn");
+        if (rb) { rb.disabled = false; rb.textContent = "Remind me"; }
         endEl.classList.add("show");
         syncResultPill();
         message("");
       }
 
+      /* The share link's result code (mirror of scripts/rawkle-result.mjs):
+         puzzle number, an x if not solved, then one row per guess, tiles
+         as letters: g = gold, b = blue, a = absent. It carries no letters
+         and no band name, so the card it draws stays spoiler-free. The
+         edge function og_rawkle.js turns it into the preview; practice
+         rounds have no puzzle number and share the plain link. */
+      function rawkleShareCode() {
+        if (mode !== "daily" || puzzleNo <= 0 || status === "playing") return null;
+        var rows = guesses.map(function (g) {
+          return scoreGuess(g, answer).map(function (st) {
+            return st === "correct" ? "g" : st === "present" ? "b" : "a";
+          }).join("");
+        }).filter(function (r) { return r.length > 0; }).slice(0, 6);
+        if (!rows.length) return null;
+        return puzzleNo + (status === "won" ? "" : "x") + "-" + rows.join(".");
+      }
       function shareText() {
         var head = mode === "practice"
           ? "Rawkle by Six Degrees (practice)"
@@ -745,6 +791,48 @@
          url field brings the full target list and renders the link
          preview. If the chosen app drops the text anyway, the
          clipboard copy is the rescue and the message says so. */
+      /* Daily reminder signup: email-only, double opt-in (same pipe as
+         the card game — /api/game-reminder-signup). Nothing arrives until
+         the confirmation link in the email is clicked. */
+      document.getElementById("remind-btn").addEventListener("click", function () {
+        var input = document.getElementById("remind-email");
+        var status = document.getElementById("remind-status");
+        var btn = document.getElementById("remind-btn");
+        var email = (input.value || "").trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          status.textContent = "Enter a real email address.";
+          status.className = "remind-status";
+          input.focus();
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = "Sending…";
+        status.textContent = "";
+        status.className = "remind-status";
+        fetch("/api/game-reminder-signup", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: email, game: "rawkle" })
+        }).then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); }).then(function (r) {
+          if (r.ok && r.data.status === "already_on") {
+            status.textContent = "You’re already on the list ✓ — see you tomorrow morning.";
+            status.className = "remind-status ok";
+          } else if (r.ok && r.data.status === "check_email") {
+            status.textContent = "Check your email to confirm — nothing arrives until you tap the link.";
+            status.className = "remind-status ok";
+          } else {
+            status.textContent = "Couldn’t save that — try again in a bit.";
+            status.className = "remind-status";
+            btn.disabled = false;
+            btn.textContent = "Remind me";
+          }
+        }).catch(function () {
+          status.textContent = "Couldn’t reach the server — try again in a bit.";
+          status.className = "remind-status";
+          btn.disabled = false;
+          btn.textContent = "Remind me";
+        });
+      });
       document.getElementById("share-btn").addEventListener("click", function () {
         var btn = this;
         var label = btn.textContent;
@@ -759,11 +847,14 @@
             message(copied ? "Shared! If the app dropped the text, just paste — it’s copied." : "Shared!");
           });
         }
+        var shareUrl = "https://sixdegreesofrock.com/rawkle?s=1";
+        var code = rawkleShareCode();
+        if (code) shareUrl += "&r=" + code;
         if (navigator.share) {
           navigator.share({
             title: "Rawkle by Six Degrees",
             text: text,
-            url: "https://sixdegreesofrock.com/rawkle?s=1"
+            url: shareUrl
           }).then(function () { settle(); })
             .catch(function (err) {
               if (err && err.name === "AbortError") settle();
