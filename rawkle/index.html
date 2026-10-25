@@ -219,7 +219,7 @@
 
       <div id="keyboard" aria-label="Keyboard"></div>
 
-      <div class="site-footer" id="site-footer">6* &middot; <a href="https://sixdegreesofrock.com">sixdegreesofrock.com</a> &middot; <a href="/">More games</a> &middot; <a href="/daily">Daily Chain</a> &middot; <a href="/cards">Card Game</a> &middot; Every band is closer than you think.</div>
+      <div class="site-footer" id="site-footer">6* &middot; <a href="https://sixdegreesofrock.com">sixdegreesofrock.com</a> &middot; <a href="/play">More games</a> &middot; <a href="/game">Daily Chain</a> &middot; <a href="/cards">Card Game</a> &middot; Every band is closer than you think.</div>
     </div>
 
     <div class="overlay" id="help-overlay" role="dialog" aria-modal="true" aria-labelledby="help-title">
@@ -235,7 +235,7 @@
         <p>THE counts &mdash; The Hives play as THE HIVES, and the H is live in both words. Punctuation becomes a space: Guns N&rsquo; Roses plays as GUNS N ROSES. New band at midnight Pacific &mdash; win, and the band opens in the graph.</p>
         <label class="dontshow"><input type="checkbox" id="help-dontshow" /> Don&rsquo;t show this again</label>
         <button class="btn gold play-btn" id="help-play" type="button">Play</button>
-        <p class="links"><a href="/daily">Daily Chain</a> &middot; <a href="/cards">Card Game</a> &middot; <a href="https://sixdegreesofrock.com">The Graph</a></p>
+        <p class="links"><a href="/game">Daily Chain</a> &middot; <a href="/cards">Card Game</a> &middot; <a href="https://sixdegreesofrock.com">The Graph</a></p>
       </div>
     </div>
 
@@ -737,15 +737,49 @@
       document.getElementById("end-close").addEventListener("click", function () {
         endEl.classList.remove("show");
       });
+      /* Share, the Daily-game pattern (every 6* game shares the same
+         way): copy FIRST, synchronously in the click — iOS drops
+         the user gesture otherwise — then open the sheet with the
+         link as its own url field. A text-only payload gets a thin
+         sheet (few targets, and Facebook drops prefilled text); the
+         url field brings the full target list and renders the link
+         preview. If the chosen app drops the text anyway, the
+         clipboard copy is the rescue and the message says so. */
       document.getElementById("share-btn").addEventListener("click", function () {
+        var btn = this;
+        var label = btn.textContent;
         var text = shareText();
-        if (navigator.share) {
-          navigator.share({ text: text }).catch(function () {});
-        } else if (navigator.clipboard) {
-          navigator.clipboard.writeText(text).then(function () {
-            message("Result copied — paste it anywhere.");
-          }).catch(function () { message("Copy failed — screenshot it instead."); });
+        var copied = false;
+        var copyPromise = (navigator.clipboard && navigator.clipboard.writeText)
+          ? navigator.clipboard.writeText(text).then(function () { copied = true; }).catch(function () {})
+          : Promise.resolve();
+        function settle(note) {
+          copyPromise.then(function () {
+            if (note) { message(note); return; }
+            message(copied ? "Shared! If the app dropped the text, just paste — it’s copied." : "Shared!");
+          });
         }
+        if (navigator.share) {
+          navigator.share({
+            title: "Rawkle by Six Degrees",
+            text: text,
+            url: "https://sixdegreesofrock.com/rawkle?s=1"
+          }).then(function () { settle(); })
+            .catch(function (err) {
+              if (err && err.name === "AbortError") settle();
+              else settle("Share didn’t open — your result is copied, paste it anywhere.");
+            });
+          return;
+        }
+        copyPromise.then(function () {
+          if (copied) {
+            message("Result copied — paste it anywhere.");
+            btn.textContent = "Copied!";
+            setTimeout(function () { btn.textContent = label; }, 2200);
+          } else {
+            message("Copy failed — screenshot it instead.");
+          }
+        });
       });
 
       /* ---------- practice / daily switching ---------- */
