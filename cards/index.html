@@ -1574,6 +1574,10 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           setInstruction('<strong>' + SEATS[seat] + ' wins.</strong> ' + turnsNote);
         }
         log('<strong>' + SEATS[seat] + '</strong> emptied their hand and wins in ' + G.turns + ' turns.');
+        var rStatus = document.getElementById('remind-status');
+        if (rStatus) { rStatus.textContent = ''; rStatus.className = 'gameover-remind-status'; }
+        var rBtn = document.getElementById('remind-btn');
+        if (rBtn) { rBtn.disabled = false; rBtn.textContent = 'Remind me'; }
         gameoverEl.hidden = false;
       }
 
@@ -2031,9 +2035,11 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           if (r.ok && r.data.status === 'already_on') {
             status.textContent = 'You’re already on the list ✓ — see you tomorrow morning.';
             status.className = 'gameover-remind-status ok';
+            btn.textContent = 'On the list ✓';
           } else if (r.ok && r.data.status === 'check_email') {
             status.textContent = 'Check your email to confirm — nothing arrives until you tap the link.';
             status.className = 'gameover-remind-status ok';
+            btn.textContent = 'Sent ✓';
           } else {
             status.textContent = 'Couldn’t save that — try again in a bit.';
             status.className = 'gameover-remind-status';
