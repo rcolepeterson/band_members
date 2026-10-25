@@ -240,7 +240,7 @@ test('rawk, not Wordle: guitar picks on screen, line icons instead of emoji', ()
   for (const e of ['💡', '🔥', '🎉', '🏆', '💀', '🌳', '📤']) assert.ok(!daily.includes(e), `${e} removed from the daily screens`);
   // The results score line is drawn as picks, colored like the board.
   assert.ok(src.includes("w.innerHTML = pickSvg(pickColor(p.kind), 'sd-result-pick');"));
-  assert.ok(src.includes("const DAILY_PICK_HEX = { gold: '#c9a83a', robin: '#c0c0c0', black: '#74c9d0' };"));
+  assert.ok(src.includes("const DAILY_PICK_HEX = { gold: '#c9a83a', robin: '#9adbe8', black: '#151515' };"));
   // Icons are drawn like the main site's: no fill, currentColor stroke 1.8, round caps.
   assert.match(src, /class="sd-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1\.8" stroke-linecap="round"/);
 });
@@ -294,7 +294,9 @@ test('feedback: out of the header, in the footer and on the results screen', () 
   assert.ok(!header.includes('send-feedback-btn'), 'not in the header');
   const footer = html.slice(html.indexOf('<footer class="arena-foot">'), html.indexOf('</footer>'));
   assert.ok(footer.includes('id="send-feedback-btn"'), 'in the footer, same id so the popover wiring is unchanged');
-  assert.ok(src.includes('Something off? <button type="button" class="sd-linkbtn">Send feedback</button>'));
+  assert.ok(src.includes('>Feedback</button>'), 'results modal feedback is just "Feedback"');
+  assert.ok(footer.includes('>Feedback</button>'), 'page footer feedback is just "Feedback"');
+  assert.ok(footer.includes('<a href="/">sixdegreesofrock.com</a>'), 'page footer links to splash, not the graph');
 });
 
 test('/daily has its own link-preview image', () => {
