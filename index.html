@@ -83,16 +83,6 @@
         display: block;
       }
 
-      .wordmark {
-        font-size: 13px;
-        font-weight: 600;
-        letter-spacing: 0.42em;
-        text-indent: 0.42em;
-        color: var(--ink-dim);
-        text-transform: uppercase;
-        margin: 0 0 14px;
-      }
-
       h1 {
         font-size: 44px;
         font-weight: 800;
@@ -100,7 +90,6 @@
         margin: 0 0 10px;
         line-height: 1.05;
       }
-      h1 .star { color: var(--gold); }
 
       .tagline {
         font-family: "Archivo Narrow", "Archivo", sans-serif;
@@ -109,14 +98,6 @@
         text-transform: uppercase;
         color: var(--ink-faint);
         margin: 0;
-      }
-
-      .constellation {
-        display: block;
-        width: 100%;
-        max-width: 420px;
-        height: 54px;
-        margin: 22px auto 0;
       }
 
       /* ---------- sections ---------- */
@@ -205,20 +186,6 @@
       a.row:hover .row-arrow { transform: translateX(3px); color: var(--ink); }
       .row-arrow svg { width: 18px; height: 18px; display: block; }
 
-      .pill {
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        padding: 4px 9px;
-        border-radius: 999px;
-        border: 1px solid var(--hairline-strong);
-        color: var(--ink-dim);
-        white-space: nowrap;
-      }
-      .pill.live { color: #7ee2a8; border-color: rgba(126, 226, 168, 0.4); }
-      .pill.dev { color: var(--gold); border-color: rgba(255, 180, 84, 0.45); }
-
       /* ---------- socials ---------- */
       .social-row { display: flex; gap: 12px; flex-wrap: wrap; }
       a.social {
@@ -240,13 +207,6 @@
       a.social .s-name { font-size: 15px; font-weight: 600; display: block; }
       a.social .s-sub { font-size: 12.5px; color: var(--ink-faint); display: block; margin-top: 1px; }
 
-      .group-note {
-        margin: 12px 4px 0;
-        font-size: 13.5px;
-        line-height: 1.5;
-        color: var(--ink-faint);
-      }
-      .group-note strong { color: var(--ink-dim); font-weight: 600; }
 
       /* ---------- footer ---------- */
       footer {
@@ -260,11 +220,7 @@
       footer a { color: var(--ink-dim); text-decoration: none; border-bottom: 1px solid var(--hairline-strong); }
       footer a:hover { color: var(--ink); }
 
-      @keyframes twinkle { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.35; } }
-      .tw { animation: twinkle 3.6s ease-in-out infinite; }
-      .tw2 { animation: twinkle 5.2s ease-in-out infinite; animation-delay: 1.3s; }
       @media (prefers-reduced-motion: reduce) {
-        .tw, .tw2 { animation: none; }
         a.row, .row-arrow { transition: none; }
         a.row:hover { transform: none; }
       }
@@ -272,7 +228,6 @@
       @media (max-width: 480px) {
         .wrap { padding: 34px 16px 48px; }
         h1 { font-size: 38px; }
-        .wordmark { letter-spacing: 0.32em; text-indent: 0.32em; }
         a.row { padding: 16px 14px; gap: 13px; }
         a.row.featured { padding: 19px 14px; }
         .row-icon { width: 42px; height: 42px; }
@@ -306,27 +261,8 @@
           <circle cx="40" cy="40" r="6.5" fill="#ffb454"/>
           <circle cx="40" cy="40" r="11" stroke="rgba(255,180,84,0.5)" stroke-width="1"/>
         </svg>
-        <p class="wordmark">Six Degrees of Rock</p>
-        <h1>6<span class="star">*</span> Play</h1>
+        <h1>Six Degrees of Rock</h1>
         <p class="tagline">Global to local, connected.</p>
-
-        <!-- constellation strip: gold band node, blue member nodes -->
-        <svg class="constellation" viewBox="0 0 420 54" fill="none" aria-hidden="true">
-          <g stroke="rgba(39,184,255,0.55)" stroke-width="1">
-            <line x1="30" y1="34" x2="120" y2="14"/>
-            <line x1="120" y1="14" x2="210" y2="30"/>
-            <line x1="210" y1="30" x2="305" y2="12"/>
-            <line x1="305" y1="12" x2="392" y2="32"/>
-            <line x1="120" y1="14" x2="196" y2="46"/>
-            <line x1="196" y1="46" x2="305" y2="12"/>
-          </g>
-          <circle cx="30" cy="34" r="3" fill="#27b8ff" class="tw"/>
-          <circle cx="120" cy="14" r="3.4" fill="#ffb454"/>
-          <circle cx="210" cy="30" r="3" fill="#27b8ff" class="tw2"/>
-          <circle cx="305" cy="12" r="3.4" fill="#ffb454"/>
-          <circle cx="392" cy="32" r="3" fill="#27b8ff" class="tw"/>
-          <circle cx="196" cy="46" r="2.4" fill="#27b8ff" opacity="0.7"/>
-        </svg>
       </header>
 
       <main>
@@ -340,7 +276,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11.5 5.4"/><path d="M14 10a5 5 0 0 0-7.07 0L4.1 12.83a5 5 0 0 0 7.07 7.07l1.33-1.3"/></svg>
               </span>
               <span class="row-body">
-                <span class="row-title">Play Today&rsquo;s Daily Chain <span class="pill live">Live</span></span>
+                <span class="row-title">Play Today&rsquo;s Daily Chain</span>
                 <p class="row-desc">Connect today&rsquo;s two bands in as few moves as you can. A new chain every day &mdash; beat par, beat your best, beat the tree.</p>
               </span>
               <span class="row-arrow" aria-hidden="true">
@@ -353,7 +289,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="13" height="17" rx="2" transform="rotate(-8 9.5 13.5)"/><rect x="9" y="3" width="13" height="17" rx="2" transform="rotate(7 15.5 11.5)"/></svg>
               </span>
               <span class="row-body">
-                <span class="row-title">The Card Game <span class="pill live">Play now</span></span>
+                <span class="row-title">The Card Game</span>
                 <p class="row-desc">52 band cards, one shared musician at a time. Play a card that connects to the table &mdash; or draw until one does. Solo against the table first, then phone-to-phone: live rooms and async challenges.</p>
               </span>
               <span class="row-arrow" aria-hidden="true">
@@ -366,7 +302,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
               </span>
               <span class="row-body">
-                <span class="row-title">Rawkle <span class="pill live">Play now</span></span>
+                <span class="row-title">Rawkle</span>
                 <p class="row-desc">Guess the band in 6 tries. One Gold-or-Platinum band a day &mdash; same band for everyone, new one at midnight Pacific.</p>
               </span>
               <span class="row-arrow" aria-hidden="true">
@@ -387,7 +323,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="2.2"/><circle cx="4.5" cy="5.5" r="1.7"/><circle cx="19.5" cy="6.5" r="1.7"/><circle cx="6" cy="19" r="1.7"/><circle cx="18.5" cy="18.5" r="1.7"/><path d="M10.4 10.4 5.9 6.9M13.7 10.3l4.2-2.4M10.6 13.9l-3.2 3.6M13.9 13.8l3.1 3.2"/></svg>
               </span>
               <span class="row-body">
-                <span class="row-title">Explore the Graph <span class="pill live">Live</span></span>
+                <span class="row-title">Explore the Graph</span>
                 <p class="row-desc">The full constellation &mdash; more than 16,000 bands and musicians, connected by who played with whom. Find the threads you didn&rsquo;t know existed.</p>
               </span>
               <span class="row-arrow" aria-hidden="true">
@@ -412,8 +348,11 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/></svg>
               <span><span class="s-name">Email</span><span class="s-sub">Say hello</span></span>
             </a>
+            <a class="social" href="https://www.facebook.com/groups/3634155073429202">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 3H13a3.5 3.5 0 0 0-3.5 3.5V9H7v3h2.5v9H13v-9h2.6l.4-3H13V6.9c0-.8.5-1.4 1.3-1.4h1.2z"/></svg>
+              <span><span class="s-name">Facebook Group</span><span class="s-sub">Chains, scores, and chain talk</span></span>
+            </a>
           </div>
-          <p class="group-note">Sharing scores on Facebook? Find the group <strong>&ldquo;Six Degrees of Rock &mdash; Daily Game&rdquo;</strong> &mdash; chains, scores, and chain talk, posted by players.</p>
         </section>
 
       </main>
