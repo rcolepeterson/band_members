@@ -338,19 +338,34 @@
     .gameover-kicker { margin: 0 0 8px; color: var(--card-amber); font-size: .74rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
     .gameover-title { margin: 0 0 8px; font-family: var(--font-display); font-size: 2.3rem; font-weight: 500; line-height: 1; color: #fff; }
     .gameover-sub { margin: 0 0 20px; color: #a9bac8; font-size: .92rem; }
-    /* Daily reminder signup, on the game-over card (same pipe as Rawkle). */
-    .gameover-remind { margin-top: 22px; padding-top: 16px; border-top: 1px solid rgba(255,180,84,.25); }
-    .gameover-remind-head { margin: 0 0 4px; color: #fff; font-weight: 700; font-size: .95rem; }
-    .gameover-remind-sub { margin: 0 0 12px; color: #a9bac8; font-size: .85rem; }
-    .gameover-remind-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-    .gameover-remind-row input { flex: 1 1 190px; max-width: 250px; background: rgba(3,7,11,.7); border: 1px solid rgba(143,232,246,.35); border-radius: 999px; color: #fff; font: inherit; font-size: .9rem; padding: 10px 16px; }
-    .gameover-remind-row input:focus { outline: 2px solid var(--card-amber); outline-offset: 1px; }
-    .gameover-remind-status { margin: 10px 0 0; color: #a9bac8; font-size: .85rem; min-height: 1.2em; }
-    .gameover-remind-status.ok { color: var(--card-amber); }
-    .gameover-foot { margin: 16px 0 0; color: #a9bac8; font-size: .85rem; }
-    .gameover-foot a { color: #a9bac8; }
     .deal-btn { padding: 11px 22px; border: 1px solid var(--card-amber); border-radius: 999px; background: rgba(255,180,84,.12); color: var(--card-amber); font-weight: 700; cursor: pointer; }
     .deal-btn:hover { background: rgba(255,180,84,.22); }
+
+    /* v14 — share result: the two actions sit side by side (wrapping on
+       narrow cards); the rescue line and the clipboard-failure fallback
+       live under them, hidden until a share tap. */
+    .gameover-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .share-btn { padding: 11px 22px; border: 1px solid rgba(143,232,246,.55); border-radius: 999px; background: rgba(143,232,246,.1); color: var(--card-cyan); font-weight: 700; cursor: pointer; }
+    .share-btn:hover { background: rgba(143,232,246,.2); }
+    .share-rescue { margin: 12px 0 0; color: #8fa4b5; font-size: .82rem; }
+    .share-fallback { display: block; width: 100%; margin: 12px 0 0; padding: 10px 12px; border: 1px solid rgba(225,244,255,.25); border-radius: 8px; background: #060b11; color: #dcebf5; font: inherit; font-size: .82rem; resize: none; }
+    .share-fallback[hidden] { display: none; }
+
+    /* v14b — game-night reminder signup, restored to match the live card:
+       a rule line, the heading, a one-line sub, email field + button on
+       one row (stacking on narrow cards), and the confirm/error note. */
+    .remind { margin-top: 22px; padding-top: 20px; border-top: 1px solid rgba(225,244,255,.14); }
+    .remind-title { margin: 0 0 6px; color: #fff; font-size: 1.06rem; font-weight: 700; }
+    .remind-sub { margin: 0 0 14px; color: #a9bac8; font-size: .9rem; }
+    .remind-form { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .remind-input { flex: 1 1 190px; min-width: 0; padding: 11px 16px; border: 1px solid rgba(225,244,255,.3); border-radius: 999px; background: #060b11; color: #edf7ff; font: inherit; font-size: .92rem; }
+    .remind-input::placeholder { color: #71889b; }
+    .remind-btn { flex: none; padding: 11px 20px; border: 1px solid var(--card-amber); border-radius: 999px; background: rgba(255,180,84,.12); color: var(--card-amber); font-weight: 700; cursor: pointer; }
+    .remind-btn:hover:not(:disabled) { background: rgba(255,180,84,.22); }
+    .remind-btn:disabled { cursor: default; }
+    .remind-note { margin: 12px 0 0; color: var(--card-amber); font-size: .86rem; line-height: 1.45; }
+    .remind-note[hidden] { display: none; }
+    .remind-note.error { color: #ffab91; }
 
     .stats-strip {
       display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 26px;
@@ -870,17 +885,21 @@
           <p class="gameover-kicker">Game over</p>
           <p class="gameover-title" id="gameover-title">You win.</p>
           <p class="gameover-sub" id="gameover-sub"></p>
-          <button class="deal-btn" id="play-again" type="button">Deal a new game</button>
-          <div class="gameover-remind" id="remind-block">
-            <p class="gameover-remind-head">Never miss a game night</p>
-            <p class="gameover-remind-sub">One email each morning to deal a hand. No account needed.</p>
-            <div class="gameover-remind-row">
-              <input id="remind-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" aria-label="Email for the daily card game reminder" />
-              <button class="deal-btn" id="remind-btn" type="button">Remind me</button>
-            </div>
-            <p class="gameover-remind-status" id="remind-status"></p>
+          <div class="gameover-actions">
+            <button class="deal-btn" id="play-again" type="button">Deal a new game</button>
+            <button class="share-btn" id="share-result" type="button">Share result</button>
           </div>
-          <p class="gameover-foot"><a href="/">← sixdegreesofrock.com</a> · <a href="mailto:aaron@sixdegreesofrock.com?subject=6*%20Card%20Game%20feedback&amp;body=Device%3A%20%0AWhat%20happened%3A%20%0AWhat%20I%20expected%3A%20">Feedback</a></p>
+          <p class="share-rescue" id="share-rescue" hidden>just paste — it's copied</p>
+          <textarea class="share-fallback" id="share-fallback" rows="3" readonly hidden aria-label="Share text — select and copy it"></textarea>
+          <div class="remind">
+            <p class="remind-title">Never miss a game night</p>
+            <p class="remind-sub">One email each morning to deal a hand. No account needed.</p>
+            <form class="remind-form" id="remind-form" novalidate>
+              <input class="remind-input" id="remind-email" type="email" placeholder="you@example.com" autocomplete="email" aria-label="Email address for the daily game reminder" />
+              <button class="remind-btn" id="remind-submit" type="submit">Remind me</button>
+            </form>
+            <p class="remind-note" id="remind-note" hidden></p>
+          </div>
         </div>
       </div>
 
@@ -897,7 +916,7 @@
 
     <nav class="game-footer wrap" aria-label="Site links">
       <a href="/">← sixdegreesofrock.com</a>
-      <span class="footer-links"><a href="mailto:aaron@sixdegreesofrock.com?subject=6*%20Card%20Game%20feedback&amp;body=Device%3A%20%0AWhat%20happened%3A%20%0AWhat%20I%20expected%3A%20">Feedback</a></span>
+      <span class="footer-links"><a href="mailto:aaron@sixdegreesofrock.com?subject=6*%20Card%20Game%20feedback&amp;body=Device%3A%20%0AWhat%20happened%3A%20%0AWhat%20I%20expected%3A%20">Feedback</a><a href="/play">More games</a></span>
     </nav>
 
 
@@ -1003,6 +1022,13 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       var gameoverEl = document.getElementById('gameover');
       var gameoverTitle = document.getElementById('gameover-title');
       var gameoverSub = document.getElementById('gameover-sub');
+      var shareBtn = document.getElementById('share-result');
+      var shareRescue = document.getElementById('share-rescue');
+      var shareFallback = document.getElementById('share-fallback');
+      var remindForm = document.getElementById('remind-form');
+      var remindEmail = document.getElementById('remind-email');
+      var remindSubmit = document.getElementById('remind-submit');
+      var remindNote = document.getElementById('remind-note');
       var modal = document.getElementById('joker-modal');
       var jokerSearch = document.getElementById('joker-search');
       var jokerOptions = document.getElementById('joker-options');
@@ -1431,11 +1457,16 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           lock: false,
           turnStalled: false,
           frozenSeat: null,
-          freezePlays: 0
+          freezePlays: 0,
+          myFreeze: 0
         };
         beacon({ type: 'start' });
         logEl.innerHTML = '';
         gameoverEl.hidden = true;
+        lastResult = null;
+        shareRescue.hidden = true;
+        shareFallback.hidden = true;
+        shareFallback.value = '';
         teachHint.hidden = firstGameDone();
         renderAll();
         renderStats();
@@ -1532,7 +1563,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         if (idx < 0) return;
         hand.splice(idx, 1);
         G.played.push(card);
-        session.freeze++; G.freezePlays++; renderStats();
+        session.freeze++; G.freezePlays++; if (seat === 0) G.myFreeze++; renderStats();
         var target = (seat + 1) % 4;
         G.frozenSeat = target;
         var name = SEATS[seat];
@@ -1577,11 +1608,191 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           setInstruction('<strong>' + SEATS[seat] + ' wins.</strong> ' + turnsNote);
         }
         log('<strong>' + SEATS[seat] + '</strong> emptied their hand and wins in ' + G.turns + ' turns.');
-        var rStatus = document.getElementById('remind-status');
-        if (rStatus) { rStatus.textContent = ''; rStatus.className = 'gameover-remind-status'; }
-        var rBtn = document.getElementById('remind-btn');
-        if (rBtn) { rBtn.disabled = false; rBtn.textContent = 'Remind me'; }
+        // v14: snapshot the finished game for the share card before the
+        // overlay opens, and start every game-over with a clean share row.
+        lastResult = {
+          won: seat === 0,
+          winnerName: SEATS[seat],
+          turns: G.turns,
+          chain: G.played.length + 1,
+          stalls: G.stalls,
+          ricky: G.ricky,
+          freeze: G.freezePlays,
+          myFreeze: G.myFreeze,
+          cardsLeft: G.hands[0].length,
+          closingBand: BANDS[topBandIdx()].n
+        };
+        shareRescue.hidden = true;
+        shareFallback.hidden = true;
+        shareFallback.value = '';
         gameoverEl.hidden = false;
+      }
+
+      /* ---------- v14 share card ----------
+         House pattern, in order: tap Share result → the text share is
+         copied to the clipboard FIRST → the branded result card is drawn
+         on a 1200×630 canvas and offered through the native share sheet
+         (files) where supported, as a download everywhere else. Summary
+         stats only — never the full chain. If the clipboard refuses, the
+         text appears in a selectable area beside the rescue line; the
+         overlay is never blocked. Share taps are not beacon events. */
+      var SHARE_URL = 'sixdegreesofrock.com/cards';
+      var lastResult = null; // snapshot of the finished game, set in gameOver()
+
+      function freezeClause(n) {
+        if (!n) return '';
+        if (n === 1) return ', and I froze Josh Freese once';
+        if (n === 2) return ', and I froze Josh Freese twice';
+        return ', and I froze Josh Freese ' + n + ' times';
+      }
+      function shareText(r) {
+        var stats = r.turns + ' turns, a ' + r.chain + '-band chain' + freezeClause(r.myFreeze) + '.';
+        var first = r.won
+          ? 'I beat Mara, Dev, and Kit at the 6* Card Game — ' + stats
+          : r.winnerName + ' took the game — I finished ' + r.cardsLeft + (r.cardsLeft === 1 ? ' card' : ' cards') + ' short. ' + stats;
+        return first + '\n' + SHARE_URL;
+      }
+      function fitCanvasText(x, text, maxWidth, size, font) {
+        var s = size;
+        x.font = font(s);
+        while (s > 18 && x.measureText(text).width > maxWidth) { s -= 2; x.font = font(s); }
+        return s;
+      }
+      function drawShareCard(r) {
+        var c = document.createElement('canvas');
+        c.width = 1200; c.height = 630;
+        var x = c.getContext('2d');
+        // Midnight space, in the game's palette.
+        var grad = x.createLinearGradient(0, 0, 0, 630);
+        grad.addColorStop(0, '#0a1420');
+        grad.addColorStop(1, '#04080d');
+        x.fillStyle = grad; x.fillRect(0, 0, 1200, 630);
+        // A fixed-seed starfield: the same quiet sky on every card.
+        var seed = 987654321;
+        function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+        for (var i = 0; i < 180; i++) {
+          x.globalAlpha = .25 + rnd() * .65;
+          x.fillStyle = rnd() > .85 ? '#ffb454' : '#dcebf5';
+          x.beginPath(); x.arc(rnd() * 1200, rnd() * 630, rnd() * 1.6 + .4, 0, Math.PI * 2); x.fill();
+        }
+        x.globalAlpha = 1;
+        x.strokeStyle = 'rgba(255,180,84,.45)'; x.lineWidth = 2;
+        x.strokeRect(28, 28, 1144, 574);
+        x.textAlign = 'center';
+        // The 6* mark.
+        x.fillStyle = '#ffb454';
+        x.font = '500 118px Boska, Georgia, serif';
+        x.fillText('6*', 600, 186);
+        x.fillStyle = '#8fa4b5';
+        x.font = '700 25px Satoshi, Arial, sans-serif';
+        x.fillText('S I X   D E G R E E S   O F   R O C K   ·   C A R D   G A M E', 600, 236);
+        // The result line — the same words the overlay shows.
+        x.fillStyle = '#ffffff';
+        fitCanvasText(x, r.won ? 'You win!' : r.winnerName + ' takes the game.', 1060, 64, function (s) { return '500 ' + s + 'px Boska, Georgia, serif'; });
+        x.fillText(r.won ? 'You win!' : r.winnerName + ' takes the game.', 600, 336);
+        // The stats row.
+        var stats = r.turns + ' turns · ' + r.chain + ' cards in the final chain · ' + r.stalls + ' stalls · ' + r.ricky + ' Ricky plays · ' + r.freeze + ' Freeze plays';
+        x.fillStyle = '#c2d5e2';
+        fitCanvasText(x, stats, 1060, 30, function (s) { return '400 ' + s + 'px Satoshi, Arial, sans-serif'; });
+        x.fillText(stats, 600, 404);
+        // The closing band.
+        var closing = 'The chain closed on ' + r.closingBand;
+        x.fillStyle = '#8fe8f6';
+        fitCanvasText(x, closing, 1060, 36, function (s) { return 'italic 500 ' + s + 'px Boska, Georgia, serif'; });
+        x.fillText(closing, 600, 472);
+        x.fillStyle = '#ffb454';
+        x.font = '700 30px Satoshi, Arial, sans-serif';
+        x.fillText(SHARE_URL, 600, 548);
+        return c;
+      }
+      function offerShareImage(r) {
+        var canvas = drawShareCard(r);
+        if (!canvas.toBlob) return;
+        canvas.toBlob(function (blob) {
+          if (!blob) return;
+          var file = null;
+          try { file = new File([blob], 'six-degrees-card-game-result.png', { type: 'image/png' }); } catch (e) { file = null; }
+          if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file] }).catch(function () { /* sheet dismissed — the text is already copied */ });
+            return;
+          }
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = 'six-degrees-card-game-result.png';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+        }, 'image/png');
+      }
+      function onShareResult() {
+        if (!lastResult) return;
+        var text = shareText(lastResult);
+        function showFallback() {
+          shareFallback.value = text;
+          shareFallback.hidden = false;
+          shareRescue.hidden = false;
+          shareFallback.focus();
+          shareFallback.select();
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(
+            function () { shareRescue.hidden = false; offerShareImage(lastResult); },
+            function () { showFallback(); offerShareImage(lastResult); }
+          );
+        } else {
+          showFallback();
+          offerShareImage(lastResult);
+        }
+      }
+
+      /* ---------- v14b: game-night reminder signup ----------
+         The shared reminder pipe, same as Rawkle: email only, double
+         opt-in. A valid address POSTs { email, game: 'cards' } to
+         /api/game-reminder-signup; a check_email response means the
+         confirmation email is on its way and nothing arrives until its
+         link is tapped. The signup lives entirely inside the overlay —
+         it never touches the finished game behind it. */
+      var remindDone = false;
+      function showRemindNote(text, isError) {
+        remindNote.textContent = text;
+        remindNote.classList.toggle('error', !!isError);
+        remindNote.hidden = false;
+      }
+      function onRemindSubmit(e) {
+        e.preventDefault();
+        if (remindDone) return;
+        var email = remindEmail.value.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+          showRemindNote('Enter a real email address.', true);
+          remindEmail.focus();
+          return;
+        }
+        remindSubmit.disabled = true;
+        remindSubmit.textContent = 'Sending…';
+        fetch('/api/game-reminder-signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email, game: 'cards' })
+        }).then(function (res) {
+          return res.json().catch(function () { return null; }).then(function (data) {
+            if (res.ok && data && data.status === 'check_email') {
+              remindDone = true;
+              remindSubmit.textContent = 'Sent ✓';
+              remindEmail.disabled = true;
+              showRemindNote('Check your email to confirm — nothing arrives until you tap the link.', false);
+            } else {
+              remindSubmit.disabled = false;
+              remindSubmit.textContent = 'Remind me';
+              showRemindNote('That signup didn’t go through — try again.', true);
+            }
+          });
+        }).catch(function () {
+          remindSubmit.disabled = false;
+          remindSubmit.textContent = 'Remind me';
+          showRemindNote('That signup didn’t go through — try again.', true);
+        });
       }
 
       /* ---------- human actions ---------- */
@@ -2012,50 +2223,8 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
 
       document.getElementById('new-game').addEventListener('click', newGame);
       document.getElementById('play-again').addEventListener('click', newGame);
-      /* Daily reminder signup: email-only, double opt-in (same pipe as
-         Rawkle — /api/game-reminder-signup). Nothing arrives until the
-         confirmation link in the email is clicked. */
-      document.getElementById('remind-btn').addEventListener('click', function () {
-        var input = document.getElementById('remind-email');
-        var status = document.getElementById('remind-status');
-        var btn = document.getElementById('remind-btn');
-        var email = (input.value || '').trim();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          status.textContent = 'Enter a real email address.';
-          status.className = 'gameover-remind-status';
-          input.focus();
-          return;
-        }
-        btn.disabled = true;
-        btn.textContent = 'Sending…';
-        status.textContent = '';
-        status.className = 'gameover-remind-status';
-        fetch('/api/game-reminder-signup', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ email: email, game: 'cards' })
-        }).then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); }).then(function (r) {
-          if (r.ok && r.data.status === 'already_on') {
-            status.textContent = 'You’re already on the list ✓ — see you tomorrow morning.';
-            status.className = 'gameover-remind-status ok';
-            btn.textContent = 'On the list ✓';
-          } else if (r.ok && r.data.status === 'check_email') {
-            status.textContent = 'Check your email to confirm — nothing arrives until you tap the link.';
-            status.className = 'gameover-remind-status ok';
-            btn.textContent = 'Sent ✓';
-          } else {
-            status.textContent = 'Couldn’t save that — try again in a bit.';
-            status.className = 'gameover-remind-status';
-            btn.disabled = false;
-            btn.textContent = 'Remind me';
-          }
-        }).catch(function () {
-          status.textContent = 'Couldn’t reach the server — try again in a bit.';
-          status.className = 'gameover-remind-status';
-          btn.disabled = false;
-          btn.textContent = 'Remind me';
-        });
-      });
+      shareBtn.addEventListener('click', onShareResult);
+      remindForm.addEventListener('submit', onRemindSubmit);
       newGame();
       if (!rulesSeen()) openRules();
     }());
