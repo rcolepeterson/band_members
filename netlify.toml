@@ -26,6 +26,10 @@
   # The Rawkle result card in a shared link's preview draws with the same font.
   included_files = ["vendor/fonts/og/**"]
 
+[functions.cards_card]
+# The 6* Card Game result card in a shared link's preview draws with the same font.
+included_files = ["vendor/fonts/og/**"]
+
 [[redirects]]
   # Head-to-head invite previews (Aaron's text-message card, 2026-10-01):
   # /invite/<token> serves the challenge card (dynamic og: tags naming the
