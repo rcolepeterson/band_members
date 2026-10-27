@@ -1,6 +1,29 @@
 <!doctype html>
 <html lang="en">
   <head>
+  <!-- Google tag (gtag.js), GA4 property G-E2SNSPFHGB — copied from Daily
+       (2026-10-26, per-game tracking follow-up). Splash previously had no tag,
+       so GA recorded zero traffic for it. Same config as Daily: debug mode
+       via ?ga_debug=1, team-device filtering via ?internal=1/0, and shared
+       visits (?s=1) filed under Organic Social / source "share". Async:
+       never blocks the page. -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-E2SNSPFHGB"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    var gaConfig = {};
+    if (/[?&]ga_debug=1/.test(location.search)) gaConfig.debug_mode = true;
+    try {
+      if (/[?&]internal=1/.test(location.search)) localStorage.setItem('sdr-internal', '1');
+      if (/[?&]internal=0/.test(location.search)) localStorage.removeItem('sdr-internal');
+      if (localStorage.getItem('sdr-internal') === '1') gaConfig.traffic_type = 'internal';
+    } catch (e) {}
+    if (/[?&]s=1/.test(location.search)) {
+      gaConfig.page_location = location.origin + location.pathname + '?utm_source=share&utm_medium=social';
+    }
+    gtag('config', 'G-E2SNSPFHGB', gaConfig);
+  </script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
