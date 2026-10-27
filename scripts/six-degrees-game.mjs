@@ -1835,9 +1835,9 @@ function initGameUI() {
       if (completed.freeze_used) {
         c.appendChild(el('<p class="sd-modal-sub">A Seattle Freeze bridged your missed day. Streak intact.</p>'));
       }
+      // Gold pill under the music-map link (Aaron, 2026-10-27): the guest
+      // sign-up is a full pill now, not a text link at the bottom.
       if (!isSignedIn()) {
-        // Gold pill under the music-map link (Aaron, 2026-10-27): the guest
-        // sign-up is a full pill now, not a text link at the bottom.
         const nudge = el('<div class="sd-guest" style="margin-top:14px;text-align:center;"><button type="button" style="display:block;width:100%;min-height:52px;border-radius:999px;border:none;background:#e0a63a;color:#000;font:inherit;font-weight:700;font-size:1.05rem;cursor:pointer;">Create a free account</button><p class="sd-modal-sub" style="margin-top:8px;">to save your streak and stats!</p></div>');
         nudge.querySelector('button').addEventListener('click', requestDailySignup);
         c.appendChild(nudge);
