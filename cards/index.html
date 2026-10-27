@@ -1084,6 +1084,25 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           return 'anon-' + Math.random().toString(36).slice(2, 12);
         }
       })();
+      /* ---------- per-game tracking (2026-10-26, OPS Sheet) ----------
+         Same /api/analytics/game-event endpoint Daily uses, same
+         fire-and-forget pattern as beacon() above. One session per
+         deal: ANON_ID + deal timestamp. No practice mode exists here,
+         so every deal counts. Per-turn move events are deliberately
+         NOT fired (turns include CPU turns; the completed game's
+         turns count is the move count). Share taps fire here, not
+         through beacon(), so shares are never double-counted. */
+      var cardsSessionId = null;
+      function cardsEvent(event_type, extra) {
+        try {
+          var payload = { session_id: cardsSessionId, event_type: event_type, game_mode: "cards" };
+          if (extra) for (var k in extra) payload[k] = extra[k];
+          fetch('/api/analytics/game-event', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload), keepalive: true
+          }).catch(function () {});
+        } catch (e) {}
+      }
       function beacon(payload) {
         try {
           payload.anon = ANON_ID;
@@ -1481,6 +1500,8 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           freezePlays: 0,
           myFreeze: 0
         };
+        cardsSessionId = ANON_ID + '-' + G.startedAt;
+        cardsEvent('game_started', {});
         beacon({ type: 'start' });
         logEl.innerHTML = '';
         gameoverEl.hidden = true;
@@ -1613,6 +1634,11 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           winner: seat === 0 ? 'you' : 'cpu',
           winner_name: SEATS[seat],
           duration_s: Math.max(0, Math.round((Date.now() - G.startedAt) / 1000))
+        });
+        cardsEvent('game_completed', {
+          result: seat === 0 ? 'win' : 'loss',
+          moves_count: G.turns,
+          duration_seconds: Math.max(0, Math.round((Date.now() - G.startedAt) / 1000))
         });
         renderStats();
         // First completed game retires the teach hint for good.
@@ -1785,6 +1811,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       }
       function onShareResult() {
         if (!lastResult) return;
+        cardsEvent('share_tapped', {});
         var text = shareText(lastResult);
         var url = shareUrl(lastResult);
         var title = '6* Card Game';
