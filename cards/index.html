@@ -13,13 +13,13 @@
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
     var gaConfig = {};
-    if (/[?&]ga_debug=1/.test(location.search)) gaConfig.debug_mode = true;
+    if (/[?&]ga_debug=1\b/.test(location.search)) gaConfig.debug_mode = true;
     try {
-      if (/[?&]internal=1/.test(location.search)) localStorage.setItem('sdr-internal', '1');
-      if (/[?&]internal=0/.test(location.search)) localStorage.removeItem('sdr-internal');
+      if (/[?&]internal=1\b/.test(location.search)) localStorage.setItem('sdr-internal', '1');
+      if (/[?&]internal=0\b/.test(location.search)) localStorage.removeItem('sdr-internal');
       if (localStorage.getItem('sdr-internal') === '1') gaConfig.traffic_type = 'internal';
     } catch (e) {}
-    if (/[?&]s=1/.test(location.search)) {
+    if (/[?&]s=1\b/.test(location.search)) {
       gaConfig.page_location = location.origin + location.pathname + '?utm_source=share&utm_medium=social';
     }
     gtag('config', 'G-E2SNSPFHGB', gaConfig);
@@ -35,8 +35,8 @@
   <meta name="twitter:title" content="6* Card Game — Six Degrees of Rock" />
   <meta property="og:description" content="It's Uno with bands. Match by shared members instead of colors." />
   <meta name="twitter:description" content="It's Uno with bands. Match by shared members instead of colors." />
-  <meta property="og:image" content="https://sixdegreesofrock.com/splash-og.png" />
-  <meta name="twitter:image" content="https://sixdegreesofrock.com/splash-og.png" />
+  <meta property="og:image" content="https://sixdegreesofrock.com/cards-og.png" />
+  <meta name="twitter:image" content="https://sixdegreesofrock.com/cards-og.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:image:alt" content="Six Degrees of Rock 6* Card Game" />
@@ -376,14 +376,20 @@
     .deal-btn { padding: 11px 22px; border: 1px solid var(--card-amber); border-radius: 999px; background: rgba(255,180,84,.12); color: var(--card-amber); font-weight: 700; cursor: pointer; }
     .deal-btn:hover { background: rgba(255,180,84,.22); }
 
-    /* v14 — share result: the two actions sit side by side (wrapping on
-       narrow cards); the rescue line and the clipboard-failure fallback
-       live under them, hidden until a share tap. */
-    .gameover-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-    .share-btn { padding: 11px 22px; border: 1px solid rgba(143,232,246,.55); border-radius: 999px; background: rgba(143,232,246,.1); color: var(--card-cyan); font-weight: 700; cursor: pointer; }
-    .share-btn:hover { background: rgba(143,232,246,.2); }
-    .download-btn { padding: 11px 22px; border: 1px solid rgba(225,244,255,.35); border-radius: 999px; background: rgba(255,255,255,.06); color: #dcebf5; font-weight: 700; cursor: pointer; }
-    .download-btn:hover { background: rgba(255,255,255,.13); }
+    /* v15d — game-over actions: ONE row of TWO pills, same on phone and
+       desktop. Share result is FIRST and GOLD (the old Deal gold); Deal a
+       new game is SECOND and BLUE (the old Share blue). The row never
+       wraps and never overflows: both pills share the row equally. The
+       rescue line and the clipboard-failure fallback live under them,
+       hidden until a share tap. (.deal-btn itself stays gold — the
+       inspect and rules Play buttons use it too — so the blue Deal here
+       is scoped to .gameover-actions.) */
+    .gameover-actions { display: flex; flex-wrap: nowrap; justify-content: center; gap: 10px; }
+    .gameover-actions .share-btn, .gameover-actions .deal-btn { flex: 1 1 0; min-width: 0; padding: 11px 8px; white-space: nowrap; }
+    .share-btn { padding: 11px 22px; border: 1px solid var(--card-amber); border-radius: 999px; background: rgba(255,180,84,.12); color: var(--card-amber); font-weight: 700; cursor: pointer; }
+    .share-btn:hover { background: rgba(255,180,84,.22); }
+    .gameover-actions .deal-btn { border: 1px solid rgba(143,232,246,.55); background: rgba(143,232,246,.1); color: var(--card-cyan); }
+    .gameover-actions .deal-btn:hover { background: rgba(143,232,246,.2); }
     .share-rescue { margin: 12px 0 0; color: #8fa4b5; font-size: .82rem; }
     .share-status { margin: 8px 0 0; color: var(--card-amber); font-size: .82rem; }
     .share-status[hidden] { display: none; }
@@ -925,9 +931,8 @@
           <p class="gameover-title" id="gameover-title">You win.</p>
           <p class="gameover-sub" id="gameover-sub"></p>
           <div class="gameover-actions">
-            <button class="deal-btn" id="play-again" type="button">Deal a new game</button>
             <button class="share-btn" id="share-result" type="button">Share result</button>
-            <button class="download-btn" id="download-card" type="button">Download card</button>
+            <button class="deal-btn" id="play-again" type="button">Deal a new game</button>
           </div>
           <p class="share-rescue" id="share-rescue" hidden>just paste — it's copied</p>
           <p class="share-status" id="share-status" hidden></p>
@@ -1065,7 +1070,6 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       var gameoverTitle = document.getElementById('gameover-title');
       var gameoverSub = document.getElementById('gameover-sub');
       var shareBtn = document.getElementById('share-result');
-      var downloadBtn = document.getElementById('download-card');
       var shareRescue = document.getElementById('share-rescue');
       var shareStatus = document.getElementById('share-status');
       var shareFallback = document.getElementById('share-fallback');
@@ -1494,6 +1498,12 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         return shuffle(deck);
       }
       function newGame() {
+        // Starting a new game (Deal, or the table's New game button)
+        // clears any saved finished result FIRST, then deals.
+        dealNewGame(true, false);
+      }
+      function dealNewGame(clearSaved, suppressEvents) {
+        if (clearSaved) clearLastResult();
         clearTimers();
         modal.hidden = true;
         var deck = buildDeck();
@@ -1523,9 +1533,11 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           freezePlays: 0,
           myFreeze: 0
         };
-        cardsSessionId = ANON_ID + '-' + G.startedAt;
-        cardsEvent('game_started', {});
-        beacon({ type: 'start' });
+        if (!suppressEvents) {
+          beacon({ type: 'start' });
+          cardsSessionId = ANON_ID + '-' + G.startedAt;
+          cardsEvent('game_started', {});
+        }
         logEl.innerHTML = '';
         gameoverEl.hidden = true;
         lastResult = null;
@@ -1699,24 +1711,106 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         if (shareBtn) shareBtn.textContent = 'Share result';
         shareFallback.hidden = true;
         shareFallback.value = '';
+        // v15d: persist the finished result as the overlay opens, so
+        // navigating away and coming back restores this exact share page.
+        saveLastResult();
         gameoverEl.hidden = false;
       }
 
-      /* ---------- v15 unified share + download ----------
+      /* ---------- v15 unified share (v15d: link-only, Download cut) ----------
          Daily/Rawkle pattern: tap Share result → the share TEXT is copied
          to the clipboard FIRST, synchronously in the click (iOS drops the
          gesture otherwise) → navigator.share is called with
-         { title, text, url } and NO file. The copied text keeps the plain
-         link as its last line; the url field carries the coded link whose
-         ?s=1&r= code an edge function decodes to render the preview card.
-         The 1200×630 canvas stays, but only for the separate Download
-         card button. Summary stats only — never the full chain. If the
-         clipboard refuses, the text appears in a selectable area. The
-         overlay is never blocked. Share/download taps are not beacons.
+         { title, text, url } and NO file. The copied text's last line is
+         the full CODED share URL (v15c) — the same ?s=1&r= link the url
+         field carries — because Facebook drops the sheet's prefilled
+         text and unfurls whatever link a player pastes from the copied
+         text. So both paths (sheet url field AND pasted text) unfurl
+         the result card. The share image lives server-side; the game
+         file renders no share-card image. Summary stats only — never
+         the full chain. If the clipboard refuses, the text appears in a
+         selectable area. The overlay is never blocked. Share taps fire
+         cardsEvent('share_tapped'), never the stats beacon.
          The page ignores ?s=1&r= on load — a shared-link visit deals a
          fresh normal game. */
-      var SHARE_URL = 'sixdegreesofrock.com/cards';
       var lastResult = null; // snapshot of the finished game, set in gameOver()
+
+      /* ---------- v15d: save / restore the finished game ----------
+         At game-over, everything the overlay renders (winner, turns,
+         chain, stalls, ricky, freeze, closing band, cards left) PLUS the
+         exact share text PLUS the result code is saved under
+         'cards_last_result'. On load, a saved record restores the
+         game-over overlay from it instead of dealing fresh — Share and
+         Deal both work from the restored record. Starting a new game
+         clears the key FIRST (see dealNewGame), so a record exists only
+         when the last thing that happened was a game-over with no later
+         deal; a game in progress is never interrupted by one. All
+         storage access is wrapped in try/catch — private mode must
+         never break the game. The session strip is session-only by
+         design and is NOT persisted. */
+      function saveLastResult() {
+        try {
+          if (!lastResult) return;
+          var record = {
+            won: lastResult.won,
+            winnerName: lastResult.winnerName,
+            turns: lastResult.turns,
+            chain: lastResult.chain,
+            stalls: lastResult.stalls,
+            ricky: lastResult.ricky,
+            freeze: lastResult.freeze,
+            myFreeze: lastResult.myFreeze,
+            cardsLeft: lastResult.cardsLeft,
+            closingBand: lastResult.closingBand,
+            shareText: shareText(lastResult),
+            resultCode: resultCode(lastResult)
+          };
+          window.localStorage.setItem('cards_last_result', JSON.stringify(record));
+        } catch (e) { /* storage blocked: the overlay still works this visit */ }
+      }
+      function loadLastResult() {
+        try {
+          var raw = window.localStorage.getItem('cards_last_result');
+          if (!raw) return null;
+          var record = JSON.parse(raw);
+          if (!record || typeof record.turns !== 'number' || typeof record.chain !== 'number' || !record.winnerName) return null;
+          return record;
+        } catch (e) { return null; }
+      }
+      function clearLastResult() {
+        try { window.localStorage.removeItem('cards_last_result'); } catch (e) { /* storage blocked: nothing to clear */ }
+      }
+      function restoreGameOver(record) {
+        lastResult = {
+          won: !!record.won,
+          winnerName: record.winnerName,
+          turns: record.turns,
+          chain: record.chain,
+          stalls: record.stalls,
+          ricky: record.ricky,
+          freeze: record.freeze,
+          myFreeze: record.myFreeze,
+          cardsLeft: record.cardsLeft,
+          closingBand: record.closingBand
+        };
+        var turnsNote = lastResult.turns + ' turns · ' + lastResult.chain + ' cards in the final chain.';
+        if (lastResult.won) {
+          gameoverTitle.textContent = 'You emptied your hand. You win.';
+          gameoverSub.textContent = 'The table is yours. ' + turnsNote;
+          setInstruction('<strong>You win.</strong> ' + turnsNote);
+        } else {
+          gameoverTitle.textContent = lastResult.winnerName + ' takes the game.';
+          gameoverSub.textContent = 'First to empty their hand. ' + turnsNote + ' You finished with ' + lastResult.cardsLeft + (lastResult.cardsLeft === 1 ? ' card' : ' cards') + ' left.';
+          setInstruction('<strong>' + lastResult.winnerName + ' wins.</strong> ' + turnsNote);
+        }
+        turnPill.textContent = 'Game over';
+        shareRescue.hidden = true;
+        if (shareStatus) { shareStatus.hidden = true; shareStatus.textContent = ''; }
+        if (shareBtn) shareBtn.textContent = 'Share result';
+        shareFallback.hidden = true;
+        shareFallback.value = '';
+        gameoverEl.hidden = false;
+      }
 
       function freezeClause(n) {
         if (!n) return '';
@@ -1729,7 +1823,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         var first = r.won
           ? '6* Card Game — I beat Mara, Dev, and Kit — ' + stats
           : '6* Card Game — ' + r.winnerName + ' took the game — I finished ' + r.cardsLeft + (r.cardsLeft === 1 ? ' card' : ' cards') + ' short. ' + stats;
-        return first + '\n' + SHARE_URL;
+        return first + '\n' + shareUrl(r);
       }
       function winnerCode(r) {
         if (r.won) return 'Y';
@@ -1744,97 +1838,9 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       function shareUrl(r) {
         return 'https://sixdegreesofrock.com/cards?s=1&r=' + resultCode(r);
       }
-      function fitCanvasText(x, text, maxWidth, size, font) {
-        var s = size;
-        x.font = font(s);
-        while (s > 18 && x.measureText(text).width > maxWidth) { s -= 2; x.font = font(s); }
-        return s;
-      }
-      function drawShareCard(r) {
-        var c = document.createElement('canvas');
-        c.width = 1200; c.height = 630;
-        var x = c.getContext('2d');
-        // Midnight space, in the game's palette.
-        var grad = x.createLinearGradient(0, 0, 0, 630);
-        grad.addColorStop(0, '#0a1420');
-        grad.addColorStop(1, '#04080d');
-        x.fillStyle = grad; x.fillRect(0, 0, 1200, 630);
-        // A fixed-seed starfield: the same quiet sky on every card.
-        var seed = 987654321;
-        function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
-        for (var i = 0; i < 180; i++) {
-          x.globalAlpha = .25 + rnd() * .65;
-          x.fillStyle = rnd() > .85 ? '#ffb454' : '#dcebf5';
-          x.beginPath(); x.arc(rnd() * 1200, rnd() * 630, rnd() * 1.6 + .4, 0, Math.PI * 2); x.fill();
-        }
-        x.globalAlpha = 1;
-        x.strokeStyle = 'rgba(255,180,84,.45)'; x.lineWidth = 2;
-        x.strokeRect(28, 28, 1144, 574);
-        x.textAlign = 'center';
-        // The 6* mark.
-        x.fillStyle = '#ffb454';
-        x.font = '500 118px Boska, Georgia, serif';
-        x.fillText('6*', 600, 186);
-        x.fillStyle = '#8fa4b5';
-        x.font = '700 25px Satoshi, Arial, sans-serif';
-        x.fillText('S I X   D E G R E E S   O F   R O C K   ·   C A R D   G A M E', 600, 236);
-        // The game-name eyebrow — gold, centered, between the mark and
-        // the result line, matching the server preview card.
-        x.fillStyle = '#ffb454';
-        x.font = '700 28px Satoshi, Arial, sans-serif';
-        x.fillText('6* CARD GAME', 600, 284);
-        // The result line — the same words the overlay shows.
-        x.fillStyle = '#ffffff';
-        fitCanvasText(x, r.won ? 'You win!' : r.winnerName + ' takes the game.', 1060, 64, function (s) { return '500 ' + s + 'px Boska, Georgia, serif'; });
-        x.fillText(r.won ? 'You win!' : r.winnerName + ' takes the game.', 600, 336);
-        // The stats row.
-        var stats = r.turns + ' turns · ' + r.chain + ' cards in the final chain · ' + r.stalls + ' stalls · ' + r.ricky + ' Ricky plays · ' + r.freeze + ' Freeze plays';
-        x.fillStyle = '#c2d5e2';
-        fitCanvasText(x, stats, 1060, 30, function (s) { return '400 ' + s + 'px Satoshi, Arial, sans-serif'; });
-        x.fillText(stats, 600, 404);
-        // The closing band.
-        var closing = 'The chain closed on ' + r.closingBand;
-        x.fillStyle = '#8fe8f6';
-        fitCanvasText(x, closing, 1060, 36, function (s) { return 'italic 500 ' + s + 'px Boska, Georgia, serif'; });
-        x.fillText(closing, 600, 472);
-        x.fillStyle = '#ffb454';
-        x.font = '700 30px Satoshi, Arial, sans-serif';
-        x.fillText(SHARE_URL, 600, 548);
-        return c;
-      }
-      function downloadShareCard(r) {
-        var canvas = drawShareCard(r);
-        if (!canvas) return;
-        if (canvas.toBlob) {
-          canvas.toBlob(function (blob) {
-            if (!blob) return;
-            var url = URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = 'six-degrees-card-game-result.png';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-          }, 'image/png');
-          return;
-        }
-        if (canvas.toDataURL) {
-          var a2 = document.createElement('a');
-          a2.href = canvas.toDataURL('image/png');
-          a2.download = 'six-degrees-card-game-result.png';
-          document.body.appendChild(a2);
-          a2.click();
-          a2.remove();
-        }
-      }
-      function onDownloadCard() {
-        if (!lastResult) return;
-        downloadShareCard(lastResult);
-      }
       function onShareResult() {
-        if (!lastResult) return;
         cardsEvent('share_tapped', {});
+        if (!lastResult) return;
         var text = shareText(lastResult);
         var url = shareUrl(lastResult);
         var title = '6* Card Game';
@@ -2364,9 +2370,19 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       document.getElementById('new-game').addEventListener('click', newGame);
       document.getElementById('play-again').addEventListener('click', newGame);
       shareBtn.addEventListener('click', onShareResult);
-      if (downloadBtn) downloadBtn.addEventListener('click', onDownloadCard);
       remindForm.addEventListener('submit', onRemindSubmit);
-      newGame();
+      // v15d: a saved finished result restores its game-over overlay
+      // instead of dealing fresh. The board behind it is dealt silently
+      // (no start events, saved key untouched) purely so the table
+      // renders; Share and Deal both work from the restored record,
+      // and Deal clears the key before dealing (see dealNewGame).
+      var savedResult = loadLastResult();
+      if (savedResult) {
+        dealNewGame(false, true);
+        restoreGameOver(savedResult);
+      } else {
+        newGame();
+      }
       if (!rulesSeen()) openRules();
     }());
   </script>
