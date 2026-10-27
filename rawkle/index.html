@@ -440,6 +440,37 @@
       var keyState = {};     /* letter -> "correct" | "present" | "absent" */
 
       var STATE_KEY = "rawkle-state-v1";
+
+      /* ---------- per-game tracking (2026-10-26, OPS Sheet) ----------
+         Fire-and-forget POSTs to /api/analytics/game-event, the same
+         endpoint Daily uses. Daily puzzles only: practice rounds never
+         fire, so practice can never inflate a headline count (locked).
+         session_id is stable per daily puzzle per browser ('rawkle-'
+         + dateKey), so a reload mid-round does not count a second
+         player or a second start. Payloads carry counts only — never
+         the answer, never a guess's letters. Failures are silent. */
+      var rawklePlayerFlag = "rawkle-started-";
+      function rawkleSessionId() { return "rawkle-" + dateKey; }
+      function rawkleEvent(event_type, extra) {
+        try {
+          if (mode !== "daily") return;
+          var payload = { session_id: rawkleSessionId(), event_type: event_type, game_mode: "rawkle" };
+          if (extra) for (var k in extra) payload[k] = extra[k];
+          fetch("/api/analytics/game-event", {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify(payload), keepalive: true
+          }).catch(function () {});
+        } catch (e) {}
+      }
+      function rawkleStartIfNeeded() {
+        try {
+          if (mode !== "daily" || status !== "playing") return;
+          var flag = rawklePlayerFlag + dateKey;
+          if (localStorage.getItem(flag) === "1") return;
+          localStorage.setItem(flag, "1");
+          rawkleEvent("game_started", {});
+        } catch (e) {}
+      }
       var STATS_KEY = "rawkle-stats-v1";
 
       function loadStats() {
@@ -693,7 +724,9 @@
           pos += word.length;
         });
         var scored = scoreGuess(guessBoard, answer);
+        rawkleStartIfNeeded();
         guesses.push(guessBoard);
+        rawkleEvent("move_made", { move_number: guesses.length });
         updateKeys(guessBoard, scored);
         current = "";
         if (guessBoard === answer) {
@@ -718,6 +751,7 @@
         6: "Last try. A win is a win."
       };
       function finishRound() {
+        rawkleEvent("game_completed", { result: status === "won" ? "win" : "loss", moves_count: guesses.length });
         var stats = null;
         if (mode === "daily") stats = recordResult(status === "won", guesses.length);
         document.getElementById("end-answer").textContent = answerDisplay;
@@ -841,6 +875,7 @@
         });
       });
       document.getElementById("share-btn").addEventListener("click", function () {
+        if (mode === "daily" && status !== "playing") rawkleEvent("share_tapped", {});
         var btn = this;
         var label = btn.textContent;
         var text = shareText();
