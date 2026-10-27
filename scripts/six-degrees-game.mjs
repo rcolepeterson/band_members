@@ -1832,21 +1832,13 @@ function initGameUI() {
       const mapLink = musicMapLinkEl(run);
       mapLink.classList.add('sd-map-link--modal');
       c.appendChild(mapLink);
-      // While we're testing: ask right when people have an opinion. Easy to
-      // drop after launch; the footer link stays either way.
-      // Shared end-card footer (all three games): one splash link + Feedback, nothing else.
-      if (typeof window.openFeedbackPopover === 'function') {
-        const fb = el('<p class="sd-feedback"><a href="/">sixdegreesofrock.com</a> \u00b7 <button type="button" class="sd-linkbtn">Feedback</button></p>');
-        fb.querySelector('button').addEventListener('click', () => { closeSdModal(); window.openFeedbackPopover(); });
-        c.appendChild(fb);
-      } else {
-        c.appendChild(el('<p class="sd-feedback"><a href="/">sixdegreesofrock.com</a> \u00b7 <a href="mailto:aaron@sixdegreesofrock.com?subject=6*%20Daily%20Chain%20feedback">Feedback</a></p>'));
-      }
       if (completed.freeze_used) {
         c.appendChild(el('<p class="sd-modal-sub">A Seattle Freeze bridged your missed day. Streak intact.</p>'));
       }
       if (!isSignedIn()) {
-        const nudge = el('<p class="sd-guest"><button type="button" class="sd-linkbtn">Create a free account</button> to save your streak and stats!</p>');
+        // Gold pill under the music-map link (Aaron, 2026-10-27): the guest
+        // sign-up is a full pill now, not a text link at the bottom.
+        const nudge = el('<div class="sd-guest" style="margin-top:14px;text-align:center;"><button type="button" style="display:block;width:100%;min-height:52px;border-radius:999px;border:none;background:#e0a63a;color:#000;font:inherit;font-weight:700;font-size:1.05rem;cursor:pointer;">Create a free account</button><p class="sd-modal-sub" style="margin-top:8px;">to save your streak and stats!</p></div>');
         nudge.querySelector('button').addEventListener('click', requestDailySignup);
         c.appendChild(nudge);
         if (!practiceMode && shouldAskGuestForReminder()) {
@@ -1862,6 +1854,15 @@ function initGameUI() {
         // asked for once, here, after a win: the happiest moment, never a gate.
         try { localStorage.setItem(CARD_PROMPT_KEY, '1'); } catch {}
         c.appendChild(el('<p class="sd-guest">Where do you rock from? <a class="sd-linkbtn" href="/?card=1">Add it to your card</a></p>'));
+      }
+      // Shared end-card footer, now at the very bottom (Aaron, 2026-10-27):
+      // one splash link + Feedback, nothing after it.
+      if (typeof window.openFeedbackPopover === 'function') {
+        const fb = el('<p class="sd-feedback"><a href="/">sixdegreesofrock.com</a> \u00b7 <button type="button" class="sd-linkbtn">Feedback</button></p>');
+        fb.querySelector('button').addEventListener('click', () => { closeSdModal(); window.openFeedbackPopover(); });
+        c.appendChild(fb);
+      } else {
+        c.appendChild(el('<p class="sd-feedback"><a href="/">sixdegreesofrock.com</a> \u00b7 <a href="mailto:aaron@sixdegreesofrock.com?subject=6*%20Daily%20Chain%20feedback">Feedback</a></p>'));
       }
     });
   }
