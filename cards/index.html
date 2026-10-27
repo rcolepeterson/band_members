@@ -1678,8 +1678,8 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       function shareText(r) {
         var stats = r.turns + ' turns, a ' + r.chain + '-band chain' + freezeClause(r.myFreeze) + '.';
         var first = r.won
-          ? 'I beat Mara, Dev, and Kit at the 6* Card Game — ' + stats
-          : r.winnerName + ' took the game — I finished ' + r.cardsLeft + (r.cardsLeft === 1 ? ' card' : ' cards') + ' short. ' + stats;
+          ? '6* Card Game — I beat Mara, Dev, and Kit — ' + stats
+          : '6* Card Game — ' + r.winnerName + ' took the game — I finished ' + r.cardsLeft + (r.cardsLeft === 1 ? ' card' : ' cards') + ' short. ' + stats;
         return first + '\n' + SHARE_URL;
       }
       function winnerCode(r) {
@@ -1729,6 +1729,11 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         x.fillStyle = '#8fa4b5';
         x.font = '700 25px Satoshi, Arial, sans-serif';
         x.fillText('S I X   D E G R E E S   O F   R O C K   ·   C A R D   G A M E', 600, 236);
+        // The game-name eyebrow — gold, centered, between the mark and
+        // the result line, matching the server preview card.
+        x.fillStyle = '#ffb454';
+        x.font = '700 28px Satoshi, Arial, sans-serif';
+        x.fillText('6* CARD GAME', 600, 284);
         // The result line — the same words the overlay shows.
         x.fillStyle = '#ffffff';
         fitCanvasText(x, r.won ? 'You win!' : r.winnerName + ' takes the game.', 1060, 64, function (s) { return '500 ' + s + 'px Boska, Georgia, serif'; });
