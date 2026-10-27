@@ -50,7 +50,8 @@ export function parseCardsResultCode(code) {
 
 export function cardsResultTitle(result) {
   const turns = `${result.turns} turn${result.turns === 1 ? '' : 's'}`;
-  return result.won
-    ? `You beat Mara, Dev, and Kit — ${turns}`
-    : `${WINNER_NAMES[result.winner]} takes the game — ${turns}`;
+  const outcome = result.won
+    ? 'You beat Mara, Dev, and Kit'
+    : `${WINNER_NAMES[result.winner]} takes the game`;
+  return `6* Card Game — ${outcome} — ${turns}`;
 }
