@@ -3,8 +3,13 @@
 // POST /api/analytics/game-event — fire-and-forget event from the game client.
 //   body: {
 //     session_id: string (required, client-generated UUID per game),
-//     event_type: 'game_started' | 'move_made' | 'hint_clicked' | 'game_completed' (required),
-//     game_mode?: 'daily_chain' | 'match_play' | 'solo' | 'casual',
+//     event_type: 'game_started' | 'move_made' | 'hint_clicked' | 'game_completed' | 'share_tapped' (required),
+//     share_tapped is the per-game share count for the ops board (locked 2026-10-26:
+//     the own-server event is primary; GA share counts are a cross-check only).
+//     game_mode?: 'daily_chain' | 'match_play' | 'solo' | 'casual' | 'rawkle' | 'cards',
+//     NOTE: 'practice' is deliberately NOT a valid mode. The Daily client sends
+//     practice runs with game_mode 'practice'; rejecting them is how practice
+//     stays out of every headline count (locked 2026-10-26). Do not add it.
 //     band_a?: string, band_b?: string,
 //     result?: 'win' | 'loss' | 'abandon',       // game_completed only
 //     moves_count?: number, hints_used?: number, // game_completed only
@@ -46,9 +51,9 @@ import {
 } from './_db.mjs';
 import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
 
-const VALID_EVENT_TYPES = new Set(['game_started', 'move_made', 'hint_clicked', 'game_completed']);
+const VALID_EVENT_TYPES = new Set(['game_started', 'move_made', 'hint_clicked', 'game_completed', 'share_tapped']);
 const VALID_RESULTS = new Set(['win', 'loss', 'abandon']);
-const VALID_MODES = new Set(['daily_chain', 'match_play', 'solo', 'casual']);
+const VALID_MODES = new Set(['daily_chain', 'match_play', 'solo', 'casual', 'rawkle', 'cards']);
 
 // 100 events/min per IP — comfortably above real play (a game is ~10 events),
 // well below what a spam script would want.
