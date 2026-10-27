@@ -71,6 +71,8 @@ async function renderCardsCard({ result, host }) {
 
   centerText(ctx, '6*', 120, 118, COLORS.gold);
 
+  centerText(ctx, '6* CARD GAME', 22, 205, COLORS.gold);
+
   const line = result.won
     ? 'You beat Mara, Dev, and Kit.'
     : `${WINNER_NAMES[result.winner]} takes the game.`;
