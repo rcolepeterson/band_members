@@ -485,13 +485,40 @@
           }).catch(function () {});
         } catch (e) {}
       }
+      /* ---------- GA4 events (2026-10-28, unified game actions) ----------
+         Same event names Daily uses, tagged game:'rawkle' + mode, so GA
+         can split by game or total them. Server events above stay
+         daily-only (locked); GA fires for practice too, with
+         mode:'practice', exactly like Daily. Daily once-events key off
+         dateKey in localStorage; practice once-events use round flags
+         reset in startRound. */
+      var rawkleGaPracticeStarted = false;
+      var rawkleGaPracticeFirst = false;
+      function rawkleGa(name, params, onceKey) {
+        try {
+          if (typeof window.gtag !== "function") return;
+          if (onceKey != null) {
+            var key = "sdr-ga:" + name + ":" + onceKey;
+            if (localStorage.getItem(key)) return;
+            localStorage.setItem(key, "1");
+          }
+          window.gtag("event", name, params);
+        } catch (e) {}
+      }
+      function rawkleGaStarted() {
+        if (mode === "daily") rawkleGa("game_started", { game: "rawkle", mode: "daily" }, "rawkle-daily-" + dateKey);
+        else if (!rawkleGaPracticeStarted) { rawkleGaPracticeStarted = true; rawkleGa("game_started", { game: "rawkle", mode: "practice" }); }
+      }
       function rawkleStartIfNeeded() {
         try {
-          if (mode !== "daily" || status !== "playing") return;
-          var flag = rawklePlayerFlag + dateKey;
-          if (localStorage.getItem(flag) === "1") return;
-          localStorage.setItem(flag, "1");
-          rawkleEvent("game_started", {});
+          if (status !== "playing") return;
+          if (mode === "daily") {
+            var flag = rawklePlayerFlag + dateKey;
+            if (localStorage.getItem(flag) === "1") return;
+            localStorage.setItem(flag, "1");
+            rawkleEvent("game_started", {});
+          }
+          rawkleGaStarted();
         } catch (e) {}
       }
       var STATS_KEY = "rawkle-stats-v1";
@@ -750,6 +777,10 @@
         rawkleStartIfNeeded();
         guesses.push(guessBoard);
         rawkleEvent("move_made", { move_number: guesses.length });
+        if (guesses.length === 1) {
+          if (mode === "daily") rawkleGa("first_move", { game: "rawkle", mode: "daily" }, "rawkle-firstmove-" + dateKey);
+          else if (!rawkleGaPracticeFirst) { rawkleGaPracticeFirst = true; rawkleGa("first_move", { game: "rawkle", mode: "practice" }); }
+        }
         updateKeys(guessBoard, scored);
         current = "";
         if (guessBoard === answer) {
@@ -775,6 +806,7 @@
       };
       function finishRound() {
         rawkleEvent("game_completed", { result: status === "won" ? "win" : "loss", moves_count: guesses.length });
+        rawkleGa("game_completed", { game: "rawkle", mode: mode, result: status === "won" ? "win" : "loss", moves_count: guesses.length }, mode === "daily" ? "rawkle-completed-" + dateKey : null);
         var stats = null;
         if (mode === "daily") stats = recordResult(status === "won", guesses.length);
         document.getElementById("end-answer").textContent = answerDisplay;
@@ -899,6 +931,7 @@
       });
       document.getElementById("share-btn").addEventListener("click", function () {
         if (mode === "daily" && status !== "playing") rawkleEvent("share_tapped", {});
+        rawkleGa("share_clicked", { game: "rawkle", mode: mode });
         var btn = this;
         var label = btn.textContent;
         var text = shareText();
@@ -940,6 +973,8 @@
 
       /* ---------- practice / daily switching ---------- */
       function startRound(newMode, display) {
+        rawkleGaPracticeStarted = false;
+        rawkleGaPracticeFirst = false;
         mode = newMode;
         answerDisplay = display;
         answer = boardName(display);
