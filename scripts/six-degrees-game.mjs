@@ -1644,6 +1644,11 @@ function initGameUI() {
       if (!copied) await navigator.clipboard.writeText(text);
       showToast('Copied results to clipboard', 'good');
       btn.textContent = 'Copied!';
+      // Share parity (Aaron, 2026-10-28): the phone path fired GA's
+      // share_clicked, the desktop clipboard path did not — so GA
+      // undercounted desktop shares while the server counted both.
+      // Both paths now fire both events on every successful share.
+      if (dailyRun) gaEvent('share_clicked', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used });
       trackDailyShare();
     } catch {
       btn.textContent = 'Copy failed. Long-press the chain to copy.';
@@ -2418,6 +2423,12 @@ function initGameUI() {
       const reveal = el('<button type="button" class="tool-chip">Show me the chain</button>');
       reveal.addEventListener('click', () => dailyGiveUp(card, { outOfMoves: true }));
       actions.appendChild(reveal);
+      // A loss is shareable without giving up (Aaron, 2026-10-28): the
+      // share text for a loss is "Not solved" + the pick row, which needs
+      // no give-up — it reads straight off the run's picks.
+      const share = el(`<button type="button" class="tool-chip">${lineIcon('share')} Share result</button>`);
+      share.addEventListener('click', () => shareDailyText(share, dailyResultShareText(false), dailyResultShareLink(false)));
+      actions.appendChild(share);
       finish.appendChild(actions);
       return;
     }
@@ -2508,7 +2519,13 @@ function initGameUI() {
     return dailyRun && dailyRun.chain_date ? { date: dailyRun.chain_date } : {};
   }
 
+  // One give-up at a time (Aaron, 2026-10-28): the automatic give-up after
+  // the last pick and a tap on "Show me the chain" used to race, and the
+  // second call hit a run the server had already ended.
+  let dailyGiveUpInFlight = false;
   async function dailyGiveUp(card, { outOfMoves = false } = {}) {
+    if (dailyGiveUpInFlight) return;
+    dailyGiveUpInFlight = true;
     const note = card.querySelector('.game-daily-note');
     note.textContent = outOfMoves ? 'Out of moves. Revealing the shortest chain…' : 'Revealing the shortest chain…';
     try {
@@ -2541,7 +2558,34 @@ function initGameUI() {
       paintDailyBoard(card, null, data.gave_up);
       openDailyResults({ won: false });
     } catch (err) {
-      note.textContent = (err && err.message) || 'Could not show the chain.';
+      // Recovery (Aaron, 2026-10-28): the server's "that run is over" means
+      // the run already ended — most often a second give-up racing the
+      // first. Never strand the player on the out-of-moves board with that
+      // raw error: re-fetch the run and paint its real end state, which
+      // carries the shortest chain and the Share button. Practice runs
+      // re-deal on start, so recovery there would swap the puzzle — for
+      // practice, just say so in plain words instead.
+      if (err && err.message === 'that run is over' && !practiceMode) {
+        try {
+          const data = await dailyFetch(practicePath('/api/game-daily/play'), {
+            method: 'POST',
+            body: JSON.stringify({ action: 'start', ...dailyDate() }),
+          });
+          dailyRun = data.run;
+          dailyOptions = [];
+          paintDailyBoard(card, null, null);
+          if (dailyRun.status === 'given_up') openDailyResults({ won: false });
+          return;
+        } catch {
+          note.textContent = 'That run already ended. Reload the page to see the chain and share it.';
+          return;
+        }
+      }
+      note.textContent = err && err.message === 'that run is over'
+        ? 'That run already ended. Reload the page to see the chain and share it.'
+        : (err && err.message) || 'Could not show the chain.';
+    } finally {
+      dailyGiveUpInFlight = false;
     }
   }
 
@@ -2640,6 +2684,13 @@ function initGameUI() {
           game_mode: practiceMode ? 'practice' : 'daily_chain',
           move_number: analyticsMoveCount,
         });
+        // GA first move (Aaron, 2026-10-28): the server already knew
+        // about moves, but GA had no pick event, so Cole's email
+        // "First moves" read 0. Once per run (run id as the key, same
+        // as game_started/game_completed) and first attempts only.
+        if (analyticsMoveCount === 1 && gaCountsRun(dailyRun)) {
+          gaEvent('first_move', { puzzle_id: gaPuzzleId(dailyRun) }, dailyRun.id);
+        }
       }
       // Feedback first: the tapped button turns green, yellow or red (and
       // shakes on a dead end), then the board moves on.
