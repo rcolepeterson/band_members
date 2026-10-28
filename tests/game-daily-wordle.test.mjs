@@ -113,12 +113,13 @@ test('mode switcher sits behind SHOW_MODE_SWITCHER (off for launch), logic kept'
   assert.match(src, /btn\.style\.display = v && SHOW_MODE_SWITCHER \? '' : 'none'/, 'picker visibility respects the flag');
 });
 
-test('out of moves: the board paints no choices, only the reveal', () => {
+test('out of moves: the board paints no choices, only the reveal + share', () => {
   const at = src.indexOf('if (run.hops_used >= dailyMoveLimit(run.par)) {');
   const options = src.indexOf('for (const o of dailyOptions) {', src.indexOf('function paintDailyBoard('));
   assert.ok(at !== -1, 'out-of-moves branch exists in paintDailyBoard');
   assert.ok(at < options, 'and it returns before the choice buttons are drawn');
-  assert.match(src.slice(at, at + 700), /return;/);
+  assert.match(src.slice(at, at + 1400), /return;/);
+  assert.ok(src.slice(at, at + 1400).includes('Share result'), 'a loss is shareable without giving up');
 });
 
 test('the last move stays on the board in words until the next tap', () => {
@@ -134,7 +135,8 @@ test('practice mode (?practice=1) runs on the Solo endpoint, for fun only', () =
   assert.ok(src.includes("return practiceMode ? '/api/game-solo/play' : dailyPath;"));
   assert.ok(src.includes("{ action: 'start', fresh: true, famous: true }"), 'fresh famous pair each start');
   // Daily calls still name the daily endpoint, so the daily is untouched without the flag.
-  assert.equal((src.match(/dailyFetch\(practicePath\('\/api\/game-daily\/play'\)/g) || []).length, 6);
+  // 7th call is the give-up recovery re-fetch (Aaron, 2026-10-28).
+  assert.equal((src.match(/dailyFetch\(practicePath\('\/api\/game-daily\/play'\)/g) || []).length, 7);
 });
 
 test('giving up is not a hint: separate link, one confirm, honest copy', () => {
@@ -214,7 +216,8 @@ test('plain English: "Shortest path", "Share score", full band names', () => {
   assert.ok(src.includes('`Shortest path: ${run.par} hops`'));
   assert.ok(src.includes("[par, 'Shortest'],"));
   // "Share score" became a one-tap "Share result" (Wordle-style, 2026-10-08).
-  assert.equal((src.match(/\$\{lineIcon\('share'\)\} Share result/g) || []).length, 2);
+  // 3rd is the out-of-moves Share result (Aaron, 2026-10-28).
+  assert.equal((src.match(/\$\{lineIcon\('share'\)\} Share result/g) || []).length, 3);
   assert.ok(!src.includes('>See results<'));
   assert.match(src, /\.sd-board \.game-chain-pill,\.sd-modal \.game-chain-pill\{white-space:normal;overflow:visible;text-overflow:clip/);
 });

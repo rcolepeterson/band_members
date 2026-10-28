@@ -77,7 +77,7 @@ test('the card only reads the day\'s two band names, and never deals a future da
 
 test('every share button sends the score link', () => {
   const src = read('../scripts/six-degrees-game.mjs');
-  assert.equal((src.match(/shareDailyText\([^)]*\), dailyResultShareLink\(/g) || []).length, 2, 'win and loss boards');
+  assert.equal((src.match(/shareDailyText\([^)]*\), dailyResultShareLink\(/g) || []).length, 3, 'win, loss, and out-of-moves boards (Aaron, 2026-10-28: a loss is shareable without giving up)');
   assert.ok(src.includes('shareDailyText(shareBtn, text, dailyResultShareLink(won, completed))'), 'results modal');
   assert.ok(src.includes("await navigator.share({ title: '6° Rock', text, url: shareUrl });"));
 });
