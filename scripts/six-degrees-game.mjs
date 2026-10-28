@@ -1139,6 +1139,10 @@ function initGameUI() {
 
   // Analytics session state (per game, reset on each start)
   let analyticsSessionId = null;
+  // Last completed session (2026-10-27, share tracking): the results modal
+  // opens after game_completed clears analyticsSessionId, so a share tap
+  // after a win would otherwise have no session to join to. Keep the last
+  // session id so every share tap still counts in the ops funnel.
   let analyticsGameStartTime = null;
   let analyticsMoveCount = 0;
   let analyticsHintCount = 0;
@@ -1592,6 +1596,19 @@ function initGameUI() {
     else document.getElementById('add-band-btn')?.click();
   }
 
+  // Share tracking (2026-10-27): every Share result tap counts, on every
+  // device, every time — phone share sheet AND desktop clipboard copy.
+  // GA4 share_clicked stays, and the ops funnel gets share_tapped with the
+  // last session id (or a fresh id for a reopened finished result, so the
+  // event is at least recorded). No once-key: repeated taps are real taps.
+  function trackDailyShare() {
+    trackGameEvent({
+      session_id: analyticsSessionId || analyticsLastSessionId || newGameSessionId(),
+      event_type: 'share_tapped',
+      game_mode: practiceMode ? 'practice' : 'daily_chain',
+    });
+  }
+
   async function shareDailyText(btn, text, shareUrl = 'https://sixdegreesofrock.com/daily?s=1') {
     const label = btn.textContent;
     // iOS Safari (Paul, 2026-10-15): navigator.share() and clipboard.writeText()
@@ -1618,6 +1635,7 @@ function initGameUI() {
       }
       await copyPromise;
       if (dailyRun) gaEvent('share_clicked', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used });
+      trackDailyShare();
       showToast(copied ? 'Shared! If the app dropped the text, just paste — it’s copied.' : 'Shared!', 'good');
       return;
     }
@@ -1626,6 +1644,7 @@ function initGameUI() {
       if (!copied) await navigator.clipboard.writeText(text);
       showToast('Copied results to clipboard', 'good');
       btn.textContent = 'Copied!';
+      trackDailyShare();
     } catch {
       btn.textContent = 'Copy failed. Long-press the chain to copy.';
     }
@@ -2516,6 +2535,7 @@ function initGameUI() {
           hints_used: analyticsHintCount,
           duration_seconds: durationSeconds,
         });
+        analyticsLastSessionId = analyticsSessionId;
         analyticsSessionId = null; // session over
       }
       paintDailyBoard(card, null, data.gave_up);
@@ -2653,7 +2673,8 @@ function initGameUI() {
             hints_used: analyticsHintCount,
             duration_seconds: durationSeconds,
           });
-          analyticsSessionId = null; // session over
+          analyticsLastSessionId = analyticsSessionId;
+        analyticsSessionId = null; // session over
         }
         paintDailyBoard(card, data.completed);
         popNewestPill(card);
@@ -3160,7 +3181,8 @@ function initGameUI() {
             hints_used: analyticsHintCount,
             duration_seconds: durationSeconds,
           });
-          analyticsSessionId = null; // session over
+          analyticsLastSessionId = analyticsSessionId;
+        analyticsSessionId = null; // session over
         }
         paintSoloBoard(card, data.completed);
         // Guest win prompt (Cole, 2026-10-08).
@@ -3250,6 +3272,7 @@ function initGameUI() {
           hints_used: analyticsHintCount,
           duration_seconds: durationSeconds,
         });
+        analyticsLastSessionId = analyticsSessionId;
         analyticsSessionId = null; // session over
       }
       paintSoloBoard(card, null, data.gave_up);
