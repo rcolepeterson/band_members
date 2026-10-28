@@ -1130,6 +1130,23 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           }).catch(function () {});
         } catch (e) {}
       }
+      /* ---------- GA4 events (2026-10-28, unified game actions) ----------
+         Same event names Daily and Rawkle use, tagged game:'cards', so GA
+         can split by game or total them. Server events above are
+         untouched — notably, per-turn move events stay server-off (turns
+         include CPU turns), while GA first_move is the human's first
+         PLAY only. Once-events key off the per-deal session id. */
+      function cardsGa(name, params, onceKey) {
+        try {
+          if (typeof window.gtag !== 'function') return;
+          if (onceKey != null) {
+            var key = 'sdr-ga:' + name + ':' + onceKey;
+            if (localStorage.getItem(key)) return;
+            localStorage.setItem(key, '1');
+          }
+          window.gtag('event', name, params);
+        } catch (e) {}
+      }
       function beacon(payload) {
         try {
           payload.anon = ANON_ID;
@@ -1537,6 +1554,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           beacon({ type: 'start' });
           cardsSessionId = ANON_ID + '-' + G.startedAt;
           cardsEvent('game_started', {});
+          cardsGa('game_started', { game: 'cards' }, 'cards-started-' + cardsSessionId);
         }
         logEl.innerHTML = '';
         gameoverEl.hidden = true;
@@ -1610,6 +1628,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         var hand = G.hands[seat];
         var idx = hand.indexOf(card);
         if (idx < 0) return;
+        if (seat === 0) cardsGa('first_move', { game: 'cards' }, 'cards-firstmove-' + cardsSessionId);
         hand.splice(idx, 1);
         G.played.push(G.top.card);
         var viaSet = null;
@@ -1640,6 +1659,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         var hand = G.hands[seat];
         var idx = hand.indexOf(card);
         if (idx < 0) return;
+        if (seat === 0) cardsGa('first_move', { game: 'cards' }, 'cards-firstmove-' + cardsSessionId);
         hand.splice(idx, 1);
         G.played.push(card);
         session.freeze++; G.freezePlays++; if (seat === 0) G.myFreeze++; renderStats();
@@ -1675,6 +1695,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           moves_count: G.turns,
           duration_seconds: Math.max(0, Math.round((Date.now() - G.startedAt) / 1000))
         });
+        cardsGa('game_completed', { game: 'cards', result: seat === 0 ? 'win' : 'loss', moves_count: G.turns }, 'cards-completed-' + cardsSessionId);
         renderStats();
         // First completed game retires the teach hint for good.
         try { window.localStorage.setItem('cards_first_game_done', '1'); } catch (e) { /* storage blocked: hint may return next visit */ }
@@ -1840,6 +1861,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       }
       function onShareResult() {
         cardsEvent('share_tapped', {});
+        cardsGa('share_clicked', { game: 'cards' });
         if (!lastResult) return;
         var text = shareText(lastResult);
         var url = shareUrl(lastResult);
