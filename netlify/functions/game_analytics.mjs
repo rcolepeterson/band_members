@@ -32,6 +32,14 @@
 // and the payload carries no PII — user_id is resolved server-side from the
 // optional bearer token if present, NULL otherwise.
 //
+// USER AGENT (Aaron, 2026-10-28): the endpoint stores the request's
+// User-Agent string on each event so the ops board can break sessions down
+// by browser/device — the bot-vs-human question Paul raised about the GA
+// headline. IPs are NOT stored (rate limit only, transient). If the table
+// has not been migrated yet, the insert retries without the column instead
+// of dropping the event, so the endpoint and the migration can ship in
+// either order.
+
 // WHY FIRE-AND-FORGET
 //
 // The client sends these with keepalive fetch and never awaits the response.
@@ -133,6 +141,11 @@ export default async (req) => {
   const hintsUsed = asInt(body.hints_used);
   const durationSeconds = asInt(body.duration_seconds);
 
+  // Server-side header, not client payload: a bot that fakes the payload
+  // cannot fake this without also faking its own request headers.
+  const rawUa = req.headers?.get?.('user-agent') || '';
+  const userAgent = rawUa.trim() ? rawUa.trim().slice(0, 500) : null;
+
   if (gameMode && !VALID_MODES.has(gameMode)) {
     return badRequest('game_mode must be one of: ' + [...VALID_MODES].join(', '));
   }
@@ -144,14 +157,27 @@ export default async (req) => {
     await sql`
       insert into game_analytics_events
         (user_id, session_id, event_type, game_mode, band_a, band_b,
-         result, moves_count, hints_used, duration_seconds)
+         result, moves_count, hints_used, duration_seconds, user_agent)
       values
         (${userId}, ${sessionId}, ${eventType}, ${gameMode}, ${bandA}, ${bandB},
-         ${result}, ${movesCount}, ${hintsUsed}, ${durationSeconds})
+         ${result}, ${movesCount}, ${hintsUsed}, ${durationSeconds}, ${userAgent})
     `;
   } catch (err) {
-    console.error('game-analytics insert failed', err);
-    return serverError('failed to record event');
+    // Table not migrated yet (or any other insert failure): retry without
+    // the new column so the event is not lost for a deploy-order reason.
+    try {
+      await sql`
+        insert into game_analytics_events
+          (user_id, session_id, event_type, game_mode, band_a, band_b,
+           result, moves_count, hints_used, duration_seconds)
+        values
+          (${userId}, ${sessionId}, ${eventType}, ${gameMode}, ${bandA}, ${bandB},
+           ${result}, ${movesCount}, ${hintsUsed}, ${durationSeconds})
+      `;
+    } catch (retryErr) {
+      console.error('game-analytics insert failed', retryErr);
+      return serverError('failed to record event');
+    }
   }
 
   return ok({});

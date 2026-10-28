@@ -1036,6 +1036,13 @@ export default async (req) => {
     `;
     results.push('index game_analytics_events_session_idx ready');
 
+    // Real numbers (Aaron, 2026-10-28): session-level bot-vs-human detail.
+    // The request's User-Agent string only — IPs stay rate-limit-only and
+    // are never stored, and session_id is still a per-game UUID, so this
+    // adds no cross-session tracking for anonymous players.
+    await sql`alter table game_analytics_events add column if not exists user_agent text`;
+    results.push('column game_analytics_events.user_agent ready');
+
     // Guest play support (Aaron/Cole, 2026-10-08): guests play free without
     // sign-up; credits tracked against a guest session, migrated on signup.
     await sql`alter table users add column if not exists is_guest boolean not null default false`;
