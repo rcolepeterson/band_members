@@ -27,6 +27,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
+    <script type="module" src="/scripts/signup-attribution.mjs"></script>
     <meta name="description" content="Rawkle by Six Degrees — guess the band. One famous band a day, six tries. A Six Degrees of Rock game." />
     <link rel="icon" href="/favicon-32.png" />
     <meta property="og:title" content="Rawkle by Six Degrees" />
@@ -505,6 +506,9 @@
           window.gtag("event", name, params);
         } catch (e) {}
       }
+      function signupSrc() {
+        try { return (typeof window.signupAttribution === "function") ? window.signupAttribution() : {}; } catch (e) { return {}; }
+      }
       function rawkleGaStarted() {
         if (mode === "daily") rawkleGa("game_started", { game: "rawkle", mode: "daily" }, "rawkle-daily-" + dateKey);
         else if (!rawkleGaPracticeStarted) { rawkleGaPracticeStarted = true; rawkleGa("game_started", { game: "rawkle", mode: "practice" }); }
@@ -899,6 +903,7 @@
           input.focus();
           return;
         }
+        var src = signupSrc();
         btn.disabled = true;
         btn.textContent = "Sending…";
         status.textContent = "";
@@ -906,16 +911,18 @@
         fetch("/api/game-reminder-signup", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: email, game: "rawkle" })
+          body: JSON.stringify({ email: email, game: "rawkle", source: src })
         }).then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); }).then(function (r) {
           if (r.ok && r.data.status === "already_on") {
             status.textContent = "You’re already on the list ✓ — see you tomorrow morning.";
             status.className = "remind-status ok";
             btn.textContent = "On the list ✓";
+            rawkleGa("reminder_signup", { game: "rawkle", method: "end_card", status: "already_on", signup_source: src.source || "", signup_medium: src.medium || "", signup_campaign: src.campaign || "" });
           } else if (r.ok && r.data.status === "check_email") {
             status.textContent = "Check your email to confirm — nothing arrives until you tap the link.";
             status.className = "remind-status ok";
             btn.textContent = "Sent ✓";
+            rawkleGa("reminder_signup", { game: "rawkle", method: "end_card", status: "check_email", signup_source: src.source || "", signup_medium: src.medium || "", signup_campaign: src.campaign || "" });
           } else {
             status.textContent = "Couldn’t save that — try again in a bit.";
             status.className = "remind-status";
