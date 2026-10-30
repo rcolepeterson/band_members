@@ -26,7 +26,7 @@ test('guests sign up with an email, on the same guest id the game uses', () => {
   assert.match(page, /<input type="email" id="email"/);
   assert.match(page, /fetch\('\/api\/reminder-signup', \{/);
   assert.match(page, /localStorage\.getItem\('sdr-guest-session'\)/);
-  assert.match(page, /body: JSON\.stringify\(\{ email: email, guest_session_id: guestSessionId\(\) \}\)/);
+  assert.match(page, /body: JSON\.stringify\(\{ email: email, guest_session_id: guestSessionId\(\), source: signupSrc\(\) \}\)/);
   assert.match(page, /Check your email and tap the link to start your reminders\./);
 });
 
@@ -39,11 +39,11 @@ test('signed-in visitors get one tap, no email box', () => {
 test('it says what you get, links to the game, and counts signups', () => {
   assert.match(page, /skipped on days you&rsquo;ve played\. Free, no account\. Unsubscribe in one tap\./);
   assert.match(page, /<a class="play" href="\/daily\/">Play today&rsquo;s puzzle<\/a>/);
-  assert.match(page, /gtag\('event', 'reminder_signup', \{ method: method, where: 'remind_page' \}\)/);
+  assert.match(page, /gtag\('event', 'reminder_signup', \{ game: 'daily', method: method, where: 'remind_page', signup_source: sa\.source \|\| '', signup_medium: sa\.medium \|\| '', signup_campaign: sa\.campaign \|\| '' \}\)/);
   assert.match(page, /googletagmanager\.com\/gtag\/js\?id=G-E2SNSPFHGB/);
   const engine = read('../scripts/six-degrees-game.mjs');
   assert.match(engine, /gaEvent\('reminder_signup', \{ method: 'guest', where: 'game' \}\)/);
-  assert.match(engine, /gaEvent\('reminder_signup', \{ method: 'account', where: 'game' \}\)/);
+  assert.match(engine, /gaEvent\('reminder_signup', \{ game: 'daily', method: 'account', where: 'game', signup_source: sa\.source \|\| '', signup_medium: sa\.medium \|\| '', signup_campaign: sa\.campaign \|\| '' \}\)/);
 });
 
 test('it works on a phone: no fixed widths wider than the screen', () => {
