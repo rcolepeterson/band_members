@@ -1900,6 +1900,9 @@ function initGameUI() {
   }
   // Saves "Remind me daily" on the server. Throws if it didn't stick.
   let reminderState = null; // a promise of true/false, read once per page
+  function signupAttributionSafe() {
+    try { return (typeof window !== 'undefined' && typeof window.signupAttribution === 'function') ? window.signupAttribution() : {}; } catch { return {}; }
+  }
   async function turnOnReminder() {
     const res = await fetch('/api/notification-prefs', {
       method: 'PATCH',
@@ -1908,7 +1911,8 @@ function initGameUI() {
     });
     if (!res.ok) throw new Error('save failed');
     reminderState = Promise.resolve(true);
-    gaEvent('reminder_signup', { method: 'account', where: 'game' });
+    const sa = signupAttributionSafe();
+    gaEvent('reminder_signup', { game: 'daily', method: 'account', where: 'game', signup_source: sa.source || '', signup_medium: sa.medium || '', signup_campaign: sa.campaign || '' });
     window.dispatchEvent(new Event('sdr-reminder-on'));
   }
   function reminderIsOn() {
