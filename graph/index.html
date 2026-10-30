@@ -7540,7 +7540,13 @@ function downloadPngBlob(blob) {
         reminderToggle.addEventListener('change', async () => {
           const on = reminderToggle.checked;
           const ok = await saveNotifyPref({ daily_reminder: on });
-          if (!ok) reminderToggle.checked = !on;
+          if (!ok) { reminderToggle.checked = !on; return; }
+          if (on) {
+            try {
+              const sa = (typeof window.signupAttribution === 'function') ? window.signupAttribution() : {};
+              if (typeof window.gtag === 'function') window.gtag('event', 'reminder_signup', { game: 'daily', method: 'graph_toggle', signup_source: sa.source || '', signup_medium: sa.medium || '', signup_campaign: sa.campaign || '' });
+            } catch (_) {}
+          }
         });
       }
       const masterToggle = document.getElementById('user-card-notify-toggle');
@@ -13697,6 +13703,12 @@ function downloadPngBlob(blob) {
                 // Leave the panel in its default framing so a later sign-out
                 // doesn't reopen it still saying "Welcome back".
                 setAuthMode('signup');
+                if (creatingAccount) {
+                  try {
+                    const sa = (typeof window.signupAttribution === 'function') ? window.signupAttribution() : {};
+                    if (typeof window.gtag === 'function') window.gtag('event', 'account_signup', { method: 'graph_signup', signup_source: sa.source || '', signup_medium: sa.medium || '', signup_campaign: sa.campaign || '' });
+                  } catch (_) {}
+                }
                 if (signInOnly) closeBottomPopovers();
               } catch (error) {
                 status.textContent = 'Could not reach the server. Check your connection and try again.';
@@ -13769,5 +13781,6 @@ function downloadPngBlob(blob) {
   <!-- Query routing moved to the hub (2026-10-24 migration): the root page
        routes ?game= / ?invite= / ?match= to /daily and ?band= / ?anchor= /
        ?node= here to /graph. This page no longer redirects game links. -->
+<script type="module" src="/scripts/signup-attribution.mjs"></script>
 </body>
 </html>
