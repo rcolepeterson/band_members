@@ -31,6 +31,36 @@ import { sendEmail, isMailerConfigured, SITE_URL } from './_mailer.mjs';
 import { isPlaceholderEmail } from './_oauth.mjs';
 import { ensureReminderSchema, buildReminderConfirmEmail } from './_daily_reminder.mjs';
 
+// GA4 on the bare confirm page (twin of _game_reminders.mjs's builder):
+// fires reminder_signup_confirmed only on a FRESH confirmation, so a
+// refresh never double-counts. Params are JSON-encoded, never raw.
+export function reminderConfirmedGaScript(game, source) {
+  // Escape < so a hostile source value can never break out of this
+  // <script> block via a literal </script> sequence.
+  const params = JSON.stringify({
+    game,
+    signup_source: (source && source.source) || '',
+    signup_medium: (source && source.medium) || '',
+    signup_campaign: (source && source.campaign) || '',
+  }).replace(/</g, '\\u003c');
+  return `<script async src="https://www.googletagmanager.com/gtag/js?id=G-E2SNSPFHGB"></script>` +
+    `<script>window.dataLayer = window.dataLayer || [];` +
+    `function gtag(){dataLayer.push(arguments);}` +
+    `gtag('js', new Date());` +
+    `gtag('config', 'G-E2SNSPFHGB');` +
+    `gtag('event', 'reminder_signup_confirmed', ${params});</script>`;
+}
+
+// Same clamp as the game pipe: landing touches are marketing params,
+// never trusted raw.
+function cleanSource(value) {
+  return typeof value === 'string' ? value.trim().slice(0, 128) : '';
+}
+function normalizeSignupSource(source) {
+  const s = source && typeof source === 'object' ? source : {};
+  return { source: cleanSource(s.source), medium: cleanSource(s.medium), campaign: cleanSource(s.campaign) };
+}
+
 // Don't resend the confirmation to the same address more than this often.
 export const CONFIRM_RESEND_MS = 60 * 60 * 1000;
 
@@ -40,7 +70,7 @@ export function confirmUrlFor(token) {
   return `${SITE_URL}/api/reminder-signup?confirm=${encodeURIComponent(token)}`;
 }
 
-function page({ heading, body }) {
+function page({ heading, body, gaScript }) {
   // Same quiet page as unsubscribe.mjs.
   return new Response(
     `<!doctype html><html lang="en"><head><meta charset="utf-8" />` +
@@ -51,7 +81,7 @@ function page({ heading, body }) {
       `.card{max-width:480px;text-align:center;line-height:1.7}` +
       `h1{font-weight:normal;font-size:24px;margin:0 0 12px}` +
       `p{color:#a49d8d;font-size:15px}` +
-      `a{color:#c9a96a}</style></head><body><div class="card">` +
+      `a{color:#c9a96a}</style>${gaScript || ''}</head><body><div class="card">` +
       `<h1>${heading}</h1><p>${body}</p>` +
       `</div></body></html>`,
     { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } }
@@ -62,10 +92,11 @@ async function confirm(sql, token) {
   if (!token) {
     return page({ heading: 'That link doesn’t look right.', body: 'Try the link in the email again.' });
   }
+  const before = (await sql`select confirmed_at from guest_reminders where confirm_token = ${token} limit 1`)[0];
   const rows = await sql`
     update guest_reminders set confirmed_at = coalesce(confirmed_at, now())
     where confirm_token = ${token}
-    returning user_id
+    returning user_id, signup_source, signup_medium, signup_campaign
   `;
   if (!rows.length) {
     return page({
@@ -73,13 +104,17 @@ async function confirm(sql, token) {
       body: 'It may be old. Ask for the reminder again after your next puzzle at <a href="https://sixdegreesofrock.com/daily/">sixdegreesofrock.com/daily</a>.',
     });
   }
+  const row = rows[0];
+  const fresh = !before || !before.confirmed_at;
   return page({
     heading: 'You’re set.',
     body: 'One email each morning when the new 6° puzzle is live, skipped on days you’ve already played. <a href="https://sixdegreesofrock.com/daily/">Play today’s puzzle</a>',
+    gaScript: fresh ? reminderConfirmedGaScript('daily', row) : '',
   });
 }
 
-export async function signUp(sql, { email, guestSessionId, send = sendEmail, now = Date.now() }) {
+export async function signUp(sql, { email, guestSessionId, source, send = sendEmail, now = Date.now() }) {
+  const src = normalizeSignupSource(source);
   const guests = await sql`
     select id from users where guest_session_id = ${guestSessionId} and is_guest = true limit 1
   `;
@@ -112,11 +147,14 @@ export async function signUp(sql, { email, guestSessionId, send = sendEmail, now
   // A new or changed address starts unconfirmed with a fresh link.
   const confirmToken = newToken();
   await sql`
-    insert into guest_reminders (user_id, email, confirm_token, unsubscribe_token, confirm_sent_at)
-    values (${guest.id}, ${email}, ${confirmToken}, ${newToken()}, now())
+    insert into guest_reminders (user_id, email, confirm_token, unsubscribe_token, confirm_sent_at, signup_source, signup_medium, signup_campaign)
+    values (${guest.id}, ${email}, ${confirmToken}, ${newToken()}, now(), ${src.source}, ${src.medium}, ${src.campaign})
     on conflict (user_id) do update set
       email = excluded.email,
       confirm_token = excluded.confirm_token,
+      signup_source = coalesce(nullif(excluded.signup_source, ''), guest_reminders.signup_source),
+      signup_medium = coalesce(nullif(excluded.signup_medium, ''), guest_reminders.signup_medium),
+      signup_campaign = coalesce(nullif(excluded.signup_campaign, ''), guest_reminders.signup_campaign),
       confirmed_at = null,
       confirm_sent_at = now()
   `;
@@ -148,6 +186,7 @@ export default async (req) => {
   try { body = await req.json(); } catch { return badRequest('expected a JSON body'); }
   const email = normalizeEmail(body && body.email);
   const guestSessionId = body && body.guest_session_id;
+  const source = body && body.source;
   // A real-looking address: a dot in the domain, and not one of our own
   // placeholder addresses (guest_…@guest.local, Instagram's).
   const domain = email.split('@')[1] || '';
@@ -161,7 +200,7 @@ export default async (req) => {
 
   try {
     await ensureReminderSchema(sql);
-    const result = await signUp(sql, { email, guestSessionId });
+    const result = await signUp(sql, { email, guestSessionId, source });
     if (result.error) return badRequest(result.error);
     return ok({ status: result.status });
   } catch (err) {

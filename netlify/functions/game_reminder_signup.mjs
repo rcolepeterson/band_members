@@ -31,9 +31,10 @@ import {
   validateGameReminderEmail,
   signUpForGameReminder,
   confirmGameReminder,
+  reminderConfirmedGaScript,
 } from './_game_reminders.mjs';
 
-function page({ title, heading, body }) {
+function page({ title, heading, body, gaScript }) {
   // Same quiet page as unsubscribe.mjs.
   return new Response(
     `<!doctype html><html lang="en"><head><meta charset="utf-8" />` +
@@ -44,7 +45,7 @@ function page({ title, heading, body }) {
       `.card{max-width:480px;text-align:center;line-height:1.7}` +
       `h1{font-weight:normal;font-size:24px;margin:0 0 12px}` +
       `p{color:#a49d8d;font-size:15px}` +
-      `a{color:#c9a96a}</style></head><body><div class="card">` +
+      `a{color:#c9a96a}</style>${gaScript || ''}</head><body><div class="card">` +
       `<h1>${heading}</h1><p>${body}</p>` +
       `</div></body></html>`,
     { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } }
@@ -68,6 +69,7 @@ async function confirm(sql, token) {
     title: 'Reminder — Six Degrees of Rock',
     heading: g.confirmHeading,
     body: g.confirmBody(g.playUrl),
+    gaScript: row.fresh ? reminderConfirmedGaScript(row.game, row) : '',
   });
 }
 
@@ -93,6 +95,7 @@ export default async (req) => {
   try { body = await req.json(); } catch { return badRequest('expected a JSON body'); }
   const email = normalizeEmail(body && body.email);
   const game = body && body.game;
+  const source = body && body.source;
   if (!GAMES[game]) return badRequest('unknown game');
   const emailError = validateGameReminderEmail(email);
   if (!isPlausibleEmail(email) || emailError) {
@@ -102,7 +105,7 @@ export default async (req) => {
 
   try {
     await ensureGameReminderSchema(sql);
-    const result = await signUpForGameReminder(sql, { email, game, send: sendEmail });
+    const result = await signUpForGameReminder(sql, { email, game, source, send: sendEmail });
     if (result.error) return badRequest(result.error);
     return ok({ status: result.status });
   } catch (err) {

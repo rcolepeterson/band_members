@@ -63,6 +63,9 @@ export function ensureReminderSchema(sql) {
           created_at        timestamptz not null default now()
         )
       `;
+      await sql`alter table guest_reminders add column if not exists signup_source text`;
+      await sql`alter table guest_reminders add column if not exists signup_medium text`;
+      await sql`alter table guest_reminders add column if not exists signup_campaign text`;
     })().catch((err) => { schemaReady = null; throw err; });
   }
   return schemaReady;
