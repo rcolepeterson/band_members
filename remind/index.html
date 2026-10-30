@@ -21,6 +21,7 @@
   </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script type="module" src="/scripts/signup-attribution.mjs"></script>
   <title>6° Daily Reminder | Six Degrees of Rock</title>
   <meta name="description" content="A new rock puzzle every morning: connect two famous bands through the musicians they share. Get one email when it's live. Free, no account." />
   <link rel="canonical" href="https://sixdegreesofrock.com/remind/" />
@@ -132,8 +133,12 @@
         status.textContent = text;
         status.classList.toggle('is-error', !!isError);
       }
+      function signupSrc() {
+        try { return (typeof window.signupAttribution === 'function') ? window.signupAttribution() : {}; } catch (e) { return {}; }
+      }
       function track(method) {
-        try { gtag('event', 'reminder_signup', { method: method, where: 'remind_page' }); } catch (e) {}
+        var sa = signupSrc();
+        try { gtag('event', 'reminder_signup', { game: 'daily', method: method, where: 'remind_page', signup_source: sa.source || '', signup_medium: sa.medium || '', signup_campaign: sa.campaign || '' }); } catch (e) {}
       }
 
       // Signed in on this device (same check as the game): one tap, no email.
@@ -191,7 +196,7 @@
         fetch('/api/reminder-signup', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ email: email, guest_session_id: guestSessionId() })
+          body: JSON.stringify({ email: email, guest_session_id: guestSessionId(), source: signupSrc() })
         }).then(function (res) {
           return res.json().catch(function () { return {}; }).then(function (data) {
             if (!res.ok || data.ok === false) throw new Error((data && data.error) || 'failed');
