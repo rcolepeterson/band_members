@@ -83,6 +83,38 @@ export const CONFIRM_RESEND_MS = 60 * 60 * 1000;
 
 const newToken = () => randomBytes(32).toString('base64url');
 
+// Signup attribution ("how did they get here?"): the client sends the
+// landing touch with the signup (see scripts/signup-attribution.mjs).
+// Clamped, never trusted raw: over-long or non-string values become ''.
+function cleanSource(value) {
+  return typeof value === 'string' ? value.trim().slice(0, 128) : '';
+}
+export function normalizeSignupSource(source) {
+  const s = source && typeof source === 'object' ? source : {};
+  return { source: cleanSource(s.source), medium: cleanSource(s.medium), campaign: cleanSource(s.campaign) };
+}
+
+// GA4 on the bare confirm page: the page has no gtag of its own, so this
+// loads it and fires reminder_signup_confirmed. Params are JSON-encoded,
+// never interpolated raw. Callers pass it only on a FRESH confirmation, so
+// a refresh of the confirm page never double-counts.
+export function reminderConfirmedGaScript(game, source) {
+  // Escape < so a hostile source value can never break out of this
+  // <script> block via a literal </script> sequence.
+  const params = JSON.stringify({
+    game,
+    signup_source: (source && source.source) || '',
+    signup_medium: (source && source.medium) || '',
+    signup_campaign: (source && source.campaign) || '',
+  }).replace(/</g, '\\u003c');
+  return `<script async src="https://www.googletagmanager.com/gtag/js?id=G-E2SNSPFHGB"></script>` +
+    `<script>window.dataLayer = window.dataLayer || [];` +
+    `function gtag(){dataLayer.push(arguments);}` +
+    `gtag('js', new Date());` +
+    `gtag('config', 'G-E2SNSPFHGB');` +
+    `gtag('event', 'reminder_signup_confirmed', ${params});</script>`;
+}
+
 // The tables, created on first use. Once per warm instance.
 let schemaReady = null;
 export function ensureGameReminderSchema(sql) {
@@ -100,6 +132,9 @@ export function ensureGameReminderSchema(sql) {
           primary key (email, game)
         )
       `;
+      await sql`alter table game_reminders add column if not exists signup_source text`;
+      await sql`alter table game_reminders add column if not exists signup_medium text`;
+      await sql`alter table game_reminders add column if not exists signup_campaign text`;
       await sql`
         create table if not exists game_reminder_log (
           email         text not null,
@@ -241,7 +276,8 @@ export async function runGameReminders(sql, game, { date = pacificDate(), dryRun
 // A signup asks for confirmation first, so nobody can sign up someone
 // else's address. A new or changed address starts unconfirmed with a
 // fresh link.
-export async function signUpForGameReminder(sql, { email, game, send = defaultSendEmail, now = Date.now() }) {
+export async function signUpForGameReminder(sql, { email, game, source, send = defaultSendEmail, now = Date.now() }) {
+  const src = normalizeSignupSource(source);
   const existing = (await sql`select * from game_reminders where email = ${email} and game = ${game} limit 1`)[0];
   if (existing && existing.confirmed_at) return { status: 'already_on' };
   if (
@@ -253,11 +289,14 @@ export async function signUpForGameReminder(sql, { email, game, send = defaultSe
 
   const confirmToken = newToken();
   await sql`
-    insert into game_reminders (email, game, confirm_token, unsubscribe_token, confirm_sent_at)
-    values (${email}, ${game}, ${confirmToken}, ${newToken()}, now())
+    insert into game_reminders (email, game, confirm_token, unsubscribe_token, confirm_sent_at, signup_source, signup_medium, signup_campaign)
+    values (${email}, ${game}, ${confirmToken}, ${newToken()}, now(), ${src.source}, ${src.medium}, ${src.campaign})
     on conflict (email, game) do update set
       confirm_token = excluded.confirm_token,
       unsubscribe_token = excluded.unsubscribe_token,
+      signup_source = coalesce(nullif(excluded.signup_source, ''), game_reminders.signup_source),
+      signup_medium = coalesce(nullif(excluded.signup_medium, ''), game_reminders.signup_medium),
+      signup_campaign = coalesce(nullif(excluded.signup_campaign, ''), game_reminders.signup_campaign),
       confirmed_at = null,
       confirm_sent_at = now()
   `;
@@ -269,10 +308,13 @@ export async function signUpForGameReminder(sql, { email, game, send = defaultSe
 
 export async function confirmGameReminder(sql, token) {
   if (!token) return null;
+  const before = (await sql`select confirmed_at from game_reminders where confirm_token = ${token} limit 1`)[0];
   const rows = await sql`
     update game_reminders set confirmed_at = coalesce(confirmed_at, now())
     where confirm_token = ${token}
-    returning email, game
+    returning email, game, signup_source, signup_medium, signup_campaign
   `;
-  return (rows && rows[0]) || null;
+  const row = (rows && rows[0]) || null;
+  if (!row) return null;
+  return { ...row, fresh: !before || !before.confirmed_at };
 }
