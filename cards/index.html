@@ -27,6 +27,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
+  <script type="module" src="/scripts/signup-attribution.mjs"></script>
   <link rel="icon" href="data:," />
   <link rel="preconnect" href="https://api.fontshare.com" />
   <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=boska@500&display=swap" />
@@ -1147,6 +1148,9 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           window.gtag('event', name, params);
         } catch (e) {}
       }
+      function signupSrc() {
+        try { return (typeof window.signupAttribution === 'function') ? window.signupAttribution() : {}; } catch (e) { return {}; }
+      }
       function beacon(payload) {
         try {
           payload.anon = ANON_ID;
@@ -1937,19 +1941,21 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           remindEmail.focus();
           return;
         }
+        var src = signupSrc();
         remindSubmit.disabled = true;
         remindSubmit.textContent = 'Sending…';
         fetch('/api/game-reminder-signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email, game: 'cards' })
+          body: JSON.stringify({ email: email, game: 'cards', source: src })
         }).then(function (res) {
           return res.json().catch(function () { return null; }).then(function (data) {
-            if (res.ok && data && data.status === 'check_email') {
+            if (res.ok && data && (data.status === 'check_email' || data.status === 'already_on')) {
               remindDone = true;
-              remindSubmit.textContent = 'Sent ✓';
+              remindSubmit.textContent = data.status === 'already_on' ? 'On the list ✓' : 'Sent ✓';
               remindEmail.disabled = true;
-              showRemindNote('Check your email to confirm — nothing arrives until you tap the link.', false);
+              showRemindNote(data.status === 'already_on' ? 'You’re already on the list ✓ — see you tomorrow morning.' : 'Check your email to confirm — nothing arrives until you tap the link.', false);
+              cardsGa('reminder_signup', { game: 'cards', method: 'game_over', status: data.status, signup_source: src.source || '', signup_medium: src.medium || '', signup_campaign: src.campaign || '' });
             } else {
               remindSubmit.disabled = false;
               remindSubmit.textContent = 'Remind me';
