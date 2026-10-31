@@ -10,13 +10,21 @@
 // design, so the card reads as a card game at a glance — then the result line,
 // stats row, closing band, footer URL. The in-game Download canvas is gone
 // (v15d cut Download), so this function is now the only card renderer.
+//
+// v15f: renders at 1x (1200x630 directly, no supersample, no downscale).
+// Measured 2026-10-30: the 2x gradient fill alone cost 5,143ms of a 5,576ms
+// render (cold handler 5,914ms) — past Facebook's first-scrape patience,
+// which is why fresh shares posted white while Daily/Rawkle (solid
+// backgrounds, ~400ms renders) shared instantly. At 1x the same drawing
+// costs 921ms total with identical layout, colors, and output dimensions;
+// only antialiasing softens slightly. game_share.mjs is untouched (SUPER
+// stays 2 for Daily/Rawkle); this file simply stops using it.
 import { PassThrough } from 'node:stream';
 import * as PImage from 'pureimage';
 
 import {
-  WIDTH, HEIGHT, SUPER, COLORS, FONT_FAMILY,
+  WIDTH, HEIGHT, COLORS, FONT_FAMILY,
   ensureFont, ellipsize,
-  downscale2x,
 } from './game_share.mjs';
 import { parseCardsResultCode, WINNER_NAMES } from '../../scripts/cards-result.mjs';
 
@@ -92,9 +100,9 @@ function drawCardBack(ctx, cx, cy, w, h, angleDeg) {
 
 async function renderCardsCard({ result, host }) {
   if (!ensureFont()) return null;
-  const img = PImage.make(WIDTH * SUPER, HEIGHT * SUPER);
+  // v15f: 1x canvas — same logical drawing, no supersample (see header).
+  const img = PImage.make(WIDTH, HEIGHT);
   const ctx = img.getContext('2d');
-  ctx.scale(SUPER, SUPER);
 
   // Midnight sky: vertical gradient, deep blue up top fading to near-black.
   const sky = ctx.createLinearGradient(0, 0, 0, HEIGHT);
@@ -154,7 +162,8 @@ async function renderCardsCard({ result, host }) {
   ctx.fillRect(0, stripTop, WIDTH, 62);
   centerText(ctx, `Play the card game · ${host}/cards`, 16, stripTop + 39, COLORS.gold);
 
-  const card = downscale2x(img);
+  // v15f: already 1200x630 — no downscale step.
+  const card = img;
   const chunks = [];
   const sink = new PassThrough();
   sink.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
