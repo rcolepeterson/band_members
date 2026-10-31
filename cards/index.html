@@ -27,7 +27,63 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
-  <script type="module" src="/scripts/signup-attribution.mjs"></script>
+  <!-- Signup attribution, classic-script form of the shared module
+       (/scripts/signup-attribution.mjs on the live site): module scripts
+       cannot load in this artifact's private rendering, so the module's
+       logic is carried here verbatim (export keywords removed) to keep
+       the rule identical. Pages call window.signupAttribution() at
+       signup time; handlers guard for its absence so a failure can
+       never break a signup. Rule (last campaign touch wins): UTM params
+       win and overwrite the stored touch; otherwise ?s=1 counts as
+       share/social; otherwise the stored session touch wins; otherwise
+       the referrer host, else empty. -->
+  <script>
+    (function () {
+      var STORE_KEY = 'sdr-signup-source';
+      function clean(value) {
+        if (typeof value !== 'string') return '';
+        return value.trim().slice(0, 128);
+      }
+      function parseSignupAttribution(search, referrer, stored) {
+        try {
+          var q = new URLSearchParams(search || '');
+          var utm = clean(q.get('utm_source'));
+          if (utm) {
+            return { source: utm, medium: clean(q.get('utm_medium')), campaign: clean(q.get('utm_campaign')) };
+          }
+          if (q.get('s') === '1') return { source: 'share', medium: 'social', campaign: '' };
+          if (stored) {
+            var parsed = JSON.parse(stored);
+            if (parsed && typeof parsed.source === 'string') {
+              return { source: clean(parsed.source), medium: clean(parsed.medium), campaign: clean(parsed.campaign) };
+            }
+          }
+          if (referrer) {
+            try {
+              return { source: new URL(referrer).hostname, medium: '', campaign: '' };
+            } catch (e) { /* fall through */ }
+          }
+        } catch (e) { /* fall through */ }
+        return { source: '', medium: '', campaign: '' };
+      }
+      function signupAttribution() {
+        try {
+          var q = new URLSearchParams(window.location.search);
+          if (q.get('utm_source')) {
+            var current = parseSignupAttribution(window.location.search, '', null);
+            try { window.sessionStorage.setItem(STORE_KEY, JSON.stringify(current)); } catch (e) {}
+            return current;
+          }
+          var stored = null;
+          try { stored = window.sessionStorage.getItem(STORE_KEY); } catch (e) {}
+          return parseSignupAttribution(window.location.search, document.referrer, stored);
+        } catch (e) {
+          return { source: '', medium: '', campaign: '' };
+        }
+      }
+      if (typeof window !== 'undefined') window.signupAttribution = signupAttribution;
+    })();
+  </script>
   <link rel="icon" href="data:," />
   <link rel="preconnect" href="https://api.fontshare.com" />
   <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=boska@500&display=swap" />
@@ -1632,9 +1688,9 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         var hand = G.hands[seat];
         var idx = hand.indexOf(card);
         if (idx < 0) return;
-        if (seat === 0) cardsGa('first_move', { game: 'cards' }, 'cards-firstmove-' + cardsSessionId);
         hand.splice(idx, 1);
         G.played.push(G.top.card);
+        if (seat === 0) cardsGa('first_move', { game: 'cards' }, 'cards-firstmove-' + cardsSessionId);
         var viaSet = null;
         if (viaPerson !== null && viaPerson !== undefined) { viaSet = {}; viaSet[viaPerson] = true; }
         G.top = { card: card, asBand: asBand, viaSet: viaSet };
@@ -1663,9 +1719,9 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         var hand = G.hands[seat];
         var idx = hand.indexOf(card);
         if (idx < 0) return;
-        if (seat === 0) cardsGa('first_move', { game: 'cards' }, 'cards-firstmove-' + cardsSessionId);
         hand.splice(idx, 1);
         G.played.push(card);
+        if (seat === 0) cardsGa('first_move', { game: 'cards' }, 'cards-firstmove-' + cardsSessionId);
         session.freeze++; G.freezePlays++; if (seat === 0) G.myFreeze++; renderStats();
         var target = (seat + 1) % 4;
         G.frozenSeat = target;
@@ -1739,6 +1795,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         // v15d: persist the finished result as the overlay opens, so
         // navigating away and coming back restores this exact share page.
         saveLastResult();
+        preloadResultCard(resultCode(lastResult));
         gameoverEl.hidden = false;
       }
 
@@ -1834,6 +1891,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         if (shareBtn) shareBtn.textContent = 'Share result';
         shareFallback.hidden = true;
         shareFallback.value = '';
+        preloadResultCard(record.resultCode);
         gameoverEl.hidden = false;
       }
 
@@ -1862,6 +1920,24 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       }
       function shareUrl(r) {
         return 'https://sixdegreesofrock.com/cards?s=1&r=' + resultCode(r);
+      }
+      /* ---------- preload the result-card image (2026-10-30) ----------
+         Facebook was always the first fetcher of a fresh result code, so
+         its scraper hit the cold, heavy card render and timed out; the
+         failure was then cached as a white preview, and a retry worked
+         only because the render was warm by then. Warming the image
+         here — the moment the game-over overlay renders, before anyone
+         can share — primes the CDN cache (public, s-maxage=604800), so
+         Facebook's later scrape gets the cached image instantly.
+         Fire-and-forget only: never awaited, never gated on, and a
+         failed preload is swallowed silently — it changes nothing
+         about the game. Called only when a result code exists, from
+         gameOver() and restoreGameOver(). */
+      function preloadResultCard(code) {
+        try {
+          if (!code) return;
+          fetch('/api/cards-card?r=' + encodeURIComponent(code)).catch(function () {});
+        } catch (e) {}
       }
       function onShareResult() {
         cardsEvent('share_tapped', {});
