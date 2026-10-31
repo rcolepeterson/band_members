@@ -6,12 +6,6 @@
 [functions]
   # Netlify Functions v2 (ESM, Request/Response signature).
   node_bundler = "esbuild"
-  # Cold pureimage renders (2400x1260 gradient + downscale + PNG encode) can
-  # exceed the 10s default; Facebook's scraper then abandons the first fetch
-  # and caches the failure, which shows as a white preview. 26s is Netlify's
-  # max; this is a cap, not a delay. The game also preloads the card image
-  # at game-over, so the scraper normally hits the CDN cache, never a render.
-  timeout = 26
 
 [functions.og_image]
   # esbuild inlines JavaScript, not binaries, so the font the link-preview card draws
