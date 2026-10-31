@@ -1936,7 +1936,22 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       function preloadResultCard(code) {
         try {
           if (!code) return;
-          fetch('/api/cards-card?r=' + encodeURIComponent(code)).catch(function () {});
+          var url = '/api/cards-card?r=' + encodeURIComponent(code);
+          var retried = false;
+          function attempt() {
+            fetch(url).then(function (res) {
+              if ((!res || !res.ok) && !retried) {
+                retried = true;
+                setTimeout(attempt, 3000);
+              }
+            }).catch(function () {
+              if (!retried) {
+                retried = true;
+                setTimeout(attempt, 3000);
+              }
+            });
+          }
+          attempt();
         } catch (e) {}
       }
       function onShareResult() {
