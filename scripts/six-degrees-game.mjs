@@ -2747,7 +2747,42 @@ function initGameUI() {
         }
       }
     } catch (err) {
-      note.textContent = err.message;
+      // Recovery (Aaron, 2026-11-01): the same race as the give-up path —
+      // the pick landed and completed the run, but a second request hit
+      // the just-ended run and its raw "that run is over" overwrote the
+      // completion flow, stranding the player on a stuck board (Nov 1:
+      // Tool → Slipknot, won in 3 hops, board frozen until refresh).
+      // Never show the raw error: re-fetch the run and paint its real
+      // state — a win opens results, an active run just repaints with
+      // fresh options so the failed pick can be retapped. Display-only:
+      // no GA/server completion events here (the landing pick already
+      // fired them, or the run ended on another device). Practice runs
+      // re-deal on start, so recovery there would swap the puzzle.
+      if (err && err.message === 'that run is over' && !practiceMode) {
+        try {
+          const data = await dailyFetch(practicePath('/api/game-daily/play'), {
+            method: 'POST',
+            body: JSON.stringify({ action: 'start', ...dailyDate() }),
+          });
+          dailyRun = data.run;
+          dailyOptions = data.options || [];
+          if (dailyRun.status === 'complete') {
+            paintDailyBoard(card);
+            openDailyResults({ won: true });
+          } else if (dailyRun.status === 'given_up') {
+            paintDailyBoard(card, null, null);
+            openDailyResults({ won: false });
+          } else {
+            paintDailyBoard(card);
+          }
+        } catch {
+          note.textContent = 'That run already ended. Reload the page to see the chain and share it.';
+        }
+      } else {
+        note.textContent = err && err.message === 'that run is over'
+          ? 'That run already ended. Reload the page to see the chain and share it.'
+          : (err && err.message) || 'Could not make that pick.';
+      }
       optsBox.classList.remove('is-busy');
       if (btn) btn.classList.remove('is-pending');
       card.querySelectorAll('.game-daily-option').forEach((b) => { b.disabled = false; });
