@@ -135,8 +135,9 @@ test('practice mode (?practice=1) runs on the Solo endpoint, for fun only', () =
   assert.ok(src.includes("return practiceMode ? '/api/game-solo/play' : dailyPath;"));
   assert.ok(src.includes("{ action: 'start', fresh: true, famous: true }"), 'fresh famous pair each start');
   // Daily calls still name the daily endpoint, so the daily is untouched without the flag.
-  // 7th call is the give-up recovery re-fetch (Aaron, 2026-10-28).
-  assert.equal((src.match(/dailyFetch\(practicePath\('\/api\/game-daily\/play'\)/g) || []).length, 7);
+  // 7th call is the give-up recovery re-fetch (Aaron, 2026-10-28);
+  // 8th is the pick recovery re-fetch (Aaron, 2026-11-01).
+  assert.equal((src.match(/dailyFetch\(practicePath\('\/api\/game-daily\/play'\)/g) || []).length, 8);
 });
 
 test('giving up is not a hint: separate link, one confirm, honest copy', () => {
