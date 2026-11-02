@@ -70,6 +70,212 @@ import {
 import { polygonLayout } from './polygon-layout.mjs';
 
 // ---------------------------------------------------------------------------
+// GOVERNOR SECTION START — client governor layer (?governor=1).
+//
+// The governor is a LAYER, not a rewrite: with the flag off, every function
+// below is inert and the full-corpus path runs exactly as before. With the
+// flag on, the page never downloads /api/bands; it fetches one server-computed
+// view at a time (/api/graph-view) plus names (/api/graph-search), single
+// cards (/api/graph-card) and the group list (/api/graph-groups).
+//
+// The helpers in this section are deliberately self-contained (no module
+// state, no DOM, no imports beyond literals): tests/graph-governor-client.
+// test.mjs extracts this section and executes it in Node, because this
+// module's sigma/graphology imports cannot run under node --test.
+//
+// GOVERNOR SECTION START / END markers delimit exactly that testable block.
+// ---------------------------------------------------------------------------
+// GOVERNOR-SECTION-START
+
+// The governor is OFF by default. ONE-LINE FLIP: change GOVERNOR_DEFAULT to
+// true to make governor the default after Aaron's verification.
+export const GOVERNOR_DEFAULT = false;
+
+// ?governor=1 (or =true) enables governor mode. =0, =false, absent, or any
+// other value disables it — except that an absent value follows
+// GOVERNOR_DEFAULT, so flipping the default flips the no-flag behaviour too.
+export function governorFromSearch(search = '', defaultOn = GOVERNOR_DEFAULT) {
+  const raw = String(search || '');
+  const query = raw.startsWith('?') ? raw.slice(1) : raw;
+  let value = null;
+  try {
+    value = new URLSearchParams(query).get('governor');
+  } catch (e) {
+    return false;
+  }
+  if (value == null) return Boolean(defaultOn);
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === '1' || normalized === 'true') return true;
+  return false;
+}
+
+// Landing anchor for governor boot, mirroring resolveAnchor's parameter
+// order (node, band, member, person, anchor). The page cannot know a node's
+// type before its first fetch, so the hop count comes from the parameter
+// that named it: ?band= opens at 1 hop (band + members only, matching
+// initialHopsForAnchor for a band); every other form opens at 2 hops (the
+// member default, and the default anchor Aaron McRae is a member). A
+// ?node=/?anchor= link to a band therefore opens one degree wider than the
+// local path would; the module corrects later navigation from the view's
+// own anchor type.
+export function governorLandingParams(search = '') {
+  const raw = String(search || '');
+  const query = raw.startsWith('?') ? raw.slice(1) : raw;
+  let params = null;
+  try {
+    params = new URLSearchParams(query);
+  } catch (e) {
+    params = null;
+  }
+  const order = ['node', 'band', 'member', 'person', 'anchor'];
+  if (params) {
+    for (const param of order) {
+      const value = params.get(param);
+      if (value && String(value).trim()) {
+        return { anchor: String(value).trim(), hops: param === 'band' ? 1 : 2, param };
+      }
+    }
+  }
+  return { anchor: 'Aaron McRae', hops: 2, param: null };
+}
+
+export function governorViewUrl(anchorId, hops, maxNodes, satelliteCap = 7) {
+  return `/api/graph-view?anchor=${encodeURIComponent(anchorId)}` +
+    `&hops=${encodeURIComponent(hops)}&maxNodes=${encodeURIComponent(maxNodes)}` +
+    `&satelliteCap=${encodeURIComponent(satelliteCap)}`;
+}
+
+export function governorSearchUrl(query, limit = 20) {
+  return `/api/graph-search?q=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`;
+}
+
+export function governorCardUrl(type, id) {
+  return `/api/graph-card?type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`;
+}
+
+export function governorGroupsUrl() {
+  return '/api/graph-groups';
+}
+
+// Expand parameter derivation, mirroring expand() exactly: one more degree
+// AND a bigger budget, each capped, so expanding stays a series of readable
+// steps rather than an escape hatch to the whole corpus.
+export function governorExpandParams({
+  maxHops,
+  maxNodes,
+  expandMaxHops = 6,
+  expandMaxNodes = 400,
+  openingMaxNodes = 60,
+} = {}) {
+  const nextHops = Math.min(maxHops + 1, expandMaxHops);
+  const nextNodes = Math.min(maxNodes + openingMaxNodes, expandMaxNodes);
+  return { nextHops, nextNodes, changed: nextHops !== maxHops || nextNodes !== maxNodes };
+}
+
+// Other-groups math for governor mode, where the client never sees the full
+// corpus. The groups endpoint returns ALL groups including the current one,
+// so the client finds the current group and treats the rest as "other".
+//
+// Current-group rule, in order: (1) the group whose anchorId is the current
+// anchor; (2) the group whose anchorId is one of the view's node ids;
+// (3) the group whose anchorId is the view's own anchor. If none matches,
+// the view payload's currentComponentNodeCount (when the server supplies
+// it) still pins the other-count as totalNodes minus that count, with all
+// listed groups treated as other. If neither is available the row is hidden
+// (showRow false) rather than showing a wrong count — a capped view may
+// legitimately not contain the group's representative node.
+//
+// Tour order is the groups endpoint's own order (nodeCount desc, anchorId
+// asc): the next group is the first other group not yet visited this tour;
+// once every other group has been visited the tour restarts (restarted
+// true) instead of going quiet.
+export function governorOtherGroups({
+  totalNodes,
+  groups = [],
+  viewNodeIds = [],
+  currentAnchorId = null,
+  viewAnchorId = null,
+  currentComponentNodeCount = null,
+  visitedAnchorIds = [],
+} = {}) {
+  const list = Array.isArray(groups) ? groups : [];
+  const inView = new Set(viewNodeIds);
+  const visited = new Set(visitedAnchorIds);
+  const matched =
+    list.find(group => group && group.anchorId === currentAnchorId) ||
+    list.find(group => group && inView.has(group.anchorId)) ||
+    (viewAnchorId ? list.find(group => group && group.anchorId === viewAnchorId) : undefined) ||
+    null;
+  const others = matched ? list.filter(group => group !== matched) : list.slice();
+  const currentCount = matched
+    ? matched.nodeCount
+    : (currentComponentNodeCount != null ? currentComponentNodeCount : null);
+  const showRow = Boolean(matched || currentCount != null);
+  const otherNodeCount = matched
+    ? others.reduce((sum, group) => sum + (Number(group.nodeCount) || 0), 0)
+    : (currentCount != null ? totalNodes - currentCount : 0);
+  let unvisited = others.filter(group => group && !visited.has(group.anchorId));
+  let restarted = false;
+  if (showRow && !unvisited.length && others.length) {
+    restarted = true;
+    unvisited = others;
+  }
+  return {
+    current: matched,
+    others,
+    otherNodeCount,
+    otherGroupCount: others.length,
+    showRow,
+    restarted,
+    nextAnchorId: showRow && unvisited.length ? unvisited[0].anchorId : null,
+  };
+}
+
+// Chrome counts fragment for a governor view: the view's node count against
+// the SERVER's totalNodes — never the view length as the total, which would
+// claim the visible constellation is the whole universe.
+export function governorChromeText({ viewNodeCount, totalNodes, hops }) {
+  return `${viewNodeCount} of ${totalNodes} nodes in view, ` +
+    `${hops} ${hops === 1 ? 'degree' : 'degrees'} out`;
+}
+
+// Payload-bound assertion: a governor view carries only its own nodes,
+// links, positions, depths and frontier — never corpus fields. This tests
+// the SHAPE the client accepts, not a live server.
+export function governorViewPayloadOk(view) {
+  if (!view || typeof view !== 'object') return false;
+  // An anchor view always contains at least the anchor itself; an empty
+  // node list is the server's unknown-anchor shape, which the endpoint
+  // maps to 404 — it must never render as an empty constellation.
+  if (!Array.isArray(view.nodes) || !view.nodes.length) return false;
+  if (!Array.isArray(view.links)) return false;
+  if (!Array.isArray(view.frontier)) return false;
+  if (typeof view.positions !== 'object' || view.positions == null) return false;
+  if (typeof view.depths !== 'object' || view.depths == null) return false;
+  if (typeof view.anchor !== 'string' || !view.anchor) return false;
+  if (!Number.isFinite(Number(view.totalNodes))) return false;
+  // Corpus fields must never ride along with a view payload.
+  if ('bands' in view || 'allNodes' in view || 'master' in view || 'corpus' in view) return false;
+  return true;
+}
+
+// Endpoint failure taxonomy for governor mode. There is no local corpus to
+// fall back to, so every failure class lands in the same non-blocking retry
+// state — never a blank or broken graph, never a silent wrong corpus.
+export function governorFailureKind(status) {
+  if (status === 202) return 'computing';
+  if (status === 404) return 'not-found';
+  return 'retry';
+}
+
+export function governorRetryMessage(kind) {
+  if (kind === 'not-found') return 'Not in the graph yet — tap to retry.';
+  return 'Constellation loading — tap to retry.';
+}
+
+// GOVERNOR-SECTION-END
+
+// ---------------------------------------------------------------------------
 // Visual language
 // ---------------------------------------------------------------------------
 
@@ -1225,6 +1431,19 @@ export function initSigmaExplorer({
     visitedComponentKeys: new Set(),
     // The anchor "Show next group" jumps to, recomputed on every render.
     nextGroupAnchor: null,
+    // GOVERNOR (flag-gated layer; inert when false): the client holds one
+    // server view at a time, never the corpus. governorTotalNodes is the
+    // server's universe size for chrome counts; governorGroups is the cached
+    // /api/graph-groups list; governorVisitedGroupAnchors tours it.
+    governor: governorFromSearch(search),
+    governorTotalNodes: null,
+    governorCurrentComponentNodeCount: null,
+    governorGroups: [],
+    governorVisitedGroupAnchors: new Set(),
+    governorFailed: false,
+    governorPending: null,
+    governorSearchTimer: null,
+    governorFiltersDisabled: false,
   };
 
   state.homeStarId = homeStarId;
@@ -1758,8 +1977,14 @@ export function initSigmaExplorer({
     const view = state.view;
     const anchor = masterById.get(state.anchorId);
     const kindWord = anchor && anchor.type === 'band' ? 'band' : 'musician';
+    // GOVERNOR: chrome counts use the server's totalNodes, never the view
+    // length as the total (the view IS master in governor mode, so the old
+    // master.nodes.length read would claim the constellation is the universe).
+    const chromeTotal = state.governor && state.governorTotalNodes != null
+      ? state.governorTotalNodes
+      : master.nodes.length;
     contextEl.innerHTML = `Centered on <strong>${escapeHtml(state.anchorId)}</strong> — ` +
-      `${view.nodes.length} of ${master.nodes.length} nodes in view, ` +
+      `${view.nodes.length} of ${chromeTotal} nodes in view, ` +
       `${state.maxHops} ${state.maxHops === 1 ? 'degree' : 'degrees'} out from this ${kindWord}.`;
 
     const remaining = view.frontier.length;
@@ -1776,6 +2001,37 @@ export function initSigmaExplorer({
     // invisible forever, no matter how far this expands -- so that has to be
     // said explicitly rather than left for "frontier: none" to imply falsely
     // that the view is complete.
+    // GOVERNOR: other groups come from the cached /api/graph-groups list
+    // (all groups including the current one), not from locally computed
+    // components — the client never holds the corpus to compute them from.
+    // See governorOtherGroups() for the current-group rule and tour order.
+    if (state.governor) {
+      const grouped = governorOtherGroups({
+        totalNodes: chromeTotal,
+        groups: state.governorGroups,
+        viewNodeIds: view.nodes.map(node => node.id),
+        currentAnchorId: state.anchorId,
+        viewAnchorId: state.view && state.view.anchorId ? state.view.anchorId : null,
+        currentComponentNodeCount: state.governorCurrentComponentNodeCount,
+        visitedAnchorIds: [...state.governorVisitedGroupAnchors],
+      });
+      if (grouped.showRow && grouped.others.length) {
+        if (grouped.current) state.governorVisitedGroupAnchors.add(grouped.current.anchorId);
+        if (grouped.restarted && grouped.current) {
+          state.governorVisitedGroupAnchors = new Set([grouped.current.anchorId]);
+        }
+        state.nextGroupAnchor = grouped.nextAnchorId;
+        otherGroupsTextEl.textContent =
+          `${grouped.otherNodeCount} more ${grouped.otherNodeCount === 1 ? 'node' : 'nodes'} in ` +
+          `${grouped.otherGroupCount} separate ${grouped.otherGroupCount === 1 ? 'group' : 'groups'} — ` +
+          `no shared members with what's on screen.`;
+        otherGroupsBtn.textContent = grouped.otherGroupCount === 1 ? 'Show that group' : 'Show next group';
+        otherGroupsEl.hidden = false;
+      } else {
+        state.nextGroupAnchor = null;
+        otherGroupsEl.hidden = true;
+      }
+    } else {
     const currentComponent = components.find(ids => ids.includes(state.anchorId));
     const currentKey = currentComponent ? componentKey(currentComponent) : null;
     if (currentKey) state.visitedComponentKeys.add(currentKey);
@@ -1807,6 +2063,7 @@ export function initSigmaExplorer({
       state.nextGroupAnchor = null;
       otherGroupsEl.hidden = true;
     }
+    } // end non-governor other-groups branch
 
     if (homeStarId) {
       homeLabelEl.textContent =
@@ -2111,6 +2368,9 @@ export function initSigmaExplorer({
   function exploreFor(rawQuery) {
     const query = normalizeAnchorKey(rawQuery);
     if (!query) return { ok: false, reason: 'empty' };
+    // GOVERNOR: search resolves through /api/graph-search and the view
+    // through /api/graph-view; the local corpus below does not exist.
+    if (state.governor) return governorExploreFor(rawQuery);
     // Exact match only, diacritic-insensitive: "husker du" finds "Hüsker Dü".
     // No substring fallback — typing a band name that isn't in the tree (e.g.
     // "sugar") must not redirect to an unrelated node that merely contains the
@@ -2145,6 +2405,10 @@ export function initSigmaExplorer({
   }
 
   function expand() {
+    // GOVERNOR: Expand is another /api/graph-view fetch (hops+1, bigger
+    // budget, both capped) — never a local traversal of a corpus that is
+    // not on the phone.
+    if (state.governor) { void governorExpand(); return; }
     // The deliberate "explore beyond this view" step. Raising the node budget
     // alone does nothing once a view has exhausted its hop radius, so this
     // pushes the horizon out one degree AND raises the budget -- both capped,
@@ -2158,6 +2422,393 @@ export function initSigmaExplorer({
     if (nextHops === state.maxHops && nextNodes === state.maxNodes) return;
     state.maxHops = nextHops;
     renderNeighborhood({ anchorId: state.anchorId, maxNodes: nextNodes, animate: false });
+  }
+
+  // -- governor layer -------------------------------------------------------
+  //
+  // Flag-gated; every function here returns early or is never called when
+  // state.governor is false, so the local path above is untouched. In
+  // governor mode there is NO local corpus: search, travel, Expand and
+  // Show-next-group all fetch from the endpoints, and any failure lands in
+  // the non-blocking retry state (governorShowRetry) — never a blank graph
+  // and never a silent fetch of /api/bands, which would defeat the payload
+  // bound the governor exists to enforce.
+  //
+  // setGovernorView deliberately re-states the node/edge drawing loop from
+  // renderNeighborhood instead of refactoring it into a shared helper:
+  // the non-governor render path must stay byte-identical in behaviour
+  // (1–2° layout lock), and the shared pieces — Sigma setup, the stage,
+  // clusterTouringSatellites, resolveGraphCollisions, the camera fit — ARE
+  // reused. Only the position source differs (server positions, not a local
+  // layout), and the post-passes run in exactly the local order: cluster
+  // (band anchors only) before drawing, collisions after drawing.
+  //
+  // Roles/kinds in governor views come from the server, which computed them
+  // against the full corpus before sending the view; the local computation
+  // from view links is only a fallback for views that lack them.
+
+  function governorShowRetry(pending, status) {
+    state.governorFailed = true;
+    state.governorPending = pending || null;
+    const kind = governorFailureKind(status == null ? null : status);
+    contextEl.textContent = governorRetryMessage(kind);
+    frontierEl.textContent = 'Tap the constellation to retry.';
+    expandBtn.disabled = true;
+    expandBtn.setAttribute('aria-disabled', 'true');
+  }
+
+  async function governorLoadView({ anchorId, hops, maxNodes, animate = true }) {
+    const pending = { kind: 'view', anchorId, hops, maxNodes, animate };
+    let response = null;
+    try {
+      response = await fetch(
+        governorViewUrl(anchorId, hops, maxNodes, NEIGHBORHOOD_BUDGET.SATELLITE_CAP),
+        { signal: AbortSignal.timeout(8000) }
+      );
+    } catch (e) {
+      governorShowRetry(pending, null);
+      return false;
+    }
+    if (!response.ok || response.status === 202) {
+      governorShowRetry(pending, response.status);
+      return false;
+    }
+    let view = null;
+    try {
+      view = await response.json();
+    } catch (e) {
+      governorShowRetry(pending, null);
+      return false;
+    }
+    if (!view || view.ok === false || !governorViewPayloadOk(view)) {
+      governorShowRetry(pending, response.status);
+      return false;
+    }
+    return setGovernorView(view, { animate });
+  }
+
+  function governorRetry() {
+    const pending = state.governorPending;
+    if (!pending) return;
+    if (pending.kind === 'view') return governorLoadView(pending);
+  }
+
+  function governorHopsForAnchor(anchorId, typeHint) {
+    try {
+      if (masterById.has(anchorId)) return initialHopsForAnchor(anchorId);
+    } catch (e) {}
+    return typeHint === 'band' ? 1 : NEIGHBORHOOD_BUDGET.MAX_HOPS;
+  }
+
+  function governorRefreshGroups() {
+    fetch(governorGroupsUrl(), { signal: AbortSignal.timeout(8000) })
+      .then(response => {
+        if (!response.ok) return null;
+        return response.json();
+      })
+      .then(data => {
+        if (data && Array.isArray(data.groups)) {
+          state.governorGroups = data.groups;
+          if (state.view) updateChrome();
+        }
+      })
+      .catch(() => {
+        // Groups are advisory: a failed groups fetch hides the other-groups
+        // row (updateChrome's showRow false) rather than showing a count.
+      });
+  }
+
+  function setGovernorView(view, { groups, animate = true } = {}) {
+    if (!governorViewPayloadOk(view)) {
+      governorShowRetry({
+        kind: 'view',
+        anchorId: (view && view.anchor) || state.anchorId,
+        hops: (view && view.hops) || state.maxHops,
+        maxNodes: (view && view.maxNodes) || state.maxNodes,
+        animate,
+      }, null);
+      return false;
+    }
+    const anchorId = view.anchor;
+    const hops = view.hops != null ? view.hops : state.maxHops;
+
+    // Depths and positions arrive as plain objects; the local path uses Maps.
+    const depthsMap = new Map();
+    Object.entries(view.depths || {}).forEach(([id, hop]) => depthsMap.set(id, Number(hop)));
+    const nodes = view.nodes.map(node => {
+      const hop = depthsMap.has(node.id) ? depthsMap.get(node.id)
+        : (typeof node.hop === 'number' ? node.hop : 0);
+      depthsMap.set(node.id, hop);
+      return { ...node, hop };
+    });
+    const links = Array.isArray(view.links) ? view.links : [];
+    const positions = new Map();
+    Object.entries(view.positions || {}).forEach(([id, point]) => {
+      positions.set(id, {
+        x: Number(point && point.x) || 0,
+        y: Number(point && point.y) || 0,
+        hop: depthsMap.get(id) || 0,
+      });
+    });
+    nodes.forEach(node => {
+      if (!positions.has(node.id)) positions.set(node.id, { x: 0, y: 0, hop: node.hop || 0 });
+    });
+
+    // Build the working graph FROM THE VIEW ONLY — never the corpus.
+    master = { nodes, links };
+    adjacency = buildAdjacency(nodes, links);
+    masterById = new Map(nodes.map(node => [node.id, node]));
+    bandNames = nodes.filter(node => node.type === 'band').map(node => node.id);
+    components = getConnectedComponents(nodes, links, adjacency);
+    state.visitedComponentKeys = new Set();
+    state.governorTotalNodes = Number(view.totalNodes);
+    state.governorCurrentComponentNodeCount = Number.isFinite(Number(view.currentComponentNodeCount))
+      ? Number(view.currentComponentNodeCount)
+      : null;
+    if (Array.isArray(groups)) state.governorGroups = groups;
+    else if (!state.governorGroups.length) governorRefreshGroups();
+
+    const anchorNode = masterById.get(anchorId);
+    const anchorIsBand = anchorNode && anchorNode.type === 'band';
+    if (anchorIsBand) {
+      try {
+        clusterTouringSatellites(positions, links, nodes, depthsMap, anchorId);
+      } catch (e) {
+        console.warn('Satellite clustering skipped:', e);
+      }
+    }
+
+    // Draw loop, same shape as renderNeighborhood's (see the block comment
+    // above for why it is re-stated rather than shared). One deliberate
+    // difference: the server already attached role/kind computed from the
+    // FULL corpus, which is more correct than anything recomputable from
+    // view links alone — so server values win when present, and the local
+    // computation is only the fallback for a view that lacks them.
+    viewGraph.clear();
+    nodes.forEach(node => {
+      const point = positions.get(node.id) || { x: 0, y: 0, hop: node.hop || 0 };
+      const kind =
+        node.id === homeStarId
+          ? NODE_KINDS.HOME_STAR
+          : (node.kind || classifyNode(masterById.get(node.id) || node, { adjacency, links: master.links }));
+      const style = KIND_STYLE[kind] || KIND_STYLE[NODE_KINDS.PLANET];
+      const role = node.role || roleForNode(masterById.get(node.id) || node, {
+        anchorId,
+        links: master.links,
+      });
+      const hubShrink =
+        anchorIsBand &&
+        node.id !== anchorId &&
+        node.type !== 'band' &&
+        style.size >= KIND_STYLE[NODE_KINDS.CONSTELLATION].size;
+      const cappedGrow = node.hasMoreSatellites && !hubShrink;
+      const nodeSize = hubShrink
+        ? KIND_STYLE[NODE_KINDS.PLANET].size
+        : cappedGrow
+          ? KIND_STYLE[NODE_KINDS.CONSTELLATION].size
+          : style.size;
+      const masterNode = masterById.get(node.id);
+      const isBandNode = (masterNode && masterNode.type === 'band') || node.type === 'band';
+      const nodeColor = isBandNode ? '#ffb454' : '#27b8ff';
+      const roleSize = !isBandNode
+        ? (role === MEMBERSHIP_ROLES.FOUNDER
+            ? KIND_STYLE[NODE_KINDS.CONSTELLATION].size
+            : role === MEMBERSHIP_ROLES.TOURING
+              ? KIND_STYLE[NODE_KINDS.MOON].size
+              : KIND_STYLE[NODE_KINDS.PLANET].size)
+        : nodeSize;
+      viewGraph.addNode(node.id, {
+        label: (() => {
+          const master = masterById.get(node.id);
+          if (master && master.type === 'band' && master.name && master.id !== master.name) return master.id;
+          return nodeLabel(node);
+        })(),
+        x: point.x,
+        y: point.y,
+        hop: point.hop,
+        kind,
+        role,
+        type: kind === NODE_KINDS.HOME_STAR ? NODE_TYPES.SOLID : nodeTypeForRole(role),
+        entityType: node.type,
+        size: roleSize,
+        color: nodeColor,
+      });
+    });
+    links.forEach(link => {
+      const [source, target] = linkEndpoints(link);
+      if (!canRenderEdge(viewGraph, source, target)) return;
+      viewGraph.addEdge(source, target, {
+        size: 1,
+        relation: link.relation || 'member',
+        weight: Number(link.weight || 1),
+        role: roleFromMembership(link),
+      });
+    });
+
+    try {
+      resolveGraphCollisions(viewGraph, anchorId);
+    } catch (e) {
+      console.warn('Graph collision cleanup skipped:', e);
+    }
+
+    state.layoutExtent = layoutExtent(positions);
+    applySizeScale(nodes.length);
+    state.anchorId = anchorId;
+    state.view = {
+      nodes,
+      links,
+      depths: depthsMap,
+      frontier: Array.isArray(view.frontier) ? view.frontier : [],
+      truncated: Boolean(view.truncated),
+      anchorId,
+    };
+    state.maxNodes = view.maxNodes != null ? view.maxNodes : state.maxNodes;
+    state.maxHops = hops;
+    if (!state.openingAnchorId) state.openingAnchorId = anchorId;
+    state.governorFailed = false;
+    state.governorPending = null;
+
+    // Governor degradation, stated rather than silent: scene, genre and
+    // Recently-added filter client-side on the full corpus, which governor
+    // mode deliberately does not download. The controls are disabled (the
+    // setGraph guard below is the backstop for any other path that tries).
+    if (!state.governorFiltersDisabled) {
+      state.governorFiltersDisabled = true;
+      const scene = doc.querySelector('#scene-filter');
+      if (scene) scene.disabled = true;
+      const genre = doc.querySelector('#genre-filter');
+      if (genre) genre.disabled = true;
+      const recentBtn = filterPanel.querySelector('[data-filter-action="recent"]');
+      if (recentBtn) recentBtn.disabled = true;
+    }
+
+    clearHighlight();
+    updateChrome();
+    const fit = landingFitState();
+    const fitState = fit
+      ? { x: fit.x, y: fit.y + cameraOffsetY(fit.ratio), ratio: fit.ratio, angle: 0 }
+      : { x: 0.5, y: 0.5 + cameraOffsetY(fitRatio()), ratio: fitRatio(), angle: 0 };
+    if (animate) {
+      const camera = renderer.getCamera();
+      if (typeof camera.animate === 'function') camera.animate(fitState, { duration: 520 }, positionOverlays);
+      else camera.setState(fitState);
+      positionOverlays();
+    } else {
+      renderer.getCamera().setState(fitState);
+      positionOverlays();
+    }
+    return true;
+  }
+
+  async function governorExploreFor(rawQuery) {
+    const query = normalizeAnchorKey(rawQuery);
+    if (!query) return { ok: false, reason: 'empty' };
+    let results = null;
+    try {
+      const response = await fetch(governorSearchUrl(rawQuery), { signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error(`graph-search ${response.status}`);
+      const data = await response.json();
+      results = data && Array.isArray(data.results) ? data.results : [];
+    } catch (e) {
+      contextEl.innerHTML = 'Search is unavailable right now — try again in a moment.';
+      hideSuggestions();
+      return { ok: false, reason: 'search-unavailable' };
+    }
+    // Exact match only, diacritic-insensitive, as in the local path: no
+    // substring fallback to an unrelated node that merely contains the text.
+    const foldedQuery = foldDiacritics(query);
+    const match = results.find(result =>
+      foldDiacritics(normalizeAnchorKey(result.id)) === foldedQuery ||
+      foldDiacritics(normalizeAnchorKey(result.name)) === foldedQuery
+    );
+    if (!match) {
+      contextEl.innerHTML =
+        `No match for <strong>${escapeHtml(rawQuery)}</strong> in the tree yet.`;
+      stage.dispatchEvent(
+        new CustomEvent('rbft:sigma-search-miss', { bubbles: true, detail: { query: rawQuery } })
+      );
+      return { ok: false, reason: 'not-found' };
+    }
+    state.anchorSource = 'requested';
+    // INTEGRATION (governor v1): search results carry Neon uuids in `id`,
+    // and /api/graph-view resolves a uuid anchor server-side to its graph
+    // display id (see _graph_view.mjs resolveAnchorId), returning that
+    // display id as view.anchor. Passing the uuid — not the plain name —
+    // is what makes colliding same-name bands addressable: a plain name
+    // cannot address a city-suffixed display id and would 404 into the
+    // retry state instead of landing on the wrong twin.
+    const hops = governorHopsForAnchor(match.id || match.name, match.type);
+    const moved = await governorLoadView({
+      anchorId: match.id || match.name,
+      hops,
+      maxNodes: NEIGHBORHOOD_BUDGET.MAX_NODES,
+      animate: true,
+    });
+    // state.anchorId is now the server-resolved display id (view.anchor),
+    // which is what the view graph and the card actually key on.
+    const resolvedId = state.anchorId;
+    stage.dispatchEvent(
+      new CustomEvent('rbft:sigma-travel', { bubbles: true, detail: { anchorId: resolvedId } })
+    );
+    if (moved) highlightFrom(resolvedId);
+    return { ok: true, anchorId: resolvedId };
+  }
+
+  async function governorTravelTo(node) {
+    state.anchorSource = 'requested';
+    let typeHint = null;
+    try {
+      if (viewGraph.hasNode(node)) typeHint = viewGraph.getNodeAttribute(node, 'entityType');
+    } catch (e) {}
+    const hops = governorHopsForAnchor(node, typeHint);
+    const moved = await governorLoadView({
+      anchorId: node,
+      hops,
+      maxNodes: NEIGHBORHOOD_BUDGET.MAX_NODES,
+      animate: true,
+    });
+    stage.dispatchEvent(
+      new CustomEvent('rbft:sigma-travel', { bubbles: true, detail: { anchorId: node } })
+    );
+    if (moved) highlightFrom(node);
+  }
+
+  async function governorExpand() {
+    const { nextHops, nextNodes, changed } = governorExpandParams({
+      maxHops: state.maxHops,
+      maxNodes: state.maxNodes,
+    });
+    if (!changed) return;
+    state.maxHops = nextHops;
+    state.maxNodes = nextNodes;
+    await governorLoadView({
+      anchorId: state.anchorId,
+      hops: nextHops,
+      maxNodes: nextNodes,
+      animate: false,
+    });
+  }
+
+  async function governorGoHome(home) {
+    const hops = governorHopsForAnchor(home, null);
+    await governorLoadView({
+      anchorId: home,
+      hops,
+      maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
+      animate: true,
+    });
+  }
+
+  async function showNextGovernorGroup() {
+    const target = state.nextGroupAnchor;
+    if (!target) return;
+    const hops = governorHopsForAnchor(target, null);
+    await governorLoadView({
+      anchorId: target,
+      hops,
+      maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
+      animate: true,
+    });
   }
 
   // -- wiring ---------------------------------------------------------------
@@ -2180,6 +2831,8 @@ export function initSigmaExplorer({
       highlightFrom(node);
       return;
     }
+    // GOVERNOR: travel is a /api/graph-view fetch for the tapped node.
+    if (state.governor) { void governorTravelTo(node); return; }
     state.anchorSource = 'requested';
     state.maxHops = initialHopsForAnchor(node);
     const moved = renderNeighborhood({
@@ -2487,6 +3140,26 @@ export function initSigmaExplorer({
       hideSuggestions();
       return;
     }
+    // GOVERNOR: suggestions come from /api/graph-search (debounced), not
+    // from the local name lists — there is no corpus on the phone to rank.
+    if (state.governor) {
+      clearTimeout(state.governorSearchTimer);
+      state.governorSearchTimer = setTimeout(() => {
+        fetch(governorSearchUrl(value), { signal: AbortSignal.timeout(8000) })
+          .then(response => {
+            if (!response.ok) throw new Error(`graph-search ${response.status}`);
+            return response.json();
+          })
+          .then(data => {
+            const names = (data && Array.isArray(data.results) ? data.results : [])
+              .map(result => result.name || result.id)
+              .filter(Boolean);
+            renderSuggestions(names.slice(0, MAX_TYPEAHEAD_SUGGESTIONS));
+          })
+          .catch(() => hideSuggestions());
+      }, 200);
+      return;
+    }
     // Filter-as-you-type: the suggestion list only holds 800 of 6,245 bands,
     // so a static alphabetical slice hides N-Z entirely. Rebuild the options
     // from the query so "weezer" always offers Weezer, "nirv" offers Nirvana.
@@ -2551,7 +3224,10 @@ export function initSigmaExplorer({
     // "start over" means the band in that link -- sending them to the project's
     // default anchor instead would drop them somewhere they have never been.
     const home = state.openingAnchorId || homeStarId || NEIGHBORHOOD_BUDGET.DEFAULT_ANCHOR;
-    renderNeighborhood({
+    // GOVERNOR: Reset re-fetches the opening view instead of traversing
+    // locally (the travel event below is shared by both paths).
+    if (state.governor) void governorGoHome(home);
+    else renderNeighborhood({
       anchorId: home,
       maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
       animate: true,
@@ -2750,12 +3426,22 @@ export function initSigmaExplorer({
   // Reuses the exact same anchor-and-BFS render path a node click uses --
   // rendering every group at once is the bigger change this defers.
   otherGroupsBtn.addEventListener('click', () => {
+    // GOVERNOR: the next group comes from the cached groups list and its
+    // view from /api/graph-view — same button, same tour semantics.
+    if (state.governor) { void showNextGovernorGroup(); return; }
     if (!state.nextGroupAnchor) return;
     renderNeighborhood({
       anchorId: state.nextGroupAnchor,
       maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
       animate: true,
     });
+  });
+
+  // GOVERNOR retry: while a view fetch has failed, tapping the (empty)
+  // constellation retries the pending fetch. Gated on governorFailed, so
+  // this listener is inert in the local path.
+  canvasHost.addEventListener('click', () => {
+    if (state.governor && state.governorFailed) void governorRetry();
   });
 
   // Escape closes the popover, and so does a press anywhere else -- without
@@ -2819,6 +3505,28 @@ export function initSigmaExplorer({
    * left, so a filtered view still opens somewhere meaningful instead of nowhere.
    */
   function setGraph(next) {
+    // GOVERNOR backstop: the page hands filtered graphs here on every
+    // filter change, but governor mode holds one server view, not a corpus
+    // to filter. Re-rendering locally would discard the server positions;
+    // narrowing the view's nodes would silently show wrong filtered results.
+    // With no filter active the current view already stands, so this is a
+    // no-op success; with a filter active the visitor gets the reason, not
+    // a narrowed constellation that pretends to be filtered. (The filter
+    // controls themselves are also disabled by setGovernorView.)
+    if (state.governor) {
+      const sceneEl = doc.querySelector('#scene-filter');
+      const genreEl = doc.querySelector('#genre-filter');
+      const recentChip = doc.querySelector('.tool-chip[data-action="recent"]');
+      const recentOn = recentChip ? recentChip.getAttribute('aria-pressed') === 'true' : false;
+      const filtersActive = recentOn ||
+        (sceneEl && sceneEl.value && sceneEl.value !== 'all') ||
+        (genreEl && genreEl.value && genreEl.value !== 'all');
+      if (filtersActive) {
+        contextEl.textContent = 'Scene, genre and Recently-added need the full graph, ' +
+          'which governor mode does not download. Clear the filters to keep exploring this constellation.';
+      }
+      return true;
+    }
     if (!next || !Array.isArray(next.nodes)) return false;
     if (!next.nodes.length) {
       // An empty result is a real outcome of a narrow filter, not a failure.
@@ -2911,6 +3619,10 @@ export function initSigmaExplorer({
     exploreFor,
     travelTo,
     setGraph,
+    // GOVERNOR entry point (see the task contract): renders a server view
+    // with the local post-passes, and the retry for a failed view fetch.
+    setGovernorView,
+    governorRetry,
     expand,
     flyTo,
     highlightFrom,
@@ -3018,6 +3730,33 @@ export function bootFromPage(win = typeof window !== 'undefined' ? window : null
     win.RBFT_SIGMA = initSigmaExplorer({ master, search: win.location.search, win });
     return Boolean(win.RBFT_SIGMA);
   };
+  // GOVERNOR boot: the page never publishes a full master graph, so the
+  // normal graph-ready path must not run. Instead the page stores the
+  // landing view on win.RBFT_GOVERNOR_VIEW (+ groups) and fires
+  // 'rbft:governor-view-ready' once fetched. The stored-view check first
+  // covers the race where the fetch already resolved before this module
+  // executed (the classic page script runs before deferred modules).
+  // initSigmaExplorer first paints the view's nodes locally, then
+  // setGovernorView re-renders them at the server positions — a transient
+  // first frame, after which server positions win.
+  if (governorFromSearch(win.location.search)) {
+    const startGovernor = () => {
+      const view = win.RBFT_GOVERNOR_VIEW;
+      if (!view || !Array.isArray(view.nodes) || !view.nodes.length) return false;
+      const groups = Array.isArray(win.RBFT_GOVERNOR_GROUPS) ? win.RBFT_GOVERNOR_GROUPS : [];
+      const controller = initSigmaExplorer({
+        master: { nodes: view.nodes, links: view.links || [] },
+        search: win.location.search,
+        win,
+      });
+      if (!controller) return false;
+      win.RBFT_SIGMA = controller;
+      controller.setGovernorView(view, { groups, animate: false });
+      return true;
+    };
+    if (!startGovernor()) win.addEventListener('rbft:governor-view-ready', startGovernor, { once: true });
+    return;
+  }
   if (!start()) win.addEventListener('rbft:graph-ready', start, { once: true });
 }
 
