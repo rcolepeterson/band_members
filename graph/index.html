@@ -4423,12 +4423,98 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       window.addEventListener('rbft:sigma-select', event => {
         const detail = (event && event.detail) || {};
         if (!detail.id) return;
-        try {
-          if (detail.type === 'band') selectBandNode(detail.id, { source: 'sigma' });
-          else selectMemberNode(detail.id, { source: 'sigma' });
-        } catch (error) {
-          console.warn('Could not open the node card for a Sigma selection.', detail.id, error);
+        const open = () => {
+          try {
+            if (detail.type === 'band') selectBandNode(detail.id, { source: 'sigma' });
+            else selectMemberNode(detail.id, { source: 'sigma' });
+          } catch (error) {
+            console.warn('Could not open the node card for a Sigma selection.', detail.id, error);
+          }
+        };
+        // GOVERNOR card bridge (governor mode only; the path below is
+        // unchanged otherwise). The card renderer reads graphState.master,
+        // so the fetched card is merged INTO that view-local master before
+        // opening: entity fields (bio, genre, years, label, albums,
+        // instruments) land on the node, membership rows become graph links
+        // (tenure -> yearsActive) so the tenure chips show the FULL roster,
+        // not just the view-local one, and band badge links are seeded via
+        // the uuid-keyed bandLinksByBandId plus a rawBandsData band row so
+        // bandUuidForNode can resolve them. The card id is the node NAME:
+        // graph-card resolves a Neon uuid or a plain name. Governor view
+        // nodes carry their Neon uuid (server _graph_view.mjs), so the
+        // card fetch prefers it: for colliding same-name bands the uuid
+        // lands on the exact twin, where a plain name would be ambiguous.
+        // Without a uuid it falls back to the plain name, as before. Any
+        // fetch failure still opens the view-local card.
+        if (window.RBFT_GOVERNOR_MODE) {
+          (async () => {
+            try {
+              const masterNode = graphState && graphState.master
+                ? graphState.master.nodes.find(n => n.id === detail.id)
+                : null;
+              const cardId = (masterNode && masterNode.uuid) || (masterNode && (masterNode.name || masterNode.id)) || detail.id;
+              const type = detail.type === 'band' ? 'band' : 'member';
+              const res = await fetch(`/api/graph-card?type=${type}&id=${encodeURIComponent(cardId)}`, { signal: AbortSignal.timeout(5000) });
+              if (res.ok) {
+                const payload = await res.json();
+                const master = graphState && graphState.master;
+                if (master && payload && payload.entity) {
+                  const entity = payload.entity;
+                  const target = master.nodes.find(n => n.id === detail.id);
+                  if (target) {
+                    ['bio', 'genre', 'label', 'albums', 'instrument1', 'instrument2'].forEach(field => {
+                      if (entity[field] != null) target[field] = entity[field];
+                    });
+                    if (entity.years_active != null) target.yearsActive = entity.years_active;
+                  }
+                  const memberships = Array.isArray(payload.memberships) ? payload.memberships : [];
+                  const seenLinks = new Set(master.links.map(link => {
+                    const s = typeof link.source === 'object' ? link.source.id : link.source;
+                    const t = typeof link.target === 'object' ? link.target.id : link.target;
+                    return `${s}|${t}`;
+                  }));
+                  memberships.forEach(m => {
+                    const otherName = type === 'band' ? m.member_name : m.band_name;
+                    if (!otherName) return;
+                    const otherType = type === 'band' ? 'person' : 'band';
+                    let otherNode = master.nodes.find(n => n.name === otherName && n.type === otherType)
+                      || master.nodes.find(n => n.id === otherName);
+                    if (!otherNode) {
+                      otherNode = { id: otherName, name: otherName, type: otherType };
+                      master.nodes.push(otherNode);
+                    }
+                    const source = type === 'band' ? detail.id : otherNode.id;
+                    const targetId = type === 'band' ? otherNode.id : detail.id;
+                    const key = `${source}|${targetId}`;
+                    if (!seenLinks.has(key)) {
+                      seenLinks.add(key);
+                      master.links.push({ source, target: targetId, relation: m.relation || 'member', weight: m.weight || 1, yearsActive: m.tenure || '' });
+                    }
+                  });
+                  if (graphState.rendered) {
+                    graphState.rendered.nodes = master.nodes.slice();
+                    graphState.rendered.links = master.links.slice();
+                  }
+                  if (type === 'band' && Array.isArray(payload.links)) {
+                    if (!rawBandsData) rawBandsData = { bands: [], band_links: [] };
+                    if (!Array.isArray(rawBandsData.bands)) rawBandsData.bands = [];
+                    if (entity.id && !rawBandsData.bands.find(b => b.id === entity.id)) {
+                      rawBandsData.bands.push({ id: entity.id, name: entity.name, city: entity.city, country: entity.country });
+                    }
+                    const badgeMap = {};
+                    payload.links.forEach(link => { if (link.platform && link.url) badgeMap[link.platform] = link.url; });
+                    if (entity.id) bandLinksByBandId.set(entity.id, badgeMap);
+                  }
+                }
+              }
+            } catch (error) {
+              console.warn('Governor card fetch failed; opening the view-local card.', error);
+            }
+            open();
+          })();
+          return;
         }
+        open();
       });
       // Travelling to a new centre invalidates whatever card was open: the view
       // it described is gone.
@@ -12815,10 +12901,119 @@ function downloadPngBlob(blob) {
     // fetched at all.
     // On the SVG path the renderer must exist before any graph is drawn, so the
     // data load is chained behind it rather than racing it.
+    // ---------------------------------------------------------------------
+    // GOVERNOR boot (?governor=1, Sigma path only). When on, /api/bands is
+    // NEVER fetched on first load: the landing view comes from
+    // /api/graph-view (one constellation, not the corpus) plus the group
+    // list from /api/graph-groups, and both are handed to the Sigma module
+    // via its setGovernorView entry point (see scripts/sigma-explorer.mjs).
+    // The module boots from the stored view: the classic script runs before
+    // deferred module scripts, so the page stores the view and fires
+    // 'rbft:governor-view-ready'; the module also checks the stored view
+    // at its own load, covering the race where the fetch resolved first.
+    // Anchor precedence mirrors resolveAnchor (node, band, member, person,
+    // anchor); hops come from the parameter that named it (?band= -> 1,
+    // everything else -> 2, the member default). Groups are advisory: a
+    // failed groups fetch still boots the view, with the other-groups row
+    // hidden. A failed landing fetch shows the retry banner below — it
+    // must NOT silently fall back to /api/bands, which would defeat the
+    // payload bound the governor exists to enforce. SVG-path visitors
+    // (?renderer=svg) keep the existing flow even with the flag on.
+    // ---------------------------------------------------------------------
+    const governorModeOn = (() => {
+      try { return new URLSearchParams(window.location.search).get('governor') === '1'; }
+      catch (_) { return false; }
+    })();
+
+    function showGovernorRetry(message, onRetry) {
+      let banner = document.getElementById('governor-retry');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'governor-retry';
+        banner.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9999;background:#0d1620;color:#eaf4fb;border:1px solid rgba(143,232,246,0.6);border-radius:12px;padding:20px;text-align:center;max-width:320px;font-size:14px;line-height:1.5;';
+        const text = document.createElement('div');
+        text.id = 'governor-retry-text';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = 'Tap to retry';
+        button.style.cssText = 'margin-top:12px;padding:10px 18px;font-size:14px;border-radius:8px;border:0;background:#27b8ff;color:#06121c;cursor:pointer;';
+        button.addEventListener('click', () => {
+          banner.remove();
+          onRetry();
+        });
+        banner.appendChild(text);
+        banner.appendChild(button);
+        document.body.appendChild(banner);
+      }
+      document.getElementById('governor-retry-text').textContent = message;
+      banner.hidden = false;
+    }
+
+    async function governorBoot() {
+      window.RBFT_GOVERNOR_MODE = true;
+      const params = new URLSearchParams(window.location.search);
+      let anchor = null;
+      let hops = 2;
+      for (const param of ['node', 'band', 'member', 'person', 'anchor']) {
+        const value = params.get(param);
+        if (value && value.trim()) {
+          anchor = value.trim();
+          if (param === 'band') hops = 1;
+          break;
+        }
+      }
+      if (!anchor) anchor = 'Aaron McRae';
+      try {
+        const viewRes = await fetch(`/api/graph-view?anchor=${encodeURIComponent(anchor)}&hops=${hops}&maxNodes=60&satelliteCap=7`, { signal: AbortSignal.timeout(8000) });
+        if (viewRes.status === 202) throw new Error('Constellation still computing — tap to retry.');
+        if (!viewRes.ok) throw new Error(`Graph view unavailable (${viewRes.status}).`);
+        const view = await viewRes.json();
+        if (!view || view.ok === false || !Array.isArray(view.nodes) || !view.nodes.length) {
+          throw new Error('Graph view came back empty.');
+        }
+        let groups = [];
+        try {
+          const groupsRes = await fetch('/api/graph-groups', { signal: AbortSignal.timeout(8000) });
+          if (groupsRes.ok) {
+            const groupsData = await groupsRes.json();
+            if (Array.isArray(groupsData.groups)) groups = groupsData.groups;
+          }
+        } catch (_) {
+          // Groups are advisory; the view still boots without them.
+        }
+        // Page-side master is a COPY of the view arrays: the card bridge
+        // merges fetched cards into the page master, and that must not
+        // mutate the module's view arrays.
+        const viewMaster = { nodes: view.nodes.slice(), links: (view.links || []).slice() };
+        graphState = { master: viewMaster, rendered: { nodes: viewMaster.nodes.slice(), links: viewMaster.links.slice() } };
+        window.RBFT_GOVERNOR_VIEW = view;
+        window.RBFT_GOVERNOR_GROUPS = groups;
+        bindSigmaSelectionToNodeCard();
+        window.dispatchEvent(new CustomEvent('rbft:governor-view-ready', { detail: { anchor } }));
+        // If the module somehow already booted without applying the view
+        // (listener missed), hand it over directly — but not if its view
+        // is already set, which would double-render the same constellation.
+        const controller = window.RBFT_SIGMA;
+        if (controller && typeof controller.setGovernorView === 'function'
+            && !(controller.state && controller.state.view)) {
+          controller.setGovernorView(view, { groups, animate: false });
+        }
+      } catch (error) {
+        console.warn('Governor landing view failed:', error);
+        showGovernorRetry(
+          error && error.message ? error.message : 'Constellation loading — tap to retry.',
+          () => governorBoot()
+        );
+      }
+    }
+
     const rendererReady = onSigmaPath()
       ? Promise.resolve()
       : ensureD3().then(setupSvgRenderer);
 
+    if (governorModeOn && onSigmaPath()) {
+      governorBoot();
+    } else {
     rendererReady.then(loadGraphData).then(async rows => {
       const master = buildMasterGraph(rows);
       // Seed instrument suggestions from the CSV and refresh the datalist so
@@ -13771,6 +13966,7 @@ function downloadPngBlob(blob) {
       fallback.style.display = 'flex';
       graphBadge.textContent = 'Graph unavailable';
     });
+    } // end non-governor boot branch
   </script>
 
   <!-- Sigma.js neighborhood explorer (issue #80). OFF by default: the module
