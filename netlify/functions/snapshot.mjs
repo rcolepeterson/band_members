@@ -8,6 +8,9 @@
 //   { ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, fb_group_members,
 //     game_players, game_retention_pct, game_weekly_players,
 //     game_repeat_players, game_completion_pct, game_share_taps,
+//     rawkle_players, rawkle_retention_pct, rawkle_weekly_players,
+//     rawkle_repeat_players, rawkle_completion_pct, rawkle_share_taps,
+//     cards_plays, cards_shares, cards_wins,
 //     ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events,
 //     notes }
 //
@@ -65,14 +68,31 @@ export default async (req) => {
       followsCount = count;
     } catch { /* table may not exist yet */ }
 
-    // Bands added today (for the "new bands" metric).
+    // Snapshot date: explicit body date wins, else UTC today.
+    const hasExplicitDate = typeof body.snapshot_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.snapshot_date);
+    const today = hasExplicitDate
+      ? body.snapshot_date
+      : new Date().toISOString().slice(0, 10);
+
+    // Bands added on the snapshot date (for the "new bands" metric).
+    // Explicit dates (midnight PT capture, backfills) count bands created
+    // on that PT day; the legacy no-date path keeps counting the current
+    // UTC day, exactly as before.
     let bandsAdded = 0;
     try {
-      const [{ count }] = await sql`
-        select count(*)::int as count from bands
-        where created_at >= current_date
-      `;
-      bandsAdded = count;
+      if (hasExplicitDate) {
+        const [{ count }] = await sql`
+          select count(*)::int as count from bands
+          where (created_at at time zone 'America/Los_Angeles')::date = ${today}::date
+        `;
+        bandsAdded = count;
+      } else {
+        const [{ count }] = await sql`
+          select count(*)::int as count from bands
+          where created_at >= current_date
+        `;
+        bandsAdded = count;
+      }
     } catch { /* created_at may not exist */ }
 
     // Backfill override: explicit body values win over live counts.
@@ -81,9 +101,6 @@ export default async (req) => {
     const finalFollowsCount = num(body.follows_count) ?? followsCount;
     const finalBandsAdded = num(body.bands_added) ?? bandsAdded;
 
-    const today = typeof body.snapshot_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.snapshot_date)
-      ? body.snapshot_date
-      : new Date().toISOString().slice(0, 10);
 
     await sql`
       insert into daily_snapshots
@@ -91,6 +108,9 @@ export default async (req) => {
          ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, fb_group_members,
          game_players, game_retention_pct, game_weekly_players,
          game_repeat_players, game_completion_pct, game_share_taps,
+         rawkle_players, rawkle_retention_pct, rawkle_weekly_players,
+         rawkle_repeat_players, rawkle_completion_pct, rawkle_share_taps,
+         cards_plays, cards_shares, cards_wins,
          ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events,
          notes)
       values (
@@ -110,6 +130,15 @@ export default async (req) => {
         ${num(body.game_repeat_players)},
         ${num(body.game_completion_pct)},
         ${num(body.game_share_taps)},
+        ${num(body.rawkle_players)},
+        ${num(body.rawkle_retention_pct)},
+        ${num(body.rawkle_weekly_players)},
+        ${num(body.rawkle_repeat_players)},
+        ${num(body.rawkle_completion_pct)},
+        ${num(body.rawkle_share_taps)},
+        ${num(body.cards_plays)},
+        ${num(body.cards_shares)},
+        ${num(body.cards_wins)},
         ${num(body.ga_active_users)},
         ${num(body.ga_new_users)},
         ${num(body.ga_avg_engagement_seconds)},
@@ -132,6 +161,15 @@ export default async (req) => {
         game_repeat_players = coalesce(excluded.game_repeat_players, daily_snapshots.game_repeat_players),
         game_completion_pct = coalesce(excluded.game_completion_pct, daily_snapshots.game_completion_pct),
         game_share_taps = coalesce(excluded.game_share_taps, daily_snapshots.game_share_taps),
+        rawkle_players = coalesce(excluded.rawkle_players, daily_snapshots.rawkle_players),
+        rawkle_retention_pct = coalesce(excluded.rawkle_retention_pct, daily_snapshots.rawkle_retention_pct),
+        rawkle_weekly_players = coalesce(excluded.rawkle_weekly_players, daily_snapshots.rawkle_weekly_players),
+        rawkle_repeat_players = coalesce(excluded.rawkle_repeat_players, daily_snapshots.rawkle_repeat_players),
+        rawkle_completion_pct = coalesce(excluded.rawkle_completion_pct, daily_snapshots.rawkle_completion_pct),
+        rawkle_share_taps = coalesce(excluded.rawkle_share_taps, daily_snapshots.rawkle_share_taps),
+        cards_plays = coalesce(excluded.cards_plays, daily_snapshots.cards_plays),
+        cards_shares = coalesce(excluded.cards_shares, daily_snapshots.cards_shares),
+        cards_wins = coalesce(excluded.cards_wins, daily_snapshots.cards_wins),
         ga_active_users = coalesce(excluded.ga_active_users, daily_snapshots.ga_active_users),
         ga_new_users = coalesce(excluded.ga_new_users, daily_snapshots.ga_new_users),
         ga_avg_engagement_seconds = coalesce(excluded.ga_avg_engagement_seconds, daily_snapshots.ga_avg_engagement_seconds),
