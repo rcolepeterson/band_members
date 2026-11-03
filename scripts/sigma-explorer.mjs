@@ -89,7 +89,7 @@ import { polygonLayout } from './polygon-layout.mjs';
 
 // The governor is OFF by default. ONE-LINE FLIP: change GOVERNOR_DEFAULT to
 // true to make governor the default after Aaron's verification.
-export const GOVERNOR_DEFAULT = false;
+export const GOVERNOR_DEFAULT = true;
 
 // ?governor=1 (or =true) enables governor mode. =0, =false, absent, or any
 // other value disables it — except that an absent value follows
