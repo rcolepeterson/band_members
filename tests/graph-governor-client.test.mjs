@@ -29,7 +29,7 @@ function loadGovernorSection() {
     `${section}; return { GOVERNOR_DEFAULT, governorFromSearch, governorLandingParams, ` +
       'governorViewUrl, governorSearchUrl, governorCardUrl, governorGroupsUrl, ' +
       'governorExpandParams, governorOtherGroups, governorChromeText, ' +
-      'governorViewPayloadOk, governorFailureKind, governorRetryMessage };'
+      'governorViewPayloadOk, governorFailureKind, governorRetryMessage, governorDrawKind };'
   );
   return factory();
 }
@@ -199,6 +199,111 @@ test('governorOtherGroups: no match and no component count hides the row, never 
   });
   assert.equal(result.showRow, false);
   assert.equal(result.nextAnchorId, null);
+});
+
+// ---------------------------------------------------------------------------
+// Parity: anchor kind (governor-node-parity-v1)
+// ---------------------------------------------------------------------------
+// The live bug: a governor view for Metallica arrived with the anchor's
+// kind = 'home-star' (server classifyNode marks ANY anchor that way), and
+// the governor client trusted it, so the center rendered as a tiny white
+// node with its label blanked and no DOM overlay to label it. Legacy
+// never did this: home-star is Aaron McRae only. These tests pin the
+// restored rule, including against a stale cached view that still
+// carries the old server kind.
+
+const METALLICA_LINKS = [
+  { source: 'Metallica', target: 'James Hetfield', weight: 1, relation: 'member_of' },
+  { source: 'Metallica', target: 'Lars Ulrich', weight: 1, relation: 'member_of' },
+  { source: 'Metallica', target: 'Dave Mustaine', weight: 2, relation: 'member_of' },
+];
+
+test('governorDrawKind: band anchor with a stale server home-star kind renders as a band, not a star', () => {
+  assert.equal(
+    G.governorDrawKind({
+      nodeId: 'Metallica', homeStarId: null, serverKind: 'home-star',
+      node: { id: 'Metallica', type: 'band' }, links: METALLICA_LINKS,
+    }),
+    'solar-system'
+  );
+  // Same result when the home-star node is known but is not this node.
+  assert.equal(
+    G.governorDrawKind({
+      nodeId: 'Metallica', homeStarId: 'Aaron McRae', serverKind: 'home-star',
+      node: { id: 'Metallica', type: 'band' }, links: METALLICA_LINKS,
+    }),
+    'solar-system'
+  );
+});
+
+test('governorDrawKind: person anchor with a stale server home-star kind keeps its natural kind and label', () => {
+  const annLinks = [
+    { source: 'Alpha', target: 'Ann', weight: 1, relation: 'member_of' },
+    { source: 'Beta', target: 'Ann', weight: 1, relation: 'member_of' },
+  ];
+  assert.equal(
+    G.governorDrawKind({
+      nodeId: 'Ann', homeStarId: null, serverKind: 'home-star',
+      node: { id: 'Ann', type: 'person' }, links: annLinks,
+    }),
+    'constellation'
+  );
+  const bobLinks = [{ source: 'Alpha', target: 'Bob', weight: 2, relation: 'member_of' }];
+  assert.equal(
+    G.governorDrawKind({
+      nodeId: 'Bob', homeStarId: null, serverKind: 'home-star',
+      node: { id: 'Bob', type: 'person' }, links: bobLinks,
+    }),
+    'planet'
+  );
+  const tourLinks = [{ source: 'Alpha', target: 'Tour', weight: 3, relation: 'member_of' }];
+  assert.equal(
+    G.governorDrawKind({
+      nodeId: 'Tour', homeStarId: null, serverKind: 'home-star',
+      node: { id: 'Tour', type: 'person' }, links: tourLinks,
+    }),
+    'moon'
+  );
+});
+
+test('governorDrawKind: Aaron McRae anchor still renders as home-star', () => {
+  assert.equal(
+    G.governorDrawKind({
+      nodeId: 'Aaron McRae', homeStarId: 'Aaron McRae', serverKind: 'home-star',
+      node: { id: 'Aaron McRae', type: 'person' },
+      links: [{ source: 'The Protocol', target: 'Aaron McRae', weight: 1, relation: 'member_of' }],
+    }),
+    'home-star'
+  );
+  // The overlay path that labels that star is intact.
+  assert.match(EXPLORER, /homeStarId === state\.anchorId \? `\$\{homeStarId\} — you are here`/);
+});
+
+test('governorDrawKind: a non-home-star server kind is kept as-is', () => {
+  assert.equal(
+    G.governorDrawKind({
+      nodeId: 'Cat', homeStarId: null, serverKind: 'constellation',
+      node: { id: 'Cat', type: 'person' },
+      links: [{ source: 'Beta', target: 'Cat', weight: 2, relation: 'member_of' }],
+    }),
+    'constellation',
+    'only home-star is discarded; full-corpus kinds for other nodes must not be recomputed from view links'
+  );
+});
+
+test('setGovernorView draw loop uses governorDrawKind with homeStarId and the server kind', () => {
+  const body = EXPLORER.slice(EXPLORER.indexOf('function setGovernorView(view'));
+  assert.match(body, /governorDrawKind\(\{/);
+  assert.match(body, /homeStarId,/);
+  assert.match(body, /serverKind: node\.kind/);
+});
+
+test('tap-to-travel and drag are unchanged: 10px mouse grab, 10px drag threshold, tap travels', () => {
+  assert.match(EXPLORER, /const GRAB_RADIUS_MOUSE_PX = 10;/, 'mouse grab radius stays at the pre-governor 10px — no new interaction');
+  assert.match(EXPLORER, /const DRAG_THRESHOLD_PX = 10;/);
+  assert.match(EXPLORER, /const tappedId = dragState\.nodeId;/);
+  assert.match(EXPLORER, /if \(tappedId\) travelTo\(tappedId\);/);
+  assert.match(EXPLORER, /if \(state\.governor\) \{ void governorTravelTo\(node\); return; \}/);
 });
 
 // ---------------------------------------------------------------------------
