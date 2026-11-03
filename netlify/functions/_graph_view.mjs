@@ -389,7 +389,15 @@ export function buildViewNodes(payload, rawParams) {
   const nodes = view.nodes.map((node) => ({
     ...node,
     role: roleForNode(node, { anchorId, links: master.links }),
-    kind: classifyNode(node, { anchorId, adjacency, links: master.links }),
+    // PARITY FIX (governor-node-parity-v1): the anchor's NATURAL kind,
+    // not 'home-star'. classifyNode marks any anchor as home-star, and
+    // the governor client used to trust that, rendering a non-Aaron
+    // anchor as a tiny white label-free node. The home-star identity
+    // belongs to the default anchor only and is re-applied client-side
+    // via homeStarId (see governorDrawKind in sigma-explorer.mjs), which
+    // is also the primary guard against stale cached views. Role still
+    // uses anchorId — role is relative to the anchor, kind is not.
+    kind: classifyNode(node, { anchorId: null, adjacency, links: master.links }),
   }));
   nodes.sort((a, b) => String(a.id).localeCompare(String(b.id)));
   const links = view.links.slice().sort((a, b) =>
