@@ -40,17 +40,17 @@ const G = loadGovernorSection();
 // Flag parsing + default
 // ---------------------------------------------------------------------------
 
-test('governor flag: GOVERNOR_DEFAULT is false (governor is opt-in)', () => {
-  assert.equal(G.GOVERNOR_DEFAULT, false);
+test('governor flag: GOVERNOR_DEFAULT is true (governor is the default)', () => {
+  assert.equal(G.GOVERNOR_DEFAULT, true);
 });
 
-test('governorFromSearch: ?governor=1 on, =0/absent/garbage off', () => {
+test('governorFromSearch: ?governor=1 on, =0/garbage off, absent follows the default (on)', () => {
   assert.equal(G.governorFromSearch('?governor=1'), true);
   assert.equal(G.governorFromSearch('?governor=true'), true);
   assert.equal(G.governorFromSearch('?governor=0'), false);
   assert.equal(G.governorFromSearch('?governor=false'), false);
-  assert.equal(G.governorFromSearch(''), false);
-  assert.equal(G.governorFromSearch('?renderer=sigma'), false);
+  assert.equal(G.governorFromSearch(''), true);
+  assert.equal(G.governorFromSearch('?renderer=sigma'), true);
   assert.equal(G.governorFromSearch('?governor=yes'), false);
   assert.equal(G.governorFromSearch('?governor='), false);
   assert.equal(G.governorFromSearch('governor=1'), true, 'leading ? is optional');
@@ -531,6 +531,6 @@ test('landing boot footer: Aaron McRae governor footer values match the travel v
   assert.equal(result.nextAnchorId, 'f2ae25ad-04d6-488f-8ff6-6e9acb8f8883');
 });
 
-test('landing boot: GOVERNOR_DEFAULT stays false — no flip in this batch', () => {
-  assert.equal(G.GOVERNOR_DEFAULT, false);
+test('governor flip: GOVERNOR_DEFAULT is true — governor is the default', () => {
+  assert.equal(G.GOVERNOR_DEFAULT, true);
 });
