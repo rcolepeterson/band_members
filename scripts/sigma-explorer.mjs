@@ -1322,6 +1322,17 @@ export function initSigmaExplorer({
   win = typeof window !== 'undefined' ? window : null,
   SigmaConstructor = Sigma,
   GraphConstructor = Graph,
+  // GOVERNOR LANDING BOOT ONLY (governor-landing-footer-v1): when true,
+  // skip the local renderNeighborhood first paint. That first paint builds
+  // a view from the view-only master, so its footer is always "19 of 19"
+  // with an empty frontier — and if setGovernorView does not stick, that
+  // wrong footer is the one that persists for the whole visit (the live
+  // 2026-11-02 bug: fresh ?governor=1 landing stayed at 19 of 19 for
+  // minutes across refreshes, while travel views showed the correct
+  // 19 of 35140 footer). With the first paint skipped, the boot footer
+  // can only ever come from setGovernorView's server view. Legacy and
+  // travel paths pass nothing here and paint exactly as before.
+  skipFirstPaint = false,
 } = {}) {
   if (!doc || !master || !Array.isArray(master.nodes) || !master.nodes.length) return null;
 
@@ -2606,7 +2617,13 @@ export function initSigmaExplorer({
     state.governorCurrentComponentNodeCount = Number.isFinite(Number(view.currentComponentNodeCount))
       ? Number(view.currentComponentNodeCount)
       : null;
-    if (Array.isArray(groups)) state.governorGroups = groups;
+    // An empty groups array is the timed-out groups fetch, not a real
+    // "zero groups" answer: treating it as applied would hide the
+    // other-groups row forever on boot (the travel path, which passes no
+    // groups, retries via governorRefreshGroups). Only a non-empty list
+    // counts as applied; otherwise retry the fetch, which re-runs
+    // updateChrome when the groups arrive.
+    if (Array.isArray(groups) && groups.length) state.governorGroups = groups;
     else if (!state.governorGroups.length) governorRefreshGroups();
 
     const anchorNode = masterById.get(anchorId);
@@ -3634,11 +3651,20 @@ export function initSigmaExplorer({
   // initialHopsForAnchor; starting at the default 2 hops made /?anchor=<band>
   // draw a big view and then snap to the small one (Cole, 2026-10-11).
   state.maxHops = initialHopsForAnchor(resolved.anchorId);
-  renderNeighborhood({
-    anchorId: resolved.anchorId,
-    maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
-    animate: false,
-  });
+  if (skipFirstPaint) {
+    // Governor boot: do NOT paint a local view. The caller (bootFromPage)
+    // applies the server view via setGovernorView immediately after init,
+    // and that call is the only footer writer on boot. Painting locally
+    // first would put a wrong "19 of 19" footer on screen that can stick
+    // if the server-view application is skipped or fails silently.
+    state.anchorId = resolved.anchorId;
+  } else {
+    renderNeighborhood({
+      anchorId: resolved.anchorId,
+      maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
+      animate: false,
+    });
+  }
   // The one and only write: canonicalise the link this visit arrived on. From
   // here the address bar stays put, so a refresh returns to this view.
   syncAddressBar();
@@ -3782,9 +3808,14 @@ export function bootFromPage(win = typeof window !== 'undefined' ? window : null
   // 'rbft:governor-view-ready' once fetched. The stored-view check first
   // covers the race where the fetch already resolved before this module
   // executed (the classic page script runs before deferred modules).
-  // initSigmaExplorer first paints the view's nodes locally, then
-  // setGovernorView re-renders them at the server positions — a transient
-  // first frame, after which server positions win.
+  // GOVERNOR LANDING BOOT (governor-landing-footer-v1): init must NOT
+  // paint a local view first. The old sequence painted the view-only
+  // master locally (footer "19 of 19", empty frontier) and then relied on
+  // setGovernorView to correct it; on the live 2026-11-02 landing that
+  // correction never stuck, so the wrong footer persisted for minutes
+  // across refreshes while travel views (which never paint locally)
+  // showed the correct footer. With skipFirstPaint, the boot footer can
+  // only come from setGovernorView's server view.
   if (governorFromSearch(win.location.search)) {
     const startGovernor = () => {
       const view = win.RBFT_GOVERNOR_VIEW;
@@ -3794,6 +3825,7 @@ export function bootFromPage(win = typeof window !== 'undefined' ? window : null
         master: { nodes: view.nodes, links: view.links || [] },
         search: win.location.search,
         win,
+        skipFirstPaint: true,
       });
       if (!controller) return false;
       win.RBFT_SIGMA = controller;
