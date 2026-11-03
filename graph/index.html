@@ -12920,9 +12920,20 @@ function downloadPngBlob(blob) {
     // payload bound the governor exists to enforce. SVG-path visitors
     // (?renderer=svg) keep the existing flow even with the flag on.
     // ---------------------------------------------------------------------
+    // GOVERNOR DEFAULT FLIP (governor-gate-fix-v1): the page gate must mirror
+    // governorFromSearch in scripts/sigma-explorer.mjs. An absent ?governor=
+    // follows GOVERNOR_DEFAULT (now true), so the plain URL boots governor;
+    // explicit =0/=false forces plain mode, =1/=true forces governor. The
+    // old gate counted only an explicit =1, so after the flip the page took
+    // the local boot branch while the module was in governor mode and the
+    // plain URL stuck on "Loading the bands...".
     const governorModeOn = (() => {
-      try { return new URLSearchParams(window.location.search).get('governor') === '1'; }
-      catch (_) { return false; }
+      try {
+        const value = new URLSearchParams(window.location.search).get('governor');
+        if (value == null) return true;
+        const normalized = String(value).trim().toLowerCase();
+        return normalized === '1' || normalized === 'true';
+      } catch (_) { return true; }
     })();
 
     function showGovernorRetry(message, onRetry) {
