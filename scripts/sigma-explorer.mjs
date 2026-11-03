@@ -273,6 +273,47 @@ export function governorRetryMessage(kind) {
   return 'Constellation loading — tap to retry.';
 }
 
+// PARITY FIX (governor-node-parity-v1): the kind a governor view node is
+// drawn with. The silver ringed star belongs to ONE musician — the
+// project's default anchor (Aaron McRae, homeStarId) — never to
+// "wherever the camera happens to be". The server's classifyNode marks
+// ANY anchor as 'home-star', so a governor view for Metallica arrived
+// with kind 'home-star'; trusting it made the center render as a tiny
+// white node with its label blanked by reduceNode, and the Aaron-only DOM
+// overlay never labelled it. Legacy renderNeighborhood never had this
+// bug: it overrides home-star to homeStarId only and otherwise calls
+// classifyNode with no anchor, i.e. the natural kind.
+//
+// This helper restores exactly that rule in governor mode, and it is the
+// primary guard: it works even against a stale cached view that still
+// carries the old server home-star kind. A non-home-star server kind is
+// kept as-is (it was computed against the full corpus); only a
+// home-star kind for a non-home-star node, or a missing kind, falls
+// back to the natural kind computed from the view's own links — the
+// same computation classifyNode with anchorId null would give.
+export function governorDrawKind({ nodeId, homeStarId, serverKind, node, links = [] } = {}) {
+  if (nodeId && homeStarId && nodeId === homeStarId) return 'home-star';
+  if (serverKind && serverKind !== 'home-star') return serverKind;
+  const list = Array.isArray(links) ? links : [];
+  const endpoint = (value) => (value && typeof value === 'object' ? value.id : value);
+  if (node && node.type === 'band') {
+    const degree = list.filter((link) => endpoint(link.source) === nodeId || endpoint(link.target) === nodeId).length;
+    return degree === 0 ? 'asteroid' : 'solar-system';
+  }
+  const memberships = list.filter((link) => endpoint(link.target) === nodeId);
+  if (!memberships.length) return 'asteroid';
+  const bandCount = new Set(memberships.map((link) => endpoint(link.source))).size;
+  if (bandCount > 1) return 'constellation';
+  const moonRelations = ['touring', 'tour', 'session', 'live', 'guest', 'fill-in', 'fill in', 'substitute', 'temporary'];
+  const everyShortTerm = memberships.every((link) => {
+    const weight = Number(link.weight);
+    if (Number.isFinite(weight) && weight >= 3) return true;
+    return moonRelations.includes(String(link.relation || '').trim().toLowerCase());
+  });
+  if (everyShortTerm) return 'moon';
+  return 'planet';
+}
+
 // GOVERNOR-SECTION-END
 
 // ---------------------------------------------------------------------------
@@ -2587,10 +2628,15 @@ export function initSigmaExplorer({
     viewGraph.clear();
     nodes.forEach(node => {
       const point = positions.get(node.id) || { x: 0, y: 0, hop: node.hop || 0 };
-      const kind =
-        node.id === homeStarId
-          ? NODE_KINDS.HOME_STAR
-          : (node.kind || classifyNode(masterById.get(node.id) || node, { adjacency, links: master.links }));
+      // PARITY FIX: never trust a server 'home-star' kind for a node
+      // that is not the home-star node — see governorDrawKind.
+      const kind = governorDrawKind({
+        nodeId: node.id,
+        homeStarId,
+        serverKind: node.kind,
+        node,
+        links: master.links,
+      });
       const style = KIND_STYLE[kind] || KIND_STYLE[NODE_KINDS.PLANET];
       const role = node.role || roleForNode(masterById.get(node.id) || node, {
         anchorId,
