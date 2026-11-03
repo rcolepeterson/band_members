@@ -33,6 +33,9 @@ export default async (req) => {
                ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, fb_group_members,
                game_players, game_retention_pct, game_weekly_players,
                game_repeat_players, game_completion_pct, game_share_taps,
+               rawkle_players, rawkle_retention_pct, rawkle_weekly_players,
+               rawkle_repeat_players, rawkle_completion_pct, rawkle_share_taps,
+               cards_plays, cards_shares, cards_wins,
                ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events, notes
         from daily_snapshots
         where snapshot_date >= ${since}::date
@@ -44,6 +47,9 @@ export default async (req) => {
                ig_sixdegrees, ig_vimana17, fb_sixdegrees, fb_aaron, fb_group_members,
                game_players, game_retention_pct, game_weekly_players,
                game_repeat_players, game_completion_pct, game_share_taps,
+               rawkle_players, rawkle_retention_pct, rawkle_weekly_players,
+               rawkle_repeat_players, rawkle_completion_pct, rawkle_share_taps,
+               cards_plays, cards_shares, cards_wins,
                ga_active_users, ga_new_users, ga_avg_engagement_seconds, ga_events, notes
         from daily_snapshots
         order by snapshot_date asc

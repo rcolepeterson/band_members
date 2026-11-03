@@ -738,6 +738,19 @@ export default async (req) => {
     await sql`alter table daily_snapshots add column if not exists game_share_taps     integer`;
     results.push('daily_snapshots fb group + game value columns ready');
 
+    // Rawkle (same six metrics as Daily Chain, from game events) + Cards
+    // (plays/shares/wins) — midnight auto-log, 2026-11-03. Idempotent.
+    await sql`alter table daily_snapshots add column if not exists rawkle_players         integer`;
+    await sql`alter table daily_snapshots add column if not exists rawkle_retention_pct   integer`;
+    await sql`alter table daily_snapshots add column if not exists rawkle_weekly_players integer`;
+    await sql`alter table daily_snapshots add column if not exists rawkle_repeat_players integer`;
+    await sql`alter table daily_snapshots add column if not exists rawkle_completion_pct integer`;
+    await sql`alter table daily_snapshots add column if not exists rawkle_share_taps     integer`;
+    await sql`alter table daily_snapshots add column if not exists cards_plays            integer`;
+    await sql`alter table daily_snapshots add column if not exists cards_shares           integer`;
+    await sql`alter table daily_snapshots add column if not exists cards_wins             integer`;
+    results.push('daily_snapshots rawkle + cards columns ready');
+
     // shared_chains table ----------------------------------------------------
     // Game share cards: one row per "Share the chain" tap. The row is the
     // permanent record behind a share link (?game=<id>) — the edge function
