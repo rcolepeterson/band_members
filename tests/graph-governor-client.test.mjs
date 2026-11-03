@@ -476,6 +476,35 @@ test('landing boot: an empty groups list is retried, not treated as applied', ()
   assert.match(body, /else if \(!state\.governorGroups\.length\) governorRefreshGroups\(\);/);
 });
 
+test('boot blank fix: init return object must not reference an undefined flyTo', () => {
+  // REGRESSION (governor-boot-blank-fix-v1, live 2026-11-02 after #495):
+  // initSigmaExplorer's return object carried a bare `flyTo,` shorthand
+  // while no flyTo function existed in the file (deleted in the 2026-10-24
+  // upload a320068 -> 022a3d4, uses removed, return line left). Evaluating
+  // that object threw ReferenceError on EVERY init, so bootFromPage never
+  // received a controller and never called setGovernorView. Plain mode and
+  // pre-#495 governor mode only looked fine because the local first paint
+  // ran BEFORE the return and left a constellation on screen; #495's
+  // skipFirstPaint removed that paint, turning the latent throw into a
+  // blank stage with a generic footer and no retry. No caller uses
+  // controller.flyTo anywhere in the repo. This test fails if a shorthand
+  // is ever left without a matching function definition again.
+  const hasShorthand = /^\s*flyTo,$/m.test(EXPLORER);
+  const hasDefinition = /function flyTo\(/.test(EXPLORER);
+  assert.equal(hasShorthand && !hasDefinition, false,
+    'init return references flyTo but no flyTo function is defined — init would throw and boot would stay blank');
+});
+
+test('boot blank fix: bootFromPage applies the server view after init returns a controller', () => {
+  // With the flyTo throw gone, init returns a controller and boot must
+  // hand it the server view — that call is the only thing that paints a
+  // skipFirstPaint boot. If init threw, this call was never reached and
+  // the stage stayed blank with no error.
+  const boot = EXPLORER.slice(EXPLORER.indexOf('if (governorFromSearch(win.location.search))'));
+  assert.match(boot, /win\.RBFT_SIGMA = controller;/);
+  assert.match(boot, /controller\.setGovernorView\(view, \{ groups, animate: false \}\);/);
+});
+
 test('landing boot footer: Aaron McRae governor footer values match the travel view', () => {
   assert.equal(
     G.governorChromeText({ viewNodeCount: 19, totalNodes: 35140, hops: 2 }),
