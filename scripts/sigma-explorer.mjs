@@ -3696,7 +3696,19 @@ export function initSigmaExplorer({
     setGovernorView,
     governorRetry,
     expand,
-    flyTo,
+    // NOTE (governor-boot-blank-fix-v1): a bare `flyTo,` shorthand used to
+    // sit here, but no flyTo function exists in this file — it was deleted
+    // in the 2026-10-24 upload (a320068 -> 022a3d4) while its uses were
+    // removed, and the return line was left behind. Evaluating this object
+    // therefore threw ReferenceError: flyTo is not defined on EVERY init,
+    // so bootFromPage never received a controller and never called
+    // setGovernorView. Plain mode and pre-#495 governor mode only looked
+    // fine because the local first paint ran BEFORE this return and left a
+    // constellation on screen; #495's skipFirstPaint removed that paint,
+    // turning the latent throw into a blank stage with a generic footer
+    // and no retry. No caller uses controller.flyTo anywhere in the repo,
+    // so removing the dead shorthand (not restoring a dead function) is
+    // the fix; it changes no rendering path.
     highlightFrom,
     clearHighlight,
     destroy() {
