@@ -12991,11 +12991,18 @@ function downloadPngBlob(blob) {
         bindSigmaSelectionToNodeCard();
         window.dispatchEvent(new CustomEvent('rbft:governor-view-ready', { detail: { anchor } }));
         // If the module somehow already booted without applying the view
-        // (listener missed), hand it over directly — but not if its view
-        // is already set, which would double-render the same constellation.
+        // (listener missed), hand it over directly. The "already applied"
+        // check must be the server total, NOT merely "a view is set": the
+        // local first paint sets state.view with a wrong "19 of 19"
+        // footer, so checking state.view alone skips the re-application
+        // that would correct it — the live 2026-11-02 landing bug, where
+        // the boot footer stayed at 19 of 19 while travel views were
+        // correct. Re-applying the same server view is idempotent
+        // (setGovernorView clears and redraws), so only skip when the
+        // controller already holds this view's total.
         const controller = window.RBFT_SIGMA;
         if (controller && typeof controller.setGovernorView === 'function'
-            && !(controller.state && controller.state.view)) {
+            && !(controller.state && Number(controller.state.governorTotalNodes) === Number(view.totalNodes))) {
           controller.setGovernorView(view, { groups, animate: false });
         }
       } catch (error) {
