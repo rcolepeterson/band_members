@@ -147,7 +147,11 @@ test('buildViewFromPayload: Ann 2-hop view, role/kind attached, no bios or band_
   assert.equal(view.anchor, 'Ann');
   assert.equal(view.hops, 2);
   const ann = view.nodes.find((n) => n.id === 'Ann');
-  assert.equal(ann.kind, 'home-star');
+  // PARITY FIX (governor-node-parity-v1): the anchor's NATURAL kind, not
+  // 'home-star'. Ann bridges two bands, so she is a constellation; the
+  // client re-applies home-star only for the default anchor (Aaron McRae)
+  // via homeStarId, so a non-Aaron anchor is never rendered label-free.
+  assert.equal(ann.kind, 'constellation');
   assert.equal(ann.role, 'founder');
   assert.equal(view.nodes.find((n) => n.id === 'Alpha').kind, 'solar-system');
   assert.equal(view.nodes.find((n) => n.id === 'Alpha').role, null);
@@ -157,6 +161,16 @@ test('buildViewFromPayload: Ann 2-hop view, role/kind attached, no bios or band_
   assert.ok(!blob.includes('SECRET-BAND-BIO') && !blob.includes('SECRET-MEMBER-BIO'));
   assert.ok(!('band_links' in view));
   assert.equal(computeGraphView, buildViewFromPayload);
+});
+
+test('band anchor returns its natural kind, not home-star (Metallica parity)', () => {
+  const view = buildViewFromPayload(smallFixture(), { anchor: 'Alpha', hops: 2, maxNodes: 100, satelliteCap: 7, minSeparation: 140 });
+  assert.equal(view.anchor, 'Alpha');
+  const alpha = view.nodes.find((n) => n.id === 'Alpha');
+  assert.equal(alpha.kind, 'solar-system', 'a band anchor must render as a gold band node with its label, as in legacy');
+  assert.equal(alpha.role, null);
+  // Non-anchor nodes are untouched by the parity change.
+  assert.equal(view.nodes.find((n) => n.id === 'Ann').kind, 'constellation');
 });
 
 test('unknown anchor -> empty view', () => {
