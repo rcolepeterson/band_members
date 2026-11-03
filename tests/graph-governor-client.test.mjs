@@ -426,3 +426,82 @@ test('page governor card bridge fetches /api/graph-card and still opens the view
   assert.match(INDEX_HTML, /api\/graph-card\?type=/);
   assert.match(INDEX_HTML, /RBFT_GOVERNOR_MODE/);
 });
+
+// ---------------------------------------------------------------------------
+// Landing-boot footer (governor-landing-footer-v1)
+// ---------------------------------------------------------------------------
+// Live bug 2026-11-02: a fresh ?governor=1 landing on Aaron McRae showed
+// "19 of 19 nodes in view, Every connection in this region is on screen"
+// and no other-groups row, persisting for minutes across refreshes, while
+// a travel view to the same anchor showed the correct "19 of 35140,
+// 4 connected nodes just beyond, 12733 more nodes in 2904 groups".
+// Cause chain, as traced in code: (1) the governor boot painted a local
+// view from the 19-node view-only master first, whose footer is always
+// 19 of 19 with an empty frontier; (2) the page's re-apply guard treated
+// "a view is set" as "the governor view is applied", so it skipped the
+// re-application that would have corrected that footer; (3) an empty
+// groups list from a timed-out groups fetch was treated as applied, so
+// the other-groups row could never appear on boot (travel, which passes
+// no groups, retried the fetch). The fix removes all three: boot never
+// paints locally, the guard checks the server total, and empty groups
+// retry. These tests pin that wiring; the footer values themselves are
+// pinned by governorChromeText / governorOtherGroups below.
+
+test('landing boot: governor boot passes skipFirstPaint so no local footer is ever painted', () => {
+  const boot = EXPLORER.slice(EXPLORER.indexOf('if (governorFromSearch(win.location.search))'));
+  assert.match(boot, /skipFirstPaint: true/);
+  assert.match(EXPLORER, /skipFirstPaint = false/);
+  // The first-paint render is gated on the flag, with the anchor still set
+  // so syncAddressBar keeps working on boot.
+  const firstPaint = EXPLORER.slice(EXPLORER.indexOf('// -- first paint'));
+  assert.match(firstPaint, /if \(skipFirstPaint\)/);
+  assert.match(firstPaint, /state\.anchorId = resolved\.anchorId;/);
+});
+
+test('landing boot: legacy first paint is unchanged when skipFirstPaint is not passed', () => {
+  // Default false, and the renderNeighborhood first-paint call is still
+  // present in the else branch — plain mode and non-boot paths are untouched.
+  assert.match(EXPLORER, /skipFirstPaint = false/);
+  assert.match(EXPLORER, /renderNeighborhood\(\{\s*anchorId: resolved\.anchorId,/);
+});
+
+test('landing boot: page re-apply guard checks the server total, not merely "a view is set"', () => {
+  assert.match(INDEX_HTML, /Number\(controller\.state\.governorTotalNodes\) === Number\(view\.totalNodes\)/);
+  assert.doesNotMatch(INDEX_HTML, /!\(controller\.state && controller\.state\.view\)/);
+});
+
+test('landing boot: an empty groups list is retried, not treated as applied', () => {
+  const body = EXPLORER.slice(EXPLORER.indexOf('function setGovernorView(view'));
+  assert.match(body, /if \(Array\.isArray\(groups\) && groups\.length\) state\.governorGroups = groups;/);
+  assert.match(body, /else if \(!state\.governorGroups\.length\) governorRefreshGroups\(\);/);
+});
+
+test('landing boot footer: Aaron McRae governor footer values match the travel view', () => {
+  assert.equal(
+    G.governorChromeText({ viewNodeCount: 19, totalNodes: 35140, hops: 2 }),
+    '19 of 35140 nodes in view, 2 degrees out'
+  );
+  // Live shape: groups endpoint anchorIds are UUIDs, view ids are display
+  // names, so no group matches by id — the fallback pins the other count
+  // to totalNodes minus the server component count, and every listed
+  // group counts as other (2904 live; 2 in this fixture).
+  const result = G.governorOtherGroups({
+    totalNodes: 35140,
+    groups: [
+      { anchorId: 'f2ae25ad-04d6-488f-8ff6-6e9acb8f8883', nodeCount: 22410 },
+      { anchorId: 'b36163e1-2703-4d6b-8956d116457', nodeCount: 32 },
+    ],
+    viewNodeIds: ['Aaron McRae', 'Black Box Recovery Unit'],
+    currentAnchorId: 'Aaron McRae',
+    currentComponentNodeCount: 22407,
+    visitedAnchorIds: [],
+  });
+  assert.equal(result.showRow, true);
+  assert.equal(result.otherNodeCount, 12733, '35140 - 22407');
+  assert.equal(result.otherGroupCount, 2, 'all listed groups count as other when none matches by id');
+  assert.equal(result.nextAnchorId, 'f2ae25ad-04d6-488f-8ff6-6e9acb8f8883');
+});
+
+test('landing boot: GOVERNOR_DEFAULT stays false — no flip in this batch', () => {
+  assert.equal(G.GOVERNOR_DEFAULT, false);
+});

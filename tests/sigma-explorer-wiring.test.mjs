@@ -1830,6 +1830,10 @@ test('tester polish: 1 degree, one legal footer, honest dialog name, no dangling
 
 test('a shared /?anchor=<band> link opens at its final depth, no big-then-small snap', () => {
   // First paint must use the same depth setGraph uses right after it.
-  assert.match(EXPLORER, /state\.openingAnchorId = resolved\.anchorId;[\s\S]{0,400}?state\.maxHops = initialHopsForAnchor\(resolved\.anchorId\);\n\s*renderNeighborhood\(\{\n\s*anchorId: resolved\.anchorId,/);
+  // Governor boot (governor-landing-footer-v1) gates that first paint on
+  // skipFirstPaint so the boot footer can only come from the server view;
+  // the non-skip path still paints at the same depth, in the else branch.
+  assert.match(EXPLORER, /state\.openingAnchorId = resolved\.anchorId;[\s\S]{0,400}?state\.maxHops = initialHopsForAnchor\(resolved\.anchorId\);/);
+  assert.match(EXPLORER, /if \(skipFirstPaint\) \{[\s\S]{0,400}?state\.anchorId = resolved\.anchorId;[\s\S]{0,200}?\} else \{\s*renderNeighborhood\(\{\s*anchorId: resolved\.anchorId,/);
   assert.match(EXPLORER, /state\.maxHops = initialHopsForAnchor\(anchorId\);\n\s*clearHighlight\(\);\n\s*return renderNeighborhood/);
 });
