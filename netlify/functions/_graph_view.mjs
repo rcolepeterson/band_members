@@ -100,12 +100,20 @@ export function normalizeViewParams(raw = {}) {
     }
     return n;
   };
+  const satelliteCap = parse(raw.satelliteCap, VIEW_DEFAULTS.satelliteCap, VIEW_LIMITS.satelliteCap, 'satelliteCap');
+  // FIRST-GROUP ORDERING FIX (CI: giant-rule test): an omitted hub cap must
+  // never CLAMP an explicitly larger satelliteCap — the hub cap is a floor
+  // of 10 for the default view, not a ceiling. Only an explicitly passed
+  // hubSatelliteCap overrides the caller's satelliteCap.
+  const hubSatelliteCap = (raw.hubSatelliteCap === undefined || raw.hubSatelliteCap === null || raw.hubSatelliteCap === '')
+    ? Math.max(satelliteCap, VIEW_DEFAULTS.hubSatelliteCap)
+    : parse(raw.hubSatelliteCap, VIEW_DEFAULTS.hubSatelliteCap, VIEW_LIMITS.hubSatelliteCap, 'hubSatelliteCap');
   return {
     anchor,
     hops: parse(raw.hops, VIEW_DEFAULTS.hops, VIEW_LIMITS.hops, 'hops'),
     maxNodes: parse(raw.maxNodes, VIEW_DEFAULTS.maxNodes, VIEW_LIMITS.maxNodes, 'maxNodes'),
-    satelliteCap: parse(raw.satelliteCap, VIEW_DEFAULTS.satelliteCap, VIEW_LIMITS.satelliteCap, 'satelliteCap'),
-    hubSatelliteCap: parse(raw.hubSatelliteCap, VIEW_DEFAULTS.hubSatelliteCap, VIEW_LIMITS.hubSatelliteCap, 'hubSatelliteCap'),
+    satelliteCap,
+    hubSatelliteCap,
     hubGroup: parse(raw.hubGroup, VIEW_DEFAULTS.hubGroup, VIEW_LIMITS.hubGroup, 'hubGroup'),
     minSeparation: parse(raw.minSeparation, VIEW_DEFAULTS.minSeparation, VIEW_LIMITS.minSeparation, 'minSeparation'),
   };
