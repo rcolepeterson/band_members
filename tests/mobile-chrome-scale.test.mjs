@@ -87,14 +87,32 @@ function pxIn(css, selector, prop) {
 
 test('the phone footer hides the commentary', () => {
   const block = mobileBlock();
-  ['.sigma-context', '.sigma-frontier', '.sigma-other-groups__text'].forEach(sel => {
+  ['.sigma-context', '.sigma-frontier', '.sigma-other-groups__text', '.sigma-hub-groups__text'].forEach(sel => {
     const idx = block.indexOf(sel);
     assert.ok(idx > 0, `Expected ${sel} to be addressed in the phone block.`);
   });
+  // FIRST-GROUP ORDERING: the hub-groups narration ("Members 1–10 of 19")
+  // hides on phones like the other commentary — the rule now carries four
+  // selectors, not three.
   assert.match(
     block,
-    /\.sigma-footer \.sigma-context,\s*#\$\{STAGE_ID\} \.sigma-footer \.sigma-frontier,\s*#\$\{STAGE_ID\} \.sigma-other-groups__text\{display:none\}/,
-    'Expected the three commentary lines hidden together on a phone.'
+    /\.sigma-footer \.sigma-context,\s*#\$\{STAGE_ID\} \.sigma-footer \.sigma-frontier,\s*#\$\{STAGE_ID\} \.sigma-other-groups__text,\s*#\$\{STAGE_ID\} \.sigma-hub-groups__text\{display:none\}/,
+    'Expected the four commentary lines hidden together on a phone.'
+  );
+});
+
+test('"Show next members" survives without its sentence', () => {
+  const block = mobileBlock();
+  // Same contract as "Show next group": the button is the one thing in the
+  // paragraph a phone can act on. Hiding the paragraph instead of the text
+  // span would take it with it.
+  assert.ok(
+    !/\.sigma-hub-groups__btn[^{]*\{[^}]*display:\s*none/.test(block),
+    'The hub-group button must not be hidden on a phone.'
+  );
+  assert.ok(
+    !/\.sigma-hub-groups\{[^}]*display:\s*none/.test(block),
+    'Hiding the whole paragraph would take the button with the text.'
   );
 });
 
