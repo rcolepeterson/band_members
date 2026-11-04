@@ -102,6 +102,11 @@ export const NEIGHBORHOOD_BUDGET = Object.freeze({
   // Super-connectors (Josh Freese: 30+ bands) would otherwise flood the
   // view. 5-7 keeps it readable; expand reveals more.
   SATELLITE_CAP: 7,
+  // FIRST-GROUP ORDERING (first-group-ordering-v1): the anchor's own
+  // neighbors show 10; deeper nodes stay at SATELLITE_CAP. The server
+  // default matches (hubSatelliteCap 10 in _graph_view.mjs); the local
+  // path passes this explicitly to getNeighborhood.
+  HUB_SATELLITE_CAP: 10,
 });
 
 // ---------------------------------------------------------------------------
@@ -175,18 +180,40 @@ export function getConnectedComponents(nodes = [], links = [], adjacency = null)
  * Collects a capped local neighborhood around `anchorId`.
  *
  * Traversal is breadth-first so nearer relationships always win over distant
- * ones: hop 1 is fully admitted before any hop-2 node is considered. Within a
- * hop, candidates are ordered by degree descending — bridge musicians and
- * busy bands are the most interesting things to show, and they are also the
- * nodes a visitor is most likely to want to expand from next.
+ * ones: hop 1 is fully admitted before any hop-2 node is considered.
+ *
+ * FIRST-GROUP ORDERING (first-group-ordering-v1): within a parent's
+ * neighbors, full members come before short-term members (isShortTermMembership
+ * covers weight >= 3 AND touring/session/live/guest relations), founders
+ * (weight 1) come first within full members, then popularity_score desc,
+ * then degree desc, then name asc. Short-term members are still INCLUDED
+ * in the neighborhood — they are ordered last, never dropped — so a touring
+ * player stays in the constellation but never takes an opening slot.
+ * "Famous-times" is approximated by full-member status + popularity here
+ * because membership tenure data is empty in production; no era signal is
+ * invented. Weight/role were previously NOT ordering inputs at all, which
+ * is why founders lost opening slots to journeymen.
+ *
+ * HUB CAP: the anchor's own neighbors use `hubSatellites` (default: the
+ * same as maxSatellites when not passed) and are pageable by `hubGroup`
+ * (0-based; clamped to the last group, never empty). Deeper nodes always
+ * use maxSatellites. Callers that want the hub cap bump (10) pass it
+ * explicitly; bare-helper callers keep the old single-cap behavior.
  *
  * Returns:
- *   nodes     — the visible subgraph's nodes, each carrying `hop`
+ *   nodes     — the visible subgraph's nodes, each carrying `hop`,
+ *               `admittingFrom` (the parent id that brought it into view)
+ *               and `admittingWeight` (that membership edge's weight, so
+ *               view-layer person weight is per-band, not the min across
+ *               all of a person's bands)
  *   links     — links whose BOTH endpoints are visible (capped at MAX_EDGES)
  *   depths    — Map(id -> hop distance from the anchor)
  *   frontier  — adjacent-but-unrendered node ids, i.e. "there is more graph
  *               out there"; the UI turns these into expand affordances
  *   truncated — true when the budget (nodes or edges) stopped the traversal
+ *   hubGroupInfo — { total, group, groupCount, cap } for the anchor's
+ *               full ordered neighbor list, so the UI can cycle hub groups
+ *               in place on the same anchor view
  */
 export function getNeighborhood({
   nodes = [],
@@ -197,39 +224,78 @@ export function getNeighborhood({
   maxEdges = NEIGHBORHOOD_BUDGET.MAX_EDGES,
   adjacency = null,
   maxSatellites = Infinity,
+  hubSatellites = null,
+  hubGroup = 0,
 } = {}) {
   const byId = new Map(nodes.map(node => [node.id, node]));
-  const empty = { nodes: [], links: [], depths: new Map(), frontier: [], truncated: false };
+  const empty = {
+    nodes: [], links: [], depths: new Map(), frontier: [], truncated: false,
+    hubGroupInfo: { total: 0, group: 0, groupCount: 1, cap: hubSatellites ?? maxSatellites },
+  };
   if (!anchorId || !byId.has(anchorId)) return empty;
 
   const adj = adjacency || buildAdjacency(nodes, links);
   const degree = id => (adj.get(id) ? adj.get(id).size : 0);
 
+  // Membership link between two node ids, either direction (links are
+  // stored band -> person, adjacency is undirected).
+  const linkByPair = new Map();
+  links.forEach(link => {
+    const [s, t] = linkEndpoints(link);
+    if (s == null || t == null) return;
+    linkByPair.set(`${s}|${t}`, link);
+    linkByPair.set(`${t}|${s}`, link);
+  });
+  const linkBetween = (a, b) => linkByPair.get(`${a}|${b}`) || null;
+
+  // First-group ordering for one parent's neighbors (see header comment).
+  const compareNeighbors = parent => (a, b) => {
+    const linkA = linkBetween(parent, a);
+    const linkB = linkBetween(parent, b);
+    const shortA = linkA && isShortTermMembership(linkA) ? 1 : 0;
+    const shortB = linkB && isShortTermMembership(linkB) ? 1 : 0;
+    if (shortA !== shortB) return shortA - shortB;
+    const founderA = linkA && Number(linkA.weight) === 1 ? 0 : 1;
+    const founderB = linkB && Number(linkB.weight) === 1 ? 0 : 1;
+    if (founderA !== founderB) return founderA - founderB;
+    const popA = byId.get(a)?.popularity_score || 0;
+    const popB = byId.get(b)?.popularity_score || 0;
+    return popB - popA || degree(b) - degree(a) || String(a).localeCompare(String(b));
+  };
+
+  const hubCap = hubSatellites ?? maxSatellites;
+  // The anchor's FULL ordered neighbor list, before any group slicing, so
+  // the UI knows how many hub groups exist. Computed once, not per hop.
+  const hubOrdered = Array.from(adj.get(anchorId) || new Set()).sort(compareNeighbors(anchorId));
+  const hubGroupCount = Math.max(1, Math.ceil(hubOrdered.length / hubCap));
+  const hubGroupClamped = Math.min(Math.max(0, hubGroup | 0), hubGroupCount - 1);
+  const hubGroupInfo = { total: hubOrdered.length, group: hubGroupClamped, groupCount: hubGroupCount, cap: hubCap };
+
   const depths = new Map([[anchorId, 0]]);
   const visible = new Set([anchorId]);
   let frontierCandidates = new Set();
   let truncated = false;
+  // id -> { from, weight } for the edge that admitted the node into view.
+  const admitting = new Map();
 
   let currentLayer = [anchorId];
   const cappedNodes = new Set();
   for (let hop = 1; hop <= maxHops && currentLayer.length; hop += 1) {
-    // Candidates for this hop, de-duplicated, ordered by degree desc then
-    // name asc (a stable, reproducible order — same anchor, same view).
+    // Candidates for this hop, de-duplicated, ordered by the first-group
+    // ordering (a stable, reproducible order — same anchor, same view).
     const candidates = [];
     const seenThisLayer = new Set();
     currentLayer.forEach(id => {
       // Satellite cap: limit how many neighbors each node contributes.
       // Without this, a super-connector (30+ bands) floods the view.
-      const neighbors = Array.from(adj.get(id) || new Set())
+      // The anchor's slice is a hub-group window, not the first slice, so
+      // groups cycle in place; deeper nodes always take the first slice.
+      const ordered = Array.from(adj.get(id) || new Set())
         .filter(neighbor => !visible.has(neighbor) && !seenThisLayer.has(neighbor))
-        .sort((a, b) => {
-          // Peak popularity ordering: most recognizable members first.
-          // Falls back to degree then name for a stable, reproducible order.
-          const popA = byId.get(a)?.popularity_score || 0;
-          const popB = byId.get(b)?.popularity_score || 0;
-          return popB - popA || degree(b) - degree(a) || String(a).localeCompare(String(b));
-        })
-        .slice(0, maxSatellites);
+        .sort(compareNeighbors(id));
+      const neighbors = id === anchorId
+        ? ordered.slice(hubGroupClamped * hubCap, (hubGroupClamped + 1) * hubCap)
+        : ordered.slice(0, maxSatellites);
       neighbors.forEach(neighbor => {
         seenThisLayer.add(neighbor);
         candidates.push({ id: neighbor, from: id });
@@ -247,10 +313,15 @@ export function getNeighborhood({
       }
       visible.add(id);
       depths.set(id, hop);
+      const link = linkBetween(from, id);
+      admitting.set(id, { from, weight: link ? Number(link.weight) : null });
       admitted.push(id);
-      // Track which nodes had their satellites capped
+      // Track which nodes had their satellites capped. The anchor counts
+      // as capped when more hub groups exist than the one shown, not just
+      // when its neighbor count exceeds the cap.
       const totalNeighbors = (adj.get(from) || new Set()).size;
-      if (totalNeighbors > maxSatellites) cappedNodes.add(from);
+      const capFor = from === anchorId ? hubCap : maxSatellites;
+      if (totalNeighbors > capFor) cappedNodes.add(from);
     });
 
     currentLayer = admitted;
@@ -281,6 +352,8 @@ export function getNeighborhood({
     ...byId.get(id),
     hop: depths.get(id),
     hasMoreSatellites: cappedNodes.has(id),
+    admittingFrom: admitting.get(id)?.from ?? null,
+    admittingWeight: admitting.get(id)?.weight ?? null,
   }));
 
   return {
@@ -289,6 +362,7 @@ export function getNeighborhood({
     depths,
     frontier: Array.from(frontierCandidates).filter(id => byId.has(id)),
     truncated,
+    hubGroupInfo,
   };
 }
 
