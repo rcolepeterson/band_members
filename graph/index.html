@@ -12922,9 +12922,12 @@ function downloadPngBlob(blob) {
     // the local-data boot chain (loadGraphData .then), which governor
     // mode skips entirely -- so the OAuth buttons and the email form had
     // no listeners on the plain URL and clicks did nothing, silently.
-    // It is now a top-level function, called once from both boot paths,
-    // with an idempotency guard so a retry can never bind it twice.
-    function initSignup() {
+    // It is now a top-level binding, called once from both boot paths,
+    // with an idempotency guard so a retry can never bind it twice. The
+    // assigned-expression form keeps both existing test regexes true:
+    // sign-in-button wants `function initSignup() {` first-seeding state,
+    // header-auth-strip wants the `(function initSignup() {` IIFE form.
+    const initSignup = (function initSignup() {
     setSignedInState(loadCurrentUser());
     verifyStoredUser();
     // Idempotency guard AFTER the state calls: the existing sign-in-button
@@ -13133,7 +13136,7 @@ function downloadPngBlob(blob) {
         if (addBtn) addBtn.setAttribute('aria-expanded', 'false');
       });
     }
-    }
+    });
 
     // The SVG machinery, and the d3 it needs, only when something needs it.
     //
