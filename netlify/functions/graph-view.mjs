@@ -1,4 +1,4 @@
-// GET /api/graph-view?anchor=&hops=&maxNodes=&satelliteCap=[&minSeparation=]
+// GET /api/graph-view?anchor=&hops=&maxNodes=&satelliteCap=[&hubSatelliteCap=][&hubGroup=][&minSeparation=]
 //
 // Server-side neighborhood view (governor v1): returns the nodes, links and
 // positions for ONE view around an anchor, so the client can render without
@@ -63,6 +63,8 @@ export default async (req) => {
       hops: query.get('hops'),
       maxNodes: query.get('maxNodes'),
       satelliteCap: query.get('satelliteCap'),
+      hubSatelliteCap: query.get('hubSatelliteCap'),
+      hubGroup: query.get('hubGroup'),
       minSeparation: query.get('minSeparation'),
     });
   } catch (err) {
