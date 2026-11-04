@@ -9,7 +9,9 @@
 // warming); the trigger POST returns as soon as Netlify accepts the job.
 //
 // HTTP contract: POST with a JSON body {anchor, hops, maxNodes,
-// satelliteCap, minSeparation, version}. The worker loads the api-bands
+// satelliteCap, hubSatelliteCap, hubGroup, minSeparation, version}.
+// (normalizeViewParams supplies the hub defaults, so older triggers that
+// omit them still compute the hub-cap-10 view.) The worker loads the api-bands
 // payload the same way graph-view.mjs does (Blobs copy if present, else
 // Neon), computes the FULL view (including giant layouts — that is the
 // point of this worker), and writes it to Blobs under cacheKeyFor(version,

@@ -69,12 +69,21 @@ export const VIEW_DEFAULTS = Object.freeze({
   hops: 2,
   maxNodes: 100,
   satelliteCap: 7,
+  // FIRST-GROUP ORDERING (first-group-ordering-v1): the anchor's own
+  // neighbors show 10; deeper nodes stay at satelliteCap (7). The hub cap
+  // is its own param so the deeper cap is untouched.
+  hubSatelliteCap: 10,
+  // 0-based hub-group window into the anchor's ordered neighbors (see
+  // getNeighborhood); clamped to the last group, never empty.
+  hubGroup: 0,
   minSeparation: 140,
 });
 export const VIEW_LIMITS = Object.freeze({
   hops: [1, 6],
   maxNodes: [1, 400],
   satelliteCap: [1, 30],
+  hubSatelliteCap: [1, 30],
+  hubGroup: [0, 100],
   minSeparation: [1, 1000],
 });
 
@@ -96,6 +105,8 @@ export function normalizeViewParams(raw = {}) {
     hops: parse(raw.hops, VIEW_DEFAULTS.hops, VIEW_LIMITS.hops, 'hops'),
     maxNodes: parse(raw.maxNodes, VIEW_DEFAULTS.maxNodes, VIEW_LIMITS.maxNodes, 'maxNodes'),
     satelliteCap: parse(raw.satelliteCap, VIEW_DEFAULTS.satelliteCap, VIEW_LIMITS.satelliteCap, 'satelliteCap'),
+    hubSatelliteCap: parse(raw.hubSatelliteCap, VIEW_DEFAULTS.hubSatelliteCap, VIEW_LIMITS.hubSatelliteCap, 'hubSatelliteCap'),
+    hubGroup: parse(raw.hubGroup, VIEW_DEFAULTS.hubGroup, VIEW_LIMITS.hubGroup, 'hubGroup'),
     minSeparation: parse(raw.minSeparation, VIEW_DEFAULTS.minSeparation, VIEW_LIMITS.minSeparation, 'minSeparation'),
   };
 }
@@ -122,7 +133,7 @@ export function cacheKeyFor(version, params) {
   const p = normalizeViewParams(params);
   const versionHash = hashString(version);
   const paramsHash = hashString(JSON.stringify([
-    p.anchor, p.hops, p.maxNodes, p.satelliteCap, p.minSeparation,
+    p.anchor, p.hops, p.maxNodes, p.satelliteCap, p.hubSatelliteCap, p.hubGroup, p.minSeparation,
   ]));
   return `graph-view-v${versionHash}-${paramsHash}`;
 }
@@ -385,9 +396,22 @@ export function buildViewNodes(payload, rawParams) {
     maxNodes: params.maxNodes,
     adjacency,
     maxSatellites: params.satelliteCap,
+    hubSatellites: params.hubSatelliteCap,
+    hubGroup: params.hubGroup,
   });
   const nodes = view.nodes.map((node) => ({
     ...node,
+    // FIRST-GROUP ORDERING: view-layer per-band weight. The master node
+    // carries the MINIMUM membership weight across all of a person's bands
+    // (buildMasterFromPayload), which mis-renders a founder-elsewhere /
+    // touring-here player. A view node instead carries the weight of the
+    // membership edge that brought it into view (anchor edge for hop-1,
+    // admitting parent edge deeper). The anchor itself has no admitting
+    // edge and keeps the master weight. Sigma/governor rendering already
+    // uses anchor-relative role and is unchanged by this.
+    weight: node.type === 'person' && node.admittingWeight != null
+      ? node.admittingWeight
+      : node.weight,
     role: roleForNode(node, { anchorId, links: master.links }),
     // PARITY FIX (governor-node-parity-v1): the anchor's NATURAL kind,
     // not 'home-star'. classifyNode marks any anchor as home-star, and
@@ -412,6 +436,7 @@ export function buildViewNodes(payload, rawParams) {
     depthsMap: view.depths,
     frontier: view.frontier.slice().sort((a, b) => String(a).localeCompare(String(b))),
     truncated: view.truncated,
+    hubGroupInfo: view.hubGroupInfo || null,
     totalNodes: master.nodes.length,
     currentComponentNodeCount: componentNodeCount(adjacency, anchorId),
     master,
@@ -431,6 +456,8 @@ export function layoutView(viewNodes, rawParams) {
       hops: params.hops,
       maxNodes: params.maxNodes,
       satelliteCap: params.satelliteCap,
+      hubSatelliteCap: params.hubSatelliteCap,
+      hubGroup: params.hubGroup,
       minSeparation: params.minSeparation,
       nodes: [],
       links: [],
@@ -438,6 +465,7 @@ export function layoutView(viewNodes, rawParams) {
       depths: {},
       frontier: [],
       truncated: false,
+      hubGroupInfo: viewNodes.hubGroupInfo || null,
       totalNodes: viewNodes.totalNodes || 0,
       currentComponentNodeCount: 0,
     };
@@ -470,6 +498,8 @@ export function layoutView(viewNodes, rawParams) {
     hops: params.hops,
     maxNodes: params.maxNodes,
     satelliteCap: params.satelliteCap,
+    hubSatelliteCap: params.hubSatelliteCap,
+    hubGroup: params.hubGroup,
     minSeparation: params.minSeparation,
     nodes: viewNodes.nodes,
     links: viewNodes.links,
@@ -477,6 +507,7 @@ export function layoutView(viewNodes, rawParams) {
     depths: viewNodes.depths,
     frontier: viewNodes.frontier,
     truncated: viewNodes.truncated,
+    hubGroupInfo: viewNodes.hubGroupInfo || null,
     totalNodes: viewNodes.totalNodes,
     currentComponentNodeCount: viewNodes.currentComponentNodeCount || 0,
   };
