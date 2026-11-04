@@ -536,3 +536,18 @@ test('landing boot footer: Aaron McRae governor footer values match the travel v
 test('governor flip: GOVERNOR_DEFAULT is true — governor is the default', () => {
   assert.equal(G.GOVERNOR_DEFAULT, true);
 });
+
+// ---------------------------------------------------------------------------
+// First-group ordering (first-group-ordering-v1): hub-group cycling
+// ---------------------------------------------------------------------------
+
+test('governor hub groups: cycle function, footer row, and hubGroup fetch param', () => {
+  // The hub-group button cycles the SAME anchor view in place; it is not
+  // the disconnected-components "Show next group" jump.
+  assert.match(EXPLORER, /function cycleHubGroup\(\)/);
+  assert.match(EXPLORER, /sigma-hub-groups__btn/);
+  assert.match(EXPLORER, /hubGroup=\$\{encodeURIComponent\(group\)\}/);
+  // Anchor changes reset to group 0; Expand keeps the group (same anchor).
+  assert.match(EXPLORER, /state\.hubGroup = 0;/);
+  assert.match(EXPLORER, /state\.hubGroupInfo = view\.hubGroupInfo/);
+});
