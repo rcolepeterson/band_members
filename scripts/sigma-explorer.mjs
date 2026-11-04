@@ -938,6 +938,17 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-other-groups__btn:hover{color:#c3f2fb}
 #${STAGE_ID} .sigma-other-groups__btn:focus-visible{outline:2px solid rgba(143,232,246,0.8);
   outline-offset:2px}
+/* FIRST-GROUP ORDERING: hub member-group row, same treatment as the
+   other-groups row it sits below. */
+#${STAGE_ID} .sigma-hub-groups{margin:0;font-size:12px;color:#8b98a8;display:flex;
+  flex-wrap:wrap;justify-content:center;align-items:baseline;gap:6px}
+#${STAGE_ID} .sigma-hub-groups[hidden]{display:none}
+#${STAGE_ID} .sigma-hub-groups__btn{border:0;background:none;padding:0;margin:0;
+  font:inherit;color:#8fe8f6;text-decoration:underline;text-underline-offset:2px;
+  cursor:pointer}
+#${STAGE_ID} .sigma-hub-groups__btn:hover{color:#c3f2fb}
+#${STAGE_ID} .sigma-hub-groups__btn:focus-visible{outline:2px solid rgba(143,232,246,0.8);
+  outline-offset:2px}
 /* --------------------------------------------------------------------------
    The page's own chrome, stood down while Sigma is rendering.
 
@@ -1011,7 +1022,8 @@ body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
   #${STAGE_ID} .sigma-footer .sigma-hint:not(.sigma-hint--intro){display:none}
   #${STAGE_ID} .sigma-footer .sigma-context,
   #${STAGE_ID} .sigma-footer .sigma-frontier,
-  #${STAGE_ID} .sigma-other-groups__text{display:none}
+  #${STAGE_ID} .sigma-other-groups__text,
+  #${STAGE_ID} .sigma-hub-groups__text{display:none}
 }
 `;
 
@@ -1159,6 +1171,15 @@ function buildStage(doc, mount) {
       <p class="sigma-other-groups" hidden>
         <span class="sigma-other-groups__text"></span>
         <button type="button" class="sigma-other-groups__btn"></button>
+      </p>
+      <!-- FIRST-GROUP ORDERING: hub member groups cycle IN PLACE on this
+           anchor view (one tap, no navigation, no new page). This row is
+           NOT the disconnected-components "Show next group" row above: it
+           pages the anchor's own ordered neighbors (group 1 = founders and
+           famous-times members first). Hidden unless >1 hub group exists. -->
+      <p class="sigma-hub-groups" hidden>
+        <span class="sigma-hub-groups__text"></span>
+        <button type="button" class="sigma-hub-groups__btn"></button>
       </p>
       <!-- Legal, one carriage return below the group jump: the graph stage
            captures scroll for zoom, so this footer is the bottom of the page. -->
@@ -1351,6 +1372,10 @@ export function initSigmaExplorer({
   const otherGroupsEl = stage.querySelector('.sigma-other-groups');
   const otherGroupsTextEl = stage.querySelector('.sigma-other-groups__text');
   const otherGroupsBtn = stage.querySelector('.sigma-other-groups__btn');
+  // FIRST-GROUP ORDERING: hub member-group row (see stage markup).
+  const hubGroupsEl = stage.querySelector('.sigma-hub-groups');
+  const hubGroupsTextEl = stage.querySelector('.sigma-hub-groups__text');
+  const hubGroupsBtn = stage.querySelector('.sigma-hub-groups__btn');
   // The page's Add / Share / Feedback panels live INSIDE the toolbar that stands
   // down for the Sigma chrome, so hiding the toolbar hid the panels too and the
   // new pills opened nothing. They are moved onto the stage for the duration and
@@ -1496,6 +1521,12 @@ export function initSigmaExplorer({
     governorPending: null,
     governorSearchTimer: null,
     governorFiltersDisabled: false,
+    // FIRST-GROUP ORDERING: which hub-group window of the anchor's ordered
+    // neighbors is shown (0-based; server-clamped). Reset on every anchor
+    // change; Expand keeps it (same anchor). hubGroupInfo arrives with the
+    // view (server) or from the local traversal.
+    hubGroup: 0,
+    hubGroupInfo: null,
   };
 
   state.homeStarId = homeStarId;
@@ -1812,8 +1843,19 @@ export function initSigmaExplorer({
       maxNodes,
       adjacency,
       maxSatellites: NEIGHBORHOOD_BUDGET.SATELLITE_CAP,
+      hubSatellites: NEIGHBORHOOD_BUDGET.HUB_SATELLITE_CAP,
+      hubGroup: state.hubGroup ?? 0,
     });
     if (!view.nodes.length) return false;
+    // FIRST-GROUP ORDERING: view-layer per-band weight, mirroring the
+    // server (see _graph_view.mjs buildViewNodes). Sigma drawing itself
+    // uses anchor-relative role, not weight; this keeps the local view
+    // nodes honest for anything that does read weight.
+    view.nodes.forEach(node => {
+      if (node.type === 'person' && node.admittingWeight != null) node.weight = node.admittingWeight;
+    });
+    state.hubGroupInfo = view.hubGroupInfo || null;
+    if (view.hubGroupInfo) state.hubGroup = view.hubGroupInfo.group;
 
     // Layout selection: polygon for 2° and 3° views, ring for 4-6°.
     // Polygon beats ring for ALL views on live data (Home 2° 0 vs ring 3,
@@ -2116,6 +2158,12 @@ export function initSigmaExplorer({
       otherGroupsEl.hidden = true;
     }
     } // end non-governor other-groups branch
+
+    // FIRST-GROUP ORDERING: hub member-group row, rendered from the same
+    // state both paths maintain (server hubGroupInfo in governor mode,
+    // local traversal info otherwise). Never a navigation: the button
+    // cycles the group and re-renders this anchor view in place.
+    updateHubGroupsRow();
 
     if (homeStarId) {
       homeLabelEl.textContent =
@@ -2444,6 +2492,7 @@ export function initSigmaExplorer({
     // A new anchor starts from the standard horizon: expansions belong to the
     // view they were performed in, not to every later destination.
     state.maxHops = initialHopsForAnchor(partial.id);
+    state.hubGroup = 0;
     renderNeighborhood({ anchorId: partial.id, maxNodes: NEIGHBORHOOD_BUDGET.MAX_NODES });
     // Searching is navigation: the open card described the view we just left,
     // so close it first, then open the card for the new anchor -- the same
@@ -2509,12 +2558,18 @@ export function initSigmaExplorer({
     expandBtn.setAttribute('aria-disabled', 'true');
   }
 
-  async function governorLoadView({ anchorId, hops, maxNodes, animate = true }) {
-    const pending = { kind: 'view', anchorId, hops, maxNodes, animate };
+  async function governorLoadView({ anchorId, hops, maxNodes, hubGroup, animate = true }) {
+    // FIRST-GROUP ORDERING: hubGroup rides the URL as its own param (the
+    // tested governorViewUrl shape is unchanged); the hub cap rides the
+    // server default (hubSatelliteCap 10). A new anchor resets hubGroup
+    // at the caller; Expand keeps it (same anchor).
+    const group = hubGroup != null ? hubGroup : (state.hubGroup ?? 0);
+    const pending = { kind: 'view', anchorId, hops, maxNodes, hubGroup: group, animate };
     let response = null;
     try {
       response = await fetch(
-        governorViewUrl(anchorId, hops, maxNodes, NEIGHBORHOOD_BUDGET.SATELLITE_CAP),
+        governorViewUrl(anchorId, hops, maxNodes, NEIGHBORHOOD_BUDGET.SATELLITE_CAP) +
+          `&hubGroup=${encodeURIComponent(group)}`,
         { signal: AbortSignal.timeout(8000) }
       );
     } catch (e) {
@@ -2728,6 +2783,10 @@ export function initSigmaExplorer({
     state.maxNodes = view.maxNodes != null ? view.maxNodes : state.maxNodes;
     state.maxHops = hops;
     if (!state.openingAnchorId) state.openingAnchorId = anchorId;
+    // FIRST-GROUP ORDERING: the server clamps hubGroup; trust its info so
+    // a stale group index can never render an empty hub window.
+    state.hubGroupInfo = view.hubGroupInfo || null;
+    if (view.hubGroupInfo) state.hubGroup = view.hubGroupInfo.group;
     state.governorFailed = false;
     state.governorPending = null;
 
@@ -2793,6 +2852,7 @@ export function initSigmaExplorer({
       return { ok: false, reason: 'not-found' };
     }
     state.anchorSource = 'requested';
+    state.hubGroup = 0;
     // INTEGRATION (governor v1): search results carry Neon uuids in `id`,
     // and /api/graph-view resolves a uuid anchor server-side to its graph
     // display id (see _graph_view.mjs resolveAnchorId), returning that
@@ -2819,6 +2879,7 @@ export function initSigmaExplorer({
 
   async function governorTravelTo(node) {
     state.anchorSource = 'requested';
+    state.hubGroup = 0;
     let typeHint = null;
     try {
       if (viewGraph.hasNode(node)) typeHint = viewGraph.getNodeAttribute(node, 'entityType');
@@ -2854,6 +2915,7 @@ export function initSigmaExplorer({
 
   async function governorGoHome(home) {
     const hops = governorHopsForAnchor(home, null);
+    state.hubGroup = 0;
     await governorLoadView({
       anchorId: home,
       hops,
@@ -2898,6 +2960,7 @@ export function initSigmaExplorer({
     if (state.governor) { void governorTravelTo(node); return; }
     state.anchorSource = 'requested';
     state.maxHops = initialHopsForAnchor(node);
+    state.hubGroup = 0;
     const moved = renderNeighborhood({
       anchorId: node,
       maxNodes: NEIGHBORHOOD_BUDGET.MAX_NODES,
@@ -3281,6 +3344,7 @@ export function initSigmaExplorer({
   function goHome() {
     state.maxHops = initialHopsForAnchor(homeStarId);
     state.anchorSource = 'default';
+    state.hubGroup = 0;
     clearHighlight();
     // The view they OPENED with, which is not necessarily the default anchor.
     // Most visitors arrive on a link shared by another user, so for them
@@ -3485,6 +3549,51 @@ export function initSigmaExplorer({
     });
   });
 
+  // FIRST-GROUP ORDERING: hub member-group footer row. Hidden unless the
+  // anchor has more than one hub group. The count text is the anchor's
+  // full ordered neighbor list (not the capped window), so group 2 is
+  // reachable, not implied complete.
+  function updateHubGroupsRow() {
+    const info = state.hubGroupInfo;
+    if (!hubGroupsEl || !info || !info.groupCount || info.groupCount <= 1) {
+      if (hubGroupsEl) hubGroupsEl.hidden = true;
+      return;
+    }
+    const cap = info.cap || NEIGHBORHOOD_BUDGET.HUB_SATELLITE_CAP;
+    const start = info.group * cap + 1;
+    const end = Math.min(info.total, (info.group + 1) * cap);
+    hubGroupsTextEl.textContent =
+      `Members ${start}–${end} of ${info.total} for ${state.anchorId} — ` +
+      `group ${info.group + 1} of ${info.groupCount}.`;
+    hubGroupsBtn.textContent = info.group + 1 >= info.groupCount
+      ? 'Back to first members'
+      : 'Show next members';
+    hubGroupsEl.hidden = false;
+  }
+
+  // One tap, same anchor, same hops: the next hub-group window replaces
+  // this one in place. Wraps to group 1 after the last group. This is NOT
+  // the disconnected-components "Show next group" jump above.
+  function cycleHubGroup() {
+    const info = state.hubGroupInfo;
+    if (!info || !info.groupCount || info.groupCount <= 1) return;
+    const next = (info.group + 1) % info.groupCount;
+    if (state.governor) {
+      void governorLoadView({
+        anchorId: state.anchorId,
+        hops: state.maxHops,
+        maxNodes: state.maxNodes,
+        hubGroup: next,
+        animate: false,
+      });
+      return;
+    }
+    state.hubGroup = next;
+    renderNeighborhood({ anchorId: state.anchorId, animate: false });
+  }
+
+  hubGroupsBtn.addEventListener('click', () => { cycleHubGroup(); });
+
   // Jumps to the busiest node of another disconnected group in this filter.
   // Reuses the exact same anchor-and-BFS render path a node click uses --
   // rendering every group at once is the bigger change this defers.
@@ -3493,6 +3602,7 @@ export function initSigmaExplorer({
     // view from /api/graph-view — same button, same tour semantics.
     if (state.governor) { void showNextGovernorGroup(); return; }
     if (!state.nextGroupAnchor) return;
+    state.hubGroup = 0;
     renderNeighborhood({
       anchorId: state.nextGroupAnchor,
       maxNodes: NEIGHBORHOOD_BUDGET.OPENING_MAX_NODES,
