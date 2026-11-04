@@ -12918,6 +12918,219 @@ function downloadPngBlob(blob) {
     renderBandMemberButtons([]);
     window.addEventListener('scroll', updateHeroState, { passive: true });
 
+    // GOVERNOR SIGN-IN FIX (2026-11-04): initSignup used to live inside
+    // the local-data boot chain (loadGraphData .then), which governor
+    // mode skips entirely -- so the OAuth buttons and the email form had
+    // no listeners on the plain URL and clicks did nothing, silently.
+    // It is now a top-level function, called once from both boot paths,
+    // with an idempotency guard so a retry can never bind it twice.
+    function initSignup() {
+      if (initSignup.done) return;
+      initSignup.done = true;
+    setSignedInState(loadCurrentUser());
+    verifyStoredUser();
+    // From the game's Sign in button: open the sign-in panel right away
+    // instead of leaving the visitor to find it on the map.
+    if (/[?&]signin=game(&|$)/.test(location.search) && !loadCurrentUser()) {
+      setTimeout(() => { try { openSignInFlow(); } catch (_) {} }, 0);
+    }
+    // /?card=1 (the game's "add it to your card" link): open the account
+    // menu with Your card expanded. /?account=1 (tapping "Playing as"
+    // in the game): just open the account menu.
+    const openCard = /[?&]card=1(&|$)/.test(location.search) && loadCurrentUser();
+    if (openCard || (/[?&]account=1(&|$)/.test(location.search) && loadCurrentUser())) {
+      setTimeout(() => {
+        try {
+          const card = document.getElementById('user-card-popover');
+          if (card && card.hidden) {
+            const chip = document.getElementById('header-user-initials');
+            const mobile = document.getElementById('mobile-user-btn');
+            ((chip && chip.offsetParent) ? chip : (mobile || chip))?.click();
+          }
+          const details = document.getElementById('user-card-profile');
+          if (details && openCard) details.open = true;
+        } catch (_) {}
+      }, 0);
+    }
+
+    const form = document.getElementById('signup-form');
+    const status = document.getElementById('signup-status');
+    const submitBtn = document.getElementById('signup-submit-btn');
+    const nameInput = document.getElementById('signup-name');
+    const emailInput = document.getElementById('signup-email');
+    // Four-option sign-in: Google / Facebook / Instagram go through a
+    // full-page redirect (not a popup). The browser is sent to
+    // /api/oauth/authorize, which returns the provider's authorize URL;
+    // the provider redirects back to /api/oauth/callback, which stores
+    // the user in bmft-user and sends the visitor back to this page.
+    async function startOAuth(provider, button) {
+      const buttons = Array.from(document.querySelectorAll('[data-oauth-provider]'));
+      buttons.forEach((b) => { b.disabled = true; });
+      try {
+        const returnTo = location.pathname + location.search;
+        const res = await fetch(
+          '/api/oauth/authorize?provider=' + encodeURIComponent(provider) +
+          '&return_to=' + encodeURIComponent(returnTo)
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok || !data.url) {
+          throw new Error((data && data.error) || 'sign-in unavailable');
+        }
+        location.href = data.url;
+      } catch (err) {
+        buttons.forEach((b) => { b.disabled = false; });
+        if (status) {
+          status.textContent = 'Could not start sign-in with ' + provider +
+            '. Please try email instead.';
+        }
+      }
+    }
+    document.querySelectorAll('[data-oauth-provider]').forEach((button) => {
+      button.addEventListener('click', () => {
+        startOAuth(button.getAttribute('data-oauth-provider'), button);
+      });
+    });
+
+    if (form) {
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const name = (nameInput && nameInput.value || '').trim();
+        const email = (emailInput && emailInput.value || '').trim().toLowerCase();
+        // Two steps on one form.
+        //
+        // Step one asks for the email and nothing else: a returning visitor
+        // is found by email alone, so making them retype a profile the row
+        // already holds was pure friction. Step two appears only when the
+        // email comes back unknown, and only then do the name and profile
+        // rules apply -- checking them in step one would demand fields that
+        // are not on screen.
+        const profileFields = document.getElementById('signup-profile-fields');
+        const creatingAccount = Boolean(profileFields && !profileFields.hidden);
+
+        // Client-side sanity check. Server enforces the real rules.
+        if (creatingAccount && name.length > 100) {
+          status.textContent = 'Please keep your name to 100 characters.';
+          status.className = 'validation-message is-error';
+          return;
+        }
+        if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          status.textContent = 'That doesn’t look like a valid email. Try again.';
+          status.className = 'validation-message is-error';
+          return;
+        }
+        submitBtn.disabled = true;
+        // Same endpoint either way; only the wording follows the mode
+        // the panel was opened in (see setAuthMode / backlog #25).
+        const modeCopy = AUTH_MODE_COPY[currentAuthMode] || AUTH_MODE_COPY.signup;
+        submitBtn.textContent = modeCopy.pending;
+        status.textContent = '';
+        status.className = 'validation-message';
+        try {
+          const response = await fetch(SIGNUP_ENDPOINT, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(creatingAccount
+              // Name is optional; the server makes one from the email.
+              ? { name, email }
+              // Look up only. The server never creates an account for this
+              // shape, so a typo'd email cannot silently make a second one.
+              : { intent: 'signin', email })
+          });
+          let data = null;
+          try { data = await response.json(); } catch (_) {}
+
+          // Known email, so that was the whole sign-in. Unknown email, so
+          // this visitor is new: reveal what an account needs and let them
+          // press Continue again. Deliberately not auto-creating from one
+          // press -- a mistyped address would make an account nobody can
+          // reach.
+          if (!creatingAccount && response.ok && data && data.found === false) {
+            revealProfileFields();
+            // No status line here: revealProfileFields already rewrites the
+            // panel title and copy to say the same thing, and the status
+            // region sits below all six fields where a phone visitor would
+            // never see it.
+            return;
+          }
+
+          if (!response.ok || !data || !data.user || !data.user.token) {
+            // Was branched on the mode; with one door there is one message,
+            // and it should not guess which half of the operation failed.
+            const fallbackMsg = `Could not sign you in (${response.status}).`;
+            const msg = (data && (data.error || data.message)) || fallbackMsg;
+            status.textContent = msg;
+            status.className = 'validation-message is-error';
+            return;
+          }
+          saveCurrentUser({
+            id: data.user.id,
+            name: data.user.name,
+            email: data.user.email,
+            token: data.user.token,
+            bands_added: data.user.bands_added || 0,
+            bands_edited: data.user.bands_edited || 0,
+            city: data.user.city || '',
+            state: data.user.state || '',
+            country: data.user.country || '',
+            instrument: data.user.instrument || ''
+          });
+          // Opened with "Sign in" (not "Add your band"): signing in was the
+          // whole errand, so close the panel rather than let it turn into
+          // the Add-your-band form (Cole, 2026-10-11).
+          const signInOnly = currentAuthMode === 'signin';
+          setSignedInState(loadCurrentUser());
+          // The signup section is now hidden; if there's any residual
+          // input we clear it for good measure.
+          form.reset();
+          // Leave the panel in its default framing so a later sign-out
+          // doesn't reopen it still saying "Welcome back".
+          setAuthMode('signup');
+          if (creatingAccount) {
+            try {
+              const sa = (typeof window.signupAttribution === 'function') ? window.signupAttribution() : {};
+              if (typeof window.gtag === 'function') window.gtag('event', 'account_signup', { method: 'graph_signup', signup_source: sa.source || '', signup_medium: sa.medium || '', signup_campaign: sa.campaign || '' });
+            } catch (_) {}
+          }
+          if (signInOnly) closeBottomPopovers();
+        } catch (error) {
+          status.textContent = 'Could not reach the server. Check your connection and try again.';
+          status.className = 'validation-message is-error';
+        } finally {
+          submitBtn.disabled = false;
+          // Re-read the mode rather than restoring a label captured
+          // before the request: the success path calls
+          // setAuthMode('signup'), so a captured "Sign in" would be
+          // put back and leave the panel self-contradictory.
+          // Respect the step, not just the panel framing: once the profile
+          // fields are open the button is creating an account, and resetting
+          // it to "Continue" here undid revealProfileFields' label.
+          const profileOpen = !document.getElementById('signup-profile-fields')?.hidden;
+          submitBtn.textContent = profileOpen
+            ? 'Create account'
+            : (AUTH_MODE_COPY[currentAuthMode] || AUTH_COPY).submit;
+        }
+      });
+    }
+
+    const signOutBtn = document.getElementById('sign-out-btn');
+    if (signOutBtn) {
+      signOutBtn.addEventListener('click', () => {
+        clearCurrentUser();
+        setSignedInState(null);
+        setAuthMode('signup');
+        // Close the popover so the user sees the flipped toolbar
+        // clearly instead of the now-hidden signed-in panel.
+        const popover = document.getElementById('add-band-popover');
+        const addBtn = document.getElementById('add-band-btn');
+        if (popover) {
+          popover.hidden = true;
+          popover.classList.remove('is-open-mobile');
+        }
+        if (addBtn) addBtn.setAttribute('aria-expanded', 'false');
+      });
+    }
+    }
+
     // The SVG machinery, and the d3 it needs, only when something needs it.
     //
     // This block used to run unconditionally at boot -- which is exactly why
@@ -13056,6 +13269,9 @@ function downloadPngBlob(blob) {
 
     if (governorModeOn && onSigmaPath()) {
       governorBoot();
+      // Governor mode skips the local-data chain below, so sign-in wiring
+      // must be bound here too (see initSignup).
+      initSignup();
     } else {
     rendererReady.then(loadGraphData).then(async rows => {
       const master = buildMasterGraph(rows);
@@ -13782,210 +13998,7 @@ function downloadPngBlob(blob) {
         // the visible label matches the user's state on first paint, then
         // background-verifies against /api/me.
         // -----------------------------------------------------------------
-        (function initSignup() {
-          setSignedInState(loadCurrentUser());
-          verifyStoredUser();
-          // From the game's Sign in button: open the sign-in panel right away
-          // instead of leaving the visitor to find it on the map.
-          if (/[?&]signin=game(&|$)/.test(location.search) && !loadCurrentUser()) {
-            setTimeout(() => { try { openSignInFlow(); } catch (_) {} }, 0);
-          }
-          // /?card=1 (the game's "add it to your card" link): open the account
-          // menu with Your card expanded. /?account=1 (tapping "Playing as"
-          // in the game): just open the account menu.
-          const openCard = /[?&]card=1(&|$)/.test(location.search) && loadCurrentUser();
-          if (openCard || (/[?&]account=1(&|$)/.test(location.search) && loadCurrentUser())) {
-            setTimeout(() => {
-              try {
-                const card = document.getElementById('user-card-popover');
-                if (card && card.hidden) {
-                  const chip = document.getElementById('header-user-initials');
-                  const mobile = document.getElementById('mobile-user-btn');
-                  ((chip && chip.offsetParent) ? chip : (mobile || chip))?.click();
-                }
-                const details = document.getElementById('user-card-profile');
-                if (details && openCard) details.open = true;
-              } catch (_) {}
-            }, 0);
-          }
-
-          const form = document.getElementById('signup-form');
-          const status = document.getElementById('signup-status');
-          const submitBtn = document.getElementById('signup-submit-btn');
-          const nameInput = document.getElementById('signup-name');
-          const emailInput = document.getElementById('signup-email');
-          // Four-option sign-in: Google / Facebook / Instagram go through a
-          // full-page redirect (not a popup). The browser is sent to
-          // /api/oauth/authorize, which returns the provider's authorize URL;
-          // the provider redirects back to /api/oauth/callback, which stores
-          // the user in bmft-user and sends the visitor back to this page.
-          async function startOAuth(provider, button) {
-            const buttons = Array.from(document.querySelectorAll('[data-oauth-provider]'));
-            buttons.forEach((b) => { b.disabled = true; });
-            try {
-              const returnTo = location.pathname + location.search;
-              const res = await fetch(
-                '/api/oauth/authorize?provider=' + encodeURIComponent(provider) +
-                '&return_to=' + encodeURIComponent(returnTo)
-              );
-              const data = await res.json().catch(() => ({}));
-              if (!res.ok || !data.ok || !data.url) {
-                throw new Error((data && data.error) || 'sign-in unavailable');
-              }
-              location.href = data.url;
-            } catch (err) {
-              buttons.forEach((b) => { b.disabled = false; });
-              if (status) {
-                status.textContent = 'Could not start sign-in with ' + provider +
-                  '. Please try email instead.';
-              }
-            }
-          }
-          document.querySelectorAll('[data-oauth-provider]').forEach((button) => {
-            button.addEventListener('click', () => {
-              startOAuth(button.getAttribute('data-oauth-provider'), button);
-            });
-          });
-
-          if (form) {
-            form.addEventListener('submit', async (event) => {
-              event.preventDefault();
-              const name = (nameInput && nameInput.value || '').trim();
-              const email = (emailInput && emailInput.value || '').trim().toLowerCase();
-              // Two steps on one form.
-              //
-              // Step one asks for the email and nothing else: a returning visitor
-              // is found by email alone, so making them retype a profile the row
-              // already holds was pure friction. Step two appears only when the
-              // email comes back unknown, and only then do the name and profile
-              // rules apply -- checking them in step one would demand fields that
-              // are not on screen.
-              const profileFields = document.getElementById('signup-profile-fields');
-              const creatingAccount = Boolean(profileFields && !profileFields.hidden);
-
-              // Client-side sanity check. Server enforces the real rules.
-              if (creatingAccount && name.length > 100) {
-                status.textContent = 'Please keep your name to 100 characters.';
-                status.className = 'validation-message is-error';
-                return;
-              }
-              if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                status.textContent = 'That doesn’t look like a valid email. Try again.';
-                status.className = 'validation-message is-error';
-                return;
-              }
-              submitBtn.disabled = true;
-              // Same endpoint either way; only the wording follows the mode
-              // the panel was opened in (see setAuthMode / backlog #25).
-              const modeCopy = AUTH_MODE_COPY[currentAuthMode] || AUTH_MODE_COPY.signup;
-              submitBtn.textContent = modeCopy.pending;
-              status.textContent = '';
-              status.className = 'validation-message';
-              try {
-                const response = await fetch(SIGNUP_ENDPOINT, {
-                  method: 'POST',
-                  headers: { 'content-type': 'application/json' },
-                  body: JSON.stringify(creatingAccount
-                    // Name is optional; the server makes one from the email.
-                    ? { name, email }
-                    // Look up only. The server never creates an account for this
-                    // shape, so a typo'd email cannot silently make a second one.
-                    : { intent: 'signin', email })
-                });
-                let data = null;
-                try { data = await response.json(); } catch (_) {}
-
-                // Known email, so that was the whole sign-in. Unknown email, so
-                // this visitor is new: reveal what an account needs and let them
-                // press Continue again. Deliberately not auto-creating from one
-                // press -- a mistyped address would make an account nobody can
-                // reach.
-                if (!creatingAccount && response.ok && data && data.found === false) {
-                  revealProfileFields();
-                  // No status line here: revealProfileFields already rewrites the
-                  // panel title and copy to say the same thing, and the status
-                  // region sits below all six fields where a phone visitor would
-                  // never see it.
-                  return;
-                }
-
-                if (!response.ok || !data || !data.user || !data.user.token) {
-                  // Was branched on the mode; with one door there is one message,
-                  // and it should not guess which half of the operation failed.
-                  const fallbackMsg = `Could not sign you in (${response.status}).`;
-                  const msg = (data && (data.error || data.message)) || fallbackMsg;
-                  status.textContent = msg;
-                  status.className = 'validation-message is-error';
-                  return;
-                }
-                saveCurrentUser({
-                  id: data.user.id,
-                  name: data.user.name,
-                  email: data.user.email,
-                  token: data.user.token,
-                  bands_added: data.user.bands_added || 0,
-                  bands_edited: data.user.bands_edited || 0,
-                  city: data.user.city || '',
-                  state: data.user.state || '',
-                  country: data.user.country || '',
-                  instrument: data.user.instrument || ''
-                });
-                // Opened with "Sign in" (not "Add your band"): signing in was the
-                // whole errand, so close the panel rather than let it turn into
-                // the Add-your-band form (Cole, 2026-10-11).
-                const signInOnly = currentAuthMode === 'signin';
-                setSignedInState(loadCurrentUser());
-                // The signup section is now hidden; if there's any residual
-                // input we clear it for good measure.
-                form.reset();
-                // Leave the panel in its default framing so a later sign-out
-                // doesn't reopen it still saying "Welcome back".
-                setAuthMode('signup');
-                if (creatingAccount) {
-                  try {
-                    const sa = (typeof window.signupAttribution === 'function') ? window.signupAttribution() : {};
-                    if (typeof window.gtag === 'function') window.gtag('event', 'account_signup', { method: 'graph_signup', signup_source: sa.source || '', signup_medium: sa.medium || '', signup_campaign: sa.campaign || '' });
-                  } catch (_) {}
-                }
-                if (signInOnly) closeBottomPopovers();
-              } catch (error) {
-                status.textContent = 'Could not reach the server. Check your connection and try again.';
-                status.className = 'validation-message is-error';
-              } finally {
-                submitBtn.disabled = false;
-                // Re-read the mode rather than restoring a label captured
-                // before the request: the success path calls
-                // setAuthMode('signup'), so a captured "Sign in" would be
-                // put back and leave the panel self-contradictory.
-                // Respect the step, not just the panel framing: once the profile
-                // fields are open the button is creating an account, and resetting
-                // it to "Continue" here undid revealProfileFields' label.
-                const profileOpen = !document.getElementById('signup-profile-fields')?.hidden;
-                submitBtn.textContent = profileOpen
-                  ? 'Create account'
-                  : (AUTH_MODE_COPY[currentAuthMode] || AUTH_COPY).submit;
-              }
-            });
-          }
-
-          const signOutBtn = document.getElementById('sign-out-btn');
-          if (signOutBtn) {
-            signOutBtn.addEventListener('click', () => {
-              clearCurrentUser();
-              setSignedInState(null);
-              setAuthMode('signup');
-              // Close the popover so the user sees the flipped toolbar
-              // clearly instead of the now-hidden signed-in panel.
-              const popover = document.getElementById('add-band-popover');
-              const addBtn = document.getElementById('add-band-btn');
-              if (popover) {
-                popover.hidden = true;
-                popover.classList.remove('is-open-mobile');
-              }
-              if (addBtn) addBtn.setAttribute('aria-expanded', 'false');
-            });
-          }
-        })();
+        initSignup();
 
         // Escape key closes the menu sheet on mobile.
         document.addEventListener('keydown', ev => {
