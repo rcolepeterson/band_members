@@ -4206,8 +4206,9 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       <!--
         PR 3b: edit-band pencil. Static markup lives here, hidden by default;
         populateNodeCard() shows it for band nodes AND (as of the
-        edit-person-bio PR) musician nodes when the current user is signed
-        in (see renderEditAffordances). The aria-label/title text is
+        edit-person-bio PR) musician nodes whenever they carry an edit
+        affordance: signed in it opens the edit popover, signed out it
+        opens the sign-in panel as the nudge (see renderEditAffordances). The aria-label/title text is
         rewritten per node type at render time. Kept out of the DOM for
         anonymous visitors' interactions via the hidden attribute, not by
         injecting/removing the node on every card open, so listeners
@@ -4268,8 +4269,8 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       <button type="button" class="node-card__verify-toggle" id="node-card-verify-toggle" hidden>Show verification details</button>
       <div class="node-card__verify-details" id="node-card-verify-details" hidden></div>
       <!--
-        Signed-out discoverability hint. Only shown for band nodes when
-        loadCurrentUser() returns null. The inline "Sign in" button opens
+        Signed-out discoverability hint, retired 2026-11-04: the pencil
+        above is the signed-out nudge now, so this no longer shows. The inline "Sign in" button opens
         the same Add-your-band popover the pencil would trigger — that
         popover already gates on sign-up for anonymous visitors, so this
         is the single entry point into the edit flow for signed-out
@@ -8848,7 +8849,11 @@ function downloadPngBlob(blob) {
       const canEdit = canEditBand || canEditPerson;
       const showSigninHint = (isBand || isPerson) && !signedIn;
       if (nodeCardEditBtn) {
-        nodeCardEditBtn.hidden = !canEdit;
+        // Signed-out nudge (2026-11-04): the pencil stays visible for band
+        // and musician nodes even when signed out, and clicking it opens
+        // the sign-in panel — the card's single edit affordance. Signed in,
+        // it opens the edit popover as before.
+        nodeCardEditBtn.hidden = !(canEdit || showSigninHint);
         const label = canEditPerson ? 'Edit this musician' : 'Edit this band';
         nodeCardEditBtn.setAttribute('aria-label', label);
         nodeCardEditBtn.setAttribute('title', label);
@@ -8858,10 +8863,16 @@ function downloadPngBlob(blob) {
               if (canEditPerson) return openEditPersonPopover(node);
               return openEditBandPopover(node);
             }
-          : null;
+          : showSigninHint
+            ? (ev) => { ev.stopPropagation(); openSignupPopover(); }
+            : null;
       }
       if (nodeCardSigninHint) {
-        nodeCardSigninHint.hidden = !showSigninHint;
+        // Retired as a visible affordance 2026-11-04: the pencil above is
+        // now the signed-out nudge, so the bottom hint (buried below the
+        // members list) no longer shows. Markup stays for the existing
+        // structural tests, and the link keeps its handler for safety.
+        nodeCardSigninHint.hidden = true;
       }
       if (nodeCardSigninHintText) {
         nodeCardSigninHintText.textContent = isPerson ? 'to edit this musician.' : 'to edit this band.';
