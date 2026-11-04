@@ -12925,10 +12925,14 @@ function downloadPngBlob(blob) {
     // It is now a top-level function, called once from both boot paths,
     // with an idempotency guard so a retry can never bind it twice.
     function initSignup() {
-      if (initSignup.done) return;
-      initSignup.done = true;
     setSignedInState(loadCurrentUser());
     verifyStoredUser();
+    // Idempotency guard AFTER the state calls: the existing sign-in-button
+    // test requires setSignedInState(loadCurrentUser()) to be the first
+    // statement here (no signed-out flash), and the guard only needs to
+    // sit ahead of the listener bindings below, not ahead of state.
+    if (initSignup.done) return;
+    initSignup.done = true;
     // From the game's Sign in button: open the sign-in panel right away
     // instead of leaving the visitor to find it on the map.
     if (/[?&]signin=game(&|$)/.test(location.search) && !loadCurrentUser()) {
