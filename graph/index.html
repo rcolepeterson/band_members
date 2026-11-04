@@ -4452,7 +4452,15 @@ main.layout { padding: 0 !important; gap: 0 !important; }
               const masterNode = graphState && graphState.master
                 ? graphState.master.nodes.find(n => n.id === detail.id)
                 : null;
-              const cardId = (masterNode && masterNode.uuid) || (masterNode && (masterNode.name || masterNode.id)) || detail.id;
+              // TRAVELLED-TO CARD FIX, part 2 (2026-11-04): for a node
+              // reached by search/travel the page master has no row, so
+              // the uuid lookup above misses and cardId falls back to the
+              // plain name -- which graph-card rejects (uuid cast 500).
+              // The module's CURRENT view always carries the uuid for the
+              // node just selected, so prefer it before the name fallback.
+              const viewNodes = (window.RBFT_SIGMA && window.RBFT_SIGMA.state && window.RBFT_SIGMA.state.view && window.RBFT_SIGMA.state.view.nodes) || [];
+              const viewNode = viewNodes.find(n => n.id === detail.id) || viewNodes.find(n => n.name === detail.id);
+              const cardId = (masterNode && masterNode.uuid) || (viewNode && viewNode.uuid) || (masterNode && (masterNode.name || masterNode.id)) || detail.id;
               const type = detail.type === 'band' ? 'band' : 'member';
               const res = await fetch(`/api/graph-card?type=${type}&id=${encodeURIComponent(cardId)}`, { signal: AbortSignal.timeout(5000) });
               if (res.ok) {
@@ -4460,7 +4468,24 @@ main.layout { padding: 0 !important; gap: 0 !important; }
                 const master = graphState && graphState.master;
                 if (master && payload && payload.entity) {
                   const entity = payload.entity;
-                  const target = master.nodes.find(n => n.id === detail.id);
+                  // TRAVELLED-TO CARD FIX (2026-11-04): the page master is
+                  // frozen at the boot landing view, so a node reached by
+                  // search/travel is usually ABSENT from it, and the card
+                  // lookup below then returns null and no card opens (the
+                  // pill still shows, because selection is module-side).
+                  // Insert the fetched entity as the target node first, so
+                  // the field patch, membership links and open() all have a
+                  // node to work on. Page node types are 'band'/'person',
+                  // and uuid is kept so badge lookup resolves as before.
+                  let target = master.nodes.find(n => n.id === detail.id);
+                  if (!target) {
+                    target = { id: detail.id, name: entity.name || detail.id, type: detail.type === 'band' ? 'band' : 'person' };
+                    if (entity.id) target.uuid = entity.id;
+                    if (entity.city != null) target.city = entity.city;
+                    if (entity.state != null) target.state = entity.state;
+                    if (entity.country != null) target.country = entity.country;
+                    master.nodes.push(target);
+                  }
                   if (target) {
                     ['bio', 'genre', 'label', 'albums', 'instrument1', 'instrument2'].forEach(field => {
                       if (entity[field] != null) target[field] = entity[field];
