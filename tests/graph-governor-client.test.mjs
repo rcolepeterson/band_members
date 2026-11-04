@@ -408,7 +408,9 @@ test('governor search hop uses the search-result uuid, not the plain name', () =
 
 test('page boot: governor mode skips /api/bands and hands the view to setGovernorView', () => {
   assert.match(INDEX_HTML, /governorModeOn/);
-  assert.match(INDEX_HTML, /get\('governor'\) === '1'/, 'the flag is read from location.search in the page boot');
+  assert.match(INDEX_HTML, /get\('governor'\)/, 'the flag is read from location.search in the page boot');
+  assert.match(INDEX_HTML, /if \(value == null\) return true;/, 'an absent flag follows the governor default (now on)');
+  assert.match(INDEX_HTML, /normalized === '1' \|\| normalized === 'true'/, 'explicit 1/true forces governor on');
   assert.match(INDEX_HTML, /if \(governorModeOn && onSigmaPath\(\)\)/);
   assert.match(INDEX_HTML, /rbft:governor-view-ready/);
   assert.match(INDEX_HTML, /RBFT_GOVERNOR_VIEW/);
