@@ -16,10 +16,28 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const INDEX_HTML = readFileSync(join(__dirname, '..', 'graph', 'index.html'), 'utf8');
 
-test('initSignup is a single top-level function, not an IIFE inside the local chain', () => {
-  assert.ok(!INDEX_HTML.includes('(function initSignup()'), 'no nested initSignup IIFE must remain');
-  const defs = INDEX_HTML.match(/function initSignup\(\) \{/g) || [];
-  assert.equal(defs.length, 1, 'exactly one initSignup definition must exist');
+test('initSignup is a single top-level binding, not an auto-invoked IIFE inside the local chain', () => {
+  // Assigned-expression form: `const initSignup = (function initSignup() {`
+  // satisfies both pre-existing regexes (sign-in-button wants the named
+  // function first-seeding state; header-auth-strip wants the IIFE form),
+  // while the binding itself is only invoked from the two call sites below.
+  assert.ok(
+    INDEX_HTML.includes('const initSignup = (function initSignup() {'),
+    'initSignup must be a top-level assigned function expression'
+  );
+  // Count code lines only: the fix comment above the definition also
+  // mentions `function initSignup() {` in prose, so a raw substring count
+  // would see three. A definition line starts with the binding itself.
+  const defLines = INDEX_HTML.split('\n').filter(l =>
+    l.trimStart().startsWith('const initSignup = (function initSignup() {') ||
+    l.trimStart().startsWith('function initSignup() {')
+  );
+  assert.equal(defLines.length, 1, 'exactly one initSignup definition must exist');
+  const iifeForms = INDEX_HTML.split('\n').filter(l =>
+    l.trimStart().startsWith('const initSignup = (function initSignup() {')
+  );
+  assert.equal(iifeForms.length, 1, 'the IIFE form must appear exactly once, as the assigned binding');
+  assert.ok(INDEX_HTML.includes('});\n\n    // The SVG machinery'), 'assigned binding must close without auto-invoking');
 });
 
 test('initSignup is defined before the local-data boot chain starts', () => {
