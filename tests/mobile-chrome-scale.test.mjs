@@ -130,6 +130,16 @@ test('"Show next group" survives without its sentence', () => {
   );
 });
 
+test('the hub-groups row sits above the other-groups row', () => {
+  // FOOTER ORDER: in-view navigation first, leave-view jump second. The
+  // stage template is the render order, so the paragraph positions pin it.
+  const hubIdx = EXPLORER.indexOf('<p class="sigma-hub-groups"');
+  const otherIdx = EXPLORER.indexOf('<p class="sigma-other-groups"');
+  assert.ok(hubIdx > 0, 'Expected a hub-groups paragraph in the stage template.');
+  assert.ok(otherIdx > 0, 'Expected an other-groups paragraph in the stage template.');
+  assert.ok(hubIdx < otherIdx, 'Expected the hub-groups row to render above the other-groups row.');
+});
+
 test('the introduction survives and the generic commentary does not', () => {
   const block = mobileBlock();
   assert.match(
