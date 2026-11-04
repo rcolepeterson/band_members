@@ -938,16 +938,18 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-other-groups__btn:hover{color:#c3f2fb}
 #${STAGE_ID} .sigma-other-groups__btn:focus-visible{outline:2px solid rgba(143,232,246,0.8);
   outline-offset:2px}
-/* FIRST-GROUP ORDERING: hub member-group row, same treatment as the
-   other-groups row it sits below. */
+/* FOOTER ORDER: the hub member-group row is the featured constellation nav
+   and sits ABOVE the other-groups row: in-view navigation comes first, the
+   leave-view jump second. Its button is larger and gold (#ffb454, the
+   site's MEMBER_HIGHLIGHT_COLOR gold) so it reads as the featured nav. */
 #${STAGE_ID} .sigma-hub-groups{margin:0;font-size:12px;color:#8b98a8;display:flex;
   flex-wrap:wrap;justify-content:center;align-items:baseline;gap:6px}
 #${STAGE_ID} .sigma-hub-groups[hidden]{display:none}
 #${STAGE_ID} .sigma-hub-groups__btn{border:0;background:none;padding:0;margin:0;
-  font:inherit;color:#8fe8f6;text-decoration:underline;text-underline-offset:2px;
+  font-size:14px;color:#ffb454;text-decoration:underline;text-underline-offset:2px;
   cursor:pointer}
-#${STAGE_ID} .sigma-hub-groups__btn:hover{color:#c3f2fb}
-#${STAGE_ID} .sigma-hub-groups__btn:focus-visible{outline:2px solid rgba(143,232,246,0.8);
+#${STAGE_ID} .sigma-hub-groups__btn:hover{color:#ffc978}
+#${STAGE_ID} .sigma-hub-groups__btn:focus-visible{outline:2px solid rgba(255,180,84,0.8);
   outline-offset:2px}
 /* --------------------------------------------------------------------------
    The page's own chrome, stood down while Sigma is rendering.
@@ -1168,18 +1170,19 @@ function buildStage(doc, mount) {
       <p class="sigma-hint">${EXPLORE_COPY}</p>
       <p class="sigma-context" aria-live="polite"></p>
       <span class="sigma-frontier"></span>
-      <p class="sigma-other-groups" hidden>
-        <span class="sigma-other-groups__text"></span>
-        <button type="button" class="sigma-other-groups__btn"></button>
-      </p>
-      <!-- FIRST-GROUP ORDERING: hub member groups cycle IN PLACE on this
+      <!-- FOOTER ORDER: hub member groups cycle IN PLACE on this
            anchor view (one tap, no navigation, no new page). This row is
-           NOT the disconnected-components "Show next group" row above: it
+           NOT the disconnected-components "Show next group" row below: it
            pages the anchor's own ordered neighbors (group 1 = founders and
-           famous-times members first). Hidden unless >1 hub group exists. -->
+           famous-times members first). Hidden unless >1 hub group exists.
+           It renders ABOVE that row: in-view navigation comes first. -->
       <p class="sigma-hub-groups" hidden>
         <span class="sigma-hub-groups__text"></span>
         <button type="button" class="sigma-hub-groups__btn"></button>
+      </p>
+      <p class="sigma-other-groups" hidden>
+        <span class="sigma-other-groups__text"></span>
+        <button type="button" class="sigma-other-groups__btn"></button>
       </p>
       <!-- Legal, one carriage return below the group jump: the graph stage
            captures scroll for zoom, so this footer is the bottom of the page. -->
