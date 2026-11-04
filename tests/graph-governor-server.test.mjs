@@ -121,7 +121,7 @@ test('cacheKey embeds the version hash, so an old key is never reused', () => {
 
 test('normalizeViewParams defaults and validation', () => {
   assert.deepEqual(normalizeViewParams({ anchor: 'Ann' }), {
-    anchor: 'Ann', hops: 2, maxNodes: 100, satelliteCap: 7, minSeparation: 140,
+    anchor: 'Ann', hops: 2, maxNodes: 100, satelliteCap: 7, hubSatelliteCap: 10, hubGroup: 0, minSeparation: 140,
   });
   assert.throws(() => normalizeViewParams({ anchor: '' }), /anchor is required/);
   assert.throws(() => normalizeViewParams({ anchor: 'Ann', hops: 0 }), /hops/);
