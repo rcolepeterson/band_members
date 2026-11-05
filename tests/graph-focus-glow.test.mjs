@@ -25,15 +25,15 @@ test('directions popover markup, copy, and persistence key exist', () => {
   assert.match(INDEX_HTML, /localStorage\.setItem\(KEY, '1'\)/);
 });
 
-test('popover copy covers the five nav moves in short sentences', () => {
-  assert.match(INDEX_HTML, /The search bar shows the constellation you're in\./);
+test('popover copy covers the nav moves in short sentences', () => {
+  assert.match(INDEX_HTML, /Search for another band or musician\./);
   assert.match(INDEX_HTML, /Short press a node to light up its threads and open its card\./);
   assert.match(INDEX_HTML, /Threads light up gold for bands, blue for members\./);
   assert.match(INDEX_HTML, /Long-press a node to travel to its constellation\./);
   assert.match(INDEX_HTML, /Tap empty space to release the glow and close the card\./);
-  assert.match(INDEX_HTML, /Show next members pages this band's members in place\./);
-  assert.match(INDEX_HTML, /Expand goes one degree deeper\./);
-  assert.match(INDEX_HTML, /Show next group jumps to a disconnected part of the universe\./);
+  assert.match(INDEX_HTML, /Show next members: more of this band's members, without leaving this view\./);
+  assert.match(INDEX_HTML, /Expand: go one degree deeper\./);
+  assert.match(INDEX_HTML, /Show next group: jump to another part of the graph\./);
 });
 
 test('popover text stays at or above the 12px legibility floor', () => {
