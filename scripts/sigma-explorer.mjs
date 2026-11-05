@@ -68,6 +68,16 @@ import {
   landingFit,
 } from './neighborhood-helpers.mjs';
 import { polygonLayout } from './polygon-layout.mjs';
+import {
+  POWER_USER_SATELLITES,
+  POWER_USER_SATELLITE_DISPLAY_PX,
+  POWER_USER_SATELLITE_OFFSET_PX,
+  satelliteForAnchor,
+  satelliteScreenPosition,
+  contributionCardRows,
+  jwstIconSvg,
+} from './power-user-satellite.mjs';
+import { POWER_USER_CONTRIBUTIONS_BY_SATELLITE } from './power-user-contributions.mjs';
 
 // ---------------------------------------------------------------------------
 // GOVERNOR SECTION START — client governor layer (?governor=1).
@@ -651,6 +661,34 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-home-label{font-size:14px;color:#ffc978;font-weight:500}
 #${STAGE_ID} .sigma-focus-ring{position:absolute;pointer-events:none;transform:translate(-50%,-50%);
   width:58px;height:58px}
+/* JWST power-user satellite (v1). A DOM overlay on its OWN contributor
+   layer — never a graphology node, so the view graph, the layout solver,
+   node counts, and every game solver never see it. Fixed display size
+   (a regular member-satellite size); it does not vary with music weight.
+   Clicking it opens the contributions card; it has NO edge to any node. */
+#${STAGE_ID} .sigma-power-satellite{position:absolute;z-index:4;cursor:pointer;
+  width:${POWER_USER_SATELLITE_DISPLAY_PX}px;height:${POWER_USER_SATELLITE_DISPLAY_PX}px;
+  transform:translate(-50%,-50%);background:transparent;border:0;padding:0}
+#${STAGE_ID} .sigma-power-satellite[hidden]{display:none}
+#${STAGE_ID} .sigma-power-satellite svg{width:100%;height:100%;display:block;filter:drop-shadow(0 0 6px rgba(240,182,74,0.45))}
+#${STAGE_ID} .sigma-power-satellite-label{font-size:12px;color:#f0b64a;font-weight:500}
+#${STAGE_ID} .sigma-power-card{position:absolute;right:16px;bottom:96px;z-index:12;
+  width:min(320px,86vw);max-height:min(62vh,480px);overflow-y:auto;
+  padding:14px 16px;background:rgba(11,15,22,0.96);color:#e6ecf3;
+  border:1px solid rgba(240,182,74,0.35);border-radius:12px;
+  box-shadow:0 18px 44px rgba(0,0,0,0.55);font-size:14px;line-height:1.35}
+#${STAGE_ID} .sigma-power-card[hidden]{display:none}
+#${STAGE_ID} .sigma-power-card__close{position:absolute;top:6px;right:8px;background:transparent;
+  border:0;color:rgba(255,255,255,0.55);font-size:20px;line-height:1;cursor:pointer;padding:4px 6px;border-radius:6px}
+#${STAGE_ID} .sigma-power-card__close:hover{color:#fff;background:rgba(255,255,255,0.08)}
+#${STAGE_ID} .sigma-power-card__name{font-size:16px;font-weight:600;margin:0 24px 2px 0}
+#${STAGE_ID} .sigma-power-card__sub{font-size:12px;color:#f0b64a;margin:0 0 10px}
+#${STAGE_ID} .sigma-power-card__note{font-size:12px;color:rgba(230,236,243,0.65);margin:0 0 10px}
+#${STAGE_ID} .sigma-power-card__list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+#${STAGE_ID} .sigma-power-card__item{border-top:1px solid rgba(255,255,255,0.10);padding-top:10px}
+#${STAGE_ID} .sigma-power-card__item-title{font-weight:600}
+#${STAGE_ID} .sigma-power-card__item-meta{font-size:12px;color:rgba(230,236,243,0.65)}
+#${STAGE_ID} .sigma-power-card__item-desc{font-size:13px;color:#e6ecf3;margin-top:2px}
 #${STAGE_ID} .sigma-focus-ring .ring{position:absolute;inset:0;border-radius:50%;
   border:1.4px solid rgba(143,232,246,0.75);box-shadow:0 0 14px rgba(143,232,246,0.35)}
 /* When the home star and the current focus are near each other, Aaron's name
@@ -1054,6 +1092,19 @@ function buildStage(doc, mount) {
     <div class="sigma-scrim sigma-scrim--bottom" aria-hidden="true"></div>
     <div class="sigma-home-star" hidden><span class="ring"></span><span class="core"></span></div>
     <div class="sigma-focus-ring" hidden><span class="ring"></span></div>
+    <!-- JWST power-user satellite (v1): a DOM overlay on its own contributor
+         layer, NOT a graph node. It renders only in the view of its current
+         band, has no edge, and opens the contributions card below. -->
+    <button type="button" class="sigma-power-satellite" data-jwst-satellite hidden
+            aria-label="Power user satellite — open contributions"></button>
+    <span class="sigma-star-label sigma-power-satellite-label" hidden></span>
+    <div class="sigma-power-card" role="dialog" aria-label="Power user contributions" hidden>
+      <button type="button" class="sigma-power-card__close" data-jwst-card-close aria-label="Close contributions">&times;</button>
+      <p class="sigma-power-card__name" data-jwst-card-name></p>
+      <p class="sigma-power-card__sub">JWST satellite · Power user · Contributions</p>
+      <p class="sigma-power-card__note">Newest first, scroll for history. Contributions are real bugs, nav issues, or whole-graph enhancements that were documented and fixed — routine member adds and card edits do not count.</p>
+      <ul class="sigma-power-card__list" data-jwst-card-list></ul>
+    </div>
     <!-- The labels are siblings of the overlays they name, not children. Inside,
          they inherited the star's zoom scaling: the text grew with the zoom, and
          its distance from the star grew with it too, so the name drifted away
@@ -1371,6 +1422,45 @@ export function initSigmaExplorer({
   const starfield = stage.querySelector('.sigma-starfield');
   const homeStarEl = stage.querySelector('.sigma-home-star');
   const focusRingEl = stage.querySelector('.sigma-focus-ring');
+  // JWST power-user satellite (v1): DOM overlay, never a graph node.
+  const powerSatelliteEl = stage.querySelector('[data-jwst-satellite]');
+  const powerSatelliteLabelEl = stage.querySelector('.sigma-power-satellite-label');
+  const powerCardEl = stage.querySelector('.sigma-power-card');
+  const powerCardNameEl = stage.querySelector('[data-jwst-card-name]');
+  const powerCardListEl = stage.querySelector('[data-jwst-card-list]');
+  const powerCardCloseEl = stage.querySelector('[data-jwst-card-close]');
+  if (powerSatelliteEl) powerSatelliteEl.innerHTML = jwstIconSvg();
+  let powerCardSatellite = null;
+  function closePowerCard() {
+    powerCardSatellite = null;
+    if (powerCardEl) powerCardEl.hidden = true;
+  }
+  function openPowerCard(satellite) {
+    if (!satellite || !powerCardEl) return;
+    powerCardSatellite = satellite;
+    const contributions = POWER_USER_CONTRIBUTIONS_BY_SATELLITE[satellite.id] || [];
+    const rows = contributionCardRows(satellite, contributions);
+    if (powerCardNameEl) powerCardNameEl.textContent = `${satellite.displayName} — Power user`;
+    if (powerCardListEl) {
+      powerCardListEl.innerHTML = rows.length
+        ? rows.map((row) => {
+            const meta = [row.type, row.band, row.date, row.status].filter(Boolean).join(' · ');
+            const desc = row.description ? `<p class="sigma-power-card__item-desc">${escapeHtml(row.description)}</p>` : '';
+            const fix = row.fixLink ? `<p class="sigma-power-card__item-meta"><a href="${escapeHtml(row.fixLink)}">Fix</a></p>` : '';
+            return `<li class="sigma-power-card__item"><div class="sigma-power-card__item-title">${escapeHtml(row.title)}</div><div class="sigma-power-card__item-meta">${escapeHtml(meta)}</div>${desc}${fix}</li>`;
+          }).join('')
+        : '<li class="sigma-power-card__item"><div class="sigma-power-card__item-title">No contributions yet</div><p class="sigma-power-card__item-desc">Contributions appear here when a documented bug, nav issue, or whole-graph enhancement is fixed.</p></li>';
+    }
+    powerCardEl.hidden = false;
+  }
+  if (powerSatelliteEl) {
+    powerSatelliteEl.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const satellite = satelliteForAnchor(state.anchorId, POWER_USER_SATELLITES);
+      if (satellite) openPowerCard(satellite);
+    });
+  }
+  if (powerCardCloseEl) powerCardCloseEl.addEventListener('click', closePowerCard);
   const contextEl = stage.querySelector('.sigma-context');
   const hintEl = stage.querySelector('.sigma-hint');
   const frontierEl = stage.querySelector('.sigma-frontier');
@@ -2328,6 +2418,42 @@ export function initSigmaExplorer({
     // name too, which printed it twice -- Sigma already draws that node's label,
     // and the footer says "Centered on ..." as well.
     placeLabel(homeLabelEl, homePoint, homeStarEl, homeScale, crowded);
+
+    // JWST power-user satellite (v1). It is NOT a graph node: it is placed
+    // here, in screen space, at a fixed offset from the anchor's viewport
+    // point, and only when the current anchor is the satellite's current
+    // band. It is never added to viewGraph, never counted, never laid out,
+    // and never given an edge — so the solver, counts, and games cannot
+    // see it. When the anchor moves away, the satellite (and its card)
+    // hide; when the anchor returns, they can show again.
+    if (powerSatelliteEl) {
+      const satellite = satelliteForAnchor(state.anchorId, POWER_USER_SATELLITES);
+      if (!satellite || !viewGraph.hasNode(state.anchorId)) {
+        powerSatelliteEl.hidden = true;
+        if (powerSatelliteLabelEl) powerSatelliteLabelEl.hidden = true;
+        if (powerCardSatellite) closePowerCard();
+      } else {
+        const anchorPoint = renderer.graphToViewport({
+          x: viewGraph.getNodeAttribute(state.anchorId, 'x'),
+          y: viewGraph.getNodeAttribute(state.anchorId, 'y'),
+        });
+        const satPoint = satelliteScreenPosition(anchorPoint, POWER_USER_SATELLITE_OFFSET_PX);
+        const hostRect = canvasHost.getBoundingClientRect();
+        const clampedX = Math.max(24, Math.min(satPoint.x, Math.max(24, hostRect.width - 24)));
+        const clampedY = Math.max(24, Math.min(satPoint.y, Math.max(24, hostRect.height - 24)));
+        powerSatelliteEl.hidden = false;
+        powerSatelliteEl.style.left = `${clampedX}px`;
+        powerSatelliteEl.style.top = `${clampedY}px`;
+        powerSatelliteEl.style.transform = 'translate(-50%,-50%)';
+        powerSatelliteEl.setAttribute('aria-label', `${satellite.displayName} — power user satellite, open contributions`);
+        if (powerSatelliteLabelEl) {
+          powerSatelliteLabelEl.textContent = `${satellite.displayName} · Power user`;
+          powerSatelliteLabelEl.hidden = false;
+          powerSatelliteLabelEl.style.left = `${clampedX}px`;
+          powerSatelliteLabelEl.style.top = `${clampedY + POWER_USER_SATELLITE_DISPLAY_PX / 2 + 7}px`;
+        }
+      }
+    }
   }
 
   // One canvas context, reused, for measuring label widths.
@@ -3194,6 +3320,7 @@ export function initSigmaExplorer({
   // 2026-11-04). The module clears the glow; the page owns the card.
   renderer.on('clickStage', () => {
     clearHighlight();
+    closePowerCard();
     stage.dispatchEvent(new CustomEvent('rbft:sigma-stage-tap', { bubbles: true }));
   });
   // afterRender fires once per painted frame, with the camera in its final
