@@ -2454,9 +2454,9 @@ export function initSigmaExplorer({
   function highlightFrom(id) {
     if (!viewGraph.hasNode(id)) return;
     const entityType = viewGraph.getNodeAttribute(id, 'entityType');
-    // Band click -> its members in electric blue.
-    // Member click -> their bands in gold. Same contract as the SVG renderer.
-    state.highlightColor = entityType === 'band' ? BAND_HIGHLIGHT_COLOR : MEMBER_HIGHLIGHT_COLOR;
+    // Band click -> its members in gold.
+    // Member click -> their bands in blue.
+    state.highlightColor = entityType === 'band' ? MEMBER_HIGHLIGHT_COLOR : BAND_HIGHLIGHT_COLOR;
     state.selection = { id, type: entityType };
     state.highlightNodes = new Set([id]);
     state.highlightEdges = new Set();
