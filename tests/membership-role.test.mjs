@@ -221,12 +221,13 @@ test('threads use ONE quiet hue at rest; touring fades via opacity, not colour',
   assert.match(reduce, /size: 0\.6/, 'touring threads are thinner at rest');
 });
 
-test('gold is a member click and electric blue is a band click', () => {
-  // The distinction that already worked and must keep working. Same contract as
-  // the SVG renderer.
+test('gold is a band click and electric blue is a member click', () => {
+  // Aaron's 2026-11-04 ruling: band clicks glow gold, member clicks glow blue.
+  // This is the inverse of the SVG renderer's old mapping (SVG is the
+  // debug-only path and keeps its mapping).
   const pick = EXPLORER.slice(EXPLORER.indexOf('function highlightFrom('), EXPLORER.indexOf('function clearHighlight(') + 1);
   const source = pick.length > 40 ? pick : EXPLORER;
-  assert.match(source, /entityType === 'band' \? BAND_HIGHLIGHT_COLOR : MEMBER_HIGHLIGHT_COLOR/);
+  assert.match(source, /entityType === 'band' \? MEMBER_HIGHLIGHT_COLOR : BAND_HIGHLIGHT_COLOR/);
   assert.match(EXPLORER, /BAND_HIGHLIGHT_COLOR = '#27b8ff'/);
   assert.match(EXPLORER, /MEMBER_HIGHLIGHT_COLOR = '#ffb454'/);
   // A selected thread takes the selection colour, not its role colour.

@@ -11,7 +11,7 @@
 //   2. The data bridge exists. index.html publishes its master graph and
 //      announces it; the module listens for exactly that event name. A
 //      renamed event on one side and not the other is a silent blank stage.
-//   3. The interaction contract survives: electric blue on band click, gold
+//   3. The interaction contract survives: gold on band click, electric blue
 //      on member click, using the same hex values as the SVG renderer's CSS.
 //   4. The 2.5D promise: no camera rotation, no orbit, no pilot mode.
 //   5. The exploration affordances promised in the issue are present: the
@@ -121,7 +121,7 @@ test('highlight hues match the SVG renderer CSS exactly', () => {
 test('band click highlights members, member click highlights bands', () => {
   assert.match(
     EXPLORER,
-    /entityType === 'band' \? BAND_HIGHLIGHT_COLOR : MEMBER_HIGHLIGHT_COLOR/,
+    /entityType === 'band' \? MEMBER_HIGHLIGHT_COLOR : BAND_HIGHLIGHT_COLOR/,
     'selection colour must be chosen by the clicked entity type'
   );
   assert.match(EXPLORER, /renderer\.on\('clickNode'/);
