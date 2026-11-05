@@ -125,7 +125,9 @@ test('band click highlights members, member click highlights bands', () => {
     'selection colour must be chosen by the clicked entity type'
   );
   assert.match(EXPLORER, /renderer\.on\('clickNode'/);
-  assert.match(EXPLORER, /renderer\.on\('clickStage', \(\) => clearHighlight\(\)\)/);
+  // Empty-space click still clears the selection; since focus (2026-11-04)
+  // it also tells the page to close the card.
+  assert.match(EXPLORER, /renderer\.on\('clickStage', \(\) => \{[\s\S]{0,200}clearHighlight\(\);[\s\S]{0,200}rbft:sigma-stage-tap/);
 });
 
 // ---------------------------------------------------------------------------
@@ -675,13 +677,30 @@ test('the star label keeps one size and one gap at every zoom', () => {
 });
 
 
-test('clicking a node travels to it, keeping it lit on arrival', () => {
-  // The point of the whole explorer: Mike McCready is 6 degrees from Aaron and
-  // Pearl Jam is 7, so reaching Pearl Jam by expanding would pull in hundreds of
-  // nodes to show one band. Travelling to Mike puts it one hop away.
-  assert.match(EXPLORER, /renderer\.on\('clickNode', \(\{\ node \}\) => \{[\s\S]*?travelTo\(node\)/);
+test('tapping a node focuses it in place; only a long-press travels', () => {
+  // FOCUS/GLOW (2026-11-04): a short press glows the node's threads and
+  // opens its card without travelling; travel lives only on the long-press.
+  // Double-click does not travel either: double-tap is the mobile zoom
+  // gesture, and one rule everywhere beats a desktop-only second nav.
+  assert.match(EXPLORER, /const LONG_PRESS_MS = 500;/);
+  assert.match(EXPLORER, /longPressTimer = setTimeout\(\(\) => \{[\s\S]*?LONG_PRESS_MS\)/);
+  assert.match(EXPLORER, /if \(dragState\.longPress\) \{[\s\S]*?travelTo\(nodeId\)/);
+  assert.match(EXPLORER, /renderer\.on\('clickNode', \(\{\ node \}\) => \{[\s\S]*?highlightFrom\(node\)/);
+  assert.doesNotMatch(EXPLORER, /renderer\.on\('clickNode', \(\{\ node \}\) => \{[\s\S]*?travelTo\(node\)/);
+  assert.doesNotMatch(EXPLORER, /renderer\.on\('doubleClickNode', \(\{\ node \}\) => \{[\s\S]*?travelTo\(node\)/);
+  // The short-press path in endDrag focuses (and its select event opens
+  // the card) instead of travelling.
+  const endDrag = EXPLORER.slice(EXPLORER.indexOf('function endDrag()'), EXPLORER.indexOf("canvasHost.addEventListener('pointerdown'"));
+  assert.match(endDrag, /if \(tappedId\) highlightFrom\(tappedId\)/);
+  // Empty-space tap tells the page to close the card, so the view is free
+  // for the next node.
+  assert.match(EXPLORER, /rbft:sigma-stage-tap/);
+  // Travel itself is unchanged: the point of the whole explorer is that
+  // Mike McCready is 6 degrees from Aaron and Pearl Jam is 7, so reaching
+  // Pearl Jam by expanding would pull in hundreds of nodes to show one
+  // band. Travelling to Mike puts it one hop away.
   const travel = EXPLORER.slice(EXPLORER.indexOf('function travelTo(node)'), EXPLORER.indexOf("renderer.on('clickNode'"));
-  // Clicking the current centre must not re-render the same view.
+  // Travelling to the current centre must not re-render the same view.
   assert.match(travel, /if \(node === state\.anchorId\)/);
   // Budgets open up for a requested anchor, as with a search.
   assert.match(travel, /state\.anchorSource = 'requested'/);
@@ -1067,8 +1086,12 @@ test('every non-click path clears the selection the ring depends on', () => {
   // Reset.
   const home = EXPLORER.slice(EXPLORER.indexOf('function goHome()'), EXPLORER.indexOf('function goHome()') + 300);
   assert.match(home, /clearHighlight\(\);/);
-  // A click on empty space.
-  assert.match(EXPLORER, /renderer\.on\('clickStage', \(\) => clearHighlight\(\)\)/);
+  // A click on empty space clears the selection -- and now also tells the
+  // page to close the card (focus ruling, 2026-11-04), so the view is free
+  // for the next node.
+  const stageTap = EXPLORER.slice(EXPLORER.indexOf("renderer.on('clickStage'"), EXPLORER.indexOf("renderer.on('clickStage'") + 300);
+  assert.match(stageTap, /clearHighlight\(\);/);
+  assert.match(stageTap, /rbft:sigma-stage-tap/);
   // And a click on a node is what sets it.
   const highlight = EXPLORER.slice(EXPLORER.indexOf('function highlightFrom(id)'), EXPLORER.indexOf('function exploreFor'));
   assert.match(highlight, /state\.selection = \{ id, type: entityType \}/);

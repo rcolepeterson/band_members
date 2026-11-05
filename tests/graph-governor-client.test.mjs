@@ -298,11 +298,13 @@ test('setGovernorView draw loop uses governorDrawKind with homeStarId and the se
   assert.match(body, /serverKind: node\.kind/);
 });
 
-test('tap-to-travel and drag are unchanged: 10px mouse grab, 10px drag threshold, tap travels', () => {
+test('tap focuses and drag are unchanged: 10px mouse grab, 10px drag threshold, hold travels', () => {
   assert.match(EXPLORER, /const GRAB_RADIUS_MOUSE_PX = 10;/, 'mouse grab radius stays at the pre-governor 10px — no new interaction');
   assert.match(EXPLORER, /const DRAG_THRESHOLD_PX = 10;/);
   assert.match(EXPLORER, /const tappedId = dragState\.nodeId;/);
-  assert.match(EXPLORER, /if \(tappedId\) travelTo\(tappedId\);/);
+  // FOCUS/GLOW (2026-11-04): a short press focuses in place instead of
+  // travelling; travel lives only on the long-press.
+  assert.match(EXPLORER, /if \(tappedId\) highlightFrom\(tappedId\);/);
   assert.match(EXPLORER, /if \(state\.governor\) \{ void governorTravelTo\(node\); return; \}/);
 });
 
