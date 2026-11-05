@@ -1123,7 +1123,18 @@ function initGameUI() {
   // no streak, no hints. The Daily Chain is where streaks and hints live.
   // game_solo_play.mjs enforces this too.
   const practiceMode = (() => {
-    try { return isArenaPage() && new URLSearchParams(window.location.search).get('practice') === '1'; }
+    // Oct 24 migration leftover (Aaron, 2026-11-04): isArenaPage() still
+    // tests /(^|\/)game\/?$/ only, so after Daily moved /game -> /daily
+    // this was always false on /daily/ and ?practice=1 silently served
+    // the daily endpoint — the 'Play a practice puzzle' button just
+    // re-showed the completed daily. Fixed surgically HERE, not by
+    // widening isArenaPage(): that helper also drives sign-in routing,
+    // the front door, and challenge queues, and widening it would change
+    // all of those on /daily/ too. Practice only needs the /daily/ path.
+    try {
+      const onGamePage = isArenaPage() || /(^|\/)daily\/?$/.test(window.location.pathname);
+      return onGamePage && new URLSearchParams(window.location.search).get('practice') === '1';
+    }
     catch { return false; }
   })();
   function practicePath(dailyPath) {
