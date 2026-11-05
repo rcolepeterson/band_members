@@ -13,6 +13,7 @@ import {
   jwstIconSvg,
   satelliteForAnchor,
   satelliteScreenPosition,
+  clampSatelliteLabelX,
   isPowerUserContributionType,
   isQualifyingContribution,
   sortContributionsNewestFirst,
@@ -38,7 +39,10 @@ test('satellite is on its own contributor layer, fixed member-satellite size, un
   assert.notEqual(SCOTT_SATELLITE.layer, 'band');
   assert.notEqual(SCOTT_SATELLITE.layer, 'person');
   assert.equal(POWER_USER_SATELLITE_DISPLAY_PX, 32);
-  assert.deepEqual(POWER_USER_SATELLITE_OFFSET_PX, { x: 110, y: -90 });
+  // Offset fix (follow-up to v1): 7 o'clock, outside the member ring —
+  // the v1 upper-right offset {x: 110, y: -90} still sat inside the ring
+  // and overlapped Bob Welch's label.
+  assert.deepEqual(POWER_USER_SATELLITE_OFFSET_PX, { x: -150, y: 260 });
   // No edge, no graph position, no music weight on the satellite config.
   assert.equal(SCOTT_SATELLITE.edge, undefined);
   assert.equal(SCOTT_SATELLITE.x, undefined);
@@ -54,9 +58,66 @@ test('satellite renders only in its current band view (Fleetwood Mac interim)', 
 });
 
 test('satellite screen position is a fixed screen-space offset, never a graph position', () => {
-  assert.deepEqual(satelliteScreenPosition({ x: 400, y: 300 }), { x: 510, y: 210 });
+  assert.deepEqual(satelliteScreenPosition({ x: 400, y: 300 }), { x: 250, y: 560 });
+  assert.deepEqual(satelliteScreenPosition({ x: 400, y: 300 }, undefined, { x: 20, y: -30 }), { x: 270, y: 530 });
   assert.equal(satelliteScreenPosition(null), null);
   assert.equal(satelliteScreenPosition({}), null);
+});
+
+test('offset fix: 7 o\'clock, distance 300, outside the Fleetwood Mac member ring', () => {
+  const { x, y } = POWER_USER_SATELLITE_OFFSET_PX;
+  // 7 o'clock: lower left in screen space (x negative, y positive).
+  assert.ok(x < 0 && y > 0, 'offset must point down-left');
+  const dist = Math.hypot(x, y);
+  assert.ok(Math.abs(dist - 300) < 1, `offset distance must be 300, got ${dist}`);
+  // Phone first-group view, measured 2026-11-04: hub (195, 426), outermost
+  // member dots ~138px from the hub. The satellite must sit well clear.
+  const hub = { x: 195, y: 426 };
+  const sat = satelliteScreenPosition(hub);
+  assert.deepEqual(sat, { x: 45, y: 686 });
+  const members = [
+    { name: 'Dave Walker', x: 145, y: 332 },
+    { name: 'Bob Welch', x: 270, y: 332 },
+    { name: 'Dave Mason', x: 207, y: 350 },
+    { name: 'Jeremy Spencer', x: 102, y: 395 },
+    { name: 'Bekka Bramlett', x: 255, y: 400 },
+    { name: 'John McVie', x: 57, y: 442 },
+    { name: 'Stevie Nicks', x: 332, y: 447 },
+    { name: 'Mick Fleetwood', x: 120, y: 480 },
+    { name: 'Rick Vito', x: 207, y: 477 },
+    { name: 'Peter Green', x: 200, y: 542 },
+  ];
+  for (const m of members) {
+    const d = Math.hypot(sat.x - m.x, sat.y - m.y);
+    assert.ok(d > 200, `satellite must be >200px from ${m.name}, got ${d.toFixed(0)}`);
+  }
+  // The label (centred under the icon, ~104px wide) must not clip at the
+  // left stage edge at this position.
+  assert.equal(clampSatelliteLabelX(sat.x, 104, 390), 60);
+});
+
+test('label clamp keeps the label fully in view near stage edges', () => {
+  assert.equal(clampSatelliteLabelX(305, 104, 390), 305);
+  assert.equal(clampSatelliteLabelX(45, 104, 390), 60);
+  assert.equal(clampSatelliteLabelX(380, 104, 390), 330);
+  assert.equal(clampSatelliteLabelX(640, 104, 1280), 640);
+  assert.equal(clampSatelliteLabelX(1250, 104, 1280), 1220);
+});
+
+test('Sigma integration: satellite drag is session-only, tap still opens the card', () => {
+  assert.match(EXPLORER, /powerSatelliteDragById = new Map/);
+  assert.match(EXPLORER, /POWER_SAT_DRAG_THRESHOLD_PX = 10/);
+  assert.match(EXPLORER, /powerSatelliteDragged/);
+  assert.match(EXPLORER, /touch-action:none/);
+  // Drag state is in-memory only: the satellite setup block must not
+  // persist a drag position anywhere.
+  const setupStart = EXPLORER.indexOf('JWST satellite drag (offset-fix follow-up)');
+  const setupEnd = EXPLORER.indexOf('if (powerCardCloseEl)', setupStart);
+  const setupBlock = EXPLORER.slice(setupStart, setupEnd);
+  assert.ok(setupBlock.length > 0);
+  assert.doesNotMatch(setupBlock, /localStorage|sessionStorage/);
+  // The click handler suppresses the card on a dragged release.
+  assert.match(EXPLORER, /if \(powerSatelliteDragged\) \{ powerSatelliteDragged = false; return; \}/);
 });
 
 test('credit rule: only bug / nav / whole-graph, and only when Fixed', () => {
