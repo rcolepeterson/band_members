@@ -223,6 +223,20 @@
     .site-footer{border-top:1px solid var(--color-divider);padding:var(--space-6) var(--space-4);text-align:center;font-size:var(--text-xs);color:var(--color-text-faint)}
     .site-footer a{color:var(--color-text-muted);text-decoration:none;margin:0 var(--space-3)}
     .site-footer a:hover{color:var(--color-primary-hover);text-decoration:underline}
+    .site-footer-howto{background:none;border:0;padding:0;margin:0 var(--space-3);font:inherit;color:var(--color-text-muted);text-decoration:none;cursor:pointer}
+    .site-footer-howto:hover{color:var(--color-primary-hover);text-decoration:underline}
+    /* Graph directions popover (2026-11-04): first-visit guide, same
+       pattern as the games' how-to card. Above the sheets and modals so
+       it can be opened while a node card is up. */
+    .graph-howto-backdrop{position:fixed;inset:0;background:rgba(4,10,20,0.6);z-index:600}
+    .graph-howto-backdrop[hidden]{display:none}
+    .graph-howto-card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:601;width:min(92vw,480px);background:#0d1626;color:#e8eef6;border:1px solid rgba(255,180,84,0.35);border-radius:16px;padding:20px 22px;box-shadow:0 18px 50px rgba(0,0,0,0.5)}
+    .graph-howto-card h2{margin:0 0 12px;font-size:18px;color:#ffb454}
+    .graph-howto-card ul{margin:0 0 16px;padding-left:20px;font-size:14px;line-height:1.55}
+    .graph-howto-card li + li{margin-top:8px}
+    .graph-howto-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px}
+    .graph-howto-row label{display:flex;align-items:center;gap:8px;cursor:pointer}
+    .graph-howto-gotit{background:#ffb454;color:#14100a;border:0;border-radius:999px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer}
     .header-right{display:flex;align-items:center;gap:var(--space-3)}
     .header-btn{min-height:44px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);display:inline-flex;align-items:center;gap:var(--space-2);background:rgba(255,255,255,0.02)}
     .header-btn:hover{border-color:rgba(82,174,182,0.45);color:var(--color-primary-hover)}
@@ -3519,6 +3533,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         <button class="tool-chip" type="button" data-action="recent" aria-pressed="false">Recently added</button>
         <button class="tool-chip" type="button" data-action="fit">Fit graph</button>
         <button class="tool-chip" type="button" data-action="clear">Clear filters</button>
+        <button class="tool-chip" type="button" id="mobile-howto-btn">How to explore</button>
       </div>
       <div class="mobile-sheet-filter-row">
         <div>
@@ -4348,7 +4363,27 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     <footer class="site-footer" aria-label="Legal">
       <a href="/privacy.html">Privacy</a>
       <a href="/terms.html">Terms</a>
+      <button type="button" class="site-footer-howto" id="graph-howto-footer-link">How to explore</button>
     </footer>
+
+    <!-- Graph directions popover (2026-11-04): first-visit guide, same
+         pattern as the games' how-to card. -->
+    <div class="graph-howto-backdrop" id="graph-howto-popover" hidden>
+      <div class="graph-howto-card" role="dialog" aria-label="How to explore">
+        <h2>How to explore</h2>
+        <ul>
+          <li>The search bar shows the constellation you're in.</li>
+          <li>Short press a node to light up its threads and open its card. Threads light up gold for bands, blue for members.</li>
+          <li>Long-press a node to travel to its constellation.</li>
+          <li>Tap empty space to release the glow and close the card.</li>
+          <li>Show next members pages this band's members in place. Expand goes one degree deeper. Show next group jumps to a disconnected part of the universe.</li>
+        </ul>
+        <div class="graph-howto-row">
+          <label><input type="checkbox" id="graph-howto-dismiss" /> Don't show this again</label>
+          <button class="graph-howto-gotit" type="button" id="graph-howto-close">Got it</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -4545,6 +4580,49 @@ main.layout { padding: 0 !important; gap: 0 !important; }
       // Travelling to a new centre invalidates whatever card was open: the view
       // it described is gone.
       window.addEventListener('rbft:sigma-travel', () => closeNodeCard());
+
+      // Empty-space tap releases the focus glow and closes the card, so
+      // the view is free for the next node (focus ruling, 2026-11-04).
+      window.addEventListener('rbft:sigma-stage-tap', () => closeNodeCard());
+
+      // Graph directions popover (2026-11-04): first-visit guide, same
+      // pattern as the games' how-to card -- shows on arrival until
+      // "Don't show this again" is checked; reopenable from the footer
+      // link and the mobile sheet chip.
+      (function initGraphHowTo() {
+        const popover = document.getElementById('graph-howto-popover');
+        if (!popover) return;
+        const dismissBox = document.getElementById('graph-howto-dismiss');
+        const closeBtn = document.getElementById('graph-howto-close');
+        const footerLink = document.getElementById('graph-howto-footer-link');
+        const mobileChip = document.getElementById('mobile-howto-btn');
+        const KEY = 'sdr-graph-howto-seen';
+        const open = () => { popover.hidden = false; };
+        const close = () => { popover.hidden = true; };
+        window.openGraphHowTo = open;
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        popover.addEventListener('click', event => { if (event.target === popover) close(); });
+        document.addEventListener('keydown', event => {
+          if (event.key === 'Escape' && !popover.hidden) close();
+        });
+        if (dismissBox) dismissBox.addEventListener('change', () => {
+          try { if (dismissBox.checked) localStorage.setItem(KEY, '1'); else localStorage.removeItem(KEY); } catch {}
+        });
+        if (footerLink) footerLink.addEventListener('click', open);
+        // The stage footer re-renders on travel, so its How-to-explore
+        // link is wired by delegation, not by id.
+        document.addEventListener('click', event => {
+          if (event.target && event.target.closest && event.target.closest('.sigma-howto-link')) open();
+        });
+        if (mobileChip) mobileChip.addEventListener('click', () => {
+          const sheetClose = document.getElementById('mobile-menu-close');
+          if (sheetClose) sheetClose.click();
+          open();
+        });
+        try {
+          if (!localStorage.getItem(KEY)) open();
+        } catch { open(); }
+      })();
 
       // "No Rawk Found", with the offer to add the band.
       //
