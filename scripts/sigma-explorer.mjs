@@ -74,6 +74,7 @@ import {
   POWER_USER_SATELLITE_OFFSET_PX,
   satelliteForAnchor,
   satelliteScreenPosition,
+  clampSatelliteLabelX,
   contributionCardRows,
   jwstIconSvg,
 } from './power-user-satellite.mjs';
@@ -666,7 +667,7 @@ const STAGE_CSS = `
    node counts, and every game solver never see it. Fixed display size
    (a regular member-satellite size); it does not vary with music weight.
    Clicking it opens the contributions card; it has NO edge to any node. */
-#${STAGE_ID} .sigma-power-satellite{position:absolute;z-index:4;cursor:pointer;
+#${STAGE_ID} .sigma-power-satellite{position:absolute;z-index:4;cursor:grab;touch-action:none;
   width:${POWER_USER_SATELLITE_DISPLAY_PX}px;height:${POWER_USER_SATELLITE_DISPLAY_PX}px;
   transform:translate(-50%,-50%);background:transparent;border:0;padding:0}
 #${STAGE_ID} .sigma-power-satellite[hidden]{display:none}
@@ -1430,6 +1431,36 @@ export function initSigmaExplorer({
   const powerCardListEl = stage.querySelector('[data-jwst-card-list]');
   const powerCardCloseEl = stage.querySelector('[data-jwst-card-close]');
   if (powerSatelliteEl) powerSatelliteEl.innerHTML = jwstIconSvg();
+  // JWST satellite drag (offset-fix follow-up): session-only, following
+  // the draggable-nodes v3 pattern — >=10px movement = a drag (moves,
+  // suppresses the card), <10px + release = a tap (opens the card).
+  // The drag adjusts the screen-space offset from the hub for THIS
+  // SESSION ONLY: it is kept in memory keyed by satellite id, it
+  // survives anchor travel within the session, and it is NOT persisted
+  // — a reload resets to the default 7 o'clock offset. It never touches
+  // the graph, the solver, or any node position.
+  const POWER_SAT_DRAG_THRESHOLD_PX = 10;
+  const powerSatelliteDragById = new Map();
+  let powerSatelliteDragged = false;
+  let powerSatelliteDragStart = null;
+  // Shared placement for the satellite button + label, used both by
+  // positionOverlays (default offset + session drag) and by drag moves.
+  // The icon keeps the 24px stage clamp; the label gets its own clamp
+  // so it stays fully in view near a stage edge (stage overflow:hidden
+  // would otherwise clip it).
+  function placePowerSatelliteAt(cx, cy, hostRect) {
+    const clampedX = Math.max(24, Math.min(cx, Math.max(24, hostRect.width - 24)));
+    const clampedY = Math.max(24, Math.min(cy, Math.max(24, hostRect.height - 24)));
+    powerSatelliteEl.style.left = `${clampedX}px`;
+    powerSatelliteEl.style.top = `${clampedY}px`;
+    powerSatelliteEl.style.transform = 'translate(-50%,-50%)';
+    if (powerSatelliteLabelEl) {
+      const labelW = powerSatelliteLabelEl.offsetWidth || 104;
+      powerSatelliteLabelEl.style.left = `${clampSatelliteLabelX(clampedX, labelW, hostRect.width)}px`;
+      powerSatelliteLabelEl.style.top = `${clampedY + POWER_USER_SATELLITE_DISPLAY_PX / 2 + 7}px`;
+    }
+    return { x: clampedX, y: clampedY };
+  }
   let powerCardSatellite = null;
   function closePowerCard() {
     powerCardSatellite = null;
@@ -1454,8 +1485,55 @@ export function initSigmaExplorer({
     powerCardEl.hidden = false;
   }
   if (powerSatelliteEl) {
+    // Drag the satellite like any other node: press-drag past the
+    // threshold moves it (session-only offset, see above); a plain tap
+    // opens the card. A drag release must never open the card — the
+    // flag below is set on a dragged pointerup and consumed by click.
+    // No preventDefault() on pointerdown: it would break the click that
+    // a tap needs. Prevention happens in pointermove, once past threshold.
+    powerSatelliteEl.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      powerSatelliteDragStart = {
+        startX: event.clientX, startY: event.clientY,
+        lastX: event.clientX, lastY: event.clientY,
+        dragged: false,
+      };
+      try { powerSatelliteEl.setPointerCapture(event.pointerId); } catch (_) {}
+      powerSatelliteEl.style.cursor = 'grabbing';
+    });
+    powerSatelliteEl.addEventListener('pointermove', (event) => {
+      if (!powerSatelliteDragStart) return;
+      const total = Math.hypot(
+        event.clientX - powerSatelliteDragStart.startX,
+        event.clientY - powerSatelliteDragStart.startY,
+      );
+      if (!powerSatelliteDragStart.dragged && total < POWER_SAT_DRAG_THRESHOLD_PX) return;
+      powerSatelliteDragStart.dragged = true;
+      const dx = event.clientX - powerSatelliteDragStart.lastX;
+      const dy = event.clientY - powerSatelliteDragStart.lastY;
+      powerSatelliteDragStart.lastX = event.clientX;
+      powerSatelliteDragStart.lastY = event.clientY;
+      const satellite = satelliteForAnchor(state.anchorId, POWER_USER_SATELLITES);
+      if (satellite) {
+        const prev = powerSatelliteDragById.get(satellite.id) || { x: 0, y: 0 };
+        powerSatelliteDragById.set(satellite.id, { x: prev.x + dx, y: prev.y + dy });
+      }
+      const hostRect = canvasHost.getBoundingClientRect();
+      const cur = powerSatelliteEl.getBoundingClientRect();
+      placePowerSatelliteAt(cur.left + cur.width / 2 + dx, cur.top + cur.height / 2 + dy, hostRect);
+      event.preventDefault();
+    });
+    const endPowerSatelliteDrag = () => {
+      if (!powerSatelliteDragStart) return;
+      if (powerSatelliteDragStart.dragged) powerSatelliteDragged = true;
+      powerSatelliteDragStart = null;
+      powerSatelliteEl.style.cursor = 'grab';
+    };
+    powerSatelliteEl.addEventListener('pointerup', endPowerSatelliteDrag);
+    powerSatelliteEl.addEventListener('pointercancel', endPowerSatelliteDrag);
     powerSatelliteEl.addEventListener('click', (event) => {
       event.stopPropagation();
+      if (powerSatelliteDragged) { powerSatelliteDragged = false; return; }
       const satellite = satelliteForAnchor(state.anchorId, POWER_USER_SATELLITES);
       if (satellite) openPowerCard(satellite);
     });
@@ -2437,21 +2515,16 @@ export function initSigmaExplorer({
           x: viewGraph.getNodeAttribute(state.anchorId, 'x'),
           y: viewGraph.getNodeAttribute(state.anchorId, 'y'),
         });
-        const satPoint = satelliteScreenPosition(anchorPoint, POWER_USER_SATELLITE_OFFSET_PX);
+        const drag = powerSatelliteDragById.get(satellite.id) || { x: 0, y: 0 };
+        const satPoint = satelliteScreenPosition(anchorPoint, POWER_USER_SATELLITE_OFFSET_PX, drag);
         const hostRect = canvasHost.getBoundingClientRect();
-        const clampedX = Math.max(24, Math.min(satPoint.x, Math.max(24, hostRect.width - 24)));
-        const clampedY = Math.max(24, Math.min(satPoint.y, Math.max(24, hostRect.height - 24)));
         powerSatelliteEl.hidden = false;
-        powerSatelliteEl.style.left = `${clampedX}px`;
-        powerSatelliteEl.style.top = `${clampedY}px`;
-        powerSatelliteEl.style.transform = 'translate(-50%,-50%)';
-        powerSatelliteEl.setAttribute('aria-label', `${satellite.displayName} — power user satellite, open contributions`);
         if (powerSatelliteLabelEl) {
           powerSatelliteLabelEl.textContent = `${satellite.displayName} · Power user`;
           powerSatelliteLabelEl.hidden = false;
-          powerSatelliteLabelEl.style.left = `${clampedX}px`;
-          powerSatelliteLabelEl.style.top = `${clampedY + POWER_USER_SATELLITE_DISPLAY_PX / 2 + 7}px`;
         }
+        placePowerSatelliteAt(satPoint.x, satPoint.y, hostRect);
+        powerSatelliteEl.setAttribute('aria-label', `${satellite.displayName} — power user satellite, open contributions`);
       }
     }
   }

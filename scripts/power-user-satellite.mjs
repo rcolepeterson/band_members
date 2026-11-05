@@ -45,11 +45,21 @@
 // size, and it never varies with music weight.
 export const POWER_USER_SATELLITE_DISPLAY_PX = 32;
 
-// Screen-space offset from the anchor node, in CSS pixels. "A bit removed":
-// far enough that the satellite can never be mistaken for a member of the
-// constellation, close enough that it reads as belonging to this view.
-// There is NO edge between the satellite and the anchor or any other node.
-export const POWER_USER_SATELLITE_OFFSET_PX = { x: 110, y: -90 };
+// Screen-space offset from the anchor node, in CSS pixels. 7 o'clock
+// (lower left), OUTSIDE the member ring, looking in — Aaron's ruling
+// after the v1 upper-right offset (110, -90) still sat inside the ring,
+// overlapping Bob Welch's label. Distance 300: on the Fleetwood Mac
+// first-group phone view the outermost member dots sit ~138px from the
+// hub, so 300 puts the satellite ~160px clear of the ring centre-to-
+// centre (~145px clear of the icon's edge), and the 7 o'clock quadrant
+// is empty (no member sits down-left of the hub). There is NO edge
+// between the satellite and the anchor or any other node. The offset
+// is FIXED and screen-space: it does not vary with zoom, and it is the
+// same on phone and desktop. If it is still not quite right in some
+// view, the satellite is draggable in-session (see sigma-explorer.mjs);
+// dragging adjusts this offset for the session only, it never changes
+// this default.
+export const POWER_USER_SATELLITE_OFFSET_PX = { x: -150, y: 260 };
 
 // The contributor layer's name. Music nodes live on the music layer; the
 // satellite lives here, and only here.
@@ -120,7 +130,7 @@ export function jwstIconSvg() {
 }
 
 // Scott's satellite, v1. Interim placement: the Fleetwood Mac view, as
-// agreed, sitting a bit removed and unconnected. When a later ticket is
+// agreed, at 7 o'clock outside the member ring and unconnected. When a later ticket is
 // ticked Fixed, update `currentBand` to that band's anchor name — that
 // update IS the move in v1. Do not add a musician node id here: Scott has
 // no musician node linked yet, and inventing one would violate the
@@ -147,15 +157,32 @@ export function satelliteForAnchor(anchorId, satellites = POWER_USER_SATELLITES)
 }
 
 // Screen position for the satellite overlay, given the anchor's viewport
-// point. Pure screen-space offset: the satellite is "a bit removed" at
-// every zoom level, and it has no graph position, no edge, and no layout
-// participation whatsoever.
-export function satelliteScreenPosition(anchorViewport, offset = POWER_USER_SATELLITE_OFFSET_PX) {
+// point. Pure screen-space offset: the satellite sits outside the ring
+// at every zoom level, and it has no graph position, no edge, and no
+// layout participation whatsoever. `drag` is the session-only drag
+// adjustment (see sigma-explorer.mjs): it shifts the offset for this
+// session only and resets on reload; it is never persisted and never
+// changes the default offset above.
+export function satelliteScreenPosition(anchorViewport, offset = POWER_USER_SATELLITE_OFFSET_PX, drag = null) {
   if (!anchorViewport || typeof anchorViewport.x !== 'number' || typeof anchorViewport.y !== 'number') return null;
   return {
-    x: anchorViewport.x + (offset ? offset.x : 0),
-    y: anchorViewport.y + (offset ? offset.y : 0),
+    x: anchorViewport.x + (offset ? offset.x : 0) + (drag ? drag.x : 0),
+    y: anchorViewport.y + (offset ? offset.y : 0) + (drag ? drag.y : 0),
   };
+}
+
+// Label centre clamp: the label is centred under the icon and is ~104px
+// wide ("Scott · Power user" at 12px), so a satellite near a stage edge
+// would otherwise clip its label (the stage has overflow:hidden). The
+// icon itself keeps the existing 24px stage clamp; the label gets its
+// own clamp so it stays fully in view even when the icon is near an
+// edge. This is a rendering clamp, not a placement algorithm: the
+// satellite's position still comes only from the fixed offset + drag.
+export function clampSatelliteLabelX(centerX, labelWidth, hostWidth) {
+  const half = (labelWidth || 104) / 2;
+  const margin = 8;
+  if (!hostWidth || hostWidth <= labelWidth + margin * 2) return hostWidth / 2;
+  return Math.max(half + margin, Math.min(centerX, hostWidth - half - margin));
 }
 
 // Is this tracker type one that CAN qualify as a power-user contribution?
