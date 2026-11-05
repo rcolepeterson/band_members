@@ -923,6 +923,8 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-footer .sigma-legal{margin:6px 0 0;font-size:12px;color:#8b98a8}
 #${STAGE_ID} .sigma-footer .sigma-legal a{color:#9fb0c2;text-decoration:none}
 #${STAGE_ID} .sigma-footer .sigma-legal a:hover{color:#d6e4f2;text-decoration:underline}
+#${STAGE_ID} .sigma-footer .sigma-howto-link{background:none;border:0;padding:0;font:inherit;font-size:12px;color:#9fb0c2;text-decoration:none;cursor:pointer}
+#${STAGE_ID} .sigma-footer .sigma-howto-link:hover{color:#d6e4f2;text-decoration:underline}
 #${STAGE_ID} .sigma-context{margin:0;font-size:12px;color:#9aa7b6;line-height:1.45}
 #${STAGE_ID} .sigma-context strong{color:#dfe6ef;font-weight:500}
 /* Disconnected-scene disclosure: a filtered scene can leave a handful of
@@ -1186,7 +1188,7 @@ function buildStage(doc, mount) {
       </p>
       <!-- Legal, one carriage return below the group jump: the graph stage
            captures scroll for zoom, so this footer is the bottom of the page. -->
-      <p class="sigma-legal"><a href="/privacy.html">Privacy</a><span aria-hidden="true"> &middot; </span><a href="/terms.html">Terms</a></p>
+      <p class="sigma-legal"><a href="/privacy.html">Privacy</a><span aria-hidden="true"> &middot; </span><a href="/terms.html">Terms</a><span aria-hidden="true"> &middot; </span><button type="button" class="sigma-howto-link">How to explore</button></p>
     </div>
   `;
   stage.hidden = false;
@@ -2986,9 +2988,15 @@ export function initSigmaExplorer({
 
   // Draggable nodes v3: press-drag moves a single node. Neighbors stay put,
   // edges stretch. Custom hit detection with forgiving grab radius.
-  // <10px movement = tap (navigates); >=10px = drag (moves, suppresses nav).
-  // Positions are session-only: navigating resets the layout.
+  // Focus gestures (2026-11-04): <10px movement + quick release = short
+  // press (focus in place: glow + card, no travel); holding past
+  // LONG_PRESS_MS = long-press (travel). >=10px = drag (moves, suppresses
+  // both). Double-click does not travel: double-tap is the mobile zoom
+  // gesture, and one rule everywhere beats a second nav gesture that
+  // works only on desktop. Positions are session-only: navigating resets
+  // the layout.
   const DRAG_THRESHOLD_PX = 10;
+  const LONG_PRESS_MS = 500;
   const GRAB_RADIUS_TOUCH_PX = 25; // fat fingers need forgiveness
   const GRAB_RADIUS_MOUSE_PX = 10; // hover already expands nodes on desktop
   let dragState = null;
@@ -3043,7 +3051,20 @@ export function initSigmaExplorer({
       startClient: { x: clientX, y: clientY },
       lastGraph: graphPos,
       dragged: false,
+      longPress: false,
+      longPressTimer: null,
     };
+
+    // A hold is the nav gesture, but travel waits for release: firing it
+    // mid-press would re-render while the camera is disabled for the drag
+    // and the pointer is still down. The timer only arms the flag; endDrag
+    // does the travelling.
+    dragState.longPressTimer = setTimeout(() => {
+      if (!dragState || dragState.dragged || dragState.longPress) return;
+      dragState.longPress = true;
+      dragState.longPressTimer = null;
+      suppressNextClick = true;
+    }, LONG_PRESS_MS);
 
     try { renderer.getCamera().disable(); } catch (err) {}
     return true;
@@ -3056,6 +3077,11 @@ export function initSigmaExplorer({
     const dy = clientY - dragState.startClient.y;
     if (!dragState.dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
     dragState.dragged = true;
+    // A real drag cancels the hold: dragging a node must never travel.
+    if (dragState.longPressTimer) {
+      clearTimeout(dragState.longPressTimer);
+      dragState.longPressTimer = null;
+    }
 
     const graphPos = pointerToGraph(clientX, clientY);
     if (!graphPos) return;
@@ -3079,16 +3105,35 @@ export function initSigmaExplorer({
   function endDrag() {
     if (!dragState) return;
     try { renderer.getCamera().enable(); } catch (err) {}
+    if (dragState.longPressTimer) {
+      clearTimeout(dragState.longPressTimer);
+      dragState.longPressTimer = null;
+    }
+    // A hold past LONG_PRESS_MS travels: the hold, not the release, is
+    // the nav gesture. Travel on release keeps the camera enabled and
+    // the pointer up before the view re-renders.
+    if (dragState.longPress) {
+      const nodeId = dragState.nodeId;
+      dragState = null;
+      if (nodeId) travelTo(nodeId);
+      return;
+    }
     if (dragState.dragged) {
       suppressNextClick = true;
       setTimeout(() => { suppressNextClick = false; }, 100);
     } else {
-      // Tap (not a drag): travel to the tapped node directly. This bypasses
-      // Sigma's clickNode event, which was unreliable with the custom pointer
-      // handling. findNodeNear already did the hit detection on pointerdown.
+      // Short press (not a drag, not a hold): focus in place. highlightFrom
+      // glows the node's threads, dims the rest, and opens its card via
+      // rbft:sigma-select -- no travel, no re-render, no layout change.
+      // This bypasses Sigma's clickNode event, which was unreliable with
+      // the custom pointer handling. findNodeNear already did the hit
+      // detection on pointerdown. suppressNextClick keeps clickNode from
+      // re-firing the same focus (and its governor card fetch) right after.
       const tappedId = dragState.nodeId;
       dragState = null;
-      if (tappedId) travelTo(tappedId);
+      suppressNextClick = true;
+      setTimeout(() => { suppressNextClick = false; }, 100);
+      if (tappedId) highlightFrom(tappedId);
       return;
     }
     dragState = null;
@@ -3130,16 +3175,27 @@ export function initSigmaExplorer({
     endDrag();
   });
 
+  // Fallback path for taps the custom pointer handling did not already
+  // serve: a tap focuses, exactly like endDrag's short-press path. Travel
+  // lives only on the long-press, so no Sigma event may travel on its own.
   renderer.on('clickNode', ({ node }) => {
     if (suppressNextClick) return;
-    travelTo(node);
+    highlightFrom(node);
   });
-  // Kept so a double click is not read as two separate journeys.
+  // Double-click does not travel: double-tap is the mobile zoom gesture,
+  // and one rule everywhere beats a desktop-only second nav gesture. A
+  // double-click is just two focuses on the same node.
   renderer.on('doubleClickNode', ({ node }) => {
     if (suppressNextClick) return;
-    travelTo(node);
+    highlightFrom(node);
   });
-  renderer.on('clickStage', () => clearHighlight());
+  // Empty-space tap: release the focus glow AND tell the page to close
+  // the card, so the view is free for the next node (focus ruling,
+  // 2026-11-04). The module clears the glow; the page owns the card.
+  renderer.on('clickStage', () => {
+    clearHighlight();
+    stage.dispatchEvent(new CustomEvent('rbft:sigma-stage-tap', { bubbles: true }));
+  });
   // afterRender fires once per painted frame, with the camera in its final
   // state for that frame -- the only place the DOM home-star overlay can be
   // kept exactly on top of its WebGL node during pans, zooms and animated
