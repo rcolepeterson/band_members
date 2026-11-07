@@ -11,8 +11,8 @@
 //   -> { ok, date, lineup, provisional, valueSum, connectionBonus,
 //        pairs, capTotal, submittedAt }
 //
-// GET /api/fantasy-play (auth) — today's state (the /api/fantasy-today
-//   contract the game page expects, served from this same function):
+// GET /api/fantasy-play (auth) — today's state, served at /api/fantasy-play
+//   from this same function:
 //   the user's lineup if any, provisional, final + win if settled, the
 //   day leaderboard, career wins + tier, whether today is settled, and
 //   yesterday's winner.
