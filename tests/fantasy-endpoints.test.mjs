@@ -371,3 +371,30 @@ test('migration is idempotent and derives wins instead of counting them', () => 
   assert.ok(!/create table if not exists \w*wins/i.test(sql));
   assert.ok(!/\bwins\s+(integer|int|bigint)\b/i.test(sql));
 });
+
+// --- Patch pins: pool sort + today-state URL --------------------------------
+
+test('visiblePool sorts price desc, name as tiebreak', () => {
+  // visiblePool is an inner function of the page module, so — same
+  // precedent as tests/sigma-explorer-wiring.test.mjs — pin the exact
+  // sort on the shipped source instead of importing it.
+  const body = src('fantasy/fantasy-game.mjs');
+  const m = body.match(/function visiblePool\(\) \{([\s\S]*?)\n  \}/);
+  assert.ok(m, 'visiblePool must exist in fantasy-game.mjs');
+  assert.match(
+    m[1],
+    /\.sort\(\(a, b\) => b\.price0 - a\.price0 \|\| a\.name\.localeCompare\(b\.name\)\)/,
+    'visiblePool must sort price descending with name as tiebreak',
+  );
+});
+
+test("today's state comes from /api/fantasy-play, never fantasy-today", () => {
+  const page = src('fantasy/fantasy-game.mjs');
+  assert.ok(
+    page.includes("fetch('/api/fantasy-play'"),
+    'loadToday must fetch /api/fantasy-play',
+  );
+  assert.ok(!page.includes('fantasy-today'), 'fantasy-today must not appear in the page');
+  const fn = src('netlify/functions/fantasy_play.mjs');
+  assert.ok(!fn.includes('fantasy-today'), 'fantasy-today must not appear in fantasy_play.mjs');
+});
