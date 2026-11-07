@@ -8,7 +8,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://sixdegreesofrock.com/</loc>
-    <lastmod>2026-10-24</lastmod>
+    <lastmod>2026-11-07</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
@@ -34,6 +34,12 @@
     <loc>https://sixdegreesofrock.com/rawkle/</loc>
     <lastmod>2026-10-24</lastmod>
     <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://sixdegreesofrock.com/fantasy/</loc>
+    <lastmod>2026-11-07</lastmod>
+    <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
