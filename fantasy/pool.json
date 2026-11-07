@@ -1,0 +1,3854 @@
+[
+ {
+  "name": "Robert Plant",
+  "V": 18.93,
+  "price0": 30,
+  "top3": [
+   [
+    10.0,
+    "Led Zeppelin",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Band of Joy",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Jimmy Page & Robert Plant",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Band of Joy",
+   "Jimmy Page & Robert Plant",
+   "Led Zeppelin",
+   "Listen",
+   "Priory of Brion",
+   "Robert Plant and the Strange Sensation",
+   "Rockestra",
+   "Saving Grace",
+   "Sensational Space Shifters",
+   "The Crawling King Snakes",
+   "The Honeydrippers",
+   "The RD Crusaders"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "9d4fb1a7-5459-43c7-af5d-c08792bced19",
+  "inst": "Lead vocals/None",
+  "slot": "V"
+ },
+ {
+  "name": "Mick Jagger",
+  "V": 15.11,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "The Rolling Stones",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Mick Jagger & The Brothers of Sodom",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Nanker Phelge",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Mick Jagger & The Brothers of Sodom",
+   "Nanker Phelge",
+   "The Rolling Stones",
+   "Various Artists for Children’s Promise"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "40f35ccd-2971-4ab7-b197-f7e649592c59",
+  "inst": "vocals/None",
+  "slot": "V"
+ },
+ {
+  "name": "Axl Rose",
+  "V": 16.01,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Guns N' Roses",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Hollywood Rose",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Rapidfire",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "GAK",
+   "Guns N' Roses",
+   "Hollywood Rose",
+   "Rapidfire"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "9fd1de31-1ce1-47fc-b5a8-b8f22f8ec2f9",
+  "inst": "vocals/None",
+  "slot": "V"
+ },
+ {
+  "name": "Kurt Cobain",
+  "V": 22.06,
+  "price0": 35,
+  "top3": [
+   [
+    10.0,
+    "Nirvana",
+    "Founder",
+    1
+   ],
+   [
+    6.0,
+    "Skid Row",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Brown Towel",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Brown Towel",
+   "Fecal Matter",
+   "Nirvana",
+   "Pen Cap Chew",
+   "Skid Row",
+   "Stiff Woodies",
+   "Throat Oyster"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "f67aae70-8e7a-4b0b-ac65-743dcb9f92ec",
+  "inst": "vocals/guitar",
+  "slot": "V"
+ },
+ {
+  "name": "Eddie Vedder",
+  "V": 21.16,
+  "price0": 35,
+  "top3": [
+   [
+    10.0,
+    "Pearl Jam",
+    "Founder",
+    1
+   ],
+   [
+    6.0,
+    "Temple of the Dog",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Bad Radio",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Bad Radio",
+   "Citizen Dick",
+   "Eddie Vedder and the Earthlings",
+   "Hovercraft",
+   "Pearl Jam",
+   "Temple of the Dog"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "1c9596b5-bb20-469b-ba7c-472c831b4ec4",
+  "inst": "vocals/guitar",
+  "slot": "V"
+ },
+ {
+  "name": "Chris Cornell",
+  "V": 28.71,
+  "price0": 45,
+  "top3": [
+   [
+    10.0,
+    "Soundgarden",
+    "Founder",
+    1
+   ],
+   [
+    10.0,
+    "Temple of the Dog",
+    "Founder",
+    1
+   ],
+   [
+    6.0,
+    "Audioslave",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Alice Mudgarden",
+   "Audioslave",
+   "Soundgarden",
+   "Temple of the Dog"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "354cdc7c-38d4-4c16-ad9c-090e149c3076",
+  "inst": "vocals/guitar",
+  "slot": "V"
+ },
+ {
+  "name": "David Lee Roth",
+  "V": 10.3,
+  "price0": 15,
+  "top3": [
+   [
+    6.0,
+    "Van Halen",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Bitter Pill",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "DLR Band",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Bitter Pill",
+   "DLR Band",
+   "Van Halen"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "4cbc6d89-74e1-46b3-ad9c-50b0844b7b55",
+  "inst": "None/None",
+  "slot": "V"
+ },
+ {
+  "name": "Sammy Hagar",
+  "V": 17.38,
+  "price0": 30,
+  "top3": [
+   [
+    6.0,
+    "Montrose",
+    "Member",
+    2
+   ],
+   [
+    6.0,
+    "Van Halen",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Chickenfoot",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Chickenfoot",
+   "Los Tres Gusanos",
+   "Montrose",
+   "Planet Us",
+   "Sammy Hagar & The Circle",
+   "Van Halen"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "870e3dce-e33f-4057-bbe1-f0e8dcc37b9a",
+  "inst": "None/None",
+  "slot": "V"
+ },
+ {
+  "name": "Ozzy Osbourne",
+  "V": 12.71,
+  "price0": 20,
+  "top3": [
+   [
+    10.0,
+    "Black Sabbath",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Various Artists for Children’s Promise",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Black Sabbath",
+   "Various Artists for Children’s Promise"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "725d534b-0af0-4920-81d3-02f016e9d0f7",
+  "inst": "Lead vocals/Harmonica",
+  "slot": "V"
+ },
+ {
+  "name": "Bruce Dickinson",
+  "V": 10.71,
+  "price0": 15,
+  "top3": [
+   [
+    6.0,
+    "Iron Maiden",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Shots",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Samson",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Iron Maiden",
+   "Samson",
+   "Shots"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "a665cfc3-b0fc-403e-a884-ef2de18c7fdb",
+  "inst": "Lead vocals/None",
+  "slot": "V"
+ },
+ {
+  "name": "James Hetfield",
+  "V": 16.41,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Metallica",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Leather Charm",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "GAK",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "GAK",
+   "Leather Charm",
+   "Maxwell House Ranch Band",
+   "Metallica",
+   "Spastik Children"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "76687c66-dca5-48e4-898b-cd11c79fbff7",
+  "inst": "vocals, guitar/None",
+  "slot": "V"
+ },
+ {
+  "name": "Roger Daltrey",
+  "V": 15.86,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "The Who",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Mark Knopfler’s Guitar Heroes",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "The Full Metal Rackets",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Mark Knopfler’s Guitar Heroes",
+   "The Full Metal Rackets",
+   "The High Numbers",
+   "The RD Crusaders",
+   "The Who"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "094174e3-a55a-4de2-8ded-2591787cb228",
+  "inst": "Guitar/Harmonica",
+  "slot": "V"
+ },
+ {
+  "name": "Stevie Nicks",
+  "V": 10.71,
+  "price0": 15,
+  "top3": [
+   [
+    6.0,
+    "Fleetwood Mac",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Stevie Nicks",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Sound City Players",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Fleetwood Mac",
+   "Sound City Players",
+   "Stevie Nicks"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "a7a7881e-5fcd-4f20-858a-f564dba0da5c",
+  "inst": "Lead vocals/Keyboard",
+  "slot": "V"
+ },
+ {
+  "name": "Ann Wilson",
+  "V": 18.56,
+  "price0": 30,
+  "top3": [
+   [
+    10.0,
+    "Heart",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "A Walk Down Abbey Road",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Ann Wilson & Tripsitter",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "A Walk Down Abbey Road",
+   "Ann Wilson & Tripsitter",
+   "Connie",
+   "Connie & Howie",
+   "Heart",
+   "Lovemongers",
+   "The Amazing Dawgs",
+   "The Ann Wilson Thing!",
+   "The Daybreaks"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "f38fd559-01d4-47fa-a728-af94556aa941",
+  "inst": "vocals/None",
+  "slot": "V"
+ },
+ {
+  "name": "Layne Staley",
+  "V": 26.06,
+  "price0": 40,
+  "top3": [
+   [
+    10.0,
+    "Alice in Chains",
+    "Founder",
+    1
+   ],
+   [
+    10.0,
+    "Mad Season",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Alice Mudgarden",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Alice Mudgarden",
+   "Alice in Chains",
+   "Alice n’ Chains",
+   "Class of '99",
+   "Diamond Lie",
+   "Mad Season",
+   "Sleze"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "454a539d-f8f5-4a3a-940a-883e2a9118f9",
+  "inst": "vocals/None",
+  "slot": "V"
+ },
+ {
+  "name": "Chester Bennington",
+  "V": 17.71,
+  "price0": 30,
+  "top3": [
+   [
+    6.0,
+    "Linkin Park",
+    "Member",
+    2
+   ],
+   [
+    6.0,
+    "Stone Temple Pilots",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Grey Daze",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Camp Freddy",
+   "Dead by Sunrise",
+   "Grey Daze",
+   "Kings of Chaos",
+   "Linkin Park",
+   "Stone Temple Pilots"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "a683429f-8ef3-4906-bb2d-90ead45c6808",
+  "inst": "Vocals/None",
+  "slot": "V"
+ },
+ {
+  "name": "Freddie Mercury",
+  "V": 10.0,
+  "price0": 15,
+  "top3": [
+   [
+    10.0,
+    "Queen",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Queen"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "dd172e18-cc03-470c-9586-575cab81d632",
+  "inst": "vocals/None",
+  "slot": "V"
+ },
+ {
+  "name": "Maynard James Keenan",
+  "V": 18.71,
+  "price0": 30,
+  "top3": [
+   [
+    10.0,
+    "Tool",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "A Perfect Circle",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Children of the Anachronistic Dynasty",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "A Perfect Circle",
+   "Children of the Anachronistic Dynasty",
+   "Green Jelly",
+   "Puscifer",
+   "Shandi’s Addiction",
+   "Tapeworm",
+   "The Human Experimente",
+   "Tool"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "3b7fd54f-7227-4188-af61-00289e6d0cc3",
+  "inst": "Lead vocals/None",
+  "slot": "V"
+ },
+ {
+  "name": "Scott Weiland",
+  "V": 16.36,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Stone Temple Pilots",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Art of Anarchy",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Artists Against AIDS Worldwide",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Art of Anarchy",
+   "Artists Against AIDS Worldwide",
+   "Camp Freddy",
+   "Stone Temple Pilots",
+   "The Wondergirls",
+   "Velvet Revolver"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "6664a6c3-e6e7-46ad-b736-a9d3ad2c60f9",
+  "inst": "Lead vocals/Principal",
+  "slot": "V"
+ },
+ {
+  "name": "Jim Morrison",
+  "V": 10.0,
+  "price0": 15,
+  "top3": [
+   [
+    10.0,
+    "The Doors",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "The Doors"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "3ae37c2e-23b5-4943-9731-85c4ffdde094",
+  "inst": "vocals/None",
+  "slot": "V"
+ },
+ {
+  "name": "Jimmy Page",
+  "V": 24.41,
+  "price0": 40,
+  "top3": [
+   [
+    10.0,
+    "Led Zeppelin",
+    "Founder",
+    1
+   ],
+   [
+    6.0,
+    "The Yardbirds",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Coverdale-Page",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Alexis Korner’s Blues Incorporated",
+   "Carter Lewis & The Southerners",
+   "Coverdale-Page",
+   "Cyril Davies & His Rhythm & Blues All Stars",
+   "Jimmy Page & Robert Plant",
+   "Led Zeppelin",
+   "Lord Sutch & Heavy Friends",
+   "Neil Christian and The Crusaders",
+   "The Firm",
+   "The Honeydrippers",
+   "The Yardbirds",
+   "XYZ"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "efcf21ef-a19b-4981-a458-b16259eb9ead",
+  "inst": "Guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Keith Richards",
+  "V": 15.86,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "The Rolling Stones",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Keith Richards and The X‐Pensive Winos",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Nanker Phelge",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Keith Richards and The X‐Pensive Winos",
+   "Nanker Phelge",
+   "The New Barbarians",
+   "The Rolling Stones",
+   "Various Artists for Children’s Promise"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "8cb42086-8960-44f2-971d-ad6921fe4342",
+  "inst": "guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Slash",
+  "V": 20.62,
+  "price0": 35,
+  "top3": [
+   [
+    10.0,
+    "Guns N' Roses",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Slash featuring Myles Kennedy and the Conspirators",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Slash’s Snakepit",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "GAK",
+   "Guns N' Roses",
+   "Hollywood Rose",
+   "Kings of Chaos",
+   "Mark Knopfler’s Guitar Heroes",
+   "Michael Jackson",
+   "Road Crew",
+   "Slash featuring Myles Kennedy and the Conspirators",
+   "Slash's Blues Ball",
+   "Slash’s Snakepit",
+   "Smith & Watt Steakhouse",
+   "The Ronnie Wood Band",
+   "Tidus Sloan",
+   "Velvet Revolver"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "a44e9ef9-a7d9-4389-9434-d204f9f462de",
+  "inst": "guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Edward Van Halen",
+  "V": 8.71,
+  "price0": 15,
+  "top3": [
+   [
+    6.0,
+    "Van Halen",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Brian May & Friends",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Brian May & Friends",
+   "Van Halen"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "a37c3119-6ffe-4bd5-ae42-fdd90932ff26",
+  "inst": "None/None",
+  "slot": "G"
+ },
+ {
+  "name": "Tony Iommi",
+  "V": 21.38,
+  "price0": 35,
+  "top3": [
+   [
+    10.0,
+    "Black Sabbath",
+    "Founder",
+    1
+   ],
+   [
+    6.0,
+    "Jethro Tull",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Hale & Pace and the Stonkers",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Black Sabbath",
+   "Hale & Pace and the Stonkers",
+   "Heaven & Hell",
+   "Jethro Tull",
+   "Mark Knopfler’s Guitar Heroes",
+   "WhoCares"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "d2f2a5d1-19b6-45cb-883a-74efeacf0028",
+  "inst": "Guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Jimi Hendrix",
+  "V": 16.6,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "The Jimi Hendrix Experience",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Jimmy James and the Blue Flames",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Band of Gypsys",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Band of Gypsys",
+   "Curtis Knight and the Squires",
+   "Gypsy Sun and Rainbows",
+   "Jimmy James and the Blue Flames",
+   "The Isley Brothers",
+   "The Jimi Hendrix Experience"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "64e857aa-fecc-47e3-a849-748415778d05",
+  "inst": "Eponymous/Guitar",
+  "slot": "G"
+ },
+ {
+  "name": "Eric Clapton",
+  "V": 24.81,
+  "price0": 40,
+  "top3": [
+   [
+    6.0,
+    "Blind Faith",
+    "Member",
+    2
+   ],
+   [
+    6.0,
+    "Cream",
+    "Member",
+    2
+   ],
+   [
+    6.0,
+    "Derek and the Dominos",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Blind Faith",
+   "Cream",
+   "Delaney & Bonnie",
+   "Derek and the Dominos",
+   "Eric Clapton & His All Star Band",
+   "Eric Clapton and the Powerhouse",
+   "George's Band",
+   "John Mayall & the Bluesbreakers",
+   "Mark Knopfler’s Guitar Heroes",
+   "Plastic Ono Band",
+   "The Chester Bees",
+   "The Louisiana Gator Boys",
+   "The Secret Police",
+   "The Singing Rebels' Band",
+   "The Yardbirds"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "cbc29852-73f4-4e1a-9a1f-8659836a9155",
+  "inst": "None/None",
+  "slot": "G"
+ },
+ {
+  "name": "David Gilmour",
+  "V": 17.16,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Pink Floyd",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Joker's Wild",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Deep End",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Arcadia",
+   "Deep End",
+   "Hale & Pace and the Stonkers",
+   "Joker's Wild",
+   "Mark Knopfler’s Guitar Heroes",
+   "Pink Floyd"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "1dd8fda4-9788-479c-8316-914dc1f243c1",
+  "inst": "guitar/guitar",
+  "slot": "G"
+ },
+ {
+  "name": "Pete Townshend",
+  "V": 16.57,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "The Who",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Deep End",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Mark Knopfler’s Guitar Heroes",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Deep End",
+   "Mark Knopfler’s Guitar Heroes",
+   "Mick Fleetwood and Friends",
+   "Rockestra",
+   "The High Numbers",
+   "The Who"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "2fe45774-c516-4f41-ad14-0b22910ffdd2",
+  "inst": "Guitar/Keyboard",
+  "slot": "G"
+ },
+ {
+  "name": "Tom Morello",
+  "V": 19.22,
+  "price0": 30,
+  "top3": [
+   [
+    6.0,
+    "Audioslave",
+    "Member",
+    2
+   ],
+   [
+    6.0,
+    "Rage Against the Machine",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Class of '99",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Audioslave",
+   "Class of '99",
+   "Lock Up",
+   "Mark Knopfler’s Guitar Heroes",
+   "Prophets of Rage",
+   "Rage Against the Machine",
+   "Shandi’s Addiction",
+   "Street Sweeper Social Club",
+   "Supergroup B"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "0f78bffd-a4cd-461c-9870-5dc75b61de9c",
+  "inst": "Electric guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Johnny Marr",
+  "V": 18.38,
+  "price0": 30,
+  "top3": [
+   [
+    10.0,
+    "The Smiths",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Electronic",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "7 Worlds Collide",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "7 Worlds Collide",
+   "Electronic",
+   "Johnny Marr + The Healers",
+   "Modest Mouse",
+   "Pretenders",
+   "The Cribs",
+   "The Smiths",
+   "The The"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "54994ea9-c31d-4b91-a025-afba095c1c0d",
+  "inst": "guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Mike McCready",
+  "V": 36.16,
+  "price0": 50,
+  "top3": [
+   [
+    10.0,
+    "Mad Season",
+    "Founder",
+    1
+   ],
+   [
+    10.0,
+    "Pearl Jam",
+    "Founder",
+    1
+   ],
+   [
+    10.0,
+    "Temple of the Dog",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Gossman Project",
+   "Levee Walkers",
+   "Mad Season",
+   "Mike McCready and The Casual Acquaintances",
+   "Pearl Jam",
+   "Raw Power",
+   "Shadow",
+   "Temple of the Dog",
+   "The Rockfords"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "ccaa8e46-6b39-4eb1-b2ec-d8d83e70b98b",
+  "inst": "guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Stone Gossard",
+  "V": 27.36,
+  "price0": 45,
+  "top3": [
+   [
+    10.0,
+    "Pearl Jam",
+    "Founder",
+    1
+   ],
+   [
+    10.0,
+    "Temple of the Dog",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Brad",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Brad",
+   "Calm Down Juanita",
+   "Citizen Dick",
+   "Gossman Project",
+   "Mother Love Bone",
+   "Painted Shield",
+   "Pearl Jam",
+   "Temple of the Dog"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "b955f26a-fd55-47c6-8629-d4f21f46c467",
+  "inst": "guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Jerry Cantrell",
+  "V": 16.66,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Alice in Chains",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Cardboard Vampyres",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Alice Mudgarden",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Alice Mudgarden",
+   "Alice in Chains",
+   "Cardboard Vampyres",
+   "Diamond Lie",
+   "Gypsy Rose"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "1dff28dd-c093-400b-9f63-39fd5ffec77f",
+  "inst": "guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Kim Thayil",
+  "V": 16.66,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Soundgarden",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "3rd Secret",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "MC50",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "3rd Secret",
+   "MC50",
+   "Soundgarden",
+   "The Impostors 6",
+   "The No W.T.O. Combo"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "4e7a03d3-b94a-4d24-bc51-8edb27ccbf9a",
+  "inst": "guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Brian May",
+  "V": 17.76,
+  "price0": 30,
+  "top3": [
+   [
+    10.0,
+    "Queen",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Artists United for Nature",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Brian May & Friends",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Artists United for Nature",
+   "Brian May & Friends",
+   "Hale & Pace and the Stonkers",
+   "Mark Knopfler’s Guitar Heroes",
+   "Queen",
+   "Queen + Paul Rodgers",
+   "Rock Therapy",
+   "The Brian May Band"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "d8f15b5c-442c-4a8b-b0c4-2a92be772627",
+  "inst": "guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Adam Jones",
+  "V": 12.15,
+  "price0": 20,
+  "top3": [
+   [
+    10.0,
+    "Tool",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Supergroup B",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Supergroup B",
+   "Tool"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "00ae8ca5-ed80-4fc8-80c0-d7152d113124",
+  "inst": "guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Dean DeLeo",
+  "V": 14.15,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Stone Temple Pilots",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Talk Show",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Army of Anyone",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Army of Anyone",
+   "Stone Temple Pilots",
+   "Talk Show"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "2ead28c1-23cb-4101-9d28-7ccde9c96ba9",
+  "inst": "guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "Tom DeLonge",
+  "V": 14.0,
+  "price0": 20,
+  "top3": [
+   [
+    10.0,
+    "Blink-182",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Angels & Airwaves",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Box Car Racer",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Angels & Airwaves",
+   "Blink-182",
+   "Box Car Racer"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "c1c3bd24-4b89-4912-91da-8484e48baf99",
+  "inst": "guitar, vocals/None",
+  "slot": "G"
+ },
+ {
+  "name": "Robby Krieger",
+  "V": 15.21,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "The Doors",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "The Butts Band",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Manzarek–Krieger",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Manzarek–Krieger",
+   "The Butts Band",
+   "The Doors",
+   "Zun"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "f046c9b5-86d6-4da8-8c58-3c0670e4929d",
+  "inst": "guitar/None",
+  "slot": "G"
+ },
+ {
+  "name": "John Paul Jones",
+  "V": 14.3,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Led Zeppelin",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Rockestra",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Them Crooked Vultures",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Led Zeppelin",
+   "Rockestra",
+   "Them Crooked Vultures"
+  ],
+  "eligible": [
+   "B",
+   "G"
+  ],
+  "member_id": "8a29600e-0db1-4a60-a928-2a796d650009",
+  "inst": "Bass guitar/Keyboard",
+  "slot": "B"
+ },
+ {
+  "name": "Flea",
+  "V": 21.38,
+  "price0": 35,
+  "top3": [
+   [
+    10.0,
+    "Jane's Addiction",
+    "Founder",
+    1
+   ],
+   [
+    6.0,
+    "Red Hot Chili Peppers",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Atoms for Peace",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Atoms for Peace",
+   "Fear",
+   "Jane's Addiction",
+   "Pigface",
+   "Red Hot Chili Peppers",
+   "Rocket Juice & the Moon"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "12af99c3-ca49-4b75-853f-31fcb45902c5",
+  "inst": "bass/None",
+  "slot": "B"
+ },
+ {
+  "name": "John Entwistle",
+  "V": 16.57,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "The Who",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "A Walk Down Abbey Road",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Ringo Starr & His All Starr Band",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "A Walk Down Abbey Road",
+   "Ringo Starr & His All Starr Band",
+   "The Best",
+   "The Crowd",
+   "The High Numbers",
+   "The Who"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "19bec677-101a-45e1-a723-abff327e58a6",
+  "inst": "Bass guitar/French horn",
+  "slot": "B"
+ },
+ {
+  "name": "Duff McKagan",
+  "V": 28.9,
+  "price0": 45,
+  "top3": [
+   [
+    10.0,
+    "Guns N' Roses",
+    "Founder",
+    1
+   ],
+   [
+    10.0,
+    "Jane's Addiction",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Duff McKagan’s Loaded",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "10 Minute Warning",
+   "Duff McKagan’s Loaded",
+   "Fastbacks",
+   "GAK",
+   "Guns N' Roses",
+   "Jane's Addiction",
+   "Kings of Chaos",
+   "Levee Walkers",
+   "Loaded",
+   "Mad for the Racket",
+   "Neurotic Outsiders",
+   "Raw Power",
+   "Smith & Watt Steakhouse",
+   "The Fartz",
+   "Velvet Revolver",
+   "Walking Papers"
+  ],
+  "eligible": [
+   "B",
+   "G"
+  ],
+  "member_id": "29d98b39-96ab-4993-9dae-1c8ae6125fc7",
+  "inst": "guitar/guitar",
+  "slot": "B"
+ },
+ {
+  "name": "Krist Novoselic",
+  "V": 24.81,
+  "price0": 40,
+  "top3": [
+   [
+    10.0,
+    "Nirvana",
+    "Founder",
+    1
+   ],
+   [
+    6.0,
+    "Skid Row",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "3rd Secret",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "3rd Secret",
+   "Anywhere",
+   "Eyes Adrift",
+   "Filthy Friends",
+   "Flipper",
+   "Giants in the Trees",
+   "Melvana",
+   "Nirvana",
+   "Pen Cap Chew",
+   "Skid Row",
+   "Sound City Players",
+   "Stiff Woodies",
+   "Sweet 75",
+   "The Bona Fide Band",
+   "The No W.T.O. Combo",
+   "Throat Oyster"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "94d48b62-c598-4a7c-833b-7b85282c6900",
+  "inst": "bass/None",
+  "slot": "B"
+ },
+ {
+  "name": "Cliff Burton",
+  "V": 13.16,
+  "price0": 20,
+  "top3": [
+   [
+    6.0,
+    "Metallica",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Trauma",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "EZ-Street",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "EZ-Street",
+   "Maxwell House Ranch Band",
+   "Metallica",
+   "Spastik Children",
+   "The Chickenfuckers",
+   "Trauma"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "b39f2799-4ee0-4f34-b416-d3be2de7da64",
+  "inst": "bass/None",
+  "slot": "B"
+ },
+ {
+  "name": "Steve Harris",
+  "V": 16.9,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Iron Maiden",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "British Lion",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Shy",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "British Lion",
+   "Iron Maiden",
+   "Shy",
+   "Smiler",
+   "The Full Metal Rackets"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "1d1f8f99-e754-41ea-9516-d6685901aa74",
+  "inst": "Background vocals/Bass guitar",
+  "slot": "B"
+ },
+ {
+  "name": "Geezer Butler",
+  "V": 15.86,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Black Sabbath",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Bullring Brummies",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Deadland Ritual",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Black Sabbath",
+   "Bullring Brummies",
+   "Deadland Ritual",
+   "G//Z/R",
+   "Heaven & Hell"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "1807dc96-b25b-42fd-a6ef-dd5c8d9732b3",
+  "inst": "Bass guitar/Synthesizer",
+  "slot": "B"
+ },
+ {
+  "name": "Lemmy Kilmister",
+  "V": 14.41,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Motörhead",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Hawkwind",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Sam Gopal",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Hawkwind",
+   "Motörhead",
+   "Sam Gopal",
+   "The Rockin' Vickers"
+  ],
+  "eligible": [
+   "B",
+   "V"
+  ],
+  "member_id": "93d50c3a-70fb-4295-a8c0-3bb3232f9a73",
+  "inst": "Bass guitar/Lead vocals",
+  "slot": "B"
+ },
+ {
+  "name": "Gene Simmons",
+  "V": 15.91,
+  "price0": 25,
+  "top3": [
+   [
+    6.0,
+    "KISS",
+    "Member",
+    2
+   ],
+   [
+    6.0,
+    "Rainbow",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Gene Simmons Band",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Gene Simmons Band",
+   "KISS",
+   "Rainbow",
+   "Wicked Lester"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "a0a92f73-0056-4820-bf20-aa7828fc2115",
+  "inst": "None/None",
+  "slot": "B"
+ },
+ {
+  "name": "Les Claypool",
+  "V": 16.73,
+  "price0": 25,
+  "top3": [
+   [
+    6.0,
+    "Primus",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Les Claypool's Fancy Band",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "The Les Claypool Frog Brigade",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Beanpole",
+   "Blind Illusion",
+   "Bob Cock and the Yellow Sock",
+   "Colonel Claypool’s Bucket of Bernie Brains",
+   "Festus Clamrod and the El Sobrante Twangers",
+   "Les Claypool and the Holy Mackerel",
+   "Les Claypool's Fancy Band",
+   "Les Claypool’s Bastard Jazz",
+   "Les Claypool’s Duo de Twang",
+   "Oysterhead",
+   "Primus",
+   "Sausage",
+   "The Claypool Lennon Delirium",
+   "The Les Claypool Frog Brigade"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "c559c317-7eba-411a-a36a-4dd0ab9a810f",
+  "inst": "Eponymous/None",
+  "slot": "B"
+ },
+ {
+  "name": "Kim Deal",
+  "V": 15.1,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Pixies",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "The Breeders",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "The Amps",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Pixies",
+   "The Amps",
+   "The Breeders"
+  ],
+  "eligible": [
+   "B",
+   "V"
+  ],
+  "member_id": "94a3f1d3-b083-41b3-90f2-cd8b219fba61",
+  "inst": "Background vocals/Electric bass guitar",
+  "slot": "B"
+ },
+ {
+  "name": "Bill Wyman",
+  "V": 14.71,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "The Rolling Stones",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Bill Wyman's Rhythm Kings",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Nanker Phelge",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Bill Wyman's Rhythm Kings",
+   "Nanker Phelge",
+   "The Rolling Stones"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "3ca4e570-a180-47f7-b615-61f43434ac5f",
+  "inst": "bass/None",
+  "slot": "B"
+ },
+ {
+  "name": "Bootsy Collins",
+  "V": 15.72,
+  "price0": 25,
+  "top3": [
+   [
+    6.0,
+    "Parliament",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Bootsy's Rubber Band",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Flo",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Bootsy's Rubber Band",
+   "Flo",
+   "Funkadelic",
+   "George Clinton and Family",
+   "George Clinton and the P-Funk All Stars",
+   "House Guests",
+   "Parliament",
+   "Parliament-Funkadelic",
+   "Praxis",
+   "Science Faxtion",
+   "The J.B.'s",
+   "The P-Funk Mob",
+   "World-Wide-Funkdrive"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "08cb606a-b05b-437b-ae8c-8ab8a08d178c",
+  "inst": "bass/None",
+  "slot": "B"
+ },
+ {
+  "name": "Jeff Ament",
+  "V": 28.16,
+  "price0": 45,
+  "top3": [
+   [
+    10.0,
+    "Pearl Jam",
+    "Founder",
+    1
+   ],
+   [
+    10.0,
+    "Temple of the Dog",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Deranged Diction",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Citizen Dick",
+   "Deranged Diction",
+   "Gossman Project",
+   "Green River",
+   "Mother Love Bone",
+   "Pearl Jam",
+   "RNDM",
+   "Temple of the Dog",
+   "Three Fish",
+   "Tres Mts."
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "a4956d2a-8b77-412d-8a5d-da061d16cf75",
+  "inst": "bass/None",
+  "slot": "B"
+ },
+ {
+  "name": "Robert Trujillo",
+  "V": 14.18,
+  "price0": 25,
+  "top3": [
+   [
+    6.0,
+    "Metallica",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Infectious Grooves",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Mass Mental?",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Cyco Miko",
+   "Infectious Grooves",
+   "Mass Mental?",
+   "Medication",
+   "Metallica",
+   "Suicidal Tendencies"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "b708f4bd-a1a6-497c-8d95-d4f025d2521a",
+  "inst": "bass/None",
+  "slot": "B"
+ },
+ {
+  "name": "Jason Newsted",
+  "V": 15.68,
+  "price0": 25,
+  "top3": [
+   [
+    6.0,
+    "Metallica",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Echobrain",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Flotsam and Jetsam",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Echobrain",
+   "Flotsam and Jetsam",
+   "Maxwell House Ranch Band",
+   "Metallica",
+   "Newsted",
+   "Rock Star Supernova",
+   "Sexoturica",
+   "Spastik Children",
+   "Voivod",
+   "WhoCares"
+  ],
+  "eligible": [
+   "B",
+   "V"
+  ],
+  "member_id": "8cc78654-6cac-4991-971c-fc214cea1dc4",
+  "inst": "bass, vocals/None",
+  "slot": "B"
+ },
+ {
+  "name": "John Deacon",
+  "V": 6.0,
+  "price0": 10,
+  "top3": [
+   [
+    6.0,
+    "Queen",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Queen"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "a3c801b3-553a-4a37-a9b8-edc300818ae3",
+  "inst": "bass/None",
+  "slot": "B"
+ },
+ {
+  "name": "Robert DeLeo",
+  "V": 15.45,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Stone Temple Pilots",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Delta Deep",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Talk Show",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Army of Anyone",
+   "Delta Deep",
+   "Stone Temple Pilots",
+   "Talk Show"
+  ],
+  "eligible": [
+   "B"
+  ],
+  "member_id": "3a5ee30b-ef6f-45d1-8d64-cfc7ad9a6119",
+  "inst": "bass/None",
+  "slot": "B"
+ },
+ {
+  "name": "Mark Hoppus",
+  "V": 14.0,
+  "price0": 20,
+  "top3": [
+   [
+    10.0,
+    "Blink-182",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "+44",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Simple Creatures",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "+44",
+   "Blink-182",
+   "Simple Creatures"
+  ],
+  "eligible": [
+   "B",
+   "V"
+  ],
+  "member_id": "0e59e423-7bef-4587-a06e-9adedfe70b57",
+  "inst": "bass, vocals/None",
+  "slot": "B"
+ },
+ {
+  "name": "John Bonham",
+  "V": 15.11,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Led Zeppelin",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Band of Joy",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Lord Sutch & Heavy Friends",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Band of Joy",
+   "Led Zeppelin",
+   "Lord Sutch & Heavy Friends",
+   "Rockestra"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "4459e58a-1a3b-4ad4-9b9b-b951393612bc",
+  "inst": "Drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Ringo Starr",
+  "V": 13.26,
+  "price0": 20,
+  "top3": [
+   [
+    6.0,
+    "The Beatles",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "George's Band",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Plastic Ono Band",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "George's Band",
+   "Plastic Ono Band",
+   "R.A.D.D. (Recording Artists Against Drunk Driving)",
+   "Ringo Starr & His All Starr Band",
+   "The Beatles",
+   "The Roundheads",
+   "The Singing Rebels' Band"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "48afb065-f009-428c-aa40-043a661ed003",
+  "inst": "Drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Neil Peart",
+  "V": 6.95,
+  "price0": 10,
+  "top3": [
+   [
+    6.0,
+    "Rush",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Rush"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "71911b92-6bb5-43f7-8d5d-bbd8599e2b56",
+  "inst": "Drums/Percussion",
+  "slot": "D"
+ },
+ {
+  "name": "Charlie Watts",
+  "V": 17.16,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "The Rolling Stones",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Blues Incorporated",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Charlie Watt's All-Star Jazz Orchestra",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Blues Incorporated",
+   "Charlie Watt's All-Star Jazz Orchestra",
+   "Nanker Phelge",
+   "Rock Therapy",
+   "Rocket 88",
+   "The Rolling Stones"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "2064adda-b72c-4ea0-be1e-3340c26481c8",
+  "inst": "drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Taylor Hawkins",
+  "V": 16.3,
+  "price0": 25,
+  "top3": [
+   [
+    6.0,
+    "Foo Fighters",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Taylor Hawkins and the Coattail Riders",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "The Birds of Satan",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Anyone",
+   "Chevy Metal",
+   "Dee Gees",
+   "Foo Fighters",
+   "Gannin Arnold Project",
+   "Kind Heaven Orchestra",
+   "NHC",
+   "Nighttime Boogie Association",
+   "Sound City Players",
+   "Taylor Hawkins and the Coattail Riders",
+   "The Birds of Satan"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "b5769e12-3d16-41a5-8c32-a20ffa1c4308",
+  "inst": "drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Chad Smith",
+  "V": 13.88,
+  "price0": 20,
+  "top3": [
+   [
+    6.0,
+    "Red Hot Chili Peppers",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Bombastic Meatbats",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Chickenfoot",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Bombastic Meatbats",
+   "Chickenfoot",
+   "Eddie Vedder and the Earthlings",
+   "G//Z/R",
+   "Red Hot Chili Peppers",
+   "Smith & Watt Steakhouse",
+   "Supergroup B"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "b038e362-8ce2-430f-981b-7ade75e2ed9a",
+  "inst": "drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Josh Freese",
+  "V": 25.76,
+  "price0": 40,
+  "top3": [
+   [
+    6.0,
+    "Foo Fighters",
+    "Member",
+    2
+   ],
+   [
+    6.0,
+    "Nine Inch Nails",
+    "Member",
+    2
+   ],
+   [
+    6.0,
+    "Weezer",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "A Perfect Circle",
+   "Ashes Divide",
+   "Black Light Burns",
+   "Calm Down Juanita",
+   "DEVO",
+   "Daredevils",
+   "Desert Sessions",
+   "Exovex",
+   "Filter",
+   "Foo Fighters",
+   "Humble Gods",
+   "Jihad Jerry & The Evildoers",
+   "Magnapop",
+   "Medication",
+   "Monster in the Machine",
+   "Nine Inch Nails",
+   "Polo",
+   "Royal Machines",
+   "Slider",
+   "Stripsearch",
+   "Sublime with Rome",
+   "Suicidal Tendencies",
+   "Tapeworm",
+   "Tender Fury",
+   "The Damning Well",
+   "The I Don't Cares",
+   "The Replacements",
+   "The Silencers",
+   "The Summer Obsession",
+   "The Vandals",
+   "Viva Death",
+   "Ween",
+   "Weezer"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "05a2fa03-ea9d-4334-98ad-62ea75debcbd",
+  "inst": "drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Lars Ulrich",
+  "V": 14.3,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Metallica",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "GAK",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Maxwell House Ranch Band",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "GAK",
+   "Maxwell House Ranch Band",
+   "Metallica"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "8e19db13-af3e-41a2-8df4-6575169773c0",
+  "inst": "drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Stewart Copeland",
+  "V": 13.93,
+  "price0": 20,
+  "top3": [
+   [
+    6.0,
+    "The Police",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Animal Logic",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Curved Air",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Animal Logic",
+   "Curved Air",
+   "Gizmodrome",
+   "Mad for the Racket",
+   "Manzarek–Krieger",
+   "Oysterhead",
+   "Strontium 90",
+   "The Police"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "879394f0-89d4-4ec8-84b6-aecc0610ee5c",
+  "inst": "None/None",
+  "slot": "D"
+ },
+ {
+  "name": "Bill Ward",
+  "V": 14.3,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Black Sabbath",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Bullring Brummies",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Heaven & Hell",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Black Sabbath",
+   "Bullring Brummies",
+   "Heaven & Hell"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "94776762-46d6-4d33-a079-843b93422967",
+  "inst": "Background vocals/Drums",
+  "slot": "D"
+ },
+ {
+  "name": "Ian Paice",
+  "V": 19.91,
+  "price0": 30,
+  "top3": [
+   [
+    10.0,
+    "Deep Purple",
+    "Founder",
+    1
+   ],
+   [
+    6.0,
+    "Whitesnake",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Green Bullfrog",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Deep Purple",
+   "Green Bullfrog",
+   "Paice Ashton Lord",
+   "Whitesnake"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "9361f6ac-d165-4c78-9be7-39a6a53e0898",
+  "inst": "Drums/Percussion",
+  "slot": "D"
+ },
+ {
+  "name": "Matt Cameron",
+  "V": 32.73,
+  "price0": 50,
+  "top3": [
+   [
+    10.0,
+    "Soundgarden",
+    "Founder",
+    1
+   ],
+   [
+    10.0,
+    "Temple of the Dog",
+    "Founder",
+    1
+   ],
+   [
+    6.0,
+    "Pearl Jam",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "3rd Secret",
+   "Bam Bam",
+   "Gossman Project",
+   "Hater",
+   "Is This Real?",
+   "MC50",
+   "Nighttime Boogie Association",
+   "Pearl Jam",
+   "Queens of the Stone Age",
+   "Skin Yard",
+   "Soundgarden",
+   "Temple of the Dog",
+   "Ten Commandos",
+   "Tone Dogs",
+   "Wellwater Conspiracy"
+  ],
+  "eligible": [
+   "D",
+   "V"
+  ],
+  "member_id": "214ddebc-8ec9-4ee6-a14f-d2198e8f667f",
+  "inst": "drums/vocals",
+  "slot": "D"
+ },
+ {
+  "name": "Dave Lombardo",
+  "V": 20.52,
+  "price0": 35,
+  "top3": [
+   [
+    10.0,
+    "Slayer",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Fantômas",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Grip Inc.",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Awakening Ground",
+   "Beloved Ghouls",
+   "Bladerunner",
+   "Dead Cross",
+   "Empire State Bastard",
+   "Fantômas",
+   "Grip Inc.",
+   "Mr. Bungle",
+   "Papsmear",
+   "Philm",
+   "Slayer",
+   "Suicidal Tendencies",
+   "Testament",
+   "The Fantômas Melvins Big Band"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "f75b1b52-a74f-4e28-bca9-ec557eef3d4a",
+  "inst": "drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Ginger Baker",
+  "V": 20.02,
+  "price0": 30,
+  "top3": [
+   [
+    6.0,
+    "Blind Faith",
+    "Member",
+    2
+   ],
+   [
+    6.0,
+    "Cream",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Baker Gurvitz Army",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Baker Gurvitz Army",
+   "Blind Faith",
+   "Blues Incorporated",
+   "Cream",
+   "Ginger Baker's Air Force",
+   "Hawkwind",
+   "Masters of Reality",
+   "Material",
+   "The Ginger Baker Band",
+   "The Graham Bond Organisation"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "29366ecc-226e-4e59-b0fe-c3a527c96465",
+  "inst": "drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Roger Taylor (Queen)",
+  "V": 17.06,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Queen",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "The Cross",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Queen + Paul Rodgers",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Band Aid 30",
+   "Hale & Pace and the Stonkers",
+   "Queen",
+   "Queen + Paul Rodgers",
+   "The Cross"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "0815f1c0-c157-43aa-9c9b-e62cc53852f0",
+  "inst": "drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Danny Carey",
+  "V": 17.91,
+  "price0": 30,
+  "top3": [
+   [
+    10.0,
+    "Tool",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Volto!",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "BEAT",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "BEAT",
+   "Green Jelly",
+   "Legend of the Seagullmen",
+   "Pigface",
+   "Pigmy Love Circus",
+   "Supergroup B",
+   "Tool",
+   "Volto!"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "c7ca91a1-2bb0-466a-a3e4-6e8fcccf9003",
+  "inst": "Additional/None",
+  "slot": "D"
+ },
+ {
+  "name": "Eric Kretz",
+  "V": 12.0,
+  "price0": 20,
+  "top3": [
+   [
+    10.0,
+    "Stone Temple Pilots",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Talk Show",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Stone Temple Pilots",
+   "Talk Show"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "66478919-584c-453e-ab31-de9791dad4af",
+  "inst": "drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Travis Barker",
+  "V": 15.21,
+  "price0": 25,
+  "top3": [
+   [
+    6.0,
+    "Blink-182",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "+44",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Box Car Racer",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "+44",
+   "ANTEMASQUE",
+   "Blink-182",
+   "Box Car Racer",
+   "Cretin Family",
+   "Supergroup B",
+   "The Aquabats",
+   "Tim Timebomb And Friends",
+   "Transplants"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "fa49f447-bf3a-4b6a-aad9-da5ff6b7da2a",
+  "inst": "drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "John Densmore",
+  "V": 12.0,
+  "price0": 20,
+  "top3": [
+   [
+    10.0,
+    "The Doors",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "The Butts Band",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "The Butts Band",
+   "The Doors"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "59f4fdca-e248-4e1a-ac5a-8709d3bd4dab",
+  "inst": "drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Roger Taylor (Duran Duran)",
+  "V": 13.9,
+  "price0": 20,
+  "top3": [
+   [
+    10.0,
+    "Duran Duran",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Arcadia",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Arcadia",
+   "Duran Duran"
+  ],
+  "eligible": [
+   "D"
+  ],
+  "member_id": "6dcc8f73-d990-4337-a67c-dd88f2b05241",
+  "inst": "drums/None",
+  "slot": "D"
+ },
+ {
+  "name": "Dave Grohl",
+  "V": 28.81,
+  "price0": 45,
+  "top3": [
+   [
+    10.0,
+    "Foo Fighters",
+    "Founder",
+    1
+   ],
+   [
+    6.0,
+    "Nirvana",
+    "Member",
+    2
+   ],
+   [
+    6.0,
+    "Queens of the Stone Age",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Chevy Metal",
+   "Churn",
+   "Dain Bramage",
+   "Dee Gees",
+   "Foo Fighters",
+   "G.B.I",
+   "Melvana",
+   "Mission Impossible",
+   "Nirvana",
+   "Queens of the Stone Age",
+   "Scream",
+   "Sound City Players",
+   "Tenacious D",
+   "The Backbeat Band",
+   "Them Crooked Vultures"
+  ],
+  "eligible": [
+   "D",
+   "G",
+   "V"
+  ],
+  "member_id": "af6dd6b2-189c-42a7-b7fd-f3bb74108e21",
+  "inst": "vocals/guitar",
+  "slot": "W"
+ },
+ {
+  "name": "Paul McCartney",
+  "V": 18.7,
+  "price0": 30,
+  "top3": [
+   [
+    10.0,
+    "The Beatles",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "George's Band",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "R.A.D.D. (Recording Artists Against Drunk Driving)",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "George's Band",
+   "R.A.D.D. (Recording Artists Against Drunk Driving)",
+   "Rockestra",
+   "Sound City Players",
+   "The Beat Brothers",
+   "The Beatles",
+   "The Justice Collective",
+   "The Quarrymen",
+   "The Silver Beatles",
+   "Wings"
+  ],
+  "eligible": [
+   "B",
+   "V"
+  ],
+  "member_id": "25799cf9-2c43-4b6a-846b-4f43b87d9c63",
+  "inst": "Bass guitar/Lead vocals",
+  "slot": "W"
+ },
+ {
+  "name": "Jack White",
+  "V": 22.68,
+  "price0": 35,
+  "top3": [
+   [
+    10.0,
+    "The White Stripes",
+    "Founder",
+    1
+   ],
+   [
+    6.0,
+    "The Raconteurs",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "The Upholsterers",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "2 Star Tabernacle",
+   "Goober & the Peas",
+   "The Dead Weather",
+   "The Go",
+   "The Raconteurs",
+   "The Upholsterers",
+   "The White Stripes"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "63cb6e89-f4ee-445f-a95e-19cab76b3d73",
+  "inst": "guitar/None",
+  "slot": "W"
+ },
+ {
+  "name": "Geddy Lee",
+  "V": 8.71,
+  "price0": 15,
+  "top3": [
+   [
+    6.0,
+    "Rush",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "The Big Dirty Band",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Rush",
+   "The Big Dirty Band"
+  ],
+  "eligible": [
+   "B",
+   "V"
+  ],
+  "member_id": "588cdda2-20f4-406a-ae3b-dc8c9cd68106",
+  "inst": "Bass guitar/Keyboard",
+  "slot": "W"
+ },
+ {
+  "name": "Phil Collins",
+  "V": 14.56,
+  "price0": 25,
+  "top3": [
+   [
+    6.0,
+    "Genesis",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Brand X",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Flaming Youth",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Brand X",
+   "Flaming Youth",
+   "Genesis",
+   "Phenix Choir",
+   "R.A.D.D. (Recording Artists Against Drunk Driving)",
+   "The Crawling King Snakes",
+   "The House Band",
+   "The Phil Collins Big Band",
+   "Wild Connections"
+  ],
+  "eligible": [
+   "D",
+   "V"
+  ],
+  "member_id": "2cb0d6fc-78e9-4ae8-8828-3e4406702fc3",
+  "inst": "Drums/Lead vocals",
+  "slot": "W"
+ },
+ {
+  "name": "David Bowie",
+  "V": 11.15,
+  "price0": 20,
+  "top3": [
+   [
+    1.2,
+    "Bewlay Bros.",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "David Bowie & The Hype",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Feathers",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Bewlay Bros.",
+   "David Bowie & The Hype",
+   "Feathers",
+   "Tao Jones Index",
+   "The Arnold Corns",
+   "The Hype",
+   "The Konrads",
+   "The Manish Boys",
+   "The Riot Squad",
+   "Tin Machine"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "2119165d-4072-42b6-846a-b51985f4626e",
+  "inst": "None/None",
+  "slot": "W"
+ },
+ {
+  "name": "Trent Reznor",
+  "V": 18.16,
+  "price0": 30,
+  "top3": [
+   [
+    10.0,
+    "Nine Inch Nails",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "How to Destroy Angels",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "1000 Homo DJs",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "1000 Homo DJs",
+   "Exotic Birds",
+   "How to Destroy Angels",
+   "Nine Inch Nails",
+   "Pigface",
+   "Sound City Players",
+   "Tapeworm",
+   "The Innocent"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "53650631-7f80-49fd-9314-e87c94e3b7ac",
+  "inst": "Lead vocals/Background vocals",
+  "slot": "W"
+ },
+ {
+  "name": "Sting",
+  "V": 13.26,
+  "price0": 20,
+  "top3": [
+   [
+    6.0,
+    "The Police",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Fast Breeder & the Radio Actors",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Mark Knopfler’s Guitar Heroes",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Arcadia",
+   "Fast Breeder & the Radio Actors",
+   "Mark Knopfler’s Guitar Heroes",
+   "Strontium 90",
+   "The Conspirators",
+   "The Police",
+   "The Secret Police"
+  ],
+  "eligible": [
+   "B",
+   "V"
+  ],
+  "member_id": "d581d5b9-854d-4d76-894d-09ca373ca801",
+  "inst": "vocals/None",
+  "slot": "W"
+ },
+ {
+  "name": "Damon Albarn",
+  "V": 16.9,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Blur",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Gorillaz",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "The Good, the Bad & the Queen",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Blur",
+   "Gorillaz",
+   "Rocket Juice & the Moon",
+   "Seymour",
+   "The Good, the Bad & the Queen"
+  ],
+  "eligible": [
+   "V"
+  ],
+  "member_id": "d26b6152-564d-4928-9660-c0a3c5cd6aa9",
+  "inst": "Vocals/None",
+  "slot": "W"
+ },
+ {
+  "name": "Thom Yorke",
+  "V": 16.41,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "Radiohead",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "The Smile",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Atoms for Peace",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Atoms for Peace",
+   "On a Friday",
+   "Radiohead",
+   "The Smile",
+   "The Venus in Furs"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "d7b69ac5-5e61-451f-ad30-0880d6f8c128",
+  "inst": "Lead vocals/Acoustic guitar",
+  "slot": "W"
+ },
+ {
+  "name": "Billy Corgan",
+  "V": 15.11,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "The Smashing Pumpkins",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Spirits in the Sky",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Starchildren",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Spirits in the Sky",
+   "Starchildren",
+   "The Smashing Pumpkins",
+   "Zwan"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "9d8e506e-131f-4a47-afbe-53393f544bd9",
+  "inst": "Electric guitar/Lead vocals",
+  "slot": "W"
+ },
+ {
+  "name": "Lindsey Buckingham",
+  "V": 6.95,
+  "price0": 10,
+  "top3": [
+   [
+    6.0,
+    "Fleetwood Mac",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Fleetwood Mac"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "623ae946-6e73-4e22-b054-b2981787010a",
+  "inst": "Guitar/Keyboard",
+  "slot": "W"
+ },
+ {
+  "name": "Steve Winwood",
+  "V": 18.06,
+  "price0": 30,
+  "top3": [
+   [
+    6.0,
+    "Blind Faith",
+    "Member",
+    2
+   ],
+   [
+    6.0,
+    "Traffic",
+    "Member",
+    2
+   ],
+   [
+    1.2,
+    "Eric Clapton and the Powerhouse",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Blind Faith",
+   "Eric Clapton and the Powerhouse",
+   "Ginger Baker's Air Force",
+   "Stomu Yamashta's Go",
+   "The Louisiana Gator Boys",
+   "The Spencer Davis Group",
+   "Traffic"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "cc13f751-d50f-48b4-ba2b-87e7c391d7e3",
+  "inst": "None/None",
+  "slot": "W"
+ },
+ {
+  "name": "Don Henley",
+  "V": 6.95,
+  "price0": 10,
+  "top3": [
+   [
+    6.0,
+    "Eagles",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Eagles"
+  ],
+  "eligible": [
+   "D",
+   "V"
+  ],
+  "member_id": "f424bded-b25a-4112-9234-edbe594a5eee",
+  "inst": "None/None",
+  "slot": "W"
+ },
+ {
+  "name": "Glenn Frey",
+  "V": 6.95,
+  "price0": 10,
+  "top3": [
+   [
+    6.0,
+    "Eagles",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Eagles"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "9f28aab8-c37d-4e1f-9edc-1d8d14e378ba",
+  "inst": "None/None",
+  "slot": "W"
+ },
+ {
+  "name": "Jeff Lynne",
+  "V": 12.51,
+  "price0": 20,
+  "top3": [
+   [
+    6.0,
+    "Electric Light Orchestra",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "The Idle Race",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Traveling Wilburys",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Electric Light Orchestra",
+   "George's Band",
+   "The Idle Race",
+   "The Move",
+   "Traveling Wilburys"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "daa5b9da-8871-48c5-a950-b6859000efcb",
+  "inst": "guitar/None",
+  "slot": "W"
+ },
+ {
+  "name": "Mike Campbell",
+  "V": 17.4,
+  "price0": 30,
+  "top3": [
+   [
+    6.0,
+    "Fleetwood Mac",
+    "Member",
+    2
+   ],
+   [
+    6.0,
+    "Tom Petty and the Heartbreakers",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Mudcrutch",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Fleetwood Mac",
+   "Life Is a Carnival",
+   "Mudcrutch",
+   "The Dirty Knobs",
+   "Tom Petty",
+   "Tom Petty and the Heartbreakers"
+  ],
+  "eligible": [
+   "G"
+  ],
+  "member_id": "89ca333f-f981-47b7-afa5-16dba961dc79",
+  "inst": "guitar/None",
+  "slot": "W"
+ },
+ {
+  "name": "Joe Walsh",
+  "V": 14.21,
+  "price0": 25,
+  "top3": [
+   [
+    6.0,
+    "Eagles",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "Barnstorm",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "The Measles",
+    "Founder",
+    1
+   ]
+  ],
+  "all_bands": [
+   "Barnstorm",
+   "Eagles",
+   "James Gang",
+   "Mark Knopfler’s Guitar Heroes",
+   "Ringo Starr & His All Starr Band",
+   "The Best",
+   "The Measles"
+  ],
+  "eligible": [
+   "G",
+   "V"
+  ],
+  "member_id": "020539e9-00d7-4588-a32a-0e1000ac3894",
+  "inst": "guitar, vocals/None",
+  "slot": "W"
+ },
+ {
+  "name": "Timothy B. Schmit",
+  "V": 12.41,
+  "price0": 20,
+  "top3": [
+   [
+    6.0,
+    "Eagles",
+    "Member",
+    2
+   ],
+   [
+    2.0,
+    "The New Breed",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Poco",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Eagles",
+   "Poco",
+   "Ringo Starr & His All Starr Band",
+   "The Coral Reefer Band",
+   "The New Breed"
+  ],
+  "eligible": [
+   "B",
+   "V"
+  ],
+  "member_id": "e0f1c5ac-c218-4afd-8a77-310e7c186e36",
+  "inst": "bass/None",
+  "slot": "W"
+ },
+ {
+  "name": "Ray Manzarek",
+  "V": 14.15,
+  "price0": 25,
+  "top3": [
+   [
+    10.0,
+    "The Doors",
+    "Founder",
+    1
+   ],
+   [
+    2.0,
+    "Nite City",
+    "Founder",
+    1
+   ],
+   [
+    1.2,
+    "Manzarek–Krieger",
+    "Member",
+    2
+   ]
+  ],
+  "all_bands": [
+   "Manzarek–Krieger",
+   "Nite City",
+   "The Doors"
+  ],
+  "eligible": [
+   "W"
+  ],
+  "member_id": "a36f0d18-26a2-4e93-9833-d49114b7135a",
+  "inst": "keyboards/None",
+  "slot": "W"
+ }
+]

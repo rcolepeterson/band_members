@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <!-- GA4, same property as the Daily page. Async: never blocks the board. -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-E2SNSPFHGB"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    var gaConfig = {};
+    if (/[?&]ga_debug=1\b/.test(location.search)) gaConfig.debug_mode = true;
+    try {
+      if (/[?&]internal=1\b/.test(location.search)) localStorage.setItem('sdr-internal', '1');
+      if (/[?&]internal=0\b/.test(location.search)) localStorage.removeItem('sdr-internal');
+      if (localStorage.getItem('sdr-internal') === '1') gaConfig.traffic_type = 'internal';
+    } catch (e) {}
+    if (/[?&]s=1\b/.test(location.search)) {
+      gaConfig.page_location = location.origin + location.pathname + '?utm_source=share&utm_medium=social';
+    }
+    gtag('config', 'G-E2SNSPFHGB', gaConfig);
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fantasy Band Game — Draft 5 musicians under $100 | Six Degrees of Rock</title>
+  <meta name="description" content="Draft five musicians under a $100 salary cap, score on career value and shared bands, and beat the Gold line of 69. Free, no ads, no real money." />
+  <link rel="canonical" href="https://sixdegreesofrock.com/fantasy/" />
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "VideoGame", "name": "Fantasy Band Game", "url": "https://sixdegreesofrock.com/fantasy/", "description": "Draft five musicians under a $100 salary cap, score on career value and shared bands, and beat the Gold line of 69. Free, no ads, no real money.", "genre": ["Puzzle", "Music"], "gamePlatform": "Web browser", "applicationCategory": "GameApplication", "operatingSystem": "Any", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "publisher": {"@type": "Organization", "name": "Six Degrees of Rock", "url": "https://sixdegreesofrock.com/"}}</script>
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
+  <meta name="theme-color" content="#05080d" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Six Degrees of Rock" />
+  <meta property="og:title" content="Fantasy Band Game — draft five musicians under $100" />
+  <meta property="og:description" content="Draft five, score on career value and shared bands, beat the Gold line of 69. Free, no ads, no real money." />
+  <meta property="og:url" content="https://sixdegreesofrock.com/fantasy/" />
+  <meta property="og:image" content="https://sixdegreesofrock.com/game-og.png?v=3" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Fantasy Band Game — draft five musicians under $100" />
+  <meta name="twitter:description" content="Draft five, score on career value and shared bands, beat the Gold line of 69. Free, no ads, no real money." />
+  <meta name="twitter:image" content="https://sixdegreesofrock.com/game-og.png?v=3" />
+  <link rel="preload" href="/vendor/fonts/boska-700.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/vendor/fonts.css" />
+  <style>
+    /* House styles copied from daily/index.html: same arena backdrop,
+       same tokens, same gold/blue grammar. Gold = the shortest path /
+       the win; robin's-egg blue = the long way round. All text is 12px
+       or larger (text-legibility gate). */
+    @font-face{font-family:'Boska';src:url('/vendor/fonts/boska-400.woff2') format('woff2');
+      font-weight:400;font-style:normal;font-display:block}
+    @font-face{font-family:'Boska';src:url('/vendor/fonts/boska-500.woff2') format('woff2');
+      font-weight:500;font-style:normal;font-display:block}
+    @font-face{font-family:'Boska';src:url('/vendor/fonts/boska-700.woff2') format('woff2');
+      font-weight:700;font-style:normal;font-display:block}
+    :root {
+      --text-xs: clamp(0.8125rem, 0.7625rem + 0.25vw, 0.9375rem);
+      --text-sm: clamp(0.9375rem, 0.8625rem + 0.35vw, 1.0625rem);
+      --text-base: clamp(1.0625rem, 1.0125rem + 0.25vw, 1.1875rem);
+      --text-lg: clamp(1.1875rem, 1.0625rem + 0.75vw, 1.5625rem);
+      --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+      --text-2xl: clamp(2rem, 1.2rem + 2.5vw, 3.5rem);
+      --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
+      --space-5: 1.25rem; --space-6: 1.5rem; --space-8: 2rem; --space-10: 2.5rem;
+      --space-12: 3rem; --space-16: 4rem; --space-20: 5rem;
+      --color-bg: #04070b; --color-surface: rgba(9,16,24,0.58); --color-surface-2: rgba(14,24,36,0.52);
+      --color-border: rgba(225,244,255,0.24); --color-divider: rgba(225,244,255,0.12);
+      --color-text: #edf7ff; --color-text-muted: #c2d5e2; --color-text-faint: #6f7889;
+      --color-text-inverse: #0f1319; --color-primary: #8fe8f6; --color-primary-hover: #68bfd2;
+      --color-gold: #d9a441; --color-gold-soft: rgba(217,164,65,.14);
+      --radius-sm: 0.375rem; --radius-md: 0.5rem; --radius-lg: 0.75rem; --radius-xl: 1rem; --radius-full: 9999px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.25); --shadow-md: 0 18px 40px rgba(0,0,0,0.4);
+      --shadow-lg: 0 28px 70px rgba(0,0,0,0.55);
+      --font-display: 'Boska', Georgia, serif; --font-body: 'Satoshi', system-ui, sans-serif;
+      --transition-interactive: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+      --accent: #52aeb6;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{-webkit-font-smoothing:antialiased;scroll-behavior:smooth;color-scheme:dark}
+    body{min-height:100dvh;font-family:var(--font-body);font-size:var(--text-base);line-height:1.6;background:var(--color-bg);color:var(--color-text)}
+    button{cursor:pointer;border:none;background:none;font:inherit;color:inherit}
+    button:disabled{cursor:default}
+    input{font:inherit;color:inherit}
+
+    .arena{position:relative;min-height:100dvh;overflow:hidden}
+    .arena::before{content:'';position:absolute;inset:0;pointer-events:none;
+      background:radial-gradient(circle at top, rgba(126,145,160,0.20) 0%, rgba(82,174,182,0.14) 24%, transparent 50%)}
+    .arena-grid{position:absolute;inset:0;pointer-events:none;opacity:.4;
+      background-image:linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size:44px 44px;
+      mask-image:linear-gradient(to bottom, rgba(0,0,0,0.55), transparent 85%)}
+
+    .arena-header{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px);
+      background:color-mix(in srgb, var(--color-bg) 78%, transparent);border-bottom:1px solid var(--color-divider)}
+    .arena-header-inner{max-width:880px;margin:0 auto;padding:var(--space-3) var(--space-4);
+      display:flex;align-items:center;justify-content:space-between;gap:var(--space-4)}
+    .arena-header-actions{display:flex;align-items:center;gap:var(--space-2)}
+    .arena-wordmark{font-weight:800;letter-spacing:.22em;font-size:var(--text-xs);text-transform:uppercase;
+      color:var(--color-text);text-decoration:none}
+    .arena-wordmark:hover{color:var(--color-primary)}
+    .arena-player{font-size:var(--text-sm);color:var(--color-text-muted);
+      display:inline-flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);
+      border:1px solid var(--color-divider);border-radius:var(--radius-full);
+      max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .arena-player[hidden]{display:none}
+    .arena-player strong{color:var(--color-primary);font-weight:600}
+
+    .arena-main{position:relative;max-width:880px;margin:0 auto;padding:var(--space-10) var(--space-4) var(--space-16)}
+    .arena-hero{text-align:center;margin-bottom:var(--space-8)}
+    .arena-degree{font-family:var(--font-display);font-weight:800;font-size:clamp(4rem, 12vw, 7rem);line-height:1;
+      letter-spacing:.02em;color:var(--color-text);
+      text-shadow:0 0 60px rgba(82,174,182,.35), 0 0 140px rgba(82,174,182,.15)}
+    .arena-eyebrow{margin-top:var(--space-3);font-size:var(--text-xs);letter-spacing:.34em;text-transform:uppercase;color:var(--color-text-muted)}
+    .arena-sub{margin:var(--space-3) auto 0;max-width:52ch;color:var(--color-text-muted);font-size:var(--text-sm)}
+    .arena-sub strong{color:var(--color-gold)}
+    .fantasy-date{margin-top:var(--space-2);font-size:var(--text-sm);color:var(--color-text-muted)}
+
+    .game-modal-card{position:relative;width:min(640px,100%);margin:0 auto;overflow:auto;
+      background:linear-gradient(180deg, rgba(16,28,40,.72), rgba(9,16,24,.58));
+      border:1px solid rgba(225,244,255,.22);border-radius:var(--radius-xl);
+      padding:var(--space-6);box-shadow:var(--shadow-lg)}
+    .game-modal-card::before{content:'';position:absolute;top:0;left:10%;right:10%;height:1px;
+      background:linear-gradient(90deg, transparent, rgba(143,232,246,.5), transparent);pointer-events:none}
+    .game-modal-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.04em}
+    .game-modal-sub{color:var(--color-text-muted);font-size:var(--text-sm);margin:var(--space-1) 0 var(--space-4)}
+    .fantasy-signin-note{font-size:var(--text-sm);color:var(--color-text-muted);margin:0 0 var(--space-4);
+      border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);
+      background:rgba(255,255,255,.02)}
+    .fantasy-signin-note[hidden]{display:none}
+    .fantasy-signin-note a{color:var(--color-primary)}
+
+    /* Salary-cap meter. */
+    .fantasy-cap{margin-bottom:var(--space-4)}
+    .fantasy-cap-row{display:flex;justify-content:space-between;gap:var(--space-3);font-size:var(--text-sm);font-weight:600}
+    .fantasy-cap-bar{margin-top:var(--space-2);height:12px;border-radius:var(--radius-full);
+      background:rgba(255,255,255,.08);overflow:hidden}
+    .fantasy-cap-fill{display:block;height:100%;width:0%;border-radius:var(--radius-full);
+      background:var(--color-gold);transition:width var(--transition-interactive)}
+    .fantasy-cap-fill.is-over{background:#ff9b9b}
+
+    /* Draft slots: tap a slot, then tap a player. Tapping a filled slot
+       again removes that pick. */
+    .fantasy-slots{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--space-2);margin-bottom:var(--space-4)}
+    .fantasy-slot{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;
+      min-height:88px;padding:var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-lg);
+      background:rgba(255,255,255,.02)}
+    .fantasy-slot:hover{border-color:rgba(143,232,246,.55)}
+    .fantasy-slot.is-active{border-color:var(--color-gold);background:var(--color-gold-soft)}
+    .fantasy-slot.is-filled{border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.12)}
+    .fantasy-slot-label{font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-muted)}
+    .fantasy-slot-name{font-size:var(--text-sm);font-weight:700;line-height:1.3}
+    .fantasy-slot-meta{font-size:var(--text-xs);color:var(--color-text-muted);line-height:1.3}
+
+    /* Live score strip. */
+    .fantasy-scores{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-4);
+      border-top:1px solid var(--color-divider);border-bottom:1px solid var(--color-divider);padding:var(--space-3) 0}
+    .fantasy-score{font-size:var(--text-sm);color:var(--color-text-muted)}
+    .fantasy-score strong{display:block;font-size:var(--text-lg);color:var(--color-text);font-weight:700}
+    .fantasy-score strong.gold{color:var(--color-gold)}
+    .fantasy-pairs{list-style:none;margin:0 0 var(--space-4);font-size:var(--text-sm);color:var(--color-text-muted)}
+    .fantasy-pairs li{padding:var(--space-1) 0;border-bottom:1px solid var(--color-divider)}
+    .fantasy-pairs li:last-child{border-bottom:0}
+
+    .fantasy-submit{width:100%;min-height:52px;border-radius:var(--radius-full);border:0;background:var(--color-primary);
+      color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer;letter-spacing:.04em}
+    .fantasy-submit:hover{background:var(--color-primary-hover)}
+    .fantasy-submit:disabled{opacity:.45;cursor:default}
+    #fantasy-status{font-size:var(--text-sm);color:var(--color-text-muted);margin:var(--space-3) 0 0;min-height:1.2em}
+
+    /* Result + band card. */
+    .fantasy-result{margin-top:var(--space-4);border-top:1px solid var(--color-divider);padding-top:var(--space-4)}
+    .fantasy-result[hidden]{display:none}
+    .fantasy-result-title{font-size:var(--text-lg);font-weight:700;margin:0 0 var(--space-2)}
+    .fantasy-result-body p{font-size:var(--text-sm);color:var(--color-text-muted);margin:0 0 var(--space-2)}
+    .fantasy-card{margin-top:var(--space-4);border:1px solid rgba(217,164,65,.45);border-radius:var(--radius-lg);
+      padding:var(--space-4);background:var(--color-gold-soft)}
+    .fantasy-card[hidden]{display:none}
+    .fantasy-card-title{font-size:var(--text-sm);font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+      color:var(--color-gold);margin:0 0 var(--space-2)}
+    .fantasy-card-text{font-size:var(--text-sm);white-space:pre-wrap;margin:0 0 var(--space-3)}
+    .fantasy-card-actions{display:flex;flex-wrap:wrap;gap:var(--space-2)}
+    .tool-chip{min-height:44px;padding:0 var(--space-4);border:1px solid var(--color-border);
+      border-radius:var(--radius-full);display:inline-flex;align-items:center;gap:var(--space-2);
+      background:rgba(255,255,255,0.02);font-size:var(--text-sm);color:var(--color-text)}
+    .tool-chip:hover{border-color:rgba(82,174,182,.45)}
+
+    /* Career + yesterday's winner. */
+    .fantasy-career{margin-top:var(--space-6);border-top:1px solid var(--color-divider);padding-top:var(--space-4)}
+    .fantasy-career[hidden]{display:none}
+    .fantasy-career h2{font-size:var(--text-sm);letter-spacing:.08em;text-transform:uppercase;
+      color:var(--color-text-muted);margin:0 0 var(--space-2);font-weight:700}
+    .fantasy-career p{font-size:var(--text-sm);color:var(--color-text)}
+    .fantasy-yesterday{font-size:var(--text-sm);color:var(--color-text-muted);margin:var(--space-2) 0 0}
+    .fantasy-yesterday[hidden]{display:none}
+
+    /* Leaderboards. */
+    .arena-boards{margin-top:var(--space-6);border-top:1px solid var(--color-divider);padding-top:var(--space-4)}
+    .arena-boards h2{font-size:var(--text-sm);letter-spacing:.08em;text-transform:uppercase;
+      color:var(--color-text-muted);margin:0 0 var(--space-2);font-weight:700}
+    .fantasy-board-tabs{display:flex;gap:var(--space-2);margin-bottom:var(--space-3)}
+    .fantasy-board-tab{flex:1;min-height:44px;border:1px solid var(--color-border);border-radius:var(--radius-full);
+      font-size:var(--text-sm);font-weight:600;color:var(--color-text-muted)}
+    .fantasy-board-tab.is-active{border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.12);color:var(--color-text)}
+    .fantasy-board{list-style:none}
+    .fantasy-board[hidden]{display:none}
+    .fantasy-board li{display:flex;justify-content:space-between;gap:var(--space-3);
+      padding:var(--space-2) 0;border-bottom:1px solid var(--color-divider);font-size:var(--text-sm)}
+    .fantasy-board li:last-child{border-bottom:0}
+
+    /* Pool browser. */
+    .arena-pool{margin-top:var(--space-6);border-top:1px solid var(--color-divider);padding-top:var(--space-4)}
+    .arena-pool h2{font-size:var(--text-sm);letter-spacing:.08em;text-transform:uppercase;
+      color:var(--color-text-muted);margin:0 0 var(--space-2);font-weight:700}
+    .fantasy-search{width:100%;min-height:48px;padding:0 var(--space-3);border:1px solid var(--color-border);
+      border-radius:var(--radius-lg);background:rgba(255,255,255,.02);color:var(--color-text);font-size:var(--text-sm);
+      margin-bottom:var(--space-3)}
+    .fantasy-search:focus{outline:none;border-color:rgba(82,174,182,.6)}
+    .fantasy-filters{display:flex;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-3)}
+    .fantasy-filter{min-height:40px;padding:0 var(--space-3);border:1px solid var(--color-border);
+      border-radius:var(--radius-full);font-size:var(--text-sm);color:var(--color-text-muted)}
+    .fantasy-filter.is-active{border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.12);color:var(--color-text)}
+    .fantasy-pool{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-3)}
+    .fantasy-card-player{border:1px solid var(--color-border);border-radius:var(--radius-lg);
+      padding:var(--space-3);background:rgba(255,255,255,.02);cursor:pointer}
+    .fantasy-card-player:hover{border-color:rgba(143,232,246,.55)}
+    .fantasy-card-player.is-picked{border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.12)}
+    .fantasy-card-name{font-size:var(--text-sm);font-weight:700}
+    .fantasy-card-plays{font-size:var(--text-xs);color:var(--color-primary);margin:var(--space-1) 0}
+    .fantasy-card-bands{font-size:var(--text-xs);color:var(--color-text-muted);line-height:1.5}
+    .fantasy-card-foot{display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-2)}
+    .fantasy-card-price{font-size:var(--text-sm);font-weight:700;color:var(--color-gold)}
+    .fantasy-card-value{font-size:var(--text-xs);color:var(--color-text-muted)}
+    .fantasy-draft-btn{margin-left:auto;min-height:36px;padding:0 var(--space-3);border:1px solid var(--color-border);
+      border-radius:var(--radius-full);font-size:var(--text-xs);color:var(--color-text)}
+    .fantasy-draft-btn:hover:not(:disabled){border-color:rgba(82,174,182,.55)}
+    .fantasy-draft-btn:disabled{opacity:.45}
+    .fantasy-empty{font-size:var(--text-sm);color:var(--color-text-muted);grid-column:1 / -1}
+
+    .fantasy-rules{margin-top:var(--space-6);border-top:1px solid var(--color-divider);padding-top:var(--space-4);
+      font-size:var(--text-sm);color:var(--color-text-muted)}
+    .fantasy-rules h2{font-size:var(--text-sm);letter-spacing:.08em;text-transform:uppercase;
+      color:var(--color-text-muted);margin:0 0 var(--space-2);font-weight:700}
+    .fantasy-rules p{margin:0 0 var(--space-2)}
+    .fantasy-rules strong{color:var(--color-text)}
+
+    .arena-foot{max-width:880px;margin:0 auto;padding:0 var(--space-4) var(--space-10);text-align:center;
+      color:var(--color-text-faint);font-size:var(--text-xs);letter-spacing:.06em}
+    .arena-foot a{color:var(--color-text-muted);text-decoration:none}
+    .arena-foot a:hover{color:var(--color-text)}
+    .arena-foot-link{background:none;border:none;padding:0;font:inherit;color:var(--color-text-muted);cursor:pointer}
+    .arena-foot-link:hover{color:var(--color-text)}
+
+    /* Feedback dialog — same Netlify form backend as Daily (form name
+       "feedback", honeypot "bot-field"). */
+    #feedback-popover{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:var(--space-4)}
+    #feedback-popover[hidden]{display:none}
+    .feedback-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(6px)}
+    .feedback-card{position:relative;width:min(460px,100%);max-height:min(90vh,640px);overflow-y:auto;
+      background:linear-gradient(180deg, rgba(16,28,40,.96), rgba(9,16,24,.96));
+      border:1px solid rgba(225,244,255,.22);border-radius:var(--radius-xl);
+      padding:var(--space-6);box-shadow:var(--shadow-lg);scrollbar-width:none}
+    .feedback-card::-webkit-scrollbar{display:none}
+    .feedback-close{position:absolute;top:10px;right:10px;width:32px;height:32px;border:0;background:none;
+      color:var(--color-text-muted);font-size:20px;line-height:1;cursor:pointer;border-radius:50%}
+    .feedback-close:hover{color:var(--color-text);background:rgba(255,255,255,.06)}
+    .feedback-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.02em;margin:0 0 var(--space-2);padding-right:var(--space-8)}
+    .feedback-copy{color:var(--color-text-muted);font-size:var(--text-sm);margin:0 0 var(--space-4)}
+    .feedback-field{margin-bottom:var(--space-3)}
+    .feedback-field label{display:block;font-size:var(--text-xs);letter-spacing:.06em;text-transform:uppercase;
+      color:var(--color-text-muted);margin-bottom:var(--space-1)}
+    .feedback-field input,.feedback-field select,.feedback-field textarea{width:100%;padding:var(--space-2) var(--space-3);
+      border:1px solid var(--color-border);border-radius:var(--radius-lg);background:rgba(255,255,255,.02);
+      color:var(--color-text);font-size:var(--text-sm);font-family:inherit}
+    .feedback-field textarea{min-height:6.5rem;resize:vertical}
+    .feedback-field input:focus,.feedback-field select:focus,.feedback-field textarea:focus{outline:none;border-color:rgba(82,174,182,.6)}
+    .feedback-field select option{background:#0a141d;color:var(--color-text)}
+    .feedback-note{font-size:var(--text-xs);color:var(--color-text-faint);margin:var(--space-1) 0 0}
+    .field-note-inline{font-weight:400;letter-spacing:0;text-transform:none;color:var(--color-text-muted);margin-left:.35em}
+    .feedback-honeypot{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+    #feedback-status{font-size:var(--text-sm);margin:0 0 var(--space-3);min-height:1.2em}
+    #feedback-status:empty{display:none}
+    #feedback-status.is-error{color:#ff9b9b}
+    #feedback-status.is-success{color:#9befcf}
+    .feedback-submit{width:100%;min-height:52px;border-radius:var(--radius-full);border:0;background:var(--color-primary);
+      color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer;letter-spacing:.04em}
+    .feedback-submit:hover{background:var(--color-primary-hover)}
+    .feedback-submit:disabled{opacity:.6;cursor:default}
+
+    @media (max-width: 640px){
+      .arena-main{padding:var(--space-6) var(--space-3) var(--space-10)}
+      .game-modal-card{padding:var(--space-4)}
+      .arena-header-inner{padding:var(--space-2) var(--space-3);gap:var(--space-2)}
+      .arena-wordmark{font-size:12px;letter-spacing:.18em;white-space:nowrap}
+      .arena-degree{font-size:clamp(3rem,22vw,4.5rem)}
+      .arena-hero{margin-bottom:var(--space-5)}
+      .arena-sub{font-size:13px}
+      .fantasy-slots{grid-template-columns:repeat(2,1fr)}
+      .fantasy-slot:last-child{grid-column:1 / -1}
+      .fantasy-pool{grid-template-columns:1fr}
+      .game-modal-title{font-size:1rem}
+      .game-modal-sub{font-size:13px;margin-bottom:var(--space-3)}
+    }
+  </style>
+</head>
+<body>
+  <!-- Hidden static form for Netlify Forms build-time discovery, same
+       pattern as Daily. Mirror any field added to the visible form here. -->
+  <form name="feedback" data-netlify="true" netlify-honeypot="bot-field" hidden>
+    <input type="text" name="feedback-type" />
+    <textarea name="feedback-message"></textarea>
+    <input type="email" name="feedback-email" />
+    <input type="text" name="bot-field" />
+  </form>
+
+  <div class="arena">
+    <div class="arena-grid" aria-hidden="true"></div>
+
+    <header class="arena-header">
+      <div class="arena-header-inner">
+        <a class="arena-wordmark" href="/">Six Degrees of Rock</a>
+        <div class="arena-header-actions">
+          <span class="arena-player" id="arena-player" hidden></span>
+        </div>
+      </div>
+    </header>
+
+    <main class="arena-main">
+      <div class="arena-hero">
+        <div class="arena-degree" aria-hidden="true">6&deg;</div>
+        <div class="arena-eyebrow">Fantasy Band Game</div>
+        <p class="arena-sub">Draft five musicians under a <strong>$100 salary cap</strong>. Score on career value and on how your five connect. Beat the <strong>Gold line of 69</strong> to win the day.</p>
+        <p class="fantasy-date" id="fantasy-date"></p>
+      </div>
+
+      <div class="game-modal-card">
+        <h1 class="game-modal-title">Draft your band</h1>
+        <p class="game-modal-sub">One band a day. Tap a slot, then tap a player. A player picked for a second slot moves there — nobody fills two slots at once.</p>
+
+        <p class="fantasy-signin-note" id="fantasy-signin-note" hidden>Browse the pool and draft as much as you like — <a href="/?signin=game">sign in to submit your band</a> and join the leaderboard.</p>
+
+        <div class="fantasy-cap" aria-live="polite">
+          <div class="fantasy-cap-row"><span>Salary cap</span><span id="cap-text">$0 of $100 — $100 left</span></div>
+          <div class="fantasy-cap-bar"><span class="fantasy-cap-fill" id="cap-fill"></span></div>
+        </div>
+
+        <div class="fantasy-slots" id="fantasy-slots" role="group" aria-label="Your five draft slots"></div>
+
+        <div class="fantasy-scores" aria-live="polite">
+          <div class="fantasy-score">Career value<strong id="prov-value">0.00</strong></div>
+          <div class="fantasy-score">Connection bonus<strong class="gold" id="prov-bonus">+0</strong></div>
+          <div class="fantasy-score">Provisional score<strong class="gold" id="prov-total">0.00</strong></div>
+        </div>
+
+        <ul class="fantasy-pairs" id="fantasy-pairs" aria-live="polite"></ul>
+
+        <button class="fantasy-submit" type="button" id="fantasy-submit" disabled>Fill all five slots within $100 to submit</button>
+        <p id="fantasy-status" role="status"></p>
+
+        <div class="fantasy-result" id="fantasy-result" hidden>
+          <h2 class="fantasy-result-title" data-result-title></h2>
+          <div class="fantasy-result-body" data-result-body></div>
+          <div class="fantasy-card" id="fantasy-card" hidden>
+            <h3 class="fantasy-card-title">Your fantasy band card</h3>
+            <p class="fantasy-card-text" data-card-text></p>
+            <div class="fantasy-card-actions">
+              <button class="tool-chip" type="button" id="fantasy-share">Share band card</button>
+              <button class="tool-chip" type="button" id="fantasy-copy">Copy band card</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section class="fantasy-career" id="fantasy-career" hidden>
+        <h2>Your career</h2>
+        <p data-career-text></p>
+        <p class="fantasy-yesterday" id="fantasy-yesterday" hidden><span data-yesterday-text></span></p>
+      </section>
+
+      <section class="arena-boards">
+        <h2>Leaderboard</h2>
+        <div class="fantasy-board-tabs">
+          <button type="button" class="fantasy-board-tab is-active" data-board-scope="daily">Today</button>
+          <button type="button" class="fantasy-board-tab" data-board-scope="weekly">This week</button>
+        </div>
+        <ol class="fantasy-board" id="board-daily"><li>No drafts today yet — yours could be the first.</li></ol>
+        <ol class="fantasy-board" id="board-weekly" hidden><li>No drafts this week yet.</li></ol>
+      </section>
+
+      <section class="arena-pool">
+        <h2>The pool — 100 musicians</h2>
+        <input class="fantasy-search" id="fantasy-search" type="search" placeholder="Search a musician or a band…" autocomplete="off" aria-label="Search the pool" />
+        <div class="fantasy-filters" id="fantasy-filters">
+          <button type="button" class="fantasy-filter is-active" data-filter="ALL">All 100</button>
+          <button type="button" class="fantasy-filter" data-filter="V">Vocalists</button>
+          <button type="button" class="fantasy-filter" data-filter="G">Guitars</button>
+          <button type="button" class="fantasy-filter" data-filter="B">Basses</button>
+          <button type="button" class="fantasy-filter" data-filter="D">Drums</button>
+          <button type="button" class="fantasy-filter" data-filter="W">Wild card</button>
+        </div>
+        <div class="fantasy-pool" id="fantasy-pool"></div>
+      </section>
+
+      <section class="fantasy-rules">
+        <h2>How scoring works</h2>
+        <p><strong>Career value.</strong> Each musician carries a value from their career in the graph, capped at their top three bands — a fourth band adds nothing to this part.</p>
+        <p><strong>Connection bonus.</strong> +4 for each pair among your five who played together in a band, up to +16. A fully connected band earns the full +16.</p>
+        <p><strong>Crowd-split.</strong> If many players pick the same musician, that musician is worth a little less to everyone who picked them — at half strength. Nobody is ever locked out of a pick. Crowd-split applies at settle, not in your provisional score.</p>
+        <p><strong>Winning.</strong> Beat the Gold line of <strong>69</strong> and the day counts as a win. Ten wins make Gold. Twenty-five make Platinum. Ties break on connection bonus first, then earliest submission.</p>
+        <p>Free to play. No ads, no entry fee, no real money. Fantasy value never feeds back into the Six Degrees graph.</p>
+      </section>
+    </main>
+
+    <footer class="arena-foot">
+      <a href="/">sixdegreesofrock.com</a><br />
+      <button class="arena-foot-link" id="send-feedback-btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="feedback-popover">Feedback</button>
+      &middot; <a href="/privacy.html">Privacy</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="https://www.facebook.com/groups/3634155073429202" target="_blank" rel="noopener">Players group</a>
+    </footer>
+  </div>
+
+  <div id="feedback-popover" role="dialog" aria-modal="true" aria-label="Send feedback" hidden>
+    <div class="feedback-backdrop" data-feedback-close></div>
+    <div class="feedback-card">
+      <button class="feedback-close" type="button" data-feedback-close aria-label="Close feedback">&times;</button>
+      <div class="feedback-title">Send feedback</div>
+      <p class="feedback-copy">Spot a bug, want a feature, or have a suggestion? Send a short note and it&rsquo;ll land in the maintainer&rsquo;s inbox.</p>
+      <form id="feedback-form" name="feedback" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/fantasy/?feedback=thanks">
+        <input type="hidden" name="form-name" value="feedback" />
+        <p class="feedback-honeypot" aria-hidden="true">
+          <label>Don&rsquo;t fill this out if you&rsquo;re human: <input name="bot-field" tabindex="-1" autocomplete="off" /></label>
+        </p>
+        <div class="feedback-field">
+          <label for="feedback-type">Type of feedback</label>
+          <select id="feedback-type" name="feedback-type" required>
+            <option value="Suggestion">Suggestion</option>
+            <option value="Feature request">Feature request</option>
+            <option value="Bug report">Bug report</option>
+            <option value="Game sponsorship">Game sponsorship</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="feedback-field">
+          <label for="feedback-message">Message</label>
+          <textarea id="feedback-message" name="feedback-message" required rows="5" placeholder="What&rsquo;s on your mind? Describe the bug, feature idea, or suggestion."></textarea>
+        </div>
+        <div class="feedback-field">
+          <label for="feedback-email">Your email <span class="field-note-inline">(optional &mdash; leave blank to stay anonymous)</span></label>
+          <input id="feedback-email" name="feedback-email" type="email" autocomplete="email" placeholder="you@example.com" />
+          <p class="feedback-note">Only used if the maintainer needs to reply. Not stored anywhere else.</p>
+        </div>
+        <div id="feedback-status" aria-live="polite"></div>
+        <button class="feedback-submit" type="submit" id="feedback-submit-btn">Feedback</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      // Sign-in lives on the homepage; ?signin=game opens it there and
+      // brings the player back here once they're in. Same as Daily.
+      window.openSignupPopover = function () { window.location.href = '/?signin=game'; };
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        if (window.__feedbackOpen && typeof window.__closeFeedback === 'function') {
+          window.__closeFeedback();
+          return;
+        }
+        window.location.href = '/';
+      });
+    })();
+  </script>
+  <script type="module" src="./fantasy-game.mjs"></script>
+  <script type="module" src="/scripts/signup-attribution.mjs"></script>
+  <script>
+    // Feedback dialog open/close + Netlify Forms submit. Mirrors Daily's
+    // contract: success shows confirmation, clears the form, auto-closes
+    // after ~2.5s; error leaves the form filled for a retry; never navigates.
+    (function () {
+      var popover = document.getElementById('feedback-popover');
+      var trigger = document.getElementById('send-feedback-btn');
+      if (!popover || !trigger) return;
+
+      function openFeedback() {
+        popover.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        window.__feedbackOpen = true;
+        document.body.style.overflow = 'hidden';
+        var first = document.getElementById('feedback-type');
+        if (first) first.focus();
+      }
+      function closeFeedback() {
+        popover.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+        window.__feedbackOpen = false;
+        document.body.style.overflow = '';
+      }
+      window.__closeFeedback = closeFeedback;
+      window.openFeedbackPopover = openFeedback;
+
+      trigger.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (popover.hidden) openFeedback(); else closeFeedback();
+      });
+      popover.querySelectorAll('[data-feedback-close]').forEach(function (el) {
+        el.addEventListener('click', closeFeedback);
+      });
+      popover.addEventListener('click', function (event) { event.stopPropagation(); });
+
+      var form = document.getElementById('feedback-form');
+      var statusEl = document.getElementById('feedback-status');
+      var submitBtn = document.getElementById('feedback-submit-btn');
+
+      function setStatus(kind, message) {
+        if (!statusEl) return;
+        statusEl.classList.remove('is-error', 'is-success');
+        if (kind === 'error') statusEl.classList.add('is-error');
+        if (kind === 'success') statusEl.classList.add('is-success');
+        statusEl.textContent = message || '';
+      }
+
+      if (!form) return;
+      form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        if (submitBtn && submitBtn.disabled) return;
+        var body = new URLSearchParams();
+        Array.from(new FormData(form).entries()).forEach(function (entry) {
+          body.append(entry[0], String(entry[1]));
+        });
+        setStatus('', 'Sending\u2026');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.dataset._label = submitBtn.textContent;
+          submitBtn.textContent = 'Sending\u2026';
+        }
+        try {
+          var response = await fetch('/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+          });
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          setStatus('success', 'Thanks \u2014 your feedback was sent. The maintainer will read it soon.');
+          form.reset();
+          setTimeout(function () {
+            closeFeedback();
+            setStatus('', '');
+          }, 2500);
+        } catch (err) {
+          console.error('feedback submit failed', err);
+          setStatus('error',
+            'Couldn\u2019t send your feedback right now. Check your connection and try again, ' +
+            'or email vimana17@gmail.com directly.');
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            if (submitBtn.dataset._label) {
+              submitBtn.textContent = submitBtn.dataset._label;
+              delete submitBtn.dataset._label;
+            }
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
