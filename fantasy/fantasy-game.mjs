@@ -19,6 +19,8 @@
 // can import them under node --test. The DOM wiring at the bottom only
 // runs in a browser (guarded by typeof document).
 
+import { fantasyResultCode } from '../scripts/fantasy-result.mjs';
+
 export const GOLD_LINE = 69;
 export const SALARY_CAP = 100;
 export const CONNECTION_PER_PAIR = 4;
@@ -228,6 +230,20 @@ export function fantasyShareText({ date, picks, provisional, final, win, handle 
   ].join('\n');
 }
 
+// Share text for a SETTLED day: title line with date and final score,
+// won/beat-the-Gold-line line, then the five pick names.
+export function fantasyResultsShareText({ date, picks, finalScore, win, handle }) {
+  const scoreLine = win
+    ? `I beat the Gold line — ${finalScore} (line is 69).`
+    : `Scored ${finalScore} — the Gold line is 69.`;
+  return [
+    `Fantasy Band Game — ${date} · ${finalScore}`,
+    scoreLine,
+    ...picks.map((p) => p.name),
+    `${handle || 'a rawker'} · sixdegreesofrock.com/fantasy`,
+  ].join('\n');
+}
+
 // --- browser wiring (skipped under node) ----------------------------------
 
 if (typeof document !== 'undefined') {
@@ -338,8 +354,8 @@ async function initFantasyPage() {
     const headers = {};
     const token = authToken();
     if (token) headers.authorization = `Bearer ${token}`;
-    const res = await fetch('/api/fantasy-today', { headers });
-    if (!res.ok) throw new Error(`fantasy-today HTTP ${res.status}`);
+    const res = await fetch('/api/fantasy-play', { headers });
+    if (!res.ok) throw new Error(`fantasy-play HTTP ${res.status}`);
     const data = await res.json();
     state.todayData = data;
     if (data.lineup) {
@@ -421,7 +437,7 @@ async function initFantasyPage() {
       }
       if (q && !(p.name.toLowerCase().includes(q) || (p.all_bands || []).some((b) => b.toLowerCase().includes(q)))) return false;
       return true;
-    }).sort((a, b) => a.name.localeCompare(b.name));
+    }).sort((a, b) => b.price0 - a.price0 || a.name.localeCompare(b.name));
   }
 
   function renderPool() {
@@ -564,6 +580,7 @@ async function initFantasyPage() {
           body.appendChild(p);
         }
       }
+      renderShareResults(picks, f);
     } else {
       if (title) title.textContent = `Provisional score ${Number(prov).toFixed(2)} — settles tonight`;
       if (body) {
@@ -572,8 +589,62 @@ async function initFantasyPage() {
         p.textContent = 'Crowd-split applies at settle, when the day\'s pick shares are known. Your band is in for today.';
         body.appendChild(p);
       }
+      removeShareResults();
     }
     renderBandCard(picks, d);
+  }
+
+  // Settled only: "Share results" button under the result body, next to
+  // the existing band-card UI. Built once, re-wired on every render; the
+  // encoder returns null on bad input, in which case no button shows.
+  // picks are already in slot order V, G, B, D, W (see renderResult).
+  function renderShareResults(picks, f) {
+    if (!els.result) return;
+    const old = els.result.querySelector('[data-share-results]');
+    const code = fantasyResultCode({
+      date: today,
+      finalScore: f.final,
+      won: isWin(f.final),
+      picks: picks.map((p) => p.member_id),
+    });
+    if (!code) { if (old) old.remove(); return; }
+    const text = fantasyResultsShareText({
+      date: today, picks, finalScore: f.final, win: isWin(f.final), handle: myHandle(),
+    });
+    const url = `https://sixdegreesofrock.com/fantasy?s=1&r=${code}`;
+    let btn = old;
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tool-chip';
+      btn.setAttribute('data-share-results', '');
+      btn.textContent = 'Share results';
+      const body = els.result.querySelector('[data-result-body]');
+      if (body) body.after(btn);
+      else els.result.appendChild(btn);
+    }
+    btn.onclick = () => shareResults(text, url);
+  }
+
+  function removeShareResults() {
+    const old = els.result && els.result.querySelector('[data-share-results]');
+    if (old) old.remove();
+  }
+
+  // Same copy-first flow as shareBandCard, with the result link as its
+  // own url field and no image file.
+  async function shareResults(text, url) {
+    const copied = await copyText(text);
+    try {
+      if (navigator.share) {
+        await navigator.share({ text, url });
+        if (els.status) els.status.textContent = 'Shared!';
+        return;
+      }
+    } catch {}
+    if (els.status) els.status.textContent = copied
+      ? 'Shared! If the app dropped the text, just paste — it is copied.'
+      : 'Copy the card below and paste it where you share.';
   }
 
   function renderBandCard(picks, d) {
