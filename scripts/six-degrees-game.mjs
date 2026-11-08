@@ -914,7 +914,7 @@ function initGameUI() {
       /* Chain timeline: a 2px rail through the dot centers (dot 12px wide,
          so its center is 6px in), band pills 14px right of the dots, and
          "via" lines indented to the same 26px so everything lines up. */
-      .sd-chain-list{position:relative;list-style:none;margin:8px auto 14px;padding:0;display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:fit-content;max-width:100%;text-align:left}
+      .sd-chain-list{position:relative;list-style:none;margin:8px auto 10px;padding:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:fit-content;max-width:100%;text-align:left}
       .sd-chain-list::before{content:'';position:absolute;left:5px;top:16px;bottom:16px;width:2px;border-radius:2px;background:rgba(143,232,246,.22)}
       .sd-chain-node{display:flex;align-items:center;gap:14px;position:relative}
       .sd-chain-dot{flex:none;width:12px;height:12px;border-radius:50%;background:var(--color-bg);border:2px solid var(--sd-good);position:relative;z-index:1}
@@ -923,9 +923,9 @@ function initGameUI() {
       .sd-chain-node.is-bad .sd-chain-dot{border-color:var(--sd-dead);background:var(--sd-dead)}
       .sd-chain-node.is-anchor .sd-chain-dot{border-color:var(--color-primary);background:var(--color-primary)}
       .sd-chain-list .game-chain-pill{max-width:none;margin:0}
-      .sd-chain-via{padding-left:26px;font-size:.82rem;line-height:1.35;max-width:100%}
+      .sd-chain-via{flex:1 1 110px;min-width:0;font-size:.78rem;line-height:1.25}
       .sd-chain-via-label{color:var(--color-text-faint);font-weight:500}
-      .sd-chain-via-names{color:var(--color-text);font-weight:600}
+      .sd-chain-via-names{color:var(--color-text);font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
       .sd-stat strong{display:flex;align-items:center;justify-content:center;gap:.2em;min-height:1.15em}
       .sd-stat strong .sd-ico{width:.7em;height:.7em}
       .sd-modal-close:focus:not(:focus-visible){outline:none;box-shadow:none}
@@ -941,15 +941,15 @@ function initGameUI() {
       .sd-icon svg,.sd-icon svg *{pointer-events:none}
       .sd-icon{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
       .sd-stats-grid .sd-stat > span{letter-spacing:.08em;font-size:.62rem;white-space:nowrap}
-      .sd-stats-block{margin:6px 0 16px}
+      .sd-stats-block{margin:4px 0 10px}
       .sd-stats-block .sd-reveal-label{margin-top:4px}
-      .sd-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0 14px;text-align:center}
-      .sd-stats-grid .sd-stat strong{font-size:1.6rem}
-      .sd-dist{display:flex;flex-direction:column;gap:5px;margin:6px 0}
+      .sd-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:4px 0 10px;text-align:center}
+      .sd-stats-grid .sd-stat strong{font-size:1.35rem}
+      .sd-dist{display:flex;flex-direction:column;gap:3px;margin:4px 0}
       .sd-dist-row{display:grid;grid-template-columns:62px 1fr;align-items:center;gap:8px}
       .sd-dist-label{font-size:.78rem;color:var(--color-text-muted);text-align:right}
       .sd-dist-track{display:block}
-      .sd-dist-bar{display:block;min-width:22px;padding:2px 8px;border-radius:6px;background:rgba(143,232,246,.16);color:var(--color-text);font-size:.78rem;font-weight:700;text-align:right;line-height:1.5}
+      .sd-dist-bar{display:block;min-width:22px;padding:1px 8px;border-radius:6px;background:rgba(143,232,246,.16);color:var(--color-text);font-size:.78rem;font-weight:700;text-align:right;line-height:1.35}
       .sd-dist-row.is-today .sd-dist-bar{background:var(--sd-good);color:#fff}
       .sd-stats-loading{text-align:center;font-size:.85rem;color:var(--color-text-muted);margin:8px 0}
       /* Practice looks different at a glance: amber instead of teal. */
@@ -1005,6 +1005,8 @@ function initGameUI() {
       .sd-modal{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px}
       .sd-modal-backdrop{position:absolute;inset:0;background:rgba(2,5,9,.74);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
       .sd-modal-card{position:relative;width:100%;max-width:420px;max-height:calc(100dvh - 32px);overflow:auto;background:#0b131c;border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:28px 20px 20px;box-shadow:var(--shadow-lg);animation:sd-rise .22s ease-out;color:var(--color-text)}
+      .sd-modal-card--results{padding:20px 16px 14px}
+      .sd-modal-card--results h2{font-size:1.32rem}
       .sd-modal-close{position:absolute;top:10px;right:10px;width:40px;height:40px;border-radius:999px;border:none;background:transparent;color:var(--color-text-muted);font-size:1.3rem;cursor:pointer}
       .sd-modal-close:hover{color:var(--color-text)}
       .sd-modal h2{font-family:var(--font-display);font-size:1.55rem;line-height:1.2;margin:0 32px 6px 0}
@@ -1016,15 +1018,19 @@ function initGameUI() {
       .sd-howto-ex p{margin:0;font-size:.9rem;color:var(--color-text-muted)}
       .sd-noshow{display:flex;align-items:center;gap:8px;margin-top:14px;color:var(--color-text-muted);font-size:.82rem;cursor:pointer}
       .sd-noshow input{width:15px;height:15px;margin:0;accent-color:var(--sd-good);cursor:pointer}
-      .sd-result-chain{text-align:center;font-size:1rem;line-height:1.9;margin:14px 0 6px;word-break:break-word}
-      .sd-result-stats{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 24px;margin:14px 0 18px}
+      .sd-result-chain{text-align:center;font-size:1rem;line-height:1.6;margin:10px 0 4px;word-break:break-word}
+      .sd-result-stats{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 24px;margin:10px 0 12px}
       .sd-stat{text-align:center}
-      .sd-stat strong{display:block;font-size:1.8rem;line-height:1.1}
+      .sd-stat strong{display:block;font-size:1.55rem;line-height:1.1}
       .sd-stat > span{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--color-text-muted)}
       .sd-reveal{font-size:.9rem;color:var(--color-text-muted);text-align:center}
       .sd-reveal strong{color:var(--color-text)}
       .sd-primary{display:block;width:100%;min-height:52px;border-radius:999px;border:none;background:var(--color-primary);color:var(--color-text-inverse);font:inherit;font-weight:700;font-size:1.05rem;cursor:pointer}
       .sd-primary:hover{background:var(--color-primary-hover)}
+      .sd-end-actions{display:flex;gap:10px;margin-top:14px}
+      .sd-end-actions .sd-primary,.sd-end-actions .sd-guest-btn{flex:1 1 0;min-width:0;min-height:44px;font-size:.95rem;line-height:1.2;padding:6px 8px}
+      .sd-guest-btn{display:block;border-radius:999px;border:none;background:#e0a63a;color:#000;font:inherit;font-weight:700;cursor:pointer}
+      .sd-end-caption{text-align:center;font-size:.8rem;color:var(--color-text-muted);margin:6px 0 0}
       .sd-secondary{display:block;width:100%;min-height:46px;margin-top:10px;border-radius:999px;border:1px solid var(--color-border);background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer}
       .sd-guest{margin-top:16px;text-align:center;font-size:.88rem;color:var(--color-text-muted)}
       .sd-linkbtn{background:none;border:none;padding:0;font:inherit;color:var(--color-primary);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
@@ -1040,7 +1046,7 @@ function initGameUI() {
       .sd-board.is-over .sd-prompt:empty,.sd-board.is-over .game-daily-options:empty,.sd-board.is-over .game-daily-note:empty{display:none}
       .sd-gameover-title{font-family:var(--font-display);font-size:clamp(1.5rem,1.1rem + 1.6vw,2rem);font-weight:700;letter-spacing:.02em;margin:0;line-height:1.15}
       .sd-gameover-sub{color:var(--color-text-muted);font-size:1rem;margin:4px 0 0}
-      .sd-reveal-label{text-align:center;font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--color-text-muted);margin:12px 0 4px}
+      .sd-reveal-label{text-align:center;font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--color-text-muted);margin:8px 0 3px}
       .sd-reveal-chain{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:0 0 10px}
       .sd-mode-list{display:grid;gap:8px;margin-top:14px}
       .sd-mode{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;padding:12px 14px;border:1px solid var(--color-border);border-radius:14px;background:transparent;color:inherit;font:inherit;cursor:pointer}
@@ -1761,6 +1767,7 @@ function initGameUI() {
   async function openStatsModal() {
     let slot = null;
     openSdModal((c) => {
+      c.classList.add('sd-modal-card--results');
       const h = document.createElement('h2');
       h.appendChild(iconText(lineIcon('stats'), 'Your stats'));
       c.appendChild(h);
@@ -1859,9 +1866,11 @@ function initGameUI() {
           box.replaceChildren(st ? statsBlockEl(st, won && !completed.is_replay ? statBucketOf(hops, par) : null) : '');
         });
       }
+      const endActions = el('<div class="sd-end-actions"></div>');
       const shareBtn = el('<button type="button" class="sd-primary">Share result</button>');
       shareBtn.addEventListener('click', () => shareDailyText(shareBtn, text, dailyResultShareLink(won, completed)));
-      c.appendChild(shareBtn);
+      endActions.appendChild(shareBtn);
+      c.appendChild(endActions);
       const homeScreen = homeScreenHintEl();
       if (homeScreen) c.appendChild(homeScreen);
       const mapLink = musicMapLinkEl(run);
@@ -1870,12 +1879,15 @@ function initGameUI() {
       if (completed.freeze_used) {
         c.appendChild(el('<p class="sd-modal-sub">A Seattle Freeze bridged your missed day. Streak intact.</p>'));
       }
-      // Gold pill under the music-map link (Aaron, 2026-10-27): the guest
-      // sign-up is a full pill now, not a text link at the bottom.
+      // Guest sign-up beside Share (Aaron, 2026-11-06): same gold pill,
+      // half the width and smaller; the caption stays, tucked right under
+      // the row so it still reads as the reason to tap. (Was a full-width
+      // pill under the map link, Aaron 2026-10-27.)
       if (!isSignedIn()) {
-        const nudge = el('<div class="sd-guest" style="margin-top:14px;text-align:center;"><button type="button" style="display:block;width:100%;min-height:52px;border-radius:999px;border:none;background:#e0a63a;color:#000;font:inherit;font-weight:700;font-size:1.05rem;cursor:pointer;">Create a free account</button><p class="sd-modal-sub" style="margin-top:8px;">to save your streak and stats!</p></div>');
-        nudge.querySelector('button').addEventListener('click', requestDailySignup);
-        c.appendChild(nudge);
+        const guestBtn = el('<button type="button" class="sd-guest-btn">Create a free account</button>');
+        guestBtn.addEventListener('click', requestDailySignup);
+        endActions.appendChild(guestBtn);
+        endActions.after(el('<p class="sd-end-caption">to save your streak and stats!</p>'));
         if (!practiceMode && shouldAskGuestForReminder()) {
           try { localStorage.setItem(REMINDER_PROMPT_KEY, '1'); } catch {}
           c.appendChild(guestReminderFormEl('Or just get a reminder tomorrow:'));
@@ -2114,17 +2126,18 @@ function initGameUI() {
   //   [Rage Against the Machine]
   //     └ Brad Wilk, Tim Commerford and Tom Morello → [Audioslave]
   function chainListEl(nodes, connections = {}) {
-    // A timeline: one continuous rail, a dot per band, every band name on
-    // the same left edge, and "via <musicians>" between two bands lined up
-    // with the names (Cole, 2026-10-08: make it look pro).
+    // A timeline: one rail, a dot per band, names on the same left edge,
+    // "via <musicians>" inline after the band it leads to (Aaron,
+    // 2026-11-06: separate via lines made the results card scroll on
+    // phones). Pills stay left-aligned; via takes the rest, max 2 lines.
     const list = el('<ol class="sd-chain-list"></ol>');
     nodes.forEach((n, i) => {
+      let via = null;
       if (i) {
         const names = connections[`${nodes[i - 1].id}|${n.id}`];
         if (names && names.length) {
-          const via = el('<li class="sd-chain-via"><span class="sd-chain-via-label">via</span> <span class="sd-chain-via-names"></span></li>');
+          via = el('<span class="sd-chain-via"><span class="sd-chain-via-label">via</span> <span class="sd-chain-via-names"></span></span>');
           via.querySelector('.sd-chain-via-names').textContent = fmtMembersLong(names);
-          list.appendChild(via);
         }
       }
       const dotKind = n.anchor ? 'is-anchor' : n.kind === 'deadend' ? 'is-bad' : n.kind === 'optimal' ? 'is-good' : 'is-ok';
@@ -2135,6 +2148,7 @@ function initGameUI() {
       const pill = el(`<span class="game-chain-pill ${cls}"></span>`);
       pill.textContent = n.name;
       li.appendChild(pill);
+      if (via) li.appendChild(via);
       list.appendChild(li);
     });
     return list;
