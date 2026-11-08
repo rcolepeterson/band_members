@@ -1005,8 +1005,8 @@ function initGameUI() {
       .sd-modal{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px}
       .sd-modal-backdrop{position:absolute;inset:0;background:rgba(2,5,9,.74);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
       .sd-modal-card{position:relative;width:100%;max-width:420px;max-height:calc(100dvh - 32px);overflow:auto;background:#0b131c;border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:28px 20px 20px;box-shadow:var(--shadow-lg);animation:sd-rise .22s ease-out;color:var(--color-text)}
-      .sd-modal-card--results{padding:20px 16px 14px}
-      .sd-modal-card--results h2{font-size:1.32rem}
+      .sd-modal-card--results{padding:18px 14px 12px}
+      .sd-modal-card--results h2{font-size:1.25rem}
       .sd-modal-close{position:absolute;top:10px;right:10px;width:40px;height:40px;border-radius:999px;border:none;background:transparent;color:var(--color-text-muted);font-size:1.3rem;cursor:pointer}
       .sd-modal-close:hover{color:var(--color-text)}
       .sd-modal h2{font-family:var(--font-display);font-size:1.55rem;line-height:1.2;margin:0 32px 6px 0}
@@ -1027,10 +1027,10 @@ function initGameUI() {
       .sd-reveal strong{color:var(--color-text)}
       .sd-primary{display:block;width:100%;min-height:52px;border-radius:999px;border:none;background:var(--color-primary);color:var(--color-text-inverse);font:inherit;font-weight:700;font-size:1.05rem;cursor:pointer}
       .sd-primary:hover{background:var(--color-primary-hover)}
-      .sd-end-actions{display:flex;gap:10px;margin-top:14px}
-      .sd-end-actions .sd-primary,.sd-end-actions .sd-guest-btn{flex:1 1 0;min-width:0;min-height:44px;font-size:.95rem;line-height:1.2;padding:6px 8px}
+      .sd-end-actions{display:flex;gap:8px;margin-top:14px}
+      .sd-end-actions .sd-primary,.sd-end-actions .sd-guest-btn{flex:1 1 0;min-width:0;min-height:40px;font-size:.9rem;line-height:1.2;padding:6px 8px}
       .sd-guest-btn{display:block;border-radius:999px;border:none;background:#e0a63a;color:#000;font:inherit;font-weight:700;cursor:pointer}
-      .sd-end-caption{text-align:center;font-size:.8rem;color:var(--color-text-muted);margin:6px 0 0}
+      .sd-end-caption{text-align:center;font-size:.8rem;color:var(--color-text-muted);margin:4px 0 0}
       .sd-secondary{display:block;width:100%;min-height:46px;margin-top:10px;border-radius:999px;border:1px solid var(--color-border);background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer}
       .sd-guest{margin-top:16px;text-align:center;font-size:.88rem;color:var(--color-text-muted)}
       .sd-linkbtn{background:none;border:none;padding:0;font:inherit;color:var(--color-primary);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
@@ -2419,6 +2419,14 @@ function initGameUI() {
       // One tap shares, like Wordle (the results modal opened on its own at the finish).
       const results = el(`<button type="button" class="tool-chip">${lineIcon('share')} Share result</button>`);
       results.addEventListener('click', () => shareDailyText(results, dailyResultShareText(true, c), dailyResultShareLink(true, c)));
+      // Reopen the results (Aaron, 2026-11-07): closing the modal left no
+      // way back to the chain, stats and bars. `c` carries the fresh
+      // finish (beat-the-tree wording, streak); on a reload it falls back
+      // to the run's own fields, like the finish line already does. Label
+      // is "See your chain", not "See results" — the wordle copy test
+      // bans that exact string.
+      const view = el('<button type="button" class="tool-chip">See your chain</button>');
+      view.addEventListener('click', () => openDailyResults({ won: true, completed: c }));
       // A win offers a NEW puzzle, same as the give-up screen (Cole,
       // 2026-10-09). "Play again" replayed today's pair, whose answer you had
       // just seen: a dead end for exactly the players most likely to want more.
@@ -2431,6 +2439,7 @@ function initGameUI() {
         again.addEventListener('click', () => { window.location.href = '/daily/?practice=1'; });
       }
       actions.appendChild(results);
+      actions.appendChild(view);
       actions.appendChild(again);
       finish.appendChild(actions);
       if (!practiceMode) {
@@ -2734,7 +2743,12 @@ function initGameUI() {
       // Aaron, 2026-10-25: no popup toast for a pick. The tapped button
       // colors first, then the repaint shows the static .sd-result bar
       // (solid pick color + two or three words) as the only verification.
-      await pause(kind === 'deadend' ? 1000 : 800);
+      // Completing move (Aaron, 2026-11-07): the 800ms pause used to run
+      // BEFORE the paint, so the final move stared at a spinner for the
+      // whole POST + 800ms and a second tap felt needed (the buttons are
+      // disabled meanwhile — the tap does nothing). Paint first so the
+      // final pick lands visibly, then only a 350ms beat before results.
+      // Other moves keep the full pause so the result bar can be read.
       if (data.completed) {
         if (gaCountsRun(dailyRun)) {
           gaEvent('game_completed', { puzzle_id: gaPuzzleId(dailyRun), moves_used: dailyRun.hops_used, par: dailyRun.par }, dailyRun.id);
@@ -2758,9 +2772,11 @@ function initGameUI() {
         }
         paintDailyBoard(card, data.completed);
         popNewestPill(card);
+        await pause(350);
         // The results modal carries the guest sign-up nudge (Cole, 2026-10-08).
         openDailyResults({ won: true, completed: data.completed });
       } else {
+        await pause(kind === 'deadend' ? 1000 : 800);
         paintDailyBoard(card);
         popNewestPill(card);
         // Out of moves: show's over. Uses the existing giveup action, so
@@ -2865,7 +2881,12 @@ function initGameUI() {
     const actions = el('<div class="sd-finish-actions"></div>');
     const results = el(`<button type="button" class="tool-chip">${lineIcon('share')} Share result</button>`);
     results.addEventListener('click', () => shareDailyText(results, dailyResultShareText(false), dailyResultShareLink(false)));
+    // Same reopen as the win board (Aaron, 2026-11-07): your attempt,
+    // dead ends and all, plus the stats and bars, live in the modal.
+    const view = el('<button type="button" class="tool-chip">See your chain</button>');
+    view.addEventListener('click', () => openDailyResults({ won: false }));
     actions.appendChild(results);
+    actions.appendChild(view);
     const again = el('<button type="button" class="tool-chip"></button>');
     if (practiceMode) {
       again.textContent = 'New puzzle';
