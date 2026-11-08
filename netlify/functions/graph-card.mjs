@@ -34,8 +34,8 @@
 // Response:
 //   band:   { ok, type:'band', entity: { id, name, city, state, country,
 //             genre, years_active, label, albums, bio, created_at, added_by },
-//             memberships: [{ member_id, member_name, tenure, weight,
-//             relation }], links: [{ platform, url }] }
+//             memberships: [{ id, member_id, member_name, instrument1,
+//             instrument2, tenure, weight, relation }], links: [{ platform, url }] }
 //   member: { ok, type:'member', entity: { id, name, city, state, country,
 //             instrument1, instrument2, years_active, bio,
 //             popularity_score }, memberships: [{ band_id, band_name,
@@ -104,18 +104,22 @@ async function findMember(sql, id) {
 }
 
 async function bandCard(sql, entity) {
+  // The edit-band dialog renders its roster from this payload in governor
+  // mode (the full /api/bands payload never loads there), so each
+  // membership carries its row id — remove/update ops need it — and each
+  // member's instruments, which the dialog's rows display.
   const memberships = await sql`
-    select member_id, tenure, weight, relation
+    select id, member_id, tenure, weight, relation
     from memberships
     where band_id = ${entity.id}
   `;
   const memberIds = [...new Set((memberships || []).map((m) => m.member_id).filter(Boolean))];
-  let namesById = new Map();
+  let membersById = new Map();
   if (memberIds.length) {
     const rows = await sql`
-      select id, name from band_members where id = any(${memberIds})
+      select id, name, instrument1, instrument2 from band_members where id = any(${memberIds})
     `;
-    namesById = new Map((rows || []).map((r) => [r.id, r.name]));
+    membersById = new Map((rows || []).map((r) => [r.id, r]));
   }
   const links = await sql`
     select platform, url from band_links where band_id = ${entity.id}
@@ -124,13 +128,19 @@ async function bandCard(sql, entity) {
     ok: true,
     type: 'band',
     entity,
-    memberships: (memberships || []).map((m) => ({
-      member_id: m.member_id,
-      member_name: namesById.get(m.member_id) ?? null,
-      tenure: m.tenure ?? null,
-      weight: m.weight ?? null,
-      relation: m.relation ?? null,
-    })),
+    memberships: (memberships || []).map((m) => {
+      const member = membersById.get(m.member_id) || {};
+      return {
+        id: m.id ?? null,
+        member_id: m.member_id,
+        member_name: member.name ?? null,
+        instrument1: member.instrument1 ?? null,
+        instrument2: member.instrument2 ?? null,
+        tenure: m.tenure ?? null,
+        weight: m.weight ?? null,
+        relation: m.relation ?? null,
+      };
+    }),
     links: (links || []).map((l) => ({ platform: l.platform, url: l.url })),
   };
 }
