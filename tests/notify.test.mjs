@@ -132,6 +132,8 @@ test('notifyBandTouched: happy path emails opted-in touchers, honors cooldown + 
   const logInserts = [];
   const sql = fakeSql([
     ['select count(*)', [{ n: 0 }]],
+    // Actor-name lookup for the "Updated by ..." line.
+    ['select name, email from users', [{ name: 'Scott Smith', email: 'scott@example.com' }]],
     ['from users u', [
       { id: 'u-in', email: 'in@x.com', name: 'In' },
       { id: 'u-out', email: 'out@x.com', name: 'Out' },
@@ -158,8 +160,76 @@ test('notifyBandTouched: happy path emails opted-in touchers, honors cooldown + 
   assert.deepEqual(mailer.sent.map((s) => s.to), ['in@x.com']);
   assert.equal(mailer.sent[0].subject, 'Soundgarden was recently updated');
   assert.ok(mailer.sent[0].text.includes('/api/unsubscribe?token=t-u-in'));
+  // Actor name from the lookup lands in both bodies.
+  assert.ok(mailer.sent[0].text.includes('Updated by Scott Smith.'));
+  assert.ok(mailer.sent[0].html.includes('Updated by Scott Smith.'));
   assert.equal(logInserts.length, 1);
   assert.equal(logInserts[0][1], 'u-in');
+}));
+
+test('notifyBandTouched: nameless actor omits the Updated-by line', withApiKey(async () => {
+  const mailer = silentMailer();
+  const sql = fakeSql([
+    ['select count(*)', [{ n: 0 }]],
+    // Lookup finds no user row for the actor.
+    ['select name, email from users', []],
+    ['from users u', [{ id: 'u-in', email: 'in@x.com', name: 'In' }]],
+    ['from notification_prefs', [{ user_id: 'u-in', email_enabled: true, unsubscribed_at: null, unsubscribe_token: 't-u-in' }]],
+    ['band_notification_log\n    where band_id', []],
+    ['insert into band_notification_log', []],
+  ]);
+  const result = await notifyBandTouched(sql, {
+    bandId: 'band-1',
+    bandName: 'Soundgarden',
+    actorUserId: 'actor-1',
+    mailer,
+  });
+  assert.equal(result.sent, 1);
+  assert.doesNotMatch(mailer.sent[0].text, /Updated by/);
+  assert.doesNotMatch(mailer.sent[0].html, /Updated by/);
+}));
+
+test('notifyBandTouched: nameless actor falls back to the account email', withApiKey(async () => {
+  const mailer = silentMailer();
+  const sql = fakeSql([
+    ['select count(*)', [{ n: 0 }]],
+    // Actor row has an email but no name.
+    ['select name, email from users', [{ name: '', email: 'scott@example.com' }]],
+    ['from users u', [{ id: 'u-in', email: 'in@x.com', name: 'In' }]],
+    ['from notification_prefs', [{ user_id: 'u-in', email_enabled: true, unsubscribed_at: null, unsubscribe_token: 't-u-in' }]],
+    ['band_notification_log\n    where band_id', []],
+    ['insert into band_notification_log', []],
+  ]);
+  const result = await notifyBandTouched(sql, {
+    bandId: 'band-1',
+    bandName: 'Soundgarden',
+    actorUserId: 'actor-1',
+    mailer,
+  });
+  assert.equal(result.sent, 1);
+  assert.ok(mailer.sent[0].text.includes('Updated by scott@example.com.'));
+  assert.ok(mailer.sent[0].html.includes('Updated by scott@example.com.'));
+}));
+
+test('notifyBandTouched: actor lookup failure still sends without the line', withApiKey(async () => {
+  const mailer = silentMailer();
+  const sql = fakeSql([
+    ['select count(*)', [{ n: 0 }]],
+    // No handler for the actor lookup: fakeSql throws, the lookup catches.
+    ['from users u', [{ id: 'u-in', email: 'in@x.com', name: 'In' }]],
+    ['from notification_prefs', [{ user_id: 'u-in', email_enabled: true, unsubscribed_at: null, unsubscribe_token: 't-u-in' }]],
+    ['band_notification_log\n    where band_id', []],
+    ['insert into band_notification_log', []],
+  ]);
+  const result = await notifyBandTouched(sql, {
+    bandId: 'band-1',
+    bandName: 'Soundgarden',
+    actorUserId: 'actor-1',
+    mailer,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.sent, 1);
+  assert.doesNotMatch(mailer.sent[0].text, /Updated by/);
 }));
 
 test('notifyBandTouched: mailer unconfigured short-circuits with no sends', withoutApiKey(async () => {
