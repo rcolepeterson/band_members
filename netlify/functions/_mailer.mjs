@@ -51,20 +51,36 @@ export function isMailerConfigured() {
 // keeps the email from leaking edit details to anyone who shouldn't see
 // them. Sentence case, quiet register, no hype.
 //
+// One exception (Aaron, 2026-11-08): the editor's name. When actorName is
+// given, the email carries an "Updated by {name}." line right under the
+// headline — so a follower can tell at a glance who made the change
+// (Scott Smith adding Randy Rhoads to Quiet Riot was the case that asked
+// for it). The caller resolves actorName as the account name, falling back
+// to the account email when there is no name — every signed-in editor has
+// an email. When actorName is missing (admin-token edits, which carry no
+// user at all) the line is omitted and the email is byte-identical to the
+// old teaser — never a made-up attribution.
+//
 // unsubscribeUrl is the per-user signed one-click link
 // (see _notify.mjs unsubscribeUrlFor + unsubscribe.mjs). Every email
 // carries it in the footer — no login required to opt out.
-export function buildBandUpdateEmail({ bandName, unsubscribeUrl }) {
+export function buildBandUpdateEmail({ bandName, unsubscribeUrl, actorName }) {
   const safeName = String(bandName || 'A band').slice(0, 200);
+  const safeActor =
+    typeof actorName === 'string' ? actorName.trim().slice(0, 100) : '';
   const subject = `${safeName} was recently updated`;
   const text =
     `${safeName} was recently updated.\n\n` +
+    (safeActor ? `Updated by ${safeActor}.\n\n` : '') +
     `See what's new: ${SITE_URL}\n\n` +
     `You're receiving this because you added, edited, or follow this band on Six Degrees of Rawk.\n` +
     `Unsubscribe: ${unsubscribeUrl}\n`;
   const html =
     `<div style="font-family: Georgia, serif; color: #e8e4da; background: #14120e; padding: 32px; max-width: 560px;">` +
     `<p style="font-size: 18px; line-height: 1.6;">${escapeHtml(safeName)} was recently updated.</p>` +
+    (safeActor
+      ? `<p style="font-size: 16px; line-height: 1.6;">Updated by ${escapeHtml(safeActor)}.</p>`
+      : '') +
     `<p><a href="${SITE_URL}" style="color: #c9a96a;">See what's new on Six Degrees of Rawk</a></p>` +
     `<hr style="border: none; border-top: 1px solid #3a352c; margin: 24px 0;" />` +
     `<p style="font-size: 12px; color: #8a8478;">You're receiving this because you added, edited, or follow this band. ` +

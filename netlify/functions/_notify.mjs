@@ -133,7 +133,7 @@ export async function getTouchedRecipients(sql, bandId, actorUserId) {
   return rows;
 }
 
-async function notifyOneRecipient(sql, bandId, bandName, recipient, mailer, eventType) {
+async function notifyOneRecipient(sql, bandId, bandName, recipient, mailer, eventType, actorName) {
   const prefs = await ensureNotifyPrefs(sql, recipient.id);
   if (!prefs.email_enabled || prefs.unsubscribed_at) {
     return { sent: false, reason: 'opted out' };
@@ -163,6 +163,7 @@ async function notifyOneRecipient(sql, bandId, bandName, recipient, mailer, even
   }
   const email = buildBandUpdateEmail({
     bandName,
+    actorName,
     unsubscribeUrl: unsubscribeUrlFor(prefs.unsubscribe_token),
   });
   // Use notify_email override if set (e.g. Aaron's business email for
@@ -196,13 +197,32 @@ export async function notifyBandTouched(
       console.warn('notify: daily send cap reached, skipping');
       return { ok: true, sent: 0, skipped: 'daily cap' };
     }
+    // Actor name for the "Updated by ..." line (Aaron, 2026-11-08). One
+    // lookup for the whole fan-out, not one per recipient. Best-effort: a
+    // lookup failure never blocks the sends below. Every signed-in editor
+    // has an account email, so a nameless account falls back to the email —
+    // the line is omitted only when there is no user at all (admin-token
+    // edits, which carry no actorUserId).
+    let actorName = null;
+    if (actorUserId) {
+      try {
+        const rows = await sql`select name, email from users where id = ${actorUserId} limit 1`;
+        if (rows.length) {
+          const name = rows[0].name && rows[0].name.trim();
+          const email = rows[0].email && rows[0].email.trim();
+          actorName = name || email || null;
+        }
+      } catch (err) {
+        console.warn('notify: actor lookup failed', err && err.message);
+      }
+    }
     const recipients = await getTouchedRecipients(sql, bandId, actorUserId);
     // Parallel sends — each recipient is independent, and at hobby scale
     // the fan-out is a handful of emails. Individual failures are caught
     // per-recipient so one bad address can't sink the rest.
     const outcomes = await Promise.allSettled(
       recipients.map((r) =>
-        notifyOneRecipient(sql, bandId, bandName, r, mailer, eventType).catch((err) => {
+        notifyOneRecipient(sql, bandId, bandName, r, mailer, eventType, actorName).catch((err) => {
           console.warn('notify: recipient failed', r.id, err && err.message);
           return { sent: false, reason: 'error' };
         })
