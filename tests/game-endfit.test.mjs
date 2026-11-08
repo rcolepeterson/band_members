@@ -35,8 +35,8 @@ test('copy and chrome are untouched, results card is tighter', () => {
   assert.ok(src.includes('Share result'), 'Share keeps its label');
   assert.ok(src.includes('Create a free account'), 'Create keeps its label');
   assert.ok(src.includes("c.classList.add('sd-modal-card--results');"), 'results card carries its own class');
-  assert.ok(src.includes('.sd-modal-card--results{padding:20px 16px 14px}'), 'results padding shrinks, other modals untouched');
-  assert.ok(src.includes('.sd-modal-card--results h2{font-size:1.32rem}'), 'results title shrinks, other modals untouched');
+  assert.ok(src.includes('.sd-modal-card--results{padding:18px 14px 12px}'), 'results padding shrinks, other modals untouched (tightened further 2026-11-07)');
+  assert.ok(src.includes('.sd-modal-card--results h2{font-size:1.25rem}'), 'results title shrinks, other modals untouched (tightened further 2026-11-07)');
   assert.ok(src.includes('.sd-stats-grid .sd-stat strong{font-size:1.35rem}'), 'stats numbers slim down');
   assert.ok(src.includes('.sd-stat strong{display:block;font-size:1.55rem;'), 'moves/shortest/time numbers slim down');
   assert.ok(src.includes("c.appendChild(chainListEl([start, ...mine], run.connections || {}));"), 'chain call site unchanged');
