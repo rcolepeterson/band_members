@@ -73,8 +73,8 @@ const OTHER_MEMBER = {
   popularity_score: 1,
 };
 const BAND_MEMBERSHIPS = [
-  { member_id: MEMBER1.id, tenure: '1990-', weight: 1, relation: 'member_of' },
-  { member_id: MEMBER2.id, tenure: '1990-1997', weight: 2, relation: 'member_of' },
+  { id: 101, member_id: MEMBER1.id, tenure: '1990-', weight: 1, relation: 'member_of' },
+  { id: 102, member_id: MEMBER2.id, tenure: '1990-1997', weight: 2, relation: 'member_of' },
 ];
 const MEMBER1_BANDS = [
   { band_id: BAND.id, tenure: '1990-', weight: 1, relation: 'member_of' },
@@ -127,7 +127,7 @@ function makeMockSql() {
     if (/union all/i.test(text)) return Promise.resolve(namesRows());
     // Card: name-list lookups (id = any(...)) before single-row lookups.
     if (/from band_members/i.test(text) && /id = any/i.test(text)) {
-      return Promise.resolve([MEMBER1, MEMBER2].map((m) => ({ id: m.id, name: m.name })));
+      return Promise.resolve([MEMBER1, MEMBER2].map((m) => ({ id: m.id, name: m.name, instrument1: m.instrument1, instrument2: m.instrument2 })));
     }
     if (/from bands/i.test(text) && /id = any/i.test(text)) {
       return Promise.resolve([{ id: BAND.id, name: BAND.name }]);
@@ -295,6 +295,11 @@ test('card band returns entity + its memberships + its links only', async () => 
   assert.equal(body.entity.bio, 'Seattle band bio.');
   assert.deepEqual(body.memberships.map((m) => m.member_id), [MEMBER1.id, MEMBER2.id]);
   assert.deepEqual(body.memberships.map((m) => m.member_name), ['Cole Peterson', 'Paul Uhlir']);
+  // Edit-dialog fields: the roster fetch needs the membership row id (for
+  // remove/update ops) and the members' instruments (for the row fields).
+  assert.deepEqual(body.memberships.map((m) => m.id), [101, 102]);
+  assert.deepEqual(body.memberships.map((m) => m.instrument1), ['Bass', 'Drums']);
+  assert.deepEqual(body.memberships.map((m) => m.instrument2), [null, null]);
   assert.deepEqual(body.links, BAND_LINKS);
   const flat = JSON.stringify(body);
   assert.ok(!flat.includes('Candlebox'), 'no other band may appear');

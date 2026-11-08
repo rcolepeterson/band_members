@@ -146,7 +146,7 @@ test('edit-band form has Save changes and Cancel buttons', () => {
   assert.ok(INDEX_HTML.includes('id="edit-band-cancel-btn"'), 'Expected #edit-band-cancel-btn.');
 });
 
-test('buildEditMemberRow renders name, instrument1, instrument2, tenure fields plus a remove button', () => {
+test('buildEditMemberRow renders name, instrument1, instrument2, tenure, weight fields plus a remove button', () => {
   assert.ok(INDEX_HTML.includes('function buildEditMemberRow'), 'Expected a buildEditMemberRow() function.');
   const idx = INDEX_HTML.indexOf('function buildEditMemberRow');
   const endIdx = INDEX_HTML.indexOf('function addEditMemberRow', idx);
@@ -155,8 +155,36 @@ test('buildEditMemberRow renders name, instrument1, instrument2, tenure fields p
   assert.ok(block.includes('edit-member-instrument1-input'), 'Expected an instrument1 input class.');
   assert.ok(block.includes('edit-member-instrument2-input'), 'Expected an instrument2 input class.');
   assert.ok(block.includes('edit-member-tenure-input'), 'Expected a tenure input class.');
+  assert.ok(block.includes('edit-member-weight-input'), 'Expected a weight select class.');
+  assert.ok(block.includes('Founder / core member'), 'Expected the weight select to offer the founder tier.');
+  assert.ok(block.includes('Touring member'), 'Expected the weight select to offer the touring tier.');
+  assert.ok(block.includes('dataset.originalWeight'), 'Expected each row to track its membership weight for diffing.');
   assert.ok(block.includes('data-remove-edit-row'), 'Expected a remove-row control.');
   assert.ok(block.includes('dataset.memberId'), 'Expected each row to track its membership via a member id data attribute.');
+});
+
+test('openEditBandPopover fetches the band card when the local roster is empty (governor mode)', () => {
+  assert.ok(INDEX_HTML.includes('function openEditBandPopover'), 'Expected an openEditBandPopover() function.');
+  const idx = INDEX_HTML.indexOf('function openEditBandPopover');
+  const endIdx = INDEX_HTML.indexOf('function computeEditBandDiff', idx);
+  const block = INDEX_HTML.slice(idx, endIdx);
+  assert.ok(block.includes("fetch('/api/graph-card?type=band&id='"), 'Expected a graph-card fetch for the roster.');
+  assert.ok(block.includes('findRawMembershipsForBand'), 'Expected the local roster lookup to still run first.');
+  assert.ok(block.includes('memberships'), 'Expected the fetched card memberships to be rendered as rows.');
+  assert.ok(block.includes('openSeq'), 'Expected an open-sequence guard so a stale fetch cannot fill a reopened dialog.');
+  assert.ok(block.includes('membershipIdByMemberId'), 'Expected the fetched rows to re-point the diff snapshot.');
+});
+
+test('computeEditBandDiff sends weight on adds and weight changes on updates', () => {
+  assert.ok(INDEX_HTML.includes('function computeEditBandDiff'), 'Expected a computeEditBandDiff() function.');
+  const idx = INDEX_HTML.indexOf('function computeEditBandDiff');
+  const endIdx = INDEX_HTML.indexOf('function computeEditBandLinksDiff', idx);
+  const block = INDEX_HTML.slice(idx, endIdx);
+  assert.ok(block.includes('edit-member-weight-input'), 'Expected the diff to read the weight select.');
+  assert.ok(block.includes('originalWeight'), 'Expected the diff to compare against the row’s original weight.');
+  assert.ok(block.includes('weight'), 'Expected weight to appear in the diff output.');
+  assert.ok(block.includes('{ id: pickedId, tenure, weight }') || block.includes('{ name, tenure, weight }'),
+    'Expected new-row adds to carry the picker’s weight.');
 });
 
 // -----------------------------------------------------------------------
@@ -210,6 +238,16 @@ test('edit-band save handler fires metadata + roster PATCH requests in parallel 
   const endIdx = INDEX_HTML.indexOf('\n    });', idx);
   const block = INDEX_HTML.slice(idx, endIdx);
   assert.ok(block.includes('Promise.all(requests)'), 'Expected Promise.all(requests) to fire both PATCH calls in parallel.');
+});
+
+test('edit-band save handler sends weight on roster adds and updates', () => {
+  const idx = INDEX_HTML.indexOf("document.getElementById('edit-band-save-btn')?.addEventListener");
+  assert.ok(idx > 0, 'Expected the edit-band-save-btn click handler.');
+  const endIdx = INDEX_HTML.indexOf('\n    });', idx);
+  const block = INDEX_HTML.slice(idx, endIdx);
+  assert.ok(block.includes('{ id, weight }'), 'Expected roster adds by id to carry the picker weight.');
+  assert.ok(block.includes('{ name, weight }'), 'Expected roster adds by name to carry the picker weight.');
+  assert.ok(block.includes('weight: u.weight'), 'Expected roster updates to carry weight.');
 });
 
 test('edit-band save handler refreshes the graph after a successful write', () => {
