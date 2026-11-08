@@ -47,7 +47,7 @@ function okFetch(payload = { id: 'email_123' }) {
   return async () => new Response(JSON.stringify(payload), { status: 200 });
 }
 
-test('buildBandUpdateEmail: teaser copy names the band and nothing else', () => {
+test('buildBandUpdateEmail: teaser copy without an actor names the band and nothing else', () => {
   const { subject, html, text } = buildBandUpdateEmail({
     bandName: 'Metallica',
     unsubscribeUrl: 'https://sixdegreesofrock.com/api/unsubscribe?token=abc',
@@ -57,11 +57,51 @@ test('buildBandUpdateEmail: teaser copy names the band and nothing else', () => 
   assert.match(html, /Metallica was recently updated\./);
   // No edit details leak into the teaser.
   assert.doesNotMatch(text, /genre|members|label/i);
+  // No actor line when no actor is given (admin-token edits, nameless accounts).
+  assert.doesNotMatch(text, /Updated by/);
+  assert.doesNotMatch(html, /Updated by/);
   // Unsubscribe link present in both bodies.
   assert.ok(text.includes('https://sixdegreesofrock.com/api/unsubscribe?token=abc'));
   assert.ok(html.includes('https://sixdegreesofrock.com/api/unsubscribe?token=abc'));
   // Site link present.
   assert.ok(text.includes(SITE_URL));
+});
+
+test('buildBandUpdateEmail: actor line appears when actorName is given', () => {
+  const { subject, html, text } = buildBandUpdateEmail({
+    bandName: 'Quiet Riot',
+    actorName: 'Scott Smith',
+    unsubscribeUrl: 'https://example.test/u',
+  });
+  // Subject stays the plain teaser; the name lives in the body.
+  assert.equal(subject, 'Quiet Riot was recently updated');
+  assert.ok(text.includes('Updated by Scott Smith.'));
+  assert.ok(html.includes('Updated by Scott Smith.'));
+  // Line sits between the headline and the site link.
+  assert.ok(text.indexOf('Updated by Scott Smith.') > text.indexOf('was recently updated.'));
+  assert.ok(text.indexOf('Updated by Scott Smith.') < text.indexOf("See what's new:"));
+});
+
+test('buildBandUpdateEmail: actor name is HTML-escaped', () => {
+  const { html, text } = buildBandUpdateEmail({
+    bandName: 'Quiet Riot',
+    actorName: '<img src=x onerror=alert(1)>',
+    unsubscribeUrl: 'https://example.test/u',
+  });
+  assert.doesNotMatch(html, /<img src=x/);
+  assert.ok(html.includes('Updated by &lt;img src=x onerror=alert(1)&gt;.'));
+  // Plain-text body carries the raw name (no HTML to escape there).
+  assert.ok(text.includes('Updated by <img src=x onerror=alert(1)>.'));
+});
+
+test('buildBandUpdateEmail: blank actor name omits the line', () => {
+  const { html, text } = buildBandUpdateEmail({
+    bandName: 'Quiet Riot',
+    actorName: '   ',
+    unsubscribeUrl: 'https://example.test/u',
+  });
+  assert.doesNotMatch(text, /Updated by/);
+  assert.doesNotMatch(html, /Updated by/);
 });
 
 test('buildBandUpdateEmail: band name is HTML-escaped', () => {
