@@ -65,6 +65,16 @@ function asTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+// Membership weight: 1 founder/core, 2 member, 3 touring. The client only
+// ever sends 1/2/3 (its picker), but the endpoint clamps anything else
+// into range rather than trusting it — and defaults to 2, the historical
+// add weight, when the field is absent or unusable.
+function clampWeight(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 2;
+  return Math.min(3, Math.max(1, Math.trunc(n)));
+}
+
 function extractBandId(req, context) {
   const fromContext = context && context.params && typeof context.params.id === 'string' ? context.params.id.trim() : '';
   if (fromContext) return fromContext;
@@ -137,13 +147,15 @@ export default async (req, context) => {
       if (!entry || typeof entry !== 'object') continue;
       const id = asTrimmedString(entry.id);
       const name = asTrimmedString(entry.name);
+      // Weight is the edit dialog's founder/member/touring picker (1/2/3).
+      const weight = clampWeight(entry.weight);
       if (id) {
-        addById.push({ id });
+        addById.push({ id, weight });
       } else if (name) {
         if (name.length > LIMITS.memberName) {
           return badRequest('member name is too long', { field: 'add' });
         }
-        addByName.push({ name });
+        addByName.push({ name, weight });
       }
       // silently skip fully-empty rows, matching bands_create's rule
     }
@@ -307,8 +319,8 @@ export default async (req, context) => {
 
     // Resolve every `add` entry (by-id + by-name) to a concrete member id.
     const resolvedAdds = [
-      ...addById.map(e => ({ memberId: e.id, name: null })),
-      ...addByName.map((e, i) => ({ memberId: byNameResults[i]?.[0]?.id || null, name: e.name })),
+      ...addById.map(e => ({ memberId: e.id, name: null, weight: e.weight })),
+      ...addByName.map((e, i) => ({ memberId: byNameResults[i]?.[0]?.id || null, name: e.name, weight: e.weight })),
     ];
 
     // --- Detect already-linked memberships for `add` (skip duplicates) ----
@@ -334,7 +346,7 @@ export default async (req, context) => {
       }
       membershipInsertPromises.push(sql`
         insert into memberships (band_id, member_id, weight, relation)
-        values (${bandId}, ${a.memberId}, 2, 'member_of')
+        values (${bandId}, ${a.memberId}, ${a.weight ?? 2}, 'member_of')
         on conflict (band_id, member_id) do nothing
         returning id, band_id, member_id, tenure, weight, relation
       `);
