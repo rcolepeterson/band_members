@@ -183,8 +183,8 @@ test('computeEditBandDiff sends weight on adds and weight changes on updates', (
   assert.ok(block.includes('edit-member-weight-input'), 'Expected the diff to read the weight select.');
   assert.ok(block.includes('originalWeight'), 'Expected the diff to compare against the row’s original weight.');
   assert.ok(block.includes('weight'), 'Expected weight to appear in the diff output.');
-  assert.ok(block.includes('{ id: pickedId, tenure, weight }') || block.includes('{ name, tenure, weight }'),
-    'Expected new-row adds to carry the picker’s weight.');
+  assert.ok(block.includes('{ id: pickedId, tenure, weight, instrument1, instrument2 }') || block.includes('{ name, tenure, weight, instrument1, instrument2 }'),
+    'Expected new-row adds to carry the picker’s weight plus tenure and instruments.');
 });
 
 // -----------------------------------------------------------------------
@@ -245,8 +245,8 @@ test('edit-band save handler sends weight on roster adds and updates', () => {
   assert.ok(idx > 0, 'Expected the edit-band-save-btn click handler.');
   const endIdx = INDEX_HTML.indexOf('\n    });', idx);
   const block = INDEX_HTML.slice(idx, endIdx);
-  assert.ok(block.includes('{ id, weight }'), 'Expected roster adds by id to carry the picker weight.');
-  assert.ok(block.includes('{ name, weight }'), 'Expected roster adds by name to carry the picker weight.');
+  assert.ok(block.includes('{ id, tenure, weight, instrument1, instrument2 }'), 'Expected roster adds by id to carry tenure, weight and instruments.');
+  assert.ok(block.includes('{ name, tenure, weight, instrument1, instrument2 }'), 'Expected roster adds by name to carry tenure, weight and instruments.');
   assert.ok(block.includes('weight: u.weight'), 'Expected roster updates to carry weight.');
 });
 
