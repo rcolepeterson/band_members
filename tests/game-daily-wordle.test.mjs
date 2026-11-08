@@ -103,7 +103,7 @@ test('hints, streak and credits live in drawers, not on the board', () => {
 test('results modal offers a share and a non-blocking guest sign-up nudge', () => {
   assert.ok(src.includes('Share result'));
   assert.ok(src.includes('to save your streak and stats!'));
-  assert.match(src, /if \(!isSignedIn\(\)\) \{\s*const nudge/);
+  assert.match(src, /if \(!isSignedIn\(\)\) \{\s*const guestBtn/);
 });
 
 test('mode switcher sits behind SHOW_MODE_SWITCHER (off for launch), logic kept', async () => {
@@ -267,7 +267,7 @@ test('game-over board shows one chain, the answer, top to bottom', () => {
 test('chain timeline: one rail, dots, names aligned; finished boards collapse empty areas', () => {
   assert.ok(src.includes('.sd-chain-list::before{'), 'continuous rail');
   assert.ok(src.includes('<span class="sd-chain-dot" aria-hidden="true"></span>'));
-  assert.ok(src.includes('.sd-chain-via{padding-left:26px;'), 'via lines align with band names (12px dot + 14px gap)');
+  assert.ok(src.includes('.sd-chain-via{flex:1 1 110px;'), 'via sits inline after its pill (Aaron, 2026-11-06: separate via lines scrolled the results card)');
   assert.ok(src.includes("card.classList.toggle('is-over', !active);"));
   assert.ok(src.includes('.sd-board.is-over .sd-prompt:empty'));
 });
