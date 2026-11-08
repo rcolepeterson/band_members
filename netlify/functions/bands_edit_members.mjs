@@ -149,13 +149,18 @@ export default async (req, context) => {
       const name = asTrimmedString(entry.name);
       // Weight is the edit dialog's founder/member/touring picker (1/2/3).
       const weight = clampWeight(entry.weight);
+      // Tenure + instruments ride on the add entry too (Aaron, 2026-11-08):
+      // a new row's date and instrument fields used to be silently dropped.
+      const tenure = asTrimmedString(entry.tenure).slice(0, LIMITS.tenure);
+      const instrument1 = asTrimmedString(entry.instrument1).slice(0, LIMITS.instrument);
+      const instrument2 = asTrimmedString(entry.instrument2).slice(0, LIMITS.instrument);
       if (id) {
-        addById.push({ id, weight });
+        addById.push({ id, weight, tenure, instrument1, instrument2 });
       } else if (name) {
         if (name.length > LIMITS.memberName) {
           return badRequest('member name is too long', { field: 'add' });
         }
-        addByName.push({ name, weight });
+        addByName.push({ name, weight, tenure, instrument1, instrument2 });
       }
       // silently skip fully-empty rows, matching bands_create's rule
     }
@@ -298,6 +303,27 @@ export default async (req, context) => {
       }
     }
     const byNameResults = addByName.map(e => [{ id: byNameIdByKey.get(e.name.toLowerCase()) || null }]);
+
+    // Resolve every `add` entry (by-id + by-name) to a concrete member id.
+    // Moved ahead of Transaction 1 (it only depends on the upserts above):
+    // the add-instrument overwrites below need the resolved ids, and the
+    // already-linked check must run before them so a duplicate add never
+    // overwrites a person's instruments on a link that was never made.
+    const resolvedAdds = [
+      ...addById.map(e => ({ memberId: e.id, name: null, weight: e.weight, tenure: e.tenure, instrument1: e.instrument1, instrument2: e.instrument2 })),
+      ...addByName.map((e, i) => ({ memberId: byNameResults[i]?.[0]?.id || null, name: e.name, weight: e.weight, tenure: e.tenure, instrument1: e.instrument1, instrument2: e.instrument2 })),
+    ];
+
+    // --- Detect already-linked memberships for `add` (skip duplicates) ----
+    const addMemberIds = resolvedAdds.map(a => a.memberId).filter(Boolean);
+    let alreadyLinkedSet = new Set();
+    if (addMemberIds.length) {
+      const existingMemberships = await sql`
+        select member_id from memberships where band_id = ${bandId} and member_id = any(${addMemberIds}::uuid[])
+      `;
+      alreadyLinkedSet = new Set(existingMemberships.map(r => r.member_id));
+    }
+
     const renamePromises = renameEntries.map(e => sql`
       update band_members set name = ${e.newName} where id = ${e.memberId} returning id
     `);
@@ -311,27 +337,31 @@ export default async (req, context) => {
       return sql`update band_members set instrument2 = ${e.instrument2 || null} where id = ${e.memberId} returning id, instrument1, instrument2`;
     });
 
-    const step1Queries = [...renamePromises, ...instrumentPromises];
+    // Instruments typed on a new row (Aaron, 2026-11-08): a blank row's
+    // instrument fields used to be silently dropped. Non-empty values now
+    // overwrite that member's instruments in Transaction 1 — the same
+    // person-level semantics as editing an existing row's instruments.
+    // Already-linked members are excluded, and blank values are a no-op.
+    const addInstrumentEntries = resolvedAdds
+      .filter(a => a.memberId && !alreadyLinkedSet.has(a.memberId) && (a.instrument1 || a.instrument2))
+      .map(a => ({ memberId: a.memberId, instrument1: a.instrument1 || undefined, instrument2: a.instrument2 || undefined }));
+    const addInstrumentPromises = addInstrumentEntries.map(e => {
+      if (e.instrument1 !== undefined && e.instrument2 !== undefined) {
+        return sql`update band_members set instrument1 = ${e.instrument1}, instrument2 = ${e.instrument2} where id = ${e.memberId} returning id, instrument1, instrument2`;
+      }
+      if (e.instrument1 !== undefined) {
+        return sql`update band_members set instrument1 = ${e.instrument1} where id = ${e.memberId} returning id, instrument1, instrument2`;
+      }
+      return sql`update band_members set instrument2 = ${e.instrument2} where id = ${e.memberId} returning id, instrument1, instrument2`;
+    });
+
+    const step1Queries = [...renamePromises, ...instrumentPromises, ...addInstrumentPromises];
     const step1Results = step1Queries.length ? await sql.transaction(step1Queries) : [];
 
     const renameResults = step1Results.slice(0, renamePromises.length);
+    // Includes the add-instrument overwrites appended to step1Queries
+    // above, so the response's instrument_changes covers them too.
     const instrumentResults = step1Results.slice(renamePromises.length);
-
-    // Resolve every `add` entry (by-id + by-name) to a concrete member id.
-    const resolvedAdds = [
-      ...addById.map(e => ({ memberId: e.id, name: null, weight: e.weight })),
-      ...addByName.map((e, i) => ({ memberId: byNameResults[i]?.[0]?.id || null, name: e.name, weight: e.weight })),
-    ];
-
-    // --- Detect already-linked memberships for `add` (skip duplicates) ----
-    const addMemberIds = resolvedAdds.map(a => a.memberId).filter(Boolean);
-    let alreadyLinkedSet = new Set();
-    if (addMemberIds.length) {
-      const existingMemberships = await sql`
-        select member_id from memberships where band_id = ${bandId} and member_id = any(${addMemberIds}::uuid[])
-      `;
-      alreadyLinkedSet = new Set(existingMemberships.map(r => r.member_id));
-    }
 
     // --- Transaction 2: memberships (add/remove/update) + band touch +
     //     contribution log + counter increment -----------------------------
@@ -345,8 +375,8 @@ export default async (req, context) => {
         continue;
       }
       membershipInsertPromises.push(sql`
-        insert into memberships (band_id, member_id, weight, relation)
-        values (${bandId}, ${a.memberId}, ${a.weight ?? 2}, 'member_of')
+        insert into memberships (band_id, member_id, weight, relation, tenure)
+        values (${bandId}, ${a.memberId}, ${a.weight ?? 2}, 'member_of', ${a.tenure || null})
         on conflict (band_id, member_id) do nothing
         returning id, band_id, member_id, tenure, weight, relation
       `);
@@ -371,7 +401,7 @@ export default async (req, context) => {
       removed: removeIds,
       updated: updateEntries.map(e => e.membershipId),
       renamed: renameLog,
-      instrument_changes: instrumentEntries,
+      instrument_changes: [...instrumentEntries, ...addInstrumentEntries],
     };
 
     const bandTouchPromise = sql`update bands set edited_by = ${user.id} where id = ${bandId}`;
