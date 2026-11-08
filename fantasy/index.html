@@ -218,18 +218,19 @@
     .fantasy-filter{min-height:40px;padding:0 var(--space-3);border:1px solid var(--color-border);
       border-radius:var(--radius-full);font-size:var(--text-sm);color:var(--color-text-muted)}
     .fantasy-filter.is-active{border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.12);color:var(--color-text)}
-    .fantasy-pool{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-3)}
+    .fantasy-pool{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-2)}
     .fantasy-card-player{border:1px solid var(--color-border);border-radius:var(--radius-lg);
-      padding:var(--space-3);background:rgba(255,255,255,.02);cursor:pointer}
+      padding:var(--space-2);background:rgba(255,255,255,.02);cursor:pointer}
     .fantasy-card-player:hover{border-color:rgba(143,232,246,.55)}
     .fantasy-card-player.is-picked{border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.12)}
     .fantasy-card-name{font-size:var(--text-sm);font-weight:700}
     .fantasy-card-plays{font-size:var(--text-xs);color:var(--color-primary);margin:var(--space-1) 0}
-    .fantasy-card-bands{font-size:var(--text-xs);color:var(--color-text-muted);line-height:1.5}
-    .fantasy-card-foot{display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-2)}
+    .fantasy-card-bands{font-size:var(--text-xs);color:var(--color-text-muted);line-height:1.5;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fantasy-card-foot{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-2)}
     .fantasy-card-price{font-size:var(--text-sm);font-weight:700;color:var(--color-gold)}
     .fantasy-card-value{font-size:var(--text-xs);color:var(--color-text-muted)}
-    .fantasy-draft-btn{margin-left:auto;min-height:36px;padding:0 var(--space-3);border:1px solid var(--color-border);
+    .fantasy-draft-btn{margin-left:auto;min-height:32px;padding:0 var(--space-3);border:1px solid var(--color-border);
       border-radius:var(--radius-full);font-size:var(--text-xs);color:var(--color-text)}
     .fantasy-draft-btn:hover:not(:disabled){border-color:rgba(82,174,182,.55)}
     .fantasy-draft-btn:disabled{opacity:.45}
@@ -295,7 +296,7 @@
       .arena-sub{font-size:13px}
       .fantasy-slots{grid-template-columns:repeat(2,1fr)}
       .fantasy-slot:last-child{grid-column:1 / -1}
-      .fantasy-pool{grid-template-columns:1fr}
+      .fantasy-pool{grid-template-columns:repeat(2,1fr)}
       .game-modal-title{font-size:1rem}
       .game-modal-sub{font-size:13px;margin-bottom:var(--space-3)}
     }
