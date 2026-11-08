@@ -218,9 +218,9 @@
     .fantasy-filter{min-height:40px;padding:0 var(--space-3);border:1px solid var(--color-border);
       border-radius:var(--radius-full);font-size:var(--text-sm);color:var(--color-text-muted)}
     .fantasy-filter.is-active{border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.12);color:var(--color-text)}
-    .fantasy-pool{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-2)}
+    .fantasy-pool{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-2)}
     .fantasy-card-player{border:1px solid var(--color-border);border-radius:var(--radius-lg);
-      padding:var(--space-2);background:rgba(255,255,255,.02);cursor:pointer}
+      padding:var(--space-2);background:rgba(255,255,255,.02);cursor:pointer;min-width:0}
     .fantasy-card-player:hover{border-color:rgba(143,232,246,.55)}
     .fantasy-card-player.is-picked{border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.12)}
     .fantasy-card-name{font-size:var(--text-sm);font-weight:700}
@@ -296,7 +296,7 @@
       .arena-sub{font-size:13px}
       .fantasy-slots{grid-template-columns:repeat(2,1fr)}
       .fantasy-slot:last-child{grid-column:1 / -1}
-      .fantasy-pool{grid-template-columns:repeat(2,1fr)}
+      .fantasy-pool{grid-template-columns:repeat(2,minmax(0,1fr))}
       .game-modal-title{font-size:1rem}
       .game-modal-sub{font-size:13px;margin-bottom:var(--space-3)}
     }
