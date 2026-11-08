@@ -2183,6 +2183,41 @@ export function labelSettings({ visibleCount = 0, smallestNodeSize = 4 } = {}) {
 }
 
 /**
+ * Outward label geometry (Sigma outward labels, 2026-11-07).
+ *
+ * One shared helper for a label's box, so the three places that need it —
+ * updateLabelBlocking() measuring, the custom labelRenderer drawing, and
+ * drawHover() placing its plate — can never drift apart. Two code paths that
+ * can drift is exactly how the Van Halen cull and the footer-overprint bugs
+ * happened; this collapses them into one function.
+ *
+ * Side is outward from the hub (the view anchor): a node left of the hub's
+ * display x gets its label on the left, everything else on the right. A node
+ * exactly under the hub (the anchor itself) and a missing hub both read
+ * right, which is the pre-outward behaviour. Left/right only, node always at
+ * one end of its label: a right label starts at node.x + nodeSize + 3, a left
+ * label ends at node.x - nodeSize - 3. Baseline and vertical extent match
+ * Sigma's default draw (y + labelSize/3, ascent 0.78, descent 0.24).
+ *
+ * Coordinates are viewport/display coordinates (the space Sigma draws in),
+ * NOT graph coordinates. `measureText` is injected so the helper stays pure
+ * and unit-testable: pass a canvas context's measureText in production.
+ */
+export function outwardLabelBox({ x, y, nodeSize, label, hubX, labelSize, measureText }) {
+  const side = hubX !== null && hubX !== undefined && x < hubX ? 'left' : 'right';
+  const textWidth = measureText(label).width;
+  const baseline = y + labelSize / 3;
+  const top = baseline - labelSize * 0.78;
+  const bottom = baseline + labelSize * 0.24;
+  if (side === 'left') {
+    const right = x - nodeSize - 3;
+    return { left: right - textWidth, right, top, bottom, side, baseline };
+  }
+  const left = x + nodeSize + 3;
+  return { left, right: left + textWidth, top, bottom, side, baseline };
+}
+
+/**
  * Band-to-band degrees for the Six Degrees feature.
  *
  * The stored path alternates Band -> Member -> Band, so the user-facing

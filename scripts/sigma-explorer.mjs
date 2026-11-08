@@ -65,6 +65,7 @@ import {
   nodeSizeScale,
   layoutExtent,
   labelSettings,
+  outwardLabelBox,
   landingFit,
 } from './neighborhood-helpers.mjs';
 import { polygonLayout } from './polygon-layout.mjs';
@@ -1733,6 +1734,11 @@ export function initSigmaExplorer({
     hideLabelsOnMove: true,
     // Replaces the white default hover plate; see drawHover.
     defaultDrawNodeHover: drawHover,
+    // Outward labels (2026-11-07): replaces Sigma's always-right default label
+    // draw; see drawOutwardLabel. NOTE: Sigma 3.0.3 has no `labelRenderer`
+    // setting — the hook is `defaultDrawNodeLabel` (same (context, data,
+    // settings) signature). The plan-back's `labelRenderer` name was wrong.
+    defaultDrawNodeLabel: drawOutwardLabel,
     nodeReducer: (id, attrs) => reduceNode(id, attrs),
     edgeReducer: (edge, attrs) => reduceEdge(edge, attrs),
   });
@@ -1779,6 +1785,145 @@ export function initSigmaExplorer({
       }
     }
     return res;
+  }
+
+  // The hub for outward labels is the view anchor (state.anchorId), NOT the
+  // home star: Aaron's node sits wherever the layout puts him, while the
+  // constellation is organised around the anchor. Returned in VIEWPORT pixels:
+  // getNodeDisplayData() reports framed-graph coordinates (unit square), NOT
+  // screen pixels, so the anchor's graph position goes through
+  // graphToViewport() — the same conversion the blocker uses for every node.
+  // Live lookup per call — a single matrix multiply — so a label never draws
+  // with a stale hub x after a camera move: labels draw during the render
+  // pass, before afterRender would refresh a per-frame cache, so a cache
+  // would lag one frame. No anchor, or the anchor not in this view, -> null
+  // -> every label reads right, which is the pre-outward behaviour.
+  function hubViewportX() {
+    if (!state.anchorId || !viewGraph.hasNode(state.anchorId)) return null;
+    const point = renderer.graphToViewport({
+      x: viewGraph.getNodeAttribute(state.anchorId, 'x'),
+      y: viewGraph.getNodeAttribute(state.anchorId, 'y'),
+    });
+    return point ? point.x : null;
+  }
+
+  /**
+   * Outward label draw (2026-11-07): Sigma's `defaultDrawNodeLabel`.
+   *
+   * Same geometry as Sigma's default drawDiscNodeLabel, except the side comes
+   * from outwardLabelBox() — left of the hub the name runs left, ending at
+   * node.x - size - 3, instead of always starting at node.x + size + 3. The
+   * box the blocker measures and the box drawn here are the same object from
+   * the same helper, so measure and draw cannot drift. Colour resolution is
+   * copied from the default (per-node labelColor attribute, so dimmed nodes
+   * keep their name at DIM_LABEL_COLOR) and the font/baseline are identical.
+   * The anchor's own DOM label is untouched; the anchor node's canvas label
+   * sits exactly under the hub, so it ties to the right.
+   */
+  function drawOutwardLabel(context, data, settings) {
+    if (!data.label) return;
+    const size = settings.labelSize || 12;
+    const font = settings.labelFont || 'Satoshi, system-ui, sans-serif';
+    const weight = settings.labelWeight || 'normal';
+    const color = settings.labelColor.attribute
+      ? data[settings.labelColor.attribute] || settings.labelColor.color || '#000'
+      : settings.labelColor.color;
+    context.fillStyle = color;
+    context.font = `${weight} ${size}px ${font}`;
+    const box = outwardLabelBox({
+      x: data.x,
+      y: data.y,
+      nodeSize: data.size,
+      label: data.label,
+      hubX: hubViewportX(),
+      labelSize: size,
+      measureText: text => context.measureText(text),
+    });
+    context.textAlign = box.side === 'left' ? 'right' : 'left';
+    context.fillText(data.label, box.side === 'left' ? box.right : box.left, box.baseline);
+    context.textAlign = 'left';
+  }
+
+  /**
+   * Draws the hover treatment for a node: a dark rounded plate behind the label,
+   * a hairline cyan edge, and a soft glow behind the node.
+   *
+   * Signature is Sigma's `defaultDrawNodeHover(context, data, settings)`.
+   * Inner function (not module-level) because the plate must follow the
+   * outward label: the side comes from outwardLabelBox() via the live hub x,
+   * the same helper the blocker and the label renderer use.
+   */
+  function drawHover(context, data, settings) {
+    const size = settings.labelSize || 12;
+    const font = settings.labelFont || 'Satoshi, system-ui, sans-serif';
+    const weight = settings.labelWeight || 'normal';
+    const label = data.label;
+
+    context.font = `${weight} ${size}px ${font}`;
+
+    // Glow behind the node, so hovering reads as "this one" even without a label.
+    context.beginPath();
+    context.fillStyle = HOVER_GLOW;
+    context.arc(data.x, data.y, data.size + 7, 0, Math.PI * 2);
+    context.closePath();
+    context.fill();
+
+    if (!label) return;
+
+    const width = context.measureText(label).width;
+    const paddingX = 10;
+    const paddingY = 6;
+    const plateHeight = size + paddingY * 2;
+    // The plate mirrors the right-side plate around the label box: 3px past
+    // the label on the node side, 2*paddingX - 3 past it on the far side, so
+    // the underlying label is covered completely whichever side it sits on.
+    // (Right side: plate [box.left - 3, box.right + 2*paddingX - 3] — the
+    // exact geometry the old code had. Left side is the mirror image.)
+    const box = outwardLabelBox({
+      x: data.x,
+      y: data.y,
+      nodeSize: data.size,
+      label,
+      hubX: hubViewportX(),
+      labelSize: size,
+      measureText: text => context.measureText(text),
+    });
+    const left = box.side === 'left'
+      ? box.right + 3 - width - paddingX * 2
+      : box.left - 3;
+    const top = data.y - plateHeight / 2;
+    const radius = plateHeight / 2;
+
+    context.beginPath();
+    context.fillStyle = HOVER_PLATE_FILL;
+    context.strokeStyle = HOVER_PLATE_EDGE;
+    context.lineWidth = 1;
+    // Rounded rectangle; roundRect is not available everywhere, so it is drawn by
+    // hand from arcs.
+    const right = left + width + paddingX * 2;
+    const bottom = top + plateHeight;
+    context.moveTo(left + radius, top);
+    context.lineTo(right - radius, top);
+    context.arcTo(right, top, right, top + radius, radius);
+    context.lineTo(right, bottom - radius);
+    context.arcTo(right, bottom, right - radius, bottom, radius);
+    context.lineTo(left + radius, bottom);
+    context.arcTo(left, bottom, left, bottom - radius, radius);
+    context.lineTo(left, top + radius);
+    context.arcTo(left, top, left + radius, top, radius);
+    context.closePath();
+    context.fill();
+    context.stroke();
+
+    context.fillStyle = HOVER_LABEL_COLOR;
+    if (box.side === 'left') {
+      context.textAlign = 'right';
+      context.fillText(label, right - paddingX - 2, data.y + size / 3);
+    } else {
+      context.textAlign = 'left';
+      context.fillText(label, left + paddingX + 2, data.y + size / 3);
+    }
+    context.textAlign = 'left';
   }
 
   function reduceEdge(edge, attrs) {
@@ -2541,8 +2686,10 @@ export function initSigmaExplorer({
    * that set would make the answer depend on the previous frame and oscillate.
    * Geometry does not move when a label is hidden, so this is stable.
    *
-   * Boxes are reconstructed the way Sigma draws them: x + size + 3, baseline at
-   * y + labelSize/3.
+   * Boxes come from outwardLabelBox() — the same helper the label renderer
+   * draws with — so a label's measured box and its drawn box agree by
+   * construction. Side is outward from the anchor: left of the hub the name
+   * runs left, otherwise right (baseline y + labelSize/3 either way).
    */
   function updateLabelBlocking() {
     const zones = [];
@@ -2582,22 +2729,36 @@ export function initSigmaExplorer({
       Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
       Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
 
+    // The hub x comes from the anchor's graph position, once per frame — the
+    // blocker and the label renderer both feed the same helper, so the box
+    // measured here is the box drawn there.
+    const hubX = hubViewportX();
+
     const candidates = [];
     viewGraph.forEachNode((id, attrs) => {
       if (!attrs.label) return;
       const display = renderer.getNodeDisplayData(id);
       if (!display) return;
+      // graphToViewport, NOT display.x/display.y: getNodeDisplayData reports
+      // framed-graph coordinates (unit square), while the label is drawn at
+      // viewport pixels — feeding framed coords into a pixel box made every
+      // label collide with the chrome and get blocked (verified 2026-11-07:
+      // 2 labels survived out of 45). graphToViewport is exactly what Sigma's
+      // label pass draws at (data.x / data.y in the label renderer), so the
+      // measured box and the drawn box agree.
       const point = renderer.graphToViewport({ x: attrs.x, y: attrs.y });
-      const left = point.x + display.size + 3;
       candidates.push({
         id,
         size: display.size,
-        box: {
-          left,
-          right: left + labelMetrics.measureText(attrs.label).width,
-          top: point.y + size / 3 - size * 0.78,
-          bottom: point.y + size / 3 + size * 0.24,
-        },
+        box: outwardLabelBox({
+          x: point.x,
+          y: point.y,
+          nodeSize: display.size,
+          label: attrs.label,
+          hubX,
+          labelSize: size,
+          measureText: text => labelMetrics.measureText(text),
+        }),
       });
     });
 
@@ -4098,65 +4259,6 @@ export function initSigmaExplorer({
       if (svg) svg.style.display = svgDisplayBefore || '';
     },
   };
-}
-
-/**
- * Draws the hover treatment for a node: a dark rounded plate behind the label,
- * a hairline cyan edge, and a soft glow behind the node.
- *
- * Signature is Sigma's `defaultDrawNodeHover(context, data, settings)`.
- */
-function drawHover(context, data, settings) {
-  const size = settings.labelSize || 12;
-  const font = settings.labelFont || 'Satoshi, system-ui, sans-serif';
-  const weight = settings.labelWeight || 'normal';
-  const label = data.label;
-
-  context.font = `${weight} ${size}px ${font}`;
-
-  // Glow behind the node, so hovering reads as "this one" even without a label.
-  context.beginPath();
-  context.fillStyle = HOVER_GLOW;
-  context.arc(data.x, data.y, data.size + 7, 0, Math.PI * 2);
-  context.closePath();
-  context.fill();
-
-  if (!label) return;
-
-  const width = context.measureText(label).width;
-  const paddingX = 10;
-  const paddingY = 6;
-  const plateHeight = size + paddingY * 2;
-  // Starts just inside where Sigma's normal label begins, so the plate covers it
-  // completely -- otherwise the first glyph of the underlying label peeks out
-  // from behind the plate's left edge.
-  const left = data.x + data.size;
-  const top = data.y - plateHeight / 2;
-  const radius = plateHeight / 2;
-
-  context.beginPath();
-  context.fillStyle = HOVER_PLATE_FILL;
-  context.strokeStyle = HOVER_PLATE_EDGE;
-  context.lineWidth = 1;
-  // Rounded rectangle; roundRect is not available everywhere, so it is drawn by
-  // hand from arcs.
-  const right = left + width + paddingX * 2;
-  const bottom = top + plateHeight;
-  context.moveTo(left + radius, top);
-  context.lineTo(right - radius, top);
-  context.arcTo(right, top, right, top + radius, radius);
-  context.lineTo(right, bottom - radius);
-  context.arcTo(right, bottom, right - radius, bottom, radius);
-  context.lineTo(left + radius, bottom);
-  context.arcTo(left, bottom, left, bottom - radius, radius);
-  context.lineTo(left, top + radius);
-  context.arcTo(left, top, left + radius, top, radius);
-  context.closePath();
-  context.fill();
-  context.stroke();
-
-  context.fillStyle = HOVER_LABEL_COLOR;
-  context.fillText(label, left + paddingX + 2, data.y + size / 3);
 }
 
 function escapeHtml(value) {
