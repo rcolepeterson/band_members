@@ -787,9 +787,22 @@ test('label placement is measured, collision-free and stable', () => {
     EXPLORER.indexOf('function updateLabelBlocking()'),
     EXPLORER.indexOf('function updateParallax()'),
   );
-  // Boxes are reconstructed the way Sigma draws a label.
-  assert.match(block, /point\.x \+ display\.size \+ 3/);
-  assert.match(block, /labelMetrics\.measureText\(attrs\.label\)\.width/);
+  // Boxes come from the shared outwardLabelBox helper — the same helper the
+  // label renderer draws with — so the measured box and the drawn box agree
+  // by construction. The old inline `point.x + display.size + 3` box is gone
+  // by design: it could only ever draw right.
+  assert.match(block, /outwardLabelBox\(\{/);
+  assert.match(block, /const hubX = hubViewportX\(\);/);
+  // The point comes from graphToViewport, NOT from display.x/display.y:
+  // getNodeDisplayData reports framed-graph coordinates (unit square), while
+  // the label is drawn at viewport pixels — feeding framed coords into a
+  // pixel box made every label collide with the chrome and get blocked
+  // (2026-11-07: 2 labels survived out of 45). graphToViewport is exactly
+  // what Sigma's label pass draws at.
+  assert.match(block, /const point = renderer\.graphToViewport\(\{ x: attrs\.x, y: attrs\.y \}\);/);
+  assert.match(block, /x: point\.x,/);
+  assert.match(block, /y: point\.y,/);
+  assert.match(block, /measureText: text => labelMetrics\.measureText\(text\)/);
   // Chrome zones: the wordmark/field/pills block, the footer, and the gold label.
   assert.match(block, /addZone\(heroEl\)/);
   assert.match(block, /addZone\(footerEl\)/);
@@ -809,6 +822,49 @@ test('label placement is measured, collision-free and stable', () => {
   assert.match(block, /renderer\.refresh\(\{ skipIndexation: true \}\)/);
   // And the reducer is what applies it.
   assert.match(EXPLORER, /if \(state\.labelBlocked\.has\(id\)\) res\.label = '';/);
+});
+
+test('outward labels: one helper feeds the blocker, the renderer, and the hover plate', () => {
+  // The outward rule is measure = draw by construction: a single helper
+  // (outwardLabelBox in neighborhood-helpers.mjs) is the only place that
+  // decides a label's box. If any of the three call sites reimplemented the
+  // geometry inline, the Van Halen class of bug — blocker and draw disagreeing
+  // about where a name sits — comes back. The helper's geometry itself is
+  // unit-tested in tests/sigma-outward-labels.test.mjs.
+  // The renderer: Sigma 3.0.3 has no `labelRenderer` setting; the hook is
+  // `defaultDrawNodeLabel`.
+  assert.match(EXPLORER, /defaultDrawNodeLabel: drawOutwardLabel/);
+  assert.match(EXPLORER, /function drawOutwardLabel\(context, data, settings\)/);
+  assert.doesNotMatch(EXPLORER, /labelRenderer: /);
+  // The renderer draws from the helper and honours the per-node label colour
+  // (dimmed nodes keep their name at DIM_LABEL_COLOR).
+  const renderer = EXPLORER.slice(
+    EXPLORER.indexOf('function drawOutwardLabel('),
+    EXPLORER.indexOf('function drawHover('),
+  );
+  assert.match(renderer, /outwardLabelBox\(\{/);
+  assert.match(renderer, /context\.textAlign = box\.side === 'left' \? 'right' : 'left'/);
+  assert.match(renderer, /data\[settings\.labelColor\.attribute\]/);
+  // The hub is the view anchor, not the home star: Aaron's node sits wherever
+  // the layout puts him, while the constellation is organised around the anchor.
+  // The hub x is the anchor's graph position through graphToViewport —
+  // getNodeDisplayData returns framed-graph coordinates (unit square), not
+  // viewport pixels, so it cannot be compared against the pixel x the label
+  // renderer draws at (2026-11-07: that mistake read every label as right).
+  assert.match(EXPLORER, /viewGraph\.getNodeAttribute\(state\.anchorId, 'x'\)/);
+  assert.doesNotMatch(EXPLORER, /getNodeDisplayData\(state\.anchorId\)/);
+  assert.doesNotMatch(EXPLORER, /getNodeDisplayData\(state\.homeStarId\)/);
+  // The hover plate follows the label: same helper, plate on the label's side.
+  const hover = EXPLORER.slice(
+    EXPLORER.indexOf('function drawHover('),
+    EXPLORER.indexOf('function reduceEdge('),
+  );
+  assert.match(hover, /outwardLabelBox\(\{/);
+  assert.match(hover, /box\.side === 'left'/);
+  // A left-side label that hits chrome or a bigger label is blocked by the
+  // same rules as a right-side one: the sort, the selected-keeps-name rule
+  // and the chrome zones are side-agnostic (pinned in the test above) — the
+  // only thing that changed is the box the helper returns.
 });
 
 test('the chrome band is measured, and used for centring only', () => {
