@@ -404,7 +404,7 @@
       add-band form's three (name, instrument, weight). Falls back to one
       column on narrow widths like the add-band rows do.
     */
-    .edit-member-row-fields{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:var(--space-3)}
+    .edit-member-row-fields{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:var(--space-3)}
     .edit-member-row-fields label{margin-top:0}
     @media (max-width: 900px){.edit-member-row-fields{grid-template-columns:1fr 1fr}}
     @media (max-width: 480px){.edit-member-row-fields{grid-template-columns:1fr}}
@@ -12013,7 +12013,8 @@ function downloadPngBlob(blob) {
       band: null,          // the master-graph band node currently being edited
       bandId: null,         // resolved via rawBandsData by name
       original: null,       // snapshot for diffing: { meta, members }
-      existingMemberNames: [] // for the datalist, built once per popover open
+      existingMemberNames: [], // for the datalist, built once per popover open
+      openSeq: 0,           // increments per popover open; guards async roster fetches
     };
 
     // Look up a band's backend row (with its real id) by display name.
@@ -12102,6 +12103,13 @@ function downloadPngBlob(blob) {
         row.dataset.originalInstrument1 = data.member.instrument1 || '';
         row.dataset.originalInstrument2 = data.member.instrument2 || '';
         row.dataset.originalTenure = (data.membership && data.membership.tenure) || '';
+        // Weight picker state (Aaron, 2026-11-08): the row carries the
+        // membership's current weight so the diff can tell a real change
+        // from a resubmission. Normalized to 1/2/3 (anything else reads as
+        // 2, the same default as the add-band form's picker) so a legacy
+        // out-of-range weight never produces a spurious update on save.
+        const rawWeight = (data.membership && data.membership.weight != null) ? String(data.membership.weight) : '2';
+        row.dataset.originalWeight = ['1', '2', '3'].includes(rawWeight) ? rawWeight : '2';
         // PR 3b fix: GET /api/bands now exposes membership.id (see
         // bands_neon.mjs). Threading it through here lets the submit logic
         // send real remove/update ops for existing rows. Rows without an id
@@ -12117,6 +12125,7 @@ function downloadPngBlob(blob) {
         row.dataset.originalInstrument1 = '';
         row.dataset.originalInstrument2 = '';
         row.dataset.originalTenure = '';
+        row.dataset.originalWeight = '2';
       }
 
       const removeBtn = document.createElement('button');
@@ -12186,10 +12195,33 @@ function downloadPngBlob(blob) {
       tenureWrap.appendChild(tenureLabel);
       tenureWrap.appendChild(tenureInput);
 
+      // Weight picker (Aaron, 2026-11-08): the same 1/2/3 scale as the
+      // add-band form. Pre-selected from the membership's current weight
+      // (2 for blank rows). The diff reads this on save.
+      const weightWrap = document.createElement('div');
+      const weightLabel = document.createElement('label');
+      weightLabel.textContent = 'Member weight';
+      const weightSelect = document.createElement('select');
+      weightSelect.className = 'edit-member-weight-input';
+      [
+        ['1', '1 — Founder / core member'],
+        ['2', '2 — Member'],
+        ['3', '3 — Touring member'],
+      ].forEach(([value, label]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        weightSelect.appendChild(option);
+      });
+      weightSelect.value = row.dataset.originalWeight || '2';
+      weightWrap.appendChild(weightLabel);
+      weightWrap.appendChild(weightSelect);
+
       fields.appendChild(nameWrap);
       fields.appendChild(instr1Wrap);
       fields.appendChild(instr2Wrap);
       fields.appendChild(tenureWrap);
+      fields.appendChild(weightWrap);
       row.appendChild(fields);
 
       return row;
@@ -12281,8 +12313,61 @@ function downloadPngBlob(blob) {
 
       const container = document.getElementById('edit-members-container');
       if (container) container.innerHTML = '';
-      const membershipRows = editBandState.bandId ? findRawMembershipsForBand(editBandState.bandId) : [];
+      const openSeq = ++editBandState.openSeq;
+      const bandIdForRoster = editBandState.bandId;
+      const membershipRows = bandIdForRoster ? findRawMembershipsForBand(bandIdForRoster) : [];
       membershipRows.forEach(row => addEditMemberRow(row));
+
+      // Governor mode never loads the full /api/bands payload, so the
+      // roster above is empty even though the band has members (Aaron,
+      // 2026-11-08: Quiet Riot's dialog showed only "+ Add another
+      // member"). When the local lookup comes up empty, fetch the band's
+      // card — one small request, same endpoint the node card uses — and
+      // render its memberships the same way. Plain mode is untouched: its
+      // rows come from rawBandsData as today, with no extra request. A
+      // failed fetch leaves the roster empty, the same as today's
+      // no-backend-id path.
+      if (!membershipRows.length && bandIdForRoster) {
+        fetch('/api/graph-card?type=band&id=' + encodeURIComponent(bandIdForRoster), { signal: AbortSignal.timeout(5000) })
+          .then((res) => (res && res.ok ? res.json() : null))
+          .then((data) => {
+            // The dialog may have closed or another band opened since the
+            // fetch started; only fill the roster if this open is still
+            // current and still showing the same band.
+            if (!data || !Array.isArray(data.memberships)) return;
+            if (editBandState.openSeq !== openSeq || editBandState.bandId !== bandIdForRoster) return;
+            const fetchedRows = data.memberships
+              .map((m) => ({
+                membership: {
+                  id: m.id ?? null,
+                  tenure: m.tenure ?? null,
+                  weight: m.weight ?? null,
+                  relation: m.relation ?? null,
+                },
+                member: {
+                  id: m.member_id,
+                  name: m.member_name,
+                  instrument1: m.instrument1 ?? '',
+                  instrument2: m.instrument2 ?? '',
+                },
+              }))
+              .filter((r) => r.member && r.member.id && r.member.name);
+            fetchedRows.forEach((row) => addEditMemberRow(row));
+            // The diff snapshot was taken at open from the (empty) local
+            // rows; point it at the fetched rows so removals and tenure /
+            // weight updates diff against the real roster.
+            if (editBandState.original) {
+              editBandState.original.memberIds = fetchedRows.map((r) => r.member.id);
+              editBandState.original.membershipIdByMemberId = {};
+              fetchedRows.forEach((r) => {
+                if (r.membership && r.membership.id != null) {
+                  editBandState.original.membershipIdByMemberId[r.member.id] = String(r.membership.id);
+                }
+              });
+            }
+          })
+          .catch(() => { /* roster stays empty; see above */ });
+      }
 
       // Snapshot for diffing at submit time.
       editBandState.original = {
@@ -12614,14 +12699,17 @@ function downloadPngBlob(blob) {
         const instrument1 = row.querySelector('.edit-member-instrument1-input')?.value.trim() || '';
         const instrument2 = row.querySelector('.edit-member-instrument2-input')?.value.trim() || '';
         const tenure = row.querySelector('.edit-member-tenure-input')?.value.trim() || '';
+        const weight = row.querySelector('.edit-member-weight-input')?.value || '2';
         const memberId = row.dataset.memberId || '';
 
         if (!memberId) {
           // New row. Prefer the id captured from a datalist pick; fall back
-          // to sending the typed name so the backend upserts it.
+          // to sending the typed name so the backend upserts it. The
+          // picker's weight rides along so a new member never silently
+          // lands at weight 2 (the server defaults to 2 when omitted).
           if (!name) return;
           const pickedId = row.dataset.pickedId || '';
-          add.push(pickedId ? { id: pickedId, tenure } : { name, tenure });
+          add.push(pickedId ? { id: pickedId, tenure, weight } : { name, tenure, weight });
           return;
         }
 
@@ -12633,16 +12721,23 @@ function downloadPngBlob(blob) {
         if (instrument1 !== row.dataset.originalInstrument1 || instrument2 !== row.dataset.originalInstrument2) {
           memberInstruments.push({ member_id: memberId, instrument1, instrument2 });
         }
-        if (tenure !== row.dataset.originalTenure) {
+        // Tenure and weight share one update op per row: either change (or
+        // both) produces a single entry carrying only the changed fields.
+        const tenureChanged = tenure !== row.dataset.originalTenure;
+        const weightChanged = weight !== (row.dataset.originalWeight || '2');
+        if (tenureChanged || weightChanged) {
           const membershipId = row.dataset.membershipId || '';
+          const entry = {};
+          if (tenureChanged) entry.tenure = tenure;
+          if (weightChanged) entry.weight = Number(weight);
           if (membershipId) {
-            update.push({ membership_id: membershipId, tenure });
+            update.push({ membership_id: membershipId, ...entry });
           } else {
             // See module header: no membership_id is available from the
             // client today. Recorded here (not silently dropped) so the
             // caller can surface it instead of pretending the tenure edit
             // was saved.
-            update.push({ membership_id: null, tenure, member_id: memberId, _unsupported: true });
+            update.push({ membership_id: null, ...entry, member_id: memberId, _unsupported: true });
           }
         }
       });
@@ -12727,7 +12822,7 @@ function downloadPngBlob(blob) {
       const supportedRemoveIds = diff.remove.filter(r => !r._unsupported).map(r => r.membership_id);
       const supportedUpdates = diff.update
         .filter(u => !u._unsupported)
-        .map(u => ({ membership_id: u.membership_id, tenure: u.tenure }));
+        .map(u => ({ membership_id: u.membership_id, tenure: u.tenure, weight: u.weight }));
 
       const metaChanged = Object.keys(diff.meta).length > 0;
       const memberOpsPresent = diff.add.length || supportedRemoveIds.length || supportedUpdates.length
@@ -12772,7 +12867,7 @@ function downloadPngBlob(blob) {
       }
       if (memberOpsPresent) {
         const membersBody = {};
-        if (diff.add.length) membersBody.add = diff.add.map(({ id, name }) => id ? { id } : { name });
+        if (diff.add.length) membersBody.add = diff.add.map(({ id, name, weight }) => id ? { id, weight } : { name, weight });
         if (supportedRemoveIds.length) membersBody.remove = supportedRemoveIds;
         if (supportedUpdates.length) membersBody.update = supportedUpdates;
         if (diff.renameMember.length) membersBody.rename_member = diff.renameMember;
