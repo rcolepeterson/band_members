@@ -12707,9 +12707,11 @@ function downloadPngBlob(blob) {
           // to sending the typed name so the backend upserts it. The
           // picker's weight rides along so a new member never silently
           // lands at weight 2 (the server defaults to 2 when omitted).
+          // Tenure + instruments ride along too (Aaron, 2026-11-08): they
+          // used to be silently dropped on new rows.
           if (!name) return;
           const pickedId = row.dataset.pickedId || '';
-          add.push(pickedId ? { id: pickedId, tenure, weight } : { name, tenure, weight });
+          add.push(pickedId ? { id: pickedId, tenure, weight, instrument1, instrument2 } : { name, tenure, weight, instrument1, instrument2 });
           return;
         }
 
@@ -12867,7 +12869,7 @@ function downloadPngBlob(blob) {
       }
       if (memberOpsPresent) {
         const membersBody = {};
-        if (diff.add.length) membersBody.add = diff.add.map(({ id, name, weight }) => id ? { id, weight } : { name, weight });
+        if (diff.add.length) membersBody.add = diff.add.map(({ id, name, tenure, weight, instrument1, instrument2 }) => id ? { id, tenure, weight, instrument1, instrument2 } : { name, tenure, weight, instrument1, instrument2 });
         if (supportedRemoveIds.length) membersBody.remove = supportedRemoveIds;
         if (supportedUpdates.length) membersBody.update = supportedUpdates;
         if (diff.renameMember.length) membersBody.rename_member = diff.renameMember;
