@@ -16,6 +16,10 @@
 //      back as a valid 1200x630 PNG — and draws the same picture for the
 //      same code.
 //   5. Every failure path returns the static-card redirect, never an error.
+//   6. The trading-card design itself: the lineup resolves names AND $
+//      prices from the frozen pool (explicit names carry no price), the
+//      frame is gold on the card's dark face, and the stamp is gold on a
+//      win and grey on a loss.
 //
 // The card renderer needs pureimage, which is a production dependency, so
 // this file runs where node_modules is installed (CI, or a scratch mirror
@@ -23,11 +27,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { Readable } from 'node:stream';
+import * as PImage from 'pureimage';
 
 import {
   fantasyResultCode, parseFantasyResultCode, fantasyResultTitle,
 } from '../scripts/fantasy-result.mjs';
-import fantasyCard, { renderFantasyCard } from '../netlify/functions/fantasy_card.mjs';
+import fantasyCard, { renderFantasyCard, resolveCardRows } from '../netlify/functions/fantasy_card.mjs';
 
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -158,4 +164,73 @@ test('card handler falls back to the static card on bad input', async () => {
     assert.equal(ok.status, 200);
     assert.equal(ok.headers.get('content-type'), 'image/png');
   }
+});
+
+// --- trading-card design ----------------------------------------------------
+
+const byId = Object.fromEntries(pool.map((p) => [p.member_id, p]));
+
+test('lineup rows resolve names and $ prices from the pool', () => {
+  const result = parseFantasyResultCode(
+    fantasyResultCode({ date: DATE, finalScore: WIN_SCORE, won: true, picks: PICKS }),
+  );
+  const rows = resolveCardRows(result);
+  assert.deepEqual(rows.map((r) => r.slot), ['V', 'G', 'B', 'D', 'W']);
+  assert.deepEqual(
+    rows.map((r) => r.name),
+    ['David Lee Roth', 'Edward Van Halen', 'John Deacon', 'Neil Peart', 'Lindsey Buckingham'],
+  );
+  assert.deepEqual(rows.map((r) => r.price), PICKS.map((id) => byId[id].price0));
+  // Explicit names carry no price — the card omits it rather than guessing.
+  const named = resolveCardRows(result, ['Vocals One', 'Guitar Two', 'Bass Three', 'Drums Four', 'Wild Five']);
+  assert.deepEqual(named.map((r) => r.name), ['Vocals One', 'Guitar Two', 'Bass Three', 'Drums Four', 'Wild Five']);
+  assert.deepEqual(named.map((r) => r.price), [null, null, null, null, null]);
+  // An unknown UUID never crashes the card — it draws as Unknown player.
+  const unknown = resolveCardRows({
+    ...result,
+    picks: ['00000000-0000-0000-0000-000000000000', ...PICKS.slice(1)],
+  });
+  assert.equal(unknown[0].name, 'Unknown player');
+  assert.equal(unknown[0].price, null);
+});
+
+async function decode(png) {
+  return PImage.decodePNGFromStream(Readable.from(png));
+}
+
+function px(img, x, y) {
+  const v = img.getPixelRGBA(x, y);
+  return { r: (v >>> 24) & 0xff, g: (v >>> 16) & 0xff, b: (v >>> 8) & 0xff };
+}
+
+// Gold #d9b36c: red-dominant, warm. Grey-blue stamp #8a97a5: blue-dominant.
+const isGold = ({ r, g, b }) => r >= 170 && g >= 130 && b <= 170 && r > b;
+const isGrey = ({ r, g, b }) => r >= 100 && r <= 180 && g >= 115 && g <= 190 && b >= 130 && b <= 205 && b > r;
+
+test('card is a gold-framed trading card, stamp gold on a win and grey on a loss', async () => {
+  const winPng = await renderFantasyCard({
+    result: parseFantasyResultCode(
+      fantasyResultCode({ date: DATE, finalScore: WIN_SCORE, won: true, picks: PICKS }),
+    ),
+  });
+  const lossPng = await renderFantasyCard({
+    result: parseFantasyResultCode(
+      fantasyResultCode({ date: DATE, finalScore: LOSS_SCORE, won: false, picks: PICKS }),
+    ),
+  });
+  assert.ok(!winPng.equals(lossPng), 'win and loss draw different cards');
+  const win = await decode(winPng);
+  const loss = await decode(lossPng);
+  for (const img of [win, loss]) {
+    // Gold frame on the top and left edges (sampled across the stroke, so a
+    // one-pixel raster shift cannot fail the test).
+    assert.ok([22, 23, 24, 25, 26].some((y) => isGold(px(img, 600, y))), 'gold frame on the top edge');
+    assert.ok([26, 27, 28, 29, 30].some((x) => isGold(px(img, x, 300))), 'gold frame on the left edge');
+    // Dark card face between the header rule and the first lineup row.
+    const face = px(img, 600, 135);
+    assert.ok(face.r < 50 && face.g < 70 && face.b >= 20 && face.b <= 100, `dark face, got ${JSON.stringify(face)}`);
+  }
+  // Stamp top edge: gold WIN, grey LOSS.
+  assert.ok([398, 399, 400, 401, 402].some((y) => isGold(px(win, 938, y))), 'gold WIN stamp');
+  assert.ok([398, 399, 400, 401, 402].some((y) => isGrey(px(loss, 938, y))), 'grey LOSS stamp');
 });
