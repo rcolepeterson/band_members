@@ -15,9 +15,11 @@
 //   from this same function:
 //   the user's lineup if any, provisional, final + win if settled, the
 //   day leaderboard, career wins + tier, whether today is settled, and
-//   yesterday's winner.
+//   yesterday's winner. It also carries `history`: the user's past
+//   lineups before today, newest first (date, final/provisional, won,
+//   five picks) — the "Your past games" list.
 //   -> { ok, date, settled, lineup, provisional, final, won,
-//        leaderboard, career, yesterday }
+//        leaderboard, history, career, yesterday }
 //
 // Auth mirrors Daily Chain exactly (game_daily_play.mjs, 2026-10-08):
 // signed-in bearer token first; no token? a guest_session_id (POST body,
@@ -54,6 +56,7 @@ import {
   previousPacificDate,
 } from './_fantasy.mjs';
 import { loadLeaderboardEntries } from './fantasy_leaderboard.mjs';
+import { poolPlayer } from './_fantasy_pool.mjs';
 
 // Resolve the caller the Daily way: bearer token, else guest_session_id.
 async function resolvePlayer(sql, req, body) {
@@ -100,6 +103,33 @@ function publicLineup(row) {
     won: row.won,
     submittedAt: row.submitted_at,
     settledAt: row.settled_at,
+  };
+}
+
+// One past game for the "Your past games" list: date, final (or
+// provisional while unsettled), WIN/LOSS, and the five picks in slot
+// order. Picks come from the row's frozen snapshot (name/V/price were
+// stored at submit time); a pick missing its name falls back to the
+// frozen embedded pool, which never changes under v1.
+export function historyEntry(row) {
+  if (!row) return null;
+  const picks = (row.picks || []).map((p) => {
+    const pool = p.member_id ? poolPlayer(p.member_id) : null;
+    return {
+      slot: p.slot,
+      member_id: p.member_id,
+      name: p.name || (pool && pool.name) || 'Unknown musician',
+      V: p.V,
+      price: p.price,
+    };
+  });
+  return {
+    date: row.play_date,
+    provisional: Number(row.provisional_score),
+    final: row.final_score == null ? null : Number(row.final_score),
+    won: row.won,
+    settled: row.final_score != null,
+    picks,
   };
 }
 
@@ -181,6 +211,16 @@ export default async (req) => {
     `.catch(() => []);
     const settled = !!(dayRows && dayRows[0] && dayRows[0].settled_at);
     const [entries, total] = await loadLeaderboardEntries(sql, { start: today, end: today });
+    // Past games: this user's lineups before today, newest first.
+    // No new table, no new endpoint — the history rides on today's
+    // state, which the page already fetches. The existing
+    // (user_id, play_date desc) index serves this query.
+    const historyRows = await sql`
+      select * from fantasy_lineups
+       where user_id = ${me.id} and play_date < ${today}
+       order by play_date desc
+       limit 30
+    `.catch(() => []);
     return ok({
       date: today,
       settled,
@@ -190,6 +230,7 @@ export default async (req) => {
       final: lineup && lineup.final_score != null ? Number(lineup.final_score) : null,
       won: lineup ? lineup.won : null,
       leaderboard: { scope: 'daily', date: today, total, entries },
+      history: (historyRows || []).map(historyEntry).filter(Boolean),
       career: await careerFor(sql, me.id),
       yesterday: await yesterdayWinner(sql, today),
     });
