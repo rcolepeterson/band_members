@@ -157,6 +157,19 @@ export function sortLeaderboard(entries) {
   });
 }
 
+// Normalize whatever a leaderboard payload looks like into an entries
+// array. fantasy-play GET returns leaderboard as an OBJECT
+// {scope, date, total, entries}; fantasy-leaderboard GET returns the
+// entries at the top level; older call sites passed an array straight
+// through. Passing the object to sortLeaderboard used to throw
+// "entries is not iterable", which killed loadToday before loadWeekly
+// ever ran — the pills looked dead. Everything else is [].
+export function normalizeLeaderboard(input) {
+  if (Array.isArray(input)) return input;
+  if (input && Array.isArray(input.entries)) return input.entries;
+  return [];
+}
+
 // --- card display ---------------------------------------------------------
 
 // Plays line from real slot eligibility, e.g. "Bass · Vocals". A player
@@ -287,6 +300,7 @@ async function initFantasyPage() {
     activeSlot: 'V',
     filter: 'ALL',
     query: '',
+    expandedId: null, // one pool card expanded at a time (tap-to-open)
     submitted: null, // server lineup once submitted / loaded
     todayData: null,
     backendDown: false,
@@ -302,6 +316,8 @@ async function initFantasyPage() {
     copyBtn: $('fantasy-copy'), boardDaily: $('board-daily'), boardWeekly: $('board-weekly'),
     boardTabs: document.querySelectorAll('[data-board-scope]'),
     career: $('fantasy-career'), yesterday: $('fantasy-yesterday'),
+    pastGames: $('fantasy-past-games'), pastList: $('past-games-list'),
+    pastEmpty: $('past-games-empty'),
   };
 
   // Header player chip + sign-in note, Daily's pattern.
@@ -360,11 +376,22 @@ async function initFantasyPage() {
     state.todayData = data;
     if (data.lineup) {
       state.submitted = data;
-      state.slots = { ...data.lineup };
+      // GET returns the public lineup object {play_date, slots, picks,
+      // ...}; the in-session submit path stores the bare slots map.
+      // Accept both shapes — spreading the public object used to put
+      // play_date/slots/picks keys into state.slots, so a reloaded
+      // submitted band never restored into the slots row.
+      const slotsMap = data.lineup.slots || data.lineup;
+      state.slots = { V: null, G: null, B: null, D: null, W: null, ...slotsMap };
     }
     renderResult();
     renderCareer();
-    renderBoards(data.leaderboard || []);
+    renderHistory(data.history);
+    renderBoards(normalizeLeaderboard(data.leaderboard));
+    // The slots row, scores, and submit button rendered before this
+    // fetch; re-render them now the server lineup is in state, or a
+    // reloaded submitted band would leave the slots row empty.
+    renderAll();
     loadWeekly().catch(() => {});
   }
 
@@ -375,7 +402,7 @@ async function initFantasyPage() {
     const res = await fetch(`/api/fantasy-leaderboard?scope=weekly&date=${today}`, { headers });
     if (!res.ok) return;
     const data = await res.json();
-    renderBoards(data.leaderboard || data.entries || [], 'weekly');
+    renderBoards(normalizeLeaderboard(data.leaderboard || data.entries || data), 'weekly');
   }
 
   function saveDraft() {
@@ -440,6 +467,10 @@ async function initFantasyPage() {
     }).sort((a, b) => b.price0 - a.price0 || a.name.localeCompare(b.name));
   }
 
+  // Pool cards are compact faces (name + instrument + cost); tapping a
+  // card expands it in place to the full detail (bands, plays line,
+  // value, draft action), like the card game's tap-to-open. One card
+  // open at a time; the open card survives re-renders via state.
   function renderPool() {
     if (!els.pool) return;
     if (els.filterRow) {
@@ -459,22 +490,35 @@ async function initFantasyPage() {
     }
     const pickedIds = new Set(Object.values(state.slots).filter(Boolean));
     for (const p of list) {
+      const expanded = state.expandedId === p.member_id;
       const card = document.createElement('article');
-      card.className = `fantasy-card-player${pickedIds.has(p.member_id) ? ' is-picked' : ''}`;
+      card.className = `fantasy-card-player${pickedIds.has(p.member_id) ? ' is-picked' : ''}${expanded ? ' is-expanded' : ''}`;
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      card.setAttribute('aria-label', `${p.name}, ${playsLine(p)}, $${p.price0}${expanded ? ', expanded' : ''}`);
+      // Face: name + instrument + cost only.
+      const face = document.createElement('div');
+      face.className = 'fantasy-card-face';
       const name = document.createElement('h3');
       name.className = 'fantasy-card-name';
       name.textContent = p.name;
       const plays = document.createElement('p');
       plays.className = 'fantasy-card-plays';
       plays.textContent = playsLine(p);
+      const price = document.createElement('span');
+      price.className = 'fantasy-card-price';
+      price.textContent = `$${p.price0}`;
+      face.append(name, plays, price);
+      // Detail: bands, value, draft action — hidden until tapped open.
+      const detail = document.createElement('div');
+      detail.className = 'fantasy-card-detail';
+      detail.hidden = !expanded;
       const bands = document.createElement('p');
       bands.className = 'fantasy-card-bands';
       bands.textContent = displayBands(p).join(' · ');
       const foot = document.createElement('div');
       foot.className = 'fantasy-card-foot';
-      const price = document.createElement('span');
-      price.className = 'fantasy-card-price';
-      price.textContent = `$${p.price0}`;
       const value = document.createElement('span');
       value.className = 'fantasy-card-value';
       value.textContent = `Value ${p.V}`;
@@ -491,9 +535,17 @@ async function initFantasyPage() {
         e.stopPropagation();
         draftPlayer(p);
       });
-      foot.append(price, value, draftBtn);
-      card.append(name, plays, bands, foot);
-      card.addEventListener('click', () => draftPlayer(p));
+      foot.append(value, draftBtn);
+      detail.append(bands, foot);
+      card.append(face, detail);
+      const toggle = () => {
+        state.expandedId = expanded ? null : p.member_id;
+        renderPool();
+      };
+      card.addEventListener('click', toggle);
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+      });
       els.pool.appendChild(card);
     }
   }
@@ -504,6 +556,7 @@ async function initFantasyPage() {
       return;
     }
     state.slots = movePick(state.slots, state.activeSlot, p.member_id);
+    state.expandedId = null; // drafted — fold the card back to its face
     saveDraft();
     if (els.status) els.status.textContent = '';
     renderAll();
@@ -559,7 +612,10 @@ async function initFantasyPage() {
   function renderResult() {
     if (!els.result || !state.todayData) return;
     const d = state.todayData;
-    const picks = SLOTS.map((s) => d.lineup && d.lineup[s]).filter(Boolean).map((id) => state.byId[id]).filter(Boolean);
+    // d.lineup is the public lineup object on GET ({slots, picks, ...})
+    // and the bare slots map on the in-session submit path.
+    const slotsMap = d.lineup && (d.lineup.slots || d.lineup);
+    const picks = SLOTS.map((s) => slotsMap && slotsMap[s]).filter(Boolean).map((id) => state.byId[id]).filter(Boolean);
     if (!picks.length) return;
     const prov = d.provisional != null ? d.provisional : provisionalScore(picks).total;
     els.result.hidden = false;
@@ -722,7 +778,7 @@ async function initFantasyPage() {
     const target = scope === 'weekly' ? els.boardWeekly : els.boardDaily;
     if (!target) return;
     target.innerHTML = '';
-    const ranked = sortLeaderboard(entries || []);
+    const ranked = sortLeaderboard(normalizeLeaderboard(entries));
     if (!ranked.length) {
       const li = document.createElement('li');
       li.textContent = scope === 'weekly' ? 'No drafts this week yet.' : 'No drafts today yet — yours could be the first.';
@@ -737,6 +793,63 @@ async function initFantasyPage() {
       score.textContent = `${Number(e.score).toFixed(2)} (+${e.connectionBonus || 0} connections)`;
       li.append(name, score);
       target.appendChild(li);
+    }
+  }
+
+  // Past games: the signed-in user's earlier lineups, newest first.
+  // Signed-out visitors never see this section — no history, no error.
+  // `history` arrives with today's state from fantasy-play GET; anything
+  // else (signed out, old deploy) leaves the section hidden.
+  function renderHistory(history) {
+    if (!els.pastGames) return;
+    if (!isSignedIn() || !Array.isArray(history)) {
+      els.pastGames.hidden = true;
+      return;
+    }
+    els.pastGames.hidden = false;
+    if (els.pastList) els.pastList.innerHTML = '';
+    if (!history.length) {
+      if (els.pastEmpty) els.pastEmpty.hidden = false;
+      return;
+    }
+    if (els.pastEmpty) els.pastEmpty.hidden = true;
+    for (const game of history) {
+      const li = document.createElement('li');
+      li.className = 'fantasy-past-game';
+      const head = document.createElement('div');
+      head.className = 'fantasy-past-head';
+      const date = document.createElement('span');
+      date.className = 'fantasy-past-date';
+      try {
+        date.textContent = new Date(`${game.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      } catch { date.textContent = game.date; }
+      const score = document.createElement('span');
+      score.className = 'fantasy-past-score';
+      const final = game.final != null ? Number(game.final) : null;
+      score.textContent = final != null
+        ? `Final ${final.toFixed(2)}`
+        : `Provisional ${Number(game.provisional || 0).toFixed(2)} — not settled yet`;
+      const stamp = document.createElement('span');
+      stamp.className = `fantasy-past-stamp${final == null ? ' is-pending' : game.won ? ' is-win' : ' is-loss'}`;
+      stamp.textContent = final == null ? 'PENDING' : game.won ? 'WIN' : 'LOSS';
+      head.append(date, score, stamp);
+      const picks = document.createElement('ul');
+      picks.className = 'fantasy-past-picks';
+      for (const p of game.picks || []) {
+        const pick = document.createElement('li');
+        const letter = document.createElement('span');
+        letter.className = 'fantasy-past-slot';
+        letter.textContent = p.slot || '';
+        const name = document.createElement('span');
+        name.textContent = p.name || 'Unknown musician';
+        const price = document.createElement('span');
+        price.className = 'fantasy-past-price';
+        price.textContent = p.price != null ? `$${p.price}` : '';
+        pick.append(letter, name, price);
+        picks.appendChild(pick);
+      }
+      li.append(head, picks);
+      els.pastList.appendChild(li);
     }
   }
 
@@ -803,7 +916,7 @@ async function initFantasyPage() {
         if (els.status) els.status.textContent = '';
         renderResult();
         renderSubmit();
-        if (data.leaderboard) renderBoards(data.leaderboard);
+        if (data.leaderboard) renderBoards(normalizeLeaderboard(data.leaderboard));
       } catch (err) {
         console.error('fantasy submit failed', err);
         els.submit.disabled = false;
