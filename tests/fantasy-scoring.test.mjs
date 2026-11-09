@@ -9,7 +9,7 @@ import {
   GOLD_LINE, SALARY_CAP,
   connectionPairs, connectionBonus, provisionalScore, finalScore,
   isWin, capTotal, movePick, removePick, canFillSlot, validateDraft,
-  canSubmit, sortLeaderboard, playsLine, displayBands, tierFor,
+  canSubmit, sortLeaderboard, normalizeLeaderboard, playsLine, displayBands, tierFor,
   winsToNextTier, SLOTS,
 } from '../fantasy/fantasy-game.mjs';
 
@@ -322,4 +322,66 @@ test('pool.json: the two Roger Taylors are separate nodes with separate prices',
 test('GOLD_LINE is the locked 69', () => {
   assert.equal(GOLD_LINE, 69);
   assert.equal(SLOTS.length, 5);
+});
+
+// --- normalizeLeaderboard: the pills regression ---------------------------
+// fantasy-play GET returns leaderboard as an OBJECT {scope, date, total,
+// entries}; loadToday used to hand that object straight to
+// sortLeaderboard, whose [...entries] threw "entries is not iterable"
+// — loadToday's catch wrote "Leaderboard unavailable" into BOTH boards
+// and loadWeekly() never ran, so the pills looked dead.
+
+test('normalizeLeaderboard unwraps the fantasy-play GET object shape', () => {
+  const entries = [
+    { name: 'A', score: 50, connectionBonus: 4, submittedAt: '2026-11-08T10:00:00Z' },
+    { name: 'B', score: 72.4, connectionBonus: 8, submittedAt: '2026-11-08T09:00:00Z' },
+  ];
+  const shaped = { scope: 'daily', date: '2026-11-08', total: 2, entries };
+  assert.deepEqual(normalizeLeaderboard(shaped), entries);
+});
+
+test('normalizeLeaderboard passes an entries array through untouched', () => {
+  const entries = [{ name: 'A', score: 50 }];
+  assert.equal(normalizeLeaderboard(entries), entries);
+});
+
+test('normalizeLeaderboard tolerates null, undefined, and objects without entries', () => {
+  assert.deepEqual(normalizeLeaderboard(null), []);
+  assert.deepEqual(normalizeLeaderboard(undefined), []);
+  assert.deepEqual(normalizeLeaderboard({}), []);
+  assert.deepEqual(normalizeLeaderboard({ scope: 'daily', total: 0 }), []);
+  assert.deepEqual(normalizeLeaderboard('nope'), []);
+});
+
+test('the old repro now sorts fine: GET-shaped daily board ranks by score', () => {
+  // The exact shape fantasy-play GET returns, with the weekly board's
+  // different entries beside it — the two boards must come out different.
+  const daily = normalizeLeaderboard({
+    scope: 'daily', date: '2026-11-08', total: 2,
+    entries: [
+      { name: 'Low', score: 41.57, connectionBonus: 0, submittedAt: '2026-11-07T10:00:00Z' },
+      { name: 'High', score: 72.4, connectionBonus: 12, submittedAt: '2026-11-08T10:00:00Z' },
+    ],
+  });
+  const weekly = normalizeLeaderboard([
+    { name: 'Week', score: 60.1, connectionBonus: 4, submittedAt: '2026-11-02T10:00:00Z' },
+  ]);
+  const rankedDaily = sortLeaderboard(daily);
+  assert.equal(rankedDaily[0].name, 'High');
+  assert.equal(rankedDaily[1].name, 'Low');
+  assert.notDeepEqual(
+    sortLeaderboard(weekly).map((e) => e.name),
+    rankedDaily.map((e) => e.name),
+  );
+});
+
+test('sortLeaderboard never sees a bare object from the page anymore', () => {
+  // Pin the call sites: loadToday, loadWeekly, and the submit handler
+  // all normalize before rendering — no renderBoards call passes a
+  // raw data.leaderboard object.
+  const body = readFileSync(new URL('../fantasy/fantasy-game.mjs', import.meta.url), 'utf8');
+  assert.ok(body.includes('renderBoards(normalizeLeaderboard(data.leaderboard))'));
+  assert.ok(body.includes("renderBoards(normalizeLeaderboard(data.leaderboard || data.entries || data), 'weekly')"));
+  assert.ok(body.includes('renderBoards(normalizeLeaderboard(data.leaderboard))'));
+  assert.ok(!body.includes('renderBoards(data.leaderboard || [])'), 'the throwing call site must be gone');
 });

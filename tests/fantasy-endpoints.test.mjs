@@ -398,3 +398,99 @@ test("today's state comes from /api/fantasy-play, never fantasy-today", () => {
   const fn = src('netlify/functions/fantasy_play.mjs');
   assert.ok(!fn.includes('fantasy-today'), 'fantasy-today must not appear in fantasy_play.mjs');
 });
+
+// --- Past games: history rides on fantasy-play GET -------------------------
+
+test('historyEntry maps a settled win row with its frozen picks', async () => {
+  const { historyEntry } = await import('../netlify/functions/fantasy_play.mjs');
+  const five = [...POOL].slice(0, 5);
+  const row = {
+    play_date: '2026-11-07',
+    provisional_score: 58.5,
+    final_score: 72.4,
+    won: true,
+    picks: five.map((p, i) => ({
+      slot: ['V', 'G', 'B', 'D', 'W'][i], member_id: p.member_id,
+      name: p.name, V: p.V, price: p.price,
+    })),
+  };
+  const entry = historyEntry(row);
+  assert.equal(entry.date, '2026-11-07');
+  assert.equal(entry.final, 72.4);
+  assert.equal(entry.won, true);
+  assert.equal(entry.settled, true);
+  assert.equal(entry.picks.length, 5);
+  assert.equal(entry.picks[0].name, five[0].name);
+  assert.equal(entry.picks[0].slot, 'V');
+});
+
+test('historyEntry marks an unsettled day pending with a null final', async () => {
+  const { historyEntry } = await import('../netlify/functions/fantasy_play.mjs');
+  const p = POOL[0];
+  const entry = historyEntry({
+    play_date: '2026-11-06', provisional_score: 61, final_score: null, won: null,
+    picks: [{ slot: 'V', member_id: p.member_id, name: p.name, V: p.V, price: p.price }],
+  });
+  assert.equal(entry.final, null);
+  assert.equal(entry.won, null);
+  assert.equal(entry.settled, false);
+  assert.equal(entry.provisional, 61);
+});
+
+test('historyEntry resolves a pick name from the frozen pool when the snapshot lacks it', async () => {
+  const { historyEntry } = await import('../netlify/functions/fantasy_play.mjs');
+  const p = POOL.find((x) => x.name === 'Freddie Mercury');
+  const entry = historyEntry({
+    play_date: '2026-11-05', provisional_score: 50, final_score: 40, won: false,
+    picks: [{ slot: 'V', member_id: p.member_id, V: p.V, price: p.price }],
+  });
+  assert.equal(entry.picks[0].name, 'Freddie Mercury');
+  assert.equal(historyEntry(null), null);
+});
+
+test('fantasy-play GET embeds history, newest first, before today only', () => {
+  const body = src('netlify/functions/fantasy_play.mjs');
+  assert.ok(body.includes('history: (historyRows || []).map(historyEntry).filter(Boolean)'));
+  assert.match(body, /where user_id = \$\{me\.id\} and play_date < \$\{today\}\s*order by play_date desc\s*limit 30/);
+});
+
+// --- Compact-pass wiring pins -----------------------------------------------
+
+test('rules live in a popover, not inline on the page', () => {
+  const page = src('fantasy/index.html');
+  assert.ok(!page.includes('<section class="fantasy-rules">'), 'inline rules section must be gone');
+  assert.ok(page.includes('id="rules-popover"'), 'rules popover must exist');
+  assert.ok(page.includes('id="rules-dontshow"'), 'rules popover needs the Don\'t show checkbox');
+  assert.ok(page.includes('fantasy-help-v1'), 'rules dismissal must persist in localStorage');
+  assert.ok(page.includes('id="rules-open-btn"'), 'a How to play button must reopen the rules');
+  // The copy itself is unchanged — same five paragraphs, Gold line intact.
+  assert.ok(page.includes('Beat the Gold line of <strong>69</strong>'));
+  assert.ok(page.includes('Crowd-split'));
+  assert.ok(page.includes('Ten wins make Gold. Twenty-five make Platinum.'));
+});
+
+test('leaderboard pills are compact, not full-width 44px tabs', () => {
+  const page = src('fantasy/index.html');
+  const m = page.match(/\.fantasy-board-tab\{([^}]*)\}/);
+  assert.ok(m, 'fantasy-board-tab CSS must exist');
+  assert.match(m[1], /min-height:28px/);
+  assert.ok(!m[1].includes('flex:1'), 'pills must not stretch full width');
+});
+
+test('pool cards are tap-to-open faces with the detail hidden until expanded', () => {
+  const page = src('fantasy/index.html');
+  assert.ok(page.includes('.fantasy-card-detail[hidden]{display:none}'));
+  const client = src('fantasy/fantasy-game.mjs');
+  assert.ok(client.includes("state.expandedId"), 'one expanded card at a time');
+  assert.ok(client.includes("aria-expanded"), 'expanded state must be exposed');
+  assert.ok(client.includes('fantasy-card-detail'), 'detail (bands, value, draft) renders inside the card');
+});
+
+test('past-games section exists and is hidden for signed-out visitors', () => {
+  const page = src('fantasy/index.html');
+  assert.ok(page.includes('id="fantasy-past-games" hidden'), 'past games start hidden');
+  assert.ok(page.includes('id="past-games-list"'));
+  const client = src('fantasy/fantasy-game.mjs');
+  assert.ok(client.includes("if (!isSignedIn() || !Array.isArray(history))"), 'signed-out visitors see no history');
+  assert.ok(client.includes('renderHistory(data.history)'), 'history renders from the fantasy-play GET');
+});
