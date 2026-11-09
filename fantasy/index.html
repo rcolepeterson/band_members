@@ -104,8 +104,8 @@
     .arena-player[hidden]{display:none}
     .arena-player strong{color:var(--color-primary);font-weight:600}
 
-    .arena-main{position:relative;max-width:880px;margin:0 auto;padding:var(--space-10) var(--space-4) var(--space-16)}
-    .arena-hero{text-align:center;margin-bottom:var(--space-8)}
+    .arena-main{position:relative;max-width:880px;margin:0 auto;padding:var(--space-6) var(--space-4) var(--space-12)}
+    .arena-hero{text-align:center;margin-bottom:var(--space-5)}
     .arena-degree{font-family:var(--font-display);font-weight:800;font-size:clamp(4rem, 12vw, 7rem);line-height:1;
       letter-spacing:.02em;color:var(--color-text);
       text-shadow:0 0 60px rgba(82,174,182,.35), 0 0 140px rgba(82,174,182,.15)}
@@ -117,11 +117,13 @@
     .game-modal-card{position:relative;width:min(640px,100%);margin:0 auto;overflow:auto;
       background:linear-gradient(180deg, rgba(16,28,40,.72), rgba(9,16,24,.58));
       border:1px solid rgba(225,244,255,.22);border-radius:var(--radius-xl);
-      padding:var(--space-6);box-shadow:var(--shadow-lg)}
+      padding:var(--space-5);box-shadow:var(--shadow-lg)}
     .game-modal-card::before{content:'';position:absolute;top:0;left:10%;right:10%;height:1px;
       background:linear-gradient(90deg, transparent, rgba(143,232,246,.5), transparent);pointer-events:none}
+    .game-modal-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3)}
     .game-modal-title{font-size:var(--text-lg);font-weight:700;letter-spacing:.04em}
-    .game-modal-sub{color:var(--color-text-muted);font-size:var(--text-sm);margin:var(--space-1) 0 var(--space-4)}
+    .game-modal-sub{color:var(--color-text-muted);font-size:var(--text-sm);margin:var(--space-1) 0 var(--space-3)}
+    .fantasy-rules-btn{flex:none;min-height:36px;padding:0 var(--space-3);font-size:13px}
     .fantasy-signin-note{font-size:var(--text-sm);color:var(--color-text-muted);margin:0 0 var(--space-4);
       border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);
       background:rgba(255,255,255,.02)}
@@ -139,9 +141,9 @@
 
     /* Draft slots: tap a slot, then tap a player. Tapping a filled slot
        again removes that pick. */
-    .fantasy-slots{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--space-2);margin-bottom:var(--space-4)}
+    .fantasy-slots{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--space-2);margin-bottom:var(--space-3)}
     .fantasy-slot{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;
-      min-height:88px;padding:var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-lg);
+      min-height:76px;padding:var(--space-2) var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-lg);
       background:rgba(255,255,255,.02)}
     .fantasy-slot:hover{border-color:rgba(143,232,246,.55)}
     .fantasy-slot.is-active{border-color:var(--color-gold);background:var(--color-gold-soft)}
@@ -151,16 +153,16 @@
     .fantasy-slot-meta{font-size:var(--text-xs);color:var(--color-text-muted);line-height:1.3}
 
     /* Live score strip. */
-    .fantasy-scores{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-4);
-      border-top:1px solid var(--color-divider);border-bottom:1px solid var(--color-divider);padding:var(--space-3) 0}
+    .fantasy-scores{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-3);
+      border-top:1px solid var(--color-divider);border-bottom:1px solid var(--color-divider);padding:var(--space-2) 0}
     .fantasy-score{font-size:var(--text-sm);color:var(--color-text-muted)}
     .fantasy-score strong{display:block;font-size:var(--text-lg);color:var(--color-text);font-weight:700}
     .fantasy-score strong.gold{color:var(--color-gold)}
-    .fantasy-pairs{list-style:none;margin:0 0 var(--space-4);font-size:var(--text-sm);color:var(--color-text-muted)}
+    .fantasy-pairs{list-style:none;margin:0 0 var(--space-3);font-size:var(--text-sm);color:var(--color-text-muted)}
     .fantasy-pairs li{padding:var(--space-1) 0;border-bottom:1px solid var(--color-divider)}
     .fantasy-pairs li:last-child{border-bottom:0}
 
-    .fantasy-submit{width:100%;min-height:52px;border-radius:var(--radius-full);border:0;background:var(--color-primary);
+    .fantasy-submit{width:100%;min-height:48px;border-radius:var(--radius-full);border:0;background:var(--color-primary);
       color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer;letter-spacing:.04em}
     .fantasy-submit:hover{background:var(--color-primary-hover)}
     .fantasy-submit:disabled{opacity:.45;cursor:default}
@@ -184,7 +186,7 @@
     .tool-chip:hover{border-color:rgba(82,174,182,.45)}
 
     /* Career + yesterday's winner. */
-    .fantasy-career{margin-top:var(--space-6);border-top:1px solid var(--color-divider);padding-top:var(--space-4)}
+    .fantasy-career{margin-top:var(--space-4);border-top:1px solid var(--color-divider);padding-top:var(--space-3)}
     .fantasy-career[hidden]{display:none}
     .fantasy-career h2{font-size:var(--text-sm);letter-spacing:.08em;text-transform:uppercase;
       color:var(--color-text-muted);margin:0 0 var(--space-2);font-weight:700}
@@ -193,12 +195,12 @@
     .fantasy-yesterday[hidden]{display:none}
 
     /* Leaderboards. */
-    .arena-boards{margin-top:var(--space-6);border-top:1px solid var(--color-divider);padding-top:var(--space-4)}
+    .arena-boards{margin-top:var(--space-4);border-top:1px solid var(--color-divider);padding-top:var(--space-3)}
     .arena-boards h2{font-size:var(--text-sm);letter-spacing:.08em;text-transform:uppercase;
       color:var(--color-text-muted);margin:0 0 var(--space-2);font-weight:700}
-    .fantasy-board-tabs{display:flex;gap:var(--space-2);margin-bottom:var(--space-3)}
-    .fantasy-board-tab{flex:1;min-height:44px;border:1px solid var(--color-border);border-radius:var(--radius-full);
-      font-size:var(--text-sm);font-weight:600;color:var(--color-text-muted)}
+    .fantasy-board-tabs{display:flex;gap:var(--space-2);margin-bottom:var(--space-2)}
+    .fantasy-board-tab{min-height:28px;padding:0 var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-full);
+      font-size:13px;font-weight:600;color:var(--color-text-muted)}
     .fantasy-board-tab.is-active{border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.12);color:var(--color-text)}
     .fantasy-board{list-style:none}
     .fantasy-board[hidden]{display:none}
@@ -206,8 +208,32 @@
       padding:var(--space-2) 0;border-bottom:1px solid var(--color-divider);font-size:var(--text-sm)}
     .fantasy-board li:last-child{border-bottom:0}
 
+    /* Past games. */
+    .fantasy-past{margin-top:var(--space-4);border-top:1px solid var(--color-divider);padding-top:var(--space-3)}
+    .fantasy-past[hidden]{display:none}
+    .fantasy-past h2{font-size:var(--text-sm);letter-spacing:.08em;text-transform:uppercase;
+      color:var(--color-text-muted);margin:0 0 var(--space-2);font-weight:700}
+    .fantasy-past-list{list-style:none}
+    .fantasy-past-game{padding:var(--space-2) 0;border-bottom:1px solid var(--color-divider)}
+    .fantasy-past-game:last-child{border-bottom:0}
+    .fantasy-past-head{display:flex;align-items:center;gap:var(--space-2);font-size:var(--text-sm);flex-wrap:wrap}
+    .fantasy-past-date{font-weight:700}
+    .fantasy-past-score{color:var(--color-text-muted)}
+    .fantasy-past-stamp{margin-left:auto;font-size:12px;font-weight:700;letter-spacing:.08em;
+      padding:2px var(--space-2);border-radius:var(--radius-full);border:1px solid var(--color-border);color:var(--color-text-muted)}
+    .fantasy-past-stamp.is-win{border-color:rgba(217,164,65,.55);background:var(--color-gold-soft);color:var(--color-gold)}
+    .fantasy-past-stamp.is-loss{color:var(--color-text-muted)}
+    .fantasy-past-stamp.is-pending{border-color:rgba(143,232,246,.45);color:var(--color-primary)}
+    .fantasy-past-picks{list-style:none;margin-top:var(--space-1)}
+    .fantasy-past-picks li{display:flex;gap:var(--space-2);font-size:var(--text-sm);color:var(--color-text-muted);
+      padding:1px 0}
+    .fantasy-past-slot{flex:none;width:18px;font-weight:700;color:var(--color-primary);text-align:center}
+    .fantasy-past-price{margin-left:auto;color:var(--color-gold);font-weight:600}
+    .fantasy-past-empty{font-size:var(--text-sm);color:var(--color-text-muted)}
+    .fantasy-past-empty[hidden]{display:none}
+
     /* Pool browser. */
-    .arena-pool{margin-top:var(--space-6);border-top:1px solid var(--color-divider);padding-top:var(--space-4)}
+    .arena-pool{margin-top:var(--space-4);border-top:1px solid var(--color-divider);padding-top:var(--space-3)}
     .arena-pool h2{font-size:var(--text-sm);letter-spacing:.08em;text-transform:uppercase;
       color:var(--color-text-muted);margin:0 0 var(--space-2);font-weight:700}
     .fantasy-search{width:100%;min-height:48px;padding:0 var(--space-3);border:1px solid var(--color-border);
@@ -223,12 +249,21 @@
       padding:var(--space-2);background:rgba(255,255,255,.02);cursor:pointer;min-width:0}
     .fantasy-card-player:hover{border-color:rgba(143,232,246,.55)}
     .fantasy-card-player.is-picked{border-color:rgba(82,174,182,.55);background:rgba(82,174,182,.12)}
-    .fantasy-card-name{font-size:var(--text-sm);font-weight:700}
-    .fantasy-card-plays{font-size:var(--text-xs);color:var(--color-primary);margin:var(--space-1) 0}
-    .fantasy-card-bands{font-size:var(--text-xs);color:var(--color-text-muted);line-height:1.5;
+    .fantasy-card-player.is-expanded{border-color:rgba(82,174,182,.55)}
+    .fantasy-card-player:focus-visible{outline:2px solid rgba(143,232,246,.7);outline-offset:1px}
+    /* Compact face: name + instrument + cost only. The detail below
+       stays hidden until the card is tapped open. */
+    .fantasy-card-face{display:flex;flex-direction:column;gap:1px;min-width:0}
+    .fantasy-card-name{font-size:var(--text-sm);font-weight:700;line-height:1.3;
       white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fantasy-card-plays{font-size:var(--text-xs);color:var(--color-primary);line-height:1.3;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fantasy-card-price{font-size:var(--text-sm);font-weight:700;color:var(--color-gold);line-height:1.3}
+    .fantasy-card-detail{margin-top:var(--space-2)}
+    .fantasy-card-detail[hidden]{display:none}
+    .fantasy-card-detail .fantasy-card-bands{white-space:normal;overflow:visible;text-overflow:clip}
+    .fantasy-card-bands{font-size:var(--text-xs);color:var(--color-text-muted);line-height:1.5}
     .fantasy-card-foot{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-2)}
-    .fantasy-card-price{font-size:var(--text-sm);font-weight:700;color:var(--color-gold)}
     .fantasy-card-value{font-size:var(--text-xs);color:var(--color-text-muted)}
     .fantasy-draft-btn{margin-left:auto;min-height:32px;padding:0 var(--space-3);border:1px solid var(--color-border);
       border-radius:var(--radius-full);font-size:var(--text-xs);color:var(--color-text)}
@@ -236,10 +271,10 @@
     .fantasy-draft-btn:disabled{opacity:.45}
     .fantasy-empty{font-size:var(--text-sm);color:var(--color-text-muted);grid-column:1 / -1}
 
-    .fantasy-rules{margin-top:var(--space-6);border-top:1px solid var(--color-divider);padding-top:var(--space-4);
-      font-size:var(--text-sm);color:var(--color-text-muted)}
-    .fantasy-rules h2{font-size:var(--text-sm);letter-spacing:.08em;text-transform:uppercase;
-      color:var(--color-text-muted);margin:0 0 var(--space-2);font-weight:700}
+    /* Rules live in the "How to play" popover now, not inline on the
+       page — same Rawkle pattern (overlay + sheet, "Don't show this
+       again" persisted in localStorage). Copy unchanged. */
+    .fantasy-rules{font-size:var(--text-sm);color:var(--color-text-muted)}
     .fantasy-rules p{margin:0 0 var(--space-2)}
     .fantasy-rules strong{color:var(--color-text)}
 
@@ -250,10 +285,13 @@
     .arena-foot-link{background:none;border:none;padding:0;font:inherit;color:var(--color-text-muted);cursor:pointer}
     .arena-foot-link:hover{color:var(--color-text)}
 
-    /* Feedback dialog — same Netlify form backend as Daily (form name
-       "feedback", honeypot "bot-field"). */
-    #feedback-popover{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:var(--space-4)}
-    #feedback-popover[hidden]{display:none}
+    /* Feedback dialog + rules ("How to play") dialog — same Netlify
+       form backend as Daily for feedback (form name "feedback",
+       honeypot "bot-field"). The rules popover mirrors Rawkle's help
+       overlay: opens on arrival until "Don't show this again" is
+       ticked (localStorage fantasy-help-v1), reopenable any time. */
+    #feedback-popover,#rules-popover{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:var(--space-4)}
+    #feedback-popover[hidden],#rules-popover[hidden]{display:none}
     .feedback-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(6px)}
     .feedback-card{position:relative;width:min(460px,100%);max-height:min(90vh,640px);overflow-y:auto;
       background:linear-gradient(180deg, rgba(16,28,40,.96), rgba(9,16,24,.96));
@@ -285,10 +323,16 @@
       color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer;letter-spacing:.04em}
     .feedback-submit:hover{background:var(--color-primary-hover)}
     .feedback-submit:disabled{opacity:.6;cursor:default}
+    .rules-dontshow{display:flex;gap:var(--space-2);align-items:center;font-size:13px;color:var(--color-text-muted);
+      margin:var(--space-4) 0 var(--space-3);cursor:pointer}
+    .feedback-card.rules-card{max-height:min(92dvh,720px)}
+    .rules-play{width:100%;min-height:48px;border-radius:var(--radius-full);border:0;background:var(--color-primary);
+      color:var(--color-text-inverse);font-weight:700;font-size:var(--text-sm);cursor:pointer;letter-spacing:.04em}
+    .rules-play:hover{background:var(--color-primary-hover)}
 
     @media (max-width: 640px){
-      .arena-main{padding:var(--space-6) var(--space-3) var(--space-10)}
-      .game-modal-card{padding:var(--space-4)}
+      .arena-main{padding:var(--space-4) var(--space-3) var(--space-8)}
+      .game-modal-card{padding:var(--space-3)}
       .arena-header-inner{padding:var(--space-2) var(--space-3);gap:var(--space-2)}
       .arena-wordmark{font-size:12px;letter-spacing:.18em;white-space:nowrap}
       .arena-degree{font-size:clamp(3rem,22vw,4.5rem)}
@@ -333,7 +377,10 @@
       </div>
 
       <div class="game-modal-card">
-        <h1 class="game-modal-title">Draft your band</h1>
+        <div class="game-modal-head">
+          <h1 class="game-modal-title">Draft your band</h1>
+          <button class="tool-chip fantasy-rules-btn" id="rules-open-btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="rules-popover">How to play</button>
+        </div>
         <p class="game-modal-sub">One band a day. Tap a slot, then tap a player. A player picked for a second slot moves there — nobody fills two slots at once.</p>
 
         <p class="fantasy-signin-note" id="fantasy-signin-note" hidden>Browse the pool and draft as much as you like — <a href="/?signin=game">sign in to submit your band</a> and join the leaderboard.</p>
@@ -386,6 +433,12 @@
         <ol class="fantasy-board" id="board-weekly" hidden><li>No drafts this week yet.</li></ol>
       </section>
 
+      <section class="fantasy-past" id="fantasy-past-games" hidden>
+        <h2>Your past games</h2>
+        <ol class="fantasy-past-list" id="past-games-list"></ol>
+        <p class="fantasy-past-empty" id="past-games-empty" hidden>No past games yet — your finished days will show up here.</p>
+      </section>
+
       <section class="arena-pool">
         <h2>The pool — 100 musicians</h2>
         <input class="fantasy-search" id="fantasy-search" type="search" placeholder="Search a musician or a band…" autocomplete="off" aria-label="Search the pool" />
@@ -400,14 +453,6 @@
         <div class="fantasy-pool" id="fantasy-pool"></div>
       </section>
 
-      <section class="fantasy-rules">
-        <h2>How scoring works</h2>
-        <p><strong>Career value.</strong> Each musician carries a value from their career in the graph, capped at their top three bands — a fourth band adds nothing to this part.</p>
-        <p><strong>Connection bonus.</strong> +4 for each pair among your five who played together in a band, up to +16. A fully connected band earns the full +16.</p>
-        <p><strong>Crowd-split.</strong> If many players pick the same musician, that musician is worth a little less to everyone who picked them — at half strength. Nobody is ever locked out of a pick. Crowd-split applies at settle, not in your provisional score.</p>
-        <p><strong>Winning.</strong> Beat the Gold line of <strong>69</strong> and the day counts as a win. Ten wins make Gold. Twenty-five make Platinum. Ties break on connection bonus first, then earliest submission.</p>
-        <p>Free to play. No ads, no entry fee, no real money. Fantasy value never feeds back into the Six Degrees graph.</p>
-      </section>
     </main>
 
     <footer class="arena-foot">
@@ -453,6 +498,28 @@
     </div>
   </div>
 
+  <!-- Rules ("How to play") popover — Rawkle's help-overlay pattern:
+       opens on arrival until "Don't show this again" is ticked
+       (localStorage fantasy-help-v1); the How to play button in the
+       draft card reopens it any time. Copy unchanged from the old
+       inline rules section. -->
+  <div id="rules-popover" role="dialog" aria-modal="true" aria-label="How to play" hidden>
+    <div class="feedback-backdrop" data-rules-close></div>
+    <div class="feedback-card rules-card">
+      <button class="feedback-close" type="button" data-rules-close aria-label="Close how to play">&times;</button>
+      <div class="feedback-title">How scoring works</div>
+      <div class="fantasy-rules">
+        <p><strong>Career value.</strong> Each musician carries a value from their career in the graph, capped at their top three bands — a fourth band adds nothing to this part.</p>
+        <p><strong>Connection bonus.</strong> +4 for each pair among your five who played together in a band, up to +16. A fully connected band earns the full +16.</p>
+        <p><strong>Crowd-split.</strong> If many players pick the same musician, that musician is worth a little less to everyone who picked them — at half strength. Nobody is ever locked out of a pick. Crowd-split applies at settle, not in your provisional score.</p>
+        <p><strong>Winning.</strong> Beat the Gold line of <strong>69</strong> and the day counts as a win. Ten wins make Gold. Twenty-five make Platinum. Ties break on connection bonus first, then earliest submission.</p>
+        <p>Free to play. No ads, no entry fee, no real money. Fantasy value never feeds back into the Six Degrees graph.</p>
+      </div>
+      <label class="rules-dontshow"><input type="checkbox" id="rules-dontshow" /> Don&rsquo;t show this again</label>
+      <button class="rules-play" type="button" id="rules-play">Play</button>
+    </div>
+  </div>
+
   <script>
     (function () {
       // Sign-in lives on the homepage; ?signin=game opens it there and
@@ -460,6 +527,10 @@
       window.openSignupPopover = function () { window.location.href = '/?signin=game'; };
       document.addEventListener('keydown', function (e) {
         if (e.key !== 'Escape') return;
+        if (window.__rulesOpen && typeof window.__closeRules === 'function') {
+          window.__closeRules();
+          return;
+        }
         if (window.__feedbackOpen && typeof window.__closeFeedback === 'function') {
           window.__closeFeedback();
           return;
@@ -559,6 +630,57 @@
           }
         }
       });
+    })();
+  </script>
+  <script>
+    // Rules ("How to play") popover — Rawkle's help-overlay pattern:
+    // opens on arrival until the player ticks "Don't show this again"
+    // (persisted in localStorage as fantasy-help-v1). The How to play
+    // button reopens it any time; opening it never touches game state.
+    (function () {
+      var KEY = 'fantasy-help-v1';
+      var popover = document.getElementById('rules-popover');
+      var trigger = document.getElementById('rules-open-btn');
+      if (!popover || !trigger) return;
+
+      function openRules() {
+        popover.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        window.__rulesOpen = true;
+        document.body.style.overflow = 'hidden';
+        // Focus the close button at the TOP of the sheet: focusing the
+        // Play button at the bottom scrolls the sheet and hides the
+        // title on first open.
+        var closer = popover.querySelector('.feedback-close');
+        if (closer) closer.focus();
+      }
+      function closeRules() {
+        var box = document.getElementById('rules-dontshow');
+        if (box && box.checked) {
+          try { localStorage.setItem(KEY, 'hide'); } catch (e) {}
+        }
+        popover.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+        window.__rulesOpen = false;
+        document.body.style.overflow = '';
+      }
+      window.__closeRules = closeRules;
+      window.openRulesPopover = openRules;
+
+      trigger.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (popover.hidden) openRules(); else closeRules();
+      });
+      popover.querySelectorAll('[data-rules-close]').forEach(function (el) {
+        el.addEventListener('click', closeRules);
+      });
+      var playBtn = document.getElementById('rules-play');
+      if (playBtn) playBtn.addEventListener('click', closeRules);
+      popover.addEventListener('click', function (event) { event.stopPropagation(); });
+
+      var hide = false;
+      try { hide = localStorage.getItem(KEY) === 'hide'; } catch (e) {}
+      if (!hide) openRules();
     })();
   </script>
 </body>
