@@ -889,9 +889,9 @@
          url field brings the full target list and renders the link
          preview. If the chosen app drops the text anyway, the
          clipboard copy is the rescue and the message says so. */
-      /* Daily reminder signup: email-only, double opt-in (same pipe as
-         the card game — /api/game-reminder-signup). Nothing arrives until
-         the confirmation link in the email is clicked. */
+      /* Daily reminder signup: email-only, single opt-in (same pipe as
+         the card game — /api/game-reminder-signup). The signup is
+         confirmed on submit and the welcome email goes out at once. */
       document.getElementById("remind-btn").addEventListener("click", function () {
         var input = document.getElementById("remind-email");
         var status = document.getElementById("remind-status");
@@ -918,11 +918,11 @@
             status.className = "remind-status ok";
             btn.textContent = "On the list ✓";
             rawkleGa("reminder_signup", { game: "rawkle", method: "end_card", status: "already_on", signup_source: src.source || "", signup_medium: src.medium || "", signup_campaign: src.campaign || "" });
-          } else if (r.ok && r.data.status === "check_email") {
-            status.textContent = "Check your email to confirm — nothing arrives until you tap the link.";
+          } else if (r.ok && r.data.status === "subscribed") {
+            status.textContent = "You’re on the list ✓ — see you tomorrow morning.";
             status.className = "remind-status ok";
-            btn.textContent = "Sent ✓";
-            rawkleGa("reminder_signup", { game: "rawkle", method: "end_card", status: "check_email", signup_source: src.source || "", signup_medium: src.medium || "", signup_campaign: src.campaign || "" });
+            btn.textContent = "On the list ✓";
+            rawkleGa("reminder_signup", { game: "rawkle", method: "end_card", status: "subscribed", signup_source: src.source || "", signup_medium: src.medium || "", signup_campaign: src.campaign || "" });
           } else {
             status.textContent = "Couldn’t save that — try again in a bit.";
             status.className = "remind-status";
