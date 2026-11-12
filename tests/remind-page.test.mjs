@@ -27,7 +27,7 @@ test('guests sign up with an email, on the same guest id the game uses', () => {
   assert.match(page, /fetch\('\/api\/reminder-signup', \{/);
   assert.match(page, /localStorage\.getItem\('sdr-guest-session'\)/);
   assert.match(page, /body: JSON\.stringify\(\{ email: email, guest_session_id: guestSessionId\(\), source: signupSrc\(\) \}\)/);
-  assert.match(page, /Check your email and tap the link to start your reminders\./);
+  assert.match(page, /You’re on the list ✓ — see you tomorrow morning\./);
 });
 
 test('signed-in visitors get one tap, no email box', () => {
