@@ -25,8 +25,9 @@ import { dailyPuzzleNumber } from '../../scripts/six-degrees-game.mjs';
 
 export const PLAY_URL = `${SITE_URL}/daily/`;
 
-// Shares Resend's 100/day free tier with the band-update emails.
-export const REMINDER_SEND_CAP = 80;
+// Resend Pro (live since 2026-11-03) has no daily limit; the cap is only
+// a runaway guard so a bug can't burn the quota.
+export const REMINDER_SEND_CAP = 200;
 
 // The flag and the log, created on first use so the toggle works before
 // anyone runs /api/migrate (migrate.mjs has the same statements). Once per
@@ -97,9 +98,9 @@ export function buildDailyReminderEmail({ date, unsubscribeUrl }) {
 }
 
 // Opted in, not reminded today, hasn't started today's puzzle: accounts
-// that turned it on, and guests who confirmed an email (their plays are on
-// their guest row, so "already played" works for them too). One email per
-// address even if someone is both.
+// that turned it on, and guests (confirmed at signup since single opt-in,
+// 2026-11-08 — their plays are on their guest row, so "already played"
+// works for them too). One email per address even if someone is both.
 export async function selectReminderRecipients(sql, date) {
   const rows = await sql`
     select u.id, u.email, p.unsubscribe_token
@@ -130,20 +131,25 @@ export async function selectReminderRecipients(sql, date) {
   });
 }
 
-// A guest's "remind me" asks them to confirm first, so nobody can sign up
-// someone else's address.
-export function buildReminderConfirmEmail({ confirmUrl }) {
-  const subject = 'Confirm your daily 6° reminder';
+// A guest's "remind me" is confirmed at signup (single opt-in, 2026-11-08),
+// so the welcome email goes out right away. The confirm link stays in it
+// as a one-tap "yes, remind me" for anyone who wants it, and the
+// unsubscribe link is the one-click way out.
+export function buildReminderWelcomeEmail({ confirmUrl, unsubscribeUrl }) {
+  const subject = 'Your daily 6° reminder is on';
   const text =
-    `Tap to get one email each morning when the new 6° puzzle is live:\n` +
-    `${confirmUrl}\n\n` +
-    `Didn't ask for this? Ignore it and you won't hear from us.\n`;
+    `One email each morning when the new 6° puzzle is live.\n` +
+    `Play today’s puzzle: ${PLAY_URL}\n\n` +
+    `Yes, remind me: ${confirmUrl}\n\n` +
+    `Didn't ask for this? Stop these emails: ${unsubscribeUrl}\n`;
   const html =
     `<div style="font-family: Georgia, serif; color: #e8e4da; background: #14120e; padding: 32px; max-width: 560px;">` +
     `<p style="font-size: 18px; line-height: 1.6; margin: 0 0 12px;">One email each morning when the new 6° puzzle is live.</p>` +
-    `<p style="margin: 0;"><a href="${confirmUrl}" style="color: #c9a96a;">Yes, remind me</a></p>` +
+    `<p style="margin: 0;"><a href="${PLAY_URL}" style="color: #c9a96a;">Play today’s puzzle</a></p>` +
+    `<p style="margin: 12px 0 0;"><a href="${confirmUrl}" style="color: #c9a96a;">Yes, remind me</a></p>` +
     `<hr style="border: none; border-top: 1px solid #3a352c; margin: 24px 0;" />` +
-    `<p style="font-size: 12px; color: #8a8478;">Didn\u2019t ask for this? Ignore it and you won\u2019t hear from us.</p>` +
+    `<p style="font-size: 12px; color: #8a8478;">Didn\u2019t ask for this? ` +
+    `<a href="${unsubscribeUrl.replace(/&/g, '&amp;')}" style="color: #8a8478;">Stop these emails</a> with one click.</p>` +
     `</div>`;
   return { subject, html, text };
 }

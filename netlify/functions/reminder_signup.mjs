@@ -2,12 +2,12 @@
 //
 // POST /api/reminder-signup  { email, guest_session_id }
 //   A guest (after a puzzle, or on /remind/ before ever playing) asks for
-//   the reminder with only an email. We
-//   save it on their guest row and send a confirmation link; nothing else
-//   is sent until they click it (double opt-in), so nobody can sign up
-//   someone else's address.
+//   the reminder with only an email. We save it on their guest row,
+//   confirmed at submit (single opt-in, 2026-11-08), and send a welcome
+//   email with a one-click unsubscribe.
 // GET /api/reminder-signup?confirm=<token>
-//   The link in that email. Turns the reminder on and says so.
+//   The link in the old confirmation emails. Still honoured, so links
+//   already in inboxes don't 404: turns the reminder on and says so.
 //
 // Signed-in players keep using "Remind me daily" (notification_prefs); this
 // is only for guests. The send itself, skip-if-played, one-a-day and
@@ -29,7 +29,7 @@ import {
 import { clientIp, consume, tooManyRequests } from './_rate_limit.mjs';
 import { sendEmail, isMailerConfigured, SITE_URL } from './_mailer.mjs';
 import { isPlaceholderEmail } from './_oauth.mjs';
-import { ensureReminderSchema, buildReminderConfirmEmail } from './_daily_reminder.mjs';
+import { ensureReminderSchema, buildReminderWelcomeEmail, reminderUnsubscribeUrl } from './_daily_reminder.mjs';
 
 // GA4 on the bare confirm page (twin of _game_reminders.mjs's builder):
 // fires reminder_signup_confirmed only on a FRESH confirmation, so a
@@ -60,9 +60,6 @@ function normalizeSignupSource(source) {
   const s = source && typeof source === 'object' ? source : {};
   return { source: cleanSource(s.source), medium: cleanSource(s.medium), campaign: cleanSource(s.campaign) };
 }
-
-// Don't resend the confirmation to the same address more than this often.
-export const CONFIRM_RESEND_MS = 60 * 60 * 1000;
 
 const newToken = () => randomBytes(32).toString('base64url');
 
@@ -113,7 +110,7 @@ async function confirm(sql, token) {
   });
 }
 
-export async function signUp(sql, { email, guestSessionId, source, send = sendEmail, now = Date.now() }) {
+export async function signUp(sql, { email, guestSessionId, source, send = sendEmail }) {
   const src = normalizeSignupSource(source);
   const guests = await sql`
     select id from users where guest_session_id = ${guestSessionId} and is_guest = true limit 1
@@ -137,31 +134,35 @@ export async function signUp(sql, { email, guestSessionId, source, send = sendEm
 
   const existing = (await sql`select * from guest_reminders where user_id = ${guest.id} limit 1`)[0];
   if (existing && existing.email === email && existing.confirmed_at) return { status: 'already_on' };
-  if (
-    existing && existing.email === email && existing.confirm_sent_at &&
-    now - new Date(existing.confirm_sent_at).getTime() < CONFIRM_RESEND_MS
-  ) {
-    return { status: 'check_email' };
-  }
 
-  // A new or changed address starts unconfirmed with a fresh link.
+  // A new or changed address is confirmed at submit, with a fresh
+  // confirm token kept for the old confirm links and the welcome email.
+  // confirmed_at sits after confirm_sent_at so the source triple stays last.
   const confirmToken = newToken();
+  const unsubscribeToken = newToken();
   await sql`
-    insert into guest_reminders (user_id, email, confirm_token, unsubscribe_token, confirm_sent_at, signup_source, signup_medium, signup_campaign)
-    values (${guest.id}, ${email}, ${confirmToken}, ${newToken()}, now(), ${src.source}, ${src.medium}, ${src.campaign})
+    insert into guest_reminders (user_id, email, confirm_token, unsubscribe_token, confirm_sent_at, confirmed_at, signup_source, signup_medium, signup_campaign)
+    values (${guest.id}, ${email}, ${confirmToken}, ${unsubscribeToken}, now(), now(), ${src.source}, ${src.medium}, ${src.campaign})
     on conflict (user_id) do update set
       email = excluded.email,
       confirm_token = excluded.confirm_token,
       signup_source = coalesce(nullif(excluded.signup_source, ''), guest_reminders.signup_source),
       signup_medium = coalesce(nullif(excluded.signup_medium, ''), guest_reminders.signup_medium),
       signup_campaign = coalesce(nullif(excluded.signup_campaign, ''), guest_reminders.signup_campaign),
-      confirmed_at = null,
+      confirmed_at = now(),
       confirm_sent_at = now()
   `;
-  const { subject, html, text } = buildReminderConfirmEmail({ confirmUrl: confirmUrlFor(confirmToken) });
+  const { subject, html, text } = buildReminderWelcomeEmail({
+    confirmUrl: confirmUrlFor(confirmToken),
+    unsubscribeUrl: reminderUnsubscribeUrl(unsubscribeToken),
+  });
   const sent = await send({ to: email, subject, html, text });
-  if (!sent || !sent.ok) return { error: 'could not send the email' };
-  return { status: 'check_email' };
+  if (!sent || !sent.ok) {
+    // They're on the list either way; the welcome email is a hello, not
+    // the thing that turns the reminder on.
+    console.error('[reminder] welcome email failed', sent && sent.error);
+  }
+  return { status: 'subscribed' };
 }
 
 export default async (req) => {
