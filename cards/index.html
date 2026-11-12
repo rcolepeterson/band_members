@@ -2011,12 +2011,12 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       }
 
       /* ---------- v14b: game-night reminder signup ----------
-         The shared reminder pipe, same as Rawkle: email only, double
+         The shared reminder pipe, same as Rawkle: email only, single
          opt-in. A valid address POSTs { email, game: 'cards' } to
-         /api/game-reminder-signup; a check_email response means the
-         confirmation email is on its way and nothing arrives until its
-         link is tapped. The signup lives entirely inside the overlay —
-         it never touches the finished game behind it. */
+         /api/game-reminder-signup; a subscribed response means the
+         signup is confirmed and the welcome email is on its way. The
+         signup lives entirely inside the overlay — it never touches
+         the finished game behind it. */
       var remindDone = false;
       function showRemindNote(text, isError) {
         remindNote.textContent = text;
@@ -2041,11 +2041,11 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
           body: JSON.stringify({ email: email, game: 'cards', source: src })
         }).then(function (res) {
           return res.json().catch(function () { return null; }).then(function (data) {
-            if (res.ok && data && (data.status === 'check_email' || data.status === 'already_on')) {
+            if (res.ok && data && (data.status === 'subscribed' || data.status === 'already_on')) {
               remindDone = true;
-              remindSubmit.textContent = data.status === 'already_on' ? 'On the list ✓' : 'Sent ✓';
+              remindSubmit.textContent = 'On the list ✓';
               remindEmail.disabled = true;
-              showRemindNote(data.status === 'already_on' ? 'You’re already on the list ✓ — see you tomorrow morning.' : 'Check your email to confirm — nothing arrives until you tap the link.', false);
+              showRemindNote(data.status === 'already_on' ? 'You’re already on the list ✓ — see you tomorrow morning.' : 'You’re on the list ✓ — see you tomorrow morning.', false);
               cardsGa('reminder_signup', { game: 'cards', method: 'game_over', status: data.status, signup_source: src.source || '', signup_medium: src.medium || '', signup_campaign: src.campaign || '' });
             } else {
               remindSubmit.disabled = false;
