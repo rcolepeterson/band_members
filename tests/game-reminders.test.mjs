@@ -7,9 +7,10 @@
 //   1. Each game's email: right subject, right play link, a per-game
 //      unsubscribe — and Rawkle's number is epoch math only, so the
 //      email can never name (or leak) the band.
-//   2. Signup is double opt-in: nothing sends until the link is clicked;
-//      a confirmed address isn't re-mailed; a recent unconfirmed one
-//      isn't spammed with a second confirmation.
+//   2. Signup is single opt-in: submit confirms at once, the welcome
+//      email goes out, and the row is immediately sendable; a confirmed
+//      address isn't re-mailed, and a failed welcome send still leaves
+//      the signup standing.
 //   3. The send: one per address per game per day, never twice, capped,
 //      dry runs send nothing, a failed send releases its claim.
 //   4. The schedules: Rawkle 8:30, cards 9:00 Pacific, half an hour apart
@@ -23,7 +24,7 @@ import {
   GAMES,
   rawklePuzzleNumber,
   buildGameReminderEmail,
-  buildGameReminderConfirmEmail,
+  buildGameReminderWelcomeEmail,
   gameReminderUnsubscribeUrl,
   validateGameReminderEmail,
   signUpForGameReminder,
@@ -63,9 +64,11 @@ function fakeSql({ recipients = [], rows = [], alreadyClaimed = [] } = {}) {
       return [];
     }
     if (q.includes('insert into game_reminders')) {
+      // The signup writes confirmed_at = now(): single opt-in, so the
+      // stored row is immediately sendable.
       store.set(`${values[0]}|${values[1]}`, {
         email: values[0], game: values[1], confirm_token: values[2],
-        unsubscribe_token: values[3], confirmed_at: null, confirm_sent_at: new Date().toISOString(),
+        unsubscribe_token: values[3], confirmed_at: new Date().toISOString(), confirm_sent_at: new Date().toISOString(),
       });
       return [];
     }
@@ -98,9 +101,20 @@ test('each game email: right subject, play link, per-game unsubscribe, no band d
   assert.equal(c.subject, 'The cards are on the table');
   assert.ok(c.text.startsWith('The Six Degrees card game is ready when you are. Deal a hand.\nPlay: https://sixdegreesofrock.com/cards'));
   assert.ok(c.text.includes('list=cards'));
-  const conf = buildGameReminderConfirmEmail('rawkle', { confirmUrl: 'https://sixdegreesofrock.com/api/game-reminder-signup?confirm=abc' });
-  assert.equal(conf.subject, 'Confirm your daily Rawkle reminder');
-  assert.ok(conf.text.includes("Didn't ask for this?"));
+  const welcome = buildGameReminderWelcomeEmail('rawkle', { confirmUrl: 'https://sixdegreesofrock.com/api/game-reminder-signup?confirm=abc', unsubscribeUrl: unsub });
+  assert.equal(welcome.subject, 'Your daily Rawkle reminder is on');
+  assert.ok(welcome.text.includes('One email each morning when the new Rawkle is live.'));
+  assert.ok(welcome.text.includes('Play: https://sixdegreesofrock.com/rawkle'));
+  assert.ok(welcome.text.includes('https://sixdegreesofrock.com/api/game-reminder-signup?confirm=abc'));
+  assert.ok(welcome.html.includes('href="https://sixdegreesofrock.com/api/game-reminder-signup?confirm=abc"'));
+  assert.ok(welcome.text.includes(unsub));
+  assert.ok(welcome.text.includes("Didn't ask for this? Stop these emails."));
+  assert.ok(welcome.html.includes("Didn’t ask for this?"));
+  assert.ok(welcome.html.includes('Stop these emails'));
+  const welcomeCards = buildGameReminderWelcomeEmail('cards', { confirmUrl: 'https://sixdegreesofrock.com/api/game-reminder-signup?confirm=abc', unsubscribeUrl: gameReminderUnsubscribeUrl('cards', 'tok') });
+  assert.equal(welcomeCards.subject, 'Your daily card game reminder is on');
+  assert.ok(welcomeCards.text.includes('One email each morning to deal a hand.'));
+  assert.ok(welcomeCards.text.includes('list=cards'));
 });
 
 test('validation rejects what cannot be mailed', () => {
@@ -110,18 +124,23 @@ test('validation rejects what cannot be mailed', () => {
   assert.equal(validateGameReminderEmail('a@b.com'), null);
 });
 
-test('signup is double opt-in, never re-mails a confirmed address', async () => {
+test('signup is single opt-in, never re-mails a confirmed address', async () => {
   __resetGameReminderSchemaForTests();
   const sent = [];
   const send = async (m) => { sent.push(m); return { ok: true }; };
   const { sql, store } = fakeSql();
   const first = await signUpForGameReminder(sql, { email: 'a@b.com', game: 'rawkle', send });
-  assert.equal(first.status, 'check_email');
+  assert.equal(first.status, 'subscribed');
   assert.equal(sent.length, 1);
-  assert.ok(sent[0].subject.includes('Confirm'));
-  assert.ok(sent[0].text.includes('/api/game-reminder-signup?confirm='));
-  // Confirming, then signing up again, does not re-mail.
+  assert.equal(sent[0].subject, 'Your daily Rawkle reminder is on');
+  assert.ok(sent[0].text.includes('Play: https://sixdegreesofrock.com/rawkle'));
+  assert.ok(sent[0].text.includes('/api/game-reminder-signup?confirm='), 'welcome keeps the optional confirm link');
+  assert.ok(sent[0].text.includes('list=rawkle'), 'welcome carries the one-click unsubscribe');
+  // The row is confirmed at once, so it is immediately sendable.
   const row = store.get('a@b.com|rawkle');
+  assert.ok(row.confirmed_at, 'confirmed_at is set on submit');
+  // Confirming via the old link still works, then signing up again
+  // does not re-mail.
   const confirmed = await confirmGameReminder(sql, row.confirm_token);
   assert.equal(confirmed.email, 'a@b.com');
   const again = await signUpForGameReminder(sql, { email: 'a@b.com', game: 'rawkle', send });
@@ -129,13 +148,18 @@ test('signup is double opt-in, never re-mails a confirmed address', async () => 
   assert.equal(sent.length, 1);
   // A bad token confirms nothing.
   assert.equal(await confirmGameReminder(sql, 'nope'), null);
-  // A recent unconfirmed signup is not re-mailed either.
-  const { sql: sql2 } = fakeSql();
+  // An old unconfirmed row re-submits into subscribed, not check_email.
+  const { sql: sql2, store: store2 } = fakeSql({ rows: [{ email: 'c@d.com', game: 'cards', confirm_token: 'old', unsubscribe_token: 'old-u', confirmed_at: null, confirm_sent_at: new Date().toISOString() }] });
   const sent2 = [];
   const send2 = async (m) => { sent2.push(m); return { ok: true }; };
-  await signUpForGameReminder(sql2, { email: 'c@d.com', game: 'cards', send: send2 });
-  await signUpForGameReminder(sql2, { email: 'c@d.com', game: 'cards', send: send2 });
+  const resub = await signUpForGameReminder(sql2, { email: 'c@d.com', game: 'cards', send: send2 });
+  assert.equal(resub.status, 'subscribed');
   assert.equal(sent2.length, 1);
+  assert.ok(store2.get('c@d.com|cards').confirmed_at, 're-submit confirms the old row');
+  // A failed welcome send still leaves the signup standing.
+  const { sql: sql3 } = fakeSql();
+  const failed = await signUpForGameReminder(sql3, { email: 'e@f.com', game: 'rawkle', send: async () => ({ ok: false, error: 'resend 500' }) });
+  assert.equal(failed.status, 'subscribed');
 });
 
 test('the send: one each, never twice, capped, dry runs send nothing', async () => {
@@ -153,6 +177,7 @@ test('the send: one each, never twice, capped, dry runs send nothing', async () 
   assert.deepEqual(sent, ['a@b.com']);
   assert.equal(summary.sent, 1);
 
+  assert.equal(GAME_REMINDER_SEND_CAP, 200);
   __resetGameReminderSchemaForTests();
   const many = Array.from({ length: GAME_REMINDER_SEND_CAP + 5 }, (_, i) => mk(`u${i}@b.com`));
   let sends = 0;
