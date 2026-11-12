@@ -204,10 +204,10 @@
           });
         }).then(function (data) {
           form.hidden = true;
-          try { localStorage.setItem('sdr-guest-reminder', 'pending'); } catch (e) {}
+          try { localStorage.setItem('sdr-guest-reminder', 'on'); } catch (e) {}
           say(data.status === 'already_on'
             ? 'You’re already on the list. See you tomorrow morning.'
-            : 'Check your email and tap the link to start your reminders.');
+            : 'You’re on the list ✓ — see you tomorrow morning.');
           track('guest');
         }).catch(function (err) {
           btn.disabled = false;
