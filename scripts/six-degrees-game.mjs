@@ -1949,8 +1949,8 @@ function initGameUI() {
   }
 
   // Guests get the reminder with just an email (Cole, 2026-10-15). The
-  // server emails a confirmation link first; reminders start once it's
-  // clicked (reminder_signup.mjs). This device remembers it asked.
+  // server confirms it at submit (single opt-in, 2026-11-08) and sends a
+  // welcome email. This device remembers it asked.
   const GUEST_REMINDER_KEY = 'sdr-guest-reminder';
   function guestReminderAsked() {
     try { return Boolean(localStorage.getItem(GUEST_REMINDER_KEY)); } catch { return false; }
@@ -1974,10 +1974,10 @@ function initGameUI() {
       btn.disabled = true;
       try {
         await dailyFetch('/api/reminder-signup', { method: 'POST', body: JSON.stringify({ email }) });
-        try { localStorage.setItem(GUEST_REMINDER_KEY, 'pending'); } catch {}
+        try { localStorage.setItem(GUEST_REMINDER_KEY, 'on'); } catch {}
         gaEvent('reminder_signup', { method: 'guest', where: 'game' });
         window.dispatchEvent(new Event('sdr-reminder-on'));
-        form.replaceChildren(document.createTextNode('Check your email and tap the link to start your reminders.'));
+        form.replaceChildren(document.createTextNode('You’re on the list ✓ — see you tomorrow morning.'));
       } catch (err) {
         btn.disabled = false;
         const msg = err && /real email/.test(err.message) ? 'That email doesn\u2019t look right.' : 'Couldn\u2019t save that. Try again in a minute.';
