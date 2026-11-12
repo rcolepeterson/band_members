@@ -10,17 +10,19 @@
 //   - Opt-in only, email-only: Rawkle and Cards have no accounts —
 //     progress lives in localStorage — so there is no notification_prefs
 //     row to flip. The list is just confirmed emails.
-//   - Double opt-in: nothing is sent until the confirmation link is
-//     clicked, so nobody can sign up someone else's address.
+//   - Single opt-in: a signup is confirmed on submit and the welcome
+//     email goes out at once. The old ?confirm= link still works for
+//     confirm emails already in inboxes, but nothing new waits on a
+//     click to start sending.
 //   - One email per address per game per day: game_reminder_log has a row
 //     per (email, game, date), claimed before the send, so a rerun or a
 //     double trigger can't send twice.
 //   - One-click unsubscribe per game: the footer link stops that game
 //     only (unsubscribe.mjs, ?list=<game>).
 //   - GAME_REMINDER_SEND_CAP keeps a bug from burning the Resend quota,
-//     which is shared with Daily's reminders and the band-update emails
-//     (100/day free tier). The caps are per-run safety valves; when the
-//     lists grow past the tier, upgrade Resend before raising them.
+//     which is shared with Daily's reminders and the band-update emails.
+//     Resend Pro is live since Nov 3, so there is no daily limit; the
+//     cap is a per-run safety valve only.
 //   - No skip-if-played: the server cannot know who played, because
 //     Rawkle and Cards keep progress on the device. The emails never name
 //     a hidden answer, so they are nudges, not spoilers. Rawkle's email
@@ -54,10 +56,10 @@ export const GAMES = {
     playUrl: PLAY_URLS.rawkle,
     subject: "Today's Rawkle is live",
     line: (num) => `Rawkle #${num} is up. One famous band, six tries.`,
-    confirmSubject: 'Confirm your daily Rawkle reminder',
-    confirmLine: 'One email each morning when the new Rawkle is live.',
-    confirmHeading: 'You’re set.',
-    confirmBody: (playUrl) => `One email each morning when the new Rawkle is live. <a href="${playUrl}">Play today’s band</a>`,
+    welcomeSubject: 'Your daily Rawkle reminder is on',
+    welcomeLine: 'One email each morning when the new Rawkle is live.',
+    welcomeHeading: 'You’re set.',
+    welcomeBody: (playUrl) => `One email each morning when the new Rawkle is live. <a href="${playUrl}">Play today’s band</a>`,
     unsubHeading: 'No more Rawkle reminders.',
     unsubBody: (playUrl) => `You won’t get the Rawkle reminder again, and we’ve deleted your email. Today’s band is always at <a href="${playUrl}">sixdegreesofrock.com/rawkle</a>.`,
   },
@@ -66,20 +68,18 @@ export const GAMES = {
     playUrl: PLAY_URLS.cards,
     subject: 'The cards are on the table',
     line: () => 'The Six Degrees card game is ready when you are. Deal a hand.',
-    confirmSubject: 'Confirm your daily card game reminder',
-    confirmLine: 'One email each morning to deal a hand.',
-    confirmHeading: 'You’re set.',
-    confirmBody: (playUrl) => `One email each morning to deal a hand. <a href="${playUrl}">Play the card game</a>`,
+    welcomeSubject: 'Your daily card game reminder is on',
+    welcomeLine: 'One email each morning to deal a hand.',
+    welcomeHeading: 'You’re set.',
+    welcomeBody: (playUrl) => `One email each morning to deal a hand. <a href="${playUrl}">Play the card game</a>`,
     unsubHeading: 'No more card game reminders.',
     unsubBody: (playUrl) => `You won’t get the card game reminder again, and we’ve deleted your email. The game is always at <a href="${playUrl}">sixdegreesofrock.com/cards</a>.`,
   },
 };
 
-// Per-run safety valve; see the header note on the shared Resend tier.
-export const GAME_REMINDER_SEND_CAP = 20;
-
-// Don't resend the confirmation to the same address more than this often.
-export const CONFIRM_RESEND_MS = 60 * 60 * 1000;
+// Per-run safety valve; Resend Pro is live since Nov 3, so there is no
+// daily limit — this only bounds a single runaway run.
+export const GAME_REMINDER_SEND_CAP = 200;
 
 const newToken = () => randomBytes(32).toString('base64url');
 
@@ -194,20 +194,25 @@ export function buildGameReminderEmail(game, { date, unsubscribeUrl }) {
   return { subject: g.subject, html, text };
 }
 
-export function buildGameReminderConfirmEmail(game, { confirmUrl }) {
+export function buildGameReminderWelcomeEmail(game, { confirmUrl, unsubscribeUrl }) {
   const g = GAMES[game];
+  const playLabel = game === 'rawkle' ? 'Play today’s band' : 'Play the card game';
   const text =
-    `${g.confirmLine}\n` +
-    `${confirmUrl}\n\n` +
-    `Didn't ask for this? Ignore it and you won't hear from us.\n`;
+    `${g.welcomeLine}\n` +
+    `Play: ${g.playUrl}\n\n` +
+    `Yes, remind me: ${confirmUrl}\n\n` +
+    `Didn't ask for this? Stop these emails.\n` +
+    `${unsubscribeUrl}\n`;
   const html =
     `<div style="font-family: Georgia, serif; color: #e8e4da; background: #14120e; padding: 32px; max-width: 560px;">` +
-    `<p style="font-size: 18px; line-height: 1.6; margin: 0 0 12px;">${g.confirmLine}</p>` +
-    `<p style="margin: 0;"><a href="${confirmUrl}" style="color: #c9a96a;">Yes, remind me</a></p>` +
+    `<p style="font-size: 18px; line-height: 1.6; margin: 0 0 12px;">${g.welcomeLine}</p>` +
+    `<p style="margin: 0;"><a href="${g.playUrl}" style="color: #c9a96a;">${playLabel}</a></p>` +
+    `<p style="margin: 12px 0 0;"><a href="${confirmUrl}" style="color: #c9a96a;">Yes, remind me</a></p>` +
     `<hr style="border: none; border-top: 1px solid #3a352c; margin: 24px 0;" />` +
-    `<p style="font-size: 12px; color: #8a8478;">Didn’t ask for this? Ignore it and you won’t hear from us.</p>` +
+    `<p style="font-size: 12px; color: #8a8478;">Didn’t ask for this? ` +
+    `<a href="${unsubscribeUrl.replace(/&/g, '&amp;')}" style="color: #8a8478;">Stop these emails</a> with one click.</p>` +
     `</div>`;
-  return { subject: g.confirmSubject, html, text };
+  return { subject: g.welcomeSubject, html, text };
 }
 
 // Confirmed, not reminded today for this game. One email per address even
@@ -273,37 +278,34 @@ export async function runGameReminders(sql, game, { date = pacificDate(), dryRun
   return { ok: true, game, date, considered: recipients.length, sent, failed, capped };
 }
 
-// A signup asks for confirmation first, so nobody can sign up someone
-// else's address. A new or changed address starts unconfirmed with a
-// fresh link.
-export async function signUpForGameReminder(sql, { email, game, source, send = defaultSendEmail, now = Date.now() }) {
+// A signup is confirmed on submit (single opt-in): the row is
+// immediately sendable and the welcome email goes out at once. A
+// re-submit of a confirmed address is a no-op. If the welcome email
+// fails to send, the signup still stands — the address is on the list
+// and the next morning's reminder goes out.
+export async function signUpForGameReminder(sql, { email, game, source, send = defaultSendEmail }) {
   const src = normalizeSignupSource(source);
   const existing = (await sql`select * from game_reminders where email = ${email} and game = ${game} limit 1`)[0];
   if (existing && existing.confirmed_at) return { status: 'already_on' };
-  if (
-    existing && existing.confirm_sent_at &&
-    now - new Date(existing.confirm_sent_at).getTime() < CONFIRM_RESEND_MS
-  ) {
-    return { status: 'check_email' };
-  }
 
   const confirmToken = newToken();
+  const unsubscribeToken = newToken();
   await sql`
-    insert into game_reminders (email, game, confirm_token, unsubscribe_token, confirm_sent_at, signup_source, signup_medium, signup_campaign)
-    values (${email}, ${game}, ${confirmToken}, ${newToken()}, now(), ${src.source}, ${src.medium}, ${src.campaign})
+    insert into game_reminders (email, game, confirm_token, unsubscribe_token, confirmed_at, confirm_sent_at, signup_source, signup_medium, signup_campaign)
+    values (${email}, ${game}, ${confirmToken}, ${unsubscribeToken}, now(), now(), ${src.source}, ${src.medium}, ${src.campaign})
     on conflict (email, game) do update set
       confirm_token = excluded.confirm_token,
       unsubscribe_token = excluded.unsubscribe_token,
       signup_source = coalesce(nullif(excluded.signup_source, ''), game_reminders.signup_source),
       signup_medium = coalesce(nullif(excluded.signup_medium, ''), game_reminders.signup_medium),
       signup_campaign = coalesce(nullif(excluded.signup_campaign, ''), game_reminders.signup_campaign),
-      confirmed_at = null,
+      confirmed_at = now(),
       confirm_sent_at = now()
   `;
-  const { subject, html, text } = buildGameReminderConfirmEmail(game, { confirmUrl: gameReminderConfirmUrl(confirmToken) });
+  const { subject, html, text } = buildGameReminderWelcomeEmail(game, { confirmUrl: gameReminderConfirmUrl(confirmToken), unsubscribeUrl: gameReminderUnsubscribeUrl(game, unsubscribeToken) });
   const sent = await send({ to: email, subject, html, text });
-  if (!sent || !sent.ok) return { error: 'could not send the email' };
-  return { status: 'check_email' };
+  if (!sent || !sent.ok) console.error('[game-reminder] welcome email failed to send', email, game);
+  return { status: 'subscribed' };
 }
 
 export async function confirmGameReminder(sql, token) {

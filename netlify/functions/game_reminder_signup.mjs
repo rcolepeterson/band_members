@@ -1,11 +1,11 @@
 // Sign-up for a 6* game's daily reminder (Rawkle, card game).
 //
 // POST /api/game-reminder-signup  { email, game }
-//   Asks for the reminder with only an email. We save it and send a
-//   confirmation link; nothing else is sent until they click it (double
-//   opt-in), so nobody can sign up someone else's address.
+//   Asks for the reminder with only an email. We save it confirmed on
+//   submit (single opt-in) and send a welcome email at once.
 // GET /api/game-reminder-signup?confirm=<token>
-//   The link in that email. Turns the reminder on and says so.
+//   The link in the old confirmation emails. Turns the reminder on and
+//   says so — kept working so links already in inboxes don't 404.
 //
 // The send itself, one-a-day and unsubscribe all live in
 // _game_reminders.mjs and unsubscribe.mjs. Daily Chain keeps its own
@@ -67,8 +67,8 @@ async function confirm(sql, token) {
   const g = GAMES[row.game] || GAMES.rawkle;
   return page({
     title: 'Reminder — Six Degrees of Rock',
-    heading: g.confirmHeading,
-    body: g.confirmBody(g.playUrl),
+    heading: g.welcomeHeading,
+    body: g.welcomeBody(g.playUrl),
     gaScript: row.fresh ? reminderConfirmedGaScript(row.game, row) : '',
   });
 }
