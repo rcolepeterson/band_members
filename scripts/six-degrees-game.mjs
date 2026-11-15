@@ -1160,6 +1160,7 @@ function initGameUI() {
   // opens after game_completed clears analyticsSessionId, so a share tap
   // after a win would otherwise have no session to join to. Keep the last
   // session id so every share tap still counts in the ops funnel.
+  let analyticsLastSessionId = null;
   let analyticsGameStartTime = null;
   let analyticsMoveCount = 0;
   let analyticsHintCount = 0;
