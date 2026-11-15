@@ -184,6 +184,29 @@ export function governorExpandParams({
   return { nextHops, nextNodes, changed: nextHops !== maxHops || nextNodes !== maxNodes };
 }
 
+// Island detection, shared by both render modes. A band is an island when
+// the view centred on it IS its whole connected component and that component
+// holds no second band -- every member belongs to this band alone, so Expand
+// has nothing to find at any depth (Walk the Moon: 4 members, none in any
+// other band, component = 5 nodes). The frontier is the proof: it lists the
+// component's nodes just beyond the current view, so an empty frontier with
+// no truncation means the component is fully on screen and the band count
+// in the view is the band count in the component. Anything short of that
+// proof -- a musician anchor, a frontier still holding nodes, a truncated
+// view -- is NOT called an island, because it might stop being one on the
+// next Expand.
+export function isIslandView({ anchorType, nodes, frontier, truncated } = {}) {
+  if (anchorType !== 'band') return false;
+  if (!Array.isArray(nodes) || !Array.isArray(frontier)) return false;
+  if (truncated) return false;
+  if (frontier.length !== 0) return false;
+  let bands = 0;
+  for (const node of nodes) {
+    if (node && node.type === 'band') bands += 1;
+  }
+  return bands === 1;
+}
+
 // Other-groups math for governor mode, where the client never sees the full
 // corpus. The groups endpoint returns ALL groups including the current one,
 // so the client finds the current group and treats the rest as "other".
@@ -980,6 +1003,25 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-other-groups__btn:hover{color:#c3f2fb}
 #${STAGE_ID} .sigma-other-groups__btn:focus-visible{outline:2px solid rgba(143,232,246,0.8);
   outline-offset:2px}
+/* Island disclosure: a band whose members play nowhere else has nothing to
+   expand into, and silence reads as a hang -- the visitor cannot tell an
+   island from a stalled fetch. This row names it, in the universe's own
+   terms, and turns the dead end into the contribution on-ramp: the "Add it"
+   button opens the same edit flow the band card's pencil opens. */
+#${STAGE_ID} .sigma-island{margin:0;font-size:13px;color:#9aa7b6;display:flex;
+  flex-wrap:wrap;justify-content:center;align-items:baseline;gap:6px}
+#${STAGE_ID} .sigma-island[hidden]{display:none}
+#${STAGE_ID} .sigma-island__text{transition:color .35s ease}
+#${STAGE_ID} .sigma-island__btn{border:0;background:none;padding:0;margin:0;
+  font:inherit;color:#8fe8f6;text-decoration:underline;text-underline-offset:2px;
+  cursor:pointer;transition:color .35s ease}
+#${STAGE_ID} .sigma-island__btn:hover{color:#c3f2fb}
+#${STAGE_ID} .sigma-island__btn:focus-visible{outline:2px solid rgba(143,232,246,0.8);
+  outline-offset:2px}
+/* Expand's answer on an island: the row brightens instead of the view
+   silently re-rendering the same handful of nodes. */
+#${STAGE_ID} .sigma-island--pulse .sigma-island__text{color:#eaf4fb}
+#${STAGE_ID} .sigma-island--pulse .sigma-island__btn{color:#eaf4fb}
 /* FOOTER ORDER: the hub member-group row is the featured constellation nav
    and sits ABOVE the other-groups row: in-view navigation comes first, the
    leave-view jump second. Its button is larger and gold (#ffb454, the
@@ -1060,14 +1102,17 @@ body.${BODY_ACTIVE_CLASS} .graph-panel{min-height:100dvh}
     view to someone who could already see all of it.
 
     The BUTTON survives without its sentence, because jumping to a
-    disconnected group is an action, not a description.
+    disconnected group is an action, not a description. The island
+    sentence hides the same way and its "Add it" button survives for the
+    same reason; the band card carries the full island sentence on a phone.
   */
   #${STAGE_ID} .sigma-footer .sigma-hint{font-size:12px}
   #${STAGE_ID} .sigma-footer .sigma-hint:not(.sigma-hint--intro){display:none}
   #${STAGE_ID} .sigma-footer .sigma-context,
   #${STAGE_ID} .sigma-footer .sigma-frontier,
   #${STAGE_ID} .sigma-other-groups__text,
-  #${STAGE_ID} .sigma-hub-groups__text{display:none}
+  #${STAGE_ID} .sigma-hub-groups__text,
+  #${STAGE_ID} .sigma-island__text{display:none}
 }
 `;
 
@@ -1225,6 +1270,14 @@ function buildStage(doc, mount) {
       <p class="sigma-hint">${EXPLORE_COPY}</p>
       <p class="sigma-context" aria-live="polite"></p>
       <span class="sigma-frontier"></span>
+      <!-- Island disclosure: updateChrome() unhides this row only when the
+           anchor band's whole component is on screen and holds no second
+           band. The sentence is desktop narration (hidden on phones, like
+           the other footer sentences); the button is an action and stays. -->
+      <p class="sigma-island" hidden>
+        <span class="sigma-island__text">An island in the universe — no threads to other bands yet. This is the whole constellation.</span>
+        <button type="button" class="sigma-island__btn">Know a connection? Add it</button>
+      </p>
       <!-- FOOTER ORDER: hub member groups cycle IN PLACE on this
            anchor view (one tap, no navigation, no new page). This row is
            NOT the disconnected-components "Show next group" row below: it
@@ -1543,6 +1596,8 @@ export function initSigmaExplorer({
   const contextEl = stage.querySelector('.sigma-context');
   const hintEl = stage.querySelector('.sigma-hint');
   const frontierEl = stage.querySelector('.sigma-frontier');
+  const islandEl = stage.querySelector('.sigma-island');
+  const islandBtn = stage.querySelector('.sigma-island__btn');
   const otherGroupsEl = stage.querySelector('.sigma-other-groups');
   const otherGroupsTextEl = stage.querySelector('.sigma-other-groups__text');
   const otherGroupsBtn = stage.querySelector('.sigma-other-groups__btn');
@@ -2385,6 +2440,11 @@ export function initSigmaExplorer({
     return ids.length ? ids.slice().sort()[0] : '';
   }
 
+  // Whether the current view is an island band's whole component, as last
+  // computed by updateChrome(). expand() reads it to answer with the island
+  // disclosure instead of re-rendering an identical view.
+  let currentIsland = false;
+
   function updateChrome() {
     const view = state.view;
     const anchor = masterById.get(state.anchorId);
@@ -2403,10 +2463,29 @@ export function initSigmaExplorer({
     frontierEl.textContent = remaining
       ? `${remaining} connected ${remaining === 1 ? 'node' : 'nodes'} just beyond this view`
       : 'Every connection in this region is on screen';
+    // Island disclosure: when the anchor band's whole component is on
+    // screen and holds no second band, the footer says so outright -- the
+    // alternative is a visitor tapping Expand, watching nothing change, and
+    // blaming their connection. The state is also published for the page:
+    // the band card shows the same disclosure when it opens on this band.
+    const viewAnchor = view.nodes.find(node => node.id === state.anchorId);
+    currentIsland = isIslandView({
+      anchorType: viewAnchor && viewAnchor.type,
+      nodes: view.nodes,
+      frontier: view.frontier,
+      truncated: view.truncated,
+    });
+    if (islandEl) islandEl.hidden = !currentIsland;
+    stage.dispatchEvent(new CustomEvent('rbft:sigma-island', {
+      bubbles: true,
+      detail: { anchorId: state.anchorId, island: currentIsland },
+    }));
     // Disabled rather than hidden: a shortcut row that changes length as you
-    // explore makes the others move under the pointer.
-    expandBtn.disabled = !remaining;
-    expandBtn.setAttribute('aria-disabled', String(!remaining));
+    // explore makes the others move under the pointer. An island keeps the
+    // button enabled even with an empty frontier, so Expand can answer with
+    // the disclosure (see expand()) instead of sitting dead.
+    expandBtn.disabled = !remaining && !currentIsland;
+    expandBtn.setAttribute('aria-disabled', String(!remaining && !currentIsland));
 
     // "Expand" only ever finds more of the anchor's own component. A filtered
     // scene can leave other bands with no shared members with it at all --
@@ -2870,7 +2949,21 @@ export function initSigmaExplorer({
     return { ok: true, anchorId: partial.id };
   }
 
+  // Expand's answer on an island: brighten the footer's island row. The
+  // class carries a colour transition, so adding it and letting a timer
+  // remove it reads as one slow pulse -- the visitor's eye lands on the
+  // sentence that explains why nothing else happened.
+  function pulseIsland() {
+    if (!islandEl || islandEl.hidden) return;
+    islandEl.classList.add('sigma-island--pulse');
+    window.setTimeout(() => islandEl.classList.remove('sigma-island--pulse'), 1600);
+  }
+
   function expand() {
+    // Island: there is nothing beyond this constellation at any depth, so
+    // Expand answers with the island disclosure rather than fetching (or
+    // re-rendering) the identical view and reading as a hang.
+    if (currentIsland) { pulseIsland(); return; }
     // GOVERNOR: Expand is another /api/graph-view fetch (hops+1, bigger
     // budget, both capped) — never a local traversal of a corpus that is
     // not on the phone.
@@ -4013,6 +4106,18 @@ export function initSigmaExplorer({
   }
 
   hubGroupsBtn.addEventListener('click', () => { cycleHubGroup(); });
+
+  // The island row's "Know a connection? Add it": the edit flow lives in
+  // the page (the same popover the band card's pencil opens), so the stage
+  // announces the intent and lets the page answer it.
+  if (islandBtn) {
+    islandBtn.addEventListener('click', () => {
+      stage.dispatchEvent(new CustomEvent('rbft:sigma-island-add', {
+        bubbles: true,
+        detail: { anchorId: state.anchorId },
+      }));
+    });
+  }
 
   // Jumps to the busiest node of another disconnected group in this filter.
   // Reuses the exact same anchor-and-BFS render path a node click uses --
