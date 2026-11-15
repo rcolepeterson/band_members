@@ -87,17 +87,18 @@ function pxIn(css, selector, prop) {
 
 test('the phone footer hides the commentary', () => {
   const block = mobileBlock();
-  ['.sigma-context', '.sigma-frontier', '.sigma-other-groups__text', '.sigma-hub-groups__text'].forEach(sel => {
+  ['.sigma-context', '.sigma-frontier', '.sigma-other-groups__text', '.sigma-hub-groups__text', '.sigma-island__text'].forEach(sel => {
     const idx = block.indexOf(sel);
     assert.ok(idx > 0, `Expected ${sel} to be addressed in the phone block.`);
   });
   // FIRST-GROUP ORDERING: the hub-groups narration ("Members 1–10 of 19")
-  // hides on phones like the other commentary — the rule now carries four
-  // selectors, not three.
+  // hides on phones like the other commentary — the rule now carries five
+  // selectors, not four: the island sentence joined the set, while its
+  // "Add it" button survives like the group-jump buttons do.
   assert.match(
     block,
-    /\.sigma-footer \.sigma-context,\s*#\$\{STAGE_ID\} \.sigma-footer \.sigma-frontier,\s*#\$\{STAGE_ID\} \.sigma-other-groups__text,\s*#\$\{STAGE_ID\} \.sigma-hub-groups__text\{display:none\}/,
-    'Expected the four commentary lines hidden together on a phone.'
+    /\.sigma-footer \.sigma-context,\s*#\$\{STAGE_ID\} \.sigma-footer \.sigma-frontier,\s*#\$\{STAGE_ID\} \.sigma-other-groups__text,\s*#\$\{STAGE_ID\} \.sigma-hub-groups__text,\s*#\$\{STAGE_ID\} \.sigma-island__text\{display:none\}/,
+    'Expected the five commentary lines hidden together on a phone.'
   );
 });
 
@@ -127,6 +128,21 @@ test('"Show next group" survives without its sentence', () => {
   assert.ok(
     !/\.sigma-other-groups\{[^}]*display:\s*none/.test(block),
     'Hiding the whole paragraph would take the button with the text.'
+  );
+});
+
+test('"Know a connection? Add it" survives without its sentence', () => {
+  const block = mobileBlock();
+  // Same contract as the group jumps: the island sentence is commentary and
+  // hides on a phone, but the button is the contribution on-ramp -- the one
+  // thing in the row a phone can act on.
+  assert.ok(
+    !/\.sigma-island__btn[^{]*\{[^}]*display:\s*none/.test(block),
+    'The island Add-it button must not be hidden on a phone.'
+  );
+  assert.ok(
+    !/\.sigma-island\{[^}]*display:\s*none/.test(block),
+    'Hiding the whole island row would take the button with the text.'
   );
 });
 
