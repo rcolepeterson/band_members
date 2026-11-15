@@ -2689,6 +2689,34 @@ main.layout { padding: 0 !important; gap: 0 !important; }
 }
 
 /*
+  Island disclosure on the band card: this band's members play nowhere
+  else, so the members list above is the whole story and there are no
+  threads out of it -- yet. Same muted register as the sign-in hint, with
+  the same inline-action treatment for "Add it", which makes the exact
+  move the card's pencil makes (edit popover signed in, sign-in panel
+  signed out). Shown by populateNodeCard via renderIslandNote().
+*/
+.node-card__island {
+  margin-top: 10px;
+  font-size: 13px;
+  color: rgba(230, 236, 243, 0.6);
+  letter-spacing: 0.01em;
+  line-height: 1.45;
+}
+.node-card__island[hidden] { display: none; }
+.node-card__island-btn {
+  color: rgba(82, 174, 182, 0.95);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.node-card__island-btn:hover { color: #fff; }
+
+/*
   Welcome nudge (first-time signed-out visitors). Frosted-glass card
   positioned:fixed so it can be anchored to either #add-band-btn
   (desktop) or #mobile-menu-btn (mobile) via JS-set top/left/right
@@ -3211,7 +3239,8 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   */
   body.node-card-sheet-open .sigma-footer .sigma-hint,
   body.node-card-sheet-open .sigma-footer .sigma-context,
-  body.node-card-sheet-open .sigma-footer .sigma-frontier {
+  body.node-card-sheet-open .sigma-footer .sigma-frontier,
+  body.node-card-sheet-open .sigma-footer .sigma-island {
     display: none !important;
   }
   body.node-card-sheet-open .sigma-footer {
@@ -4272,6 +4301,16 @@ main.layout { padding: 0 !important; gap: 0 !important; }
         <div class="node-card__chips" id="node-card-connections"></div>
       </div>
       <!--
+        Island disclosure: populateNodeCard() unhides this for a band whose
+        members belong to no other band (see renderIslandNote). The button
+        makes the same move as the card's pencil -- edit popover when
+        signed in, sign-in panel when signed out.
+      -->
+      <div class="node-card__island" id="node-card-island" hidden>
+        <span>An island in the universe — no threads to other bands yet.</span>
+        <button type="button" class="node-card__island-btn" id="node-card-island-add">Know a connection? Add it</button>
+      </div>
+      <!--
         PR 4b: expandable field-by-field cross-check breakdown. Hidden by
         default; populateNodeCard() reveals the toggle button only for band
         nodes with a verification, and the details div is filled in fresh
@@ -4458,6 +4497,31 @@ main.layout { padding: 0 !important; gap: 0 !important; }
      * need the SVG render to have happened.
      */
     function bindSigmaSelectionToNodeCard() {
+      // Island state, republished by the explorer's updateChrome() on
+      // every view change: the anchor band is an island when its whole
+      // component is on screen and holds no second band. Kept in page
+      // state so populateNodeCard() can show the same disclosure on the
+      // band card (see renderIslandNote).
+      window.addEventListener('rbft:sigma-island', event => {
+        const detail = (event && event.detail) || {};
+        sigmaIslandState = { anchorId: detail.anchorId || null, island: !!detail.island };
+      });
+      // The Sigma footer's "Know a connection? Add it": the edit flow
+      // lives here in the page, so the footer announces and the page
+      // answers -- the exact move the band card's pencil makes (edit
+      // popover signed in, sign-in panel signed out). If the band is not
+      // in the page master (a view the card bridge never seeded), open
+      // its card instead, where the same affordances live.
+      window.addEventListener('rbft:sigma-island-add', event => {
+        const anchorId = event && event.detail && event.detail.anchorId;
+        if (!anchorId) return;
+        if (!loadCurrentUser()) { openSignupPopover(); return; }
+        const node = graphState && graphState.master
+          ? graphState.master.nodes.find(n => n.id === anchorId || n.name === anchorId)
+          : null;
+        if (node) openEditBandPopover(node);
+        else selectBandNode(anchorId, { source: 'island' });
+      });
       window.addEventListener('rbft:sigma-select', event => {
         const detail = (event && event.detail) || {};
         if (!detail.id) return;
@@ -8775,6 +8839,11 @@ function downloadPngBlob(blob) {
     const nodeCardState = {
       node: null,          // the currently anchored graph node (has .x/.y)
     };
+    // Island state published by the Sigma explorer on every view change
+    // (rbft:sigma-island, wired in bindSigmaSelectionToNodeCard): whether
+    // the current anchor band's whole component is on screen with no
+    // second band in it. Read by renderIslandNote().
+    let sigmaIslandState = { anchorId: null, island: false };
     const nodeCardBadges = document.getElementById('node-card-badges');
     const nodeCardEl = document.getElementById('node-card');
     const nodeCardName = document.getElementById('node-card-name');
@@ -8786,6 +8855,8 @@ function downloadPngBlob(blob) {
     const nodeCardCloseBtn = document.getElementById('node-card-close');
     const nodeCardPeekToggle = document.getElementById('node-card-peek-toggle');
     const nodeCardEditBtn = document.getElementById('node-card-edit');
+    const nodeCardIsland = document.getElementById('node-card-island');
+    const nodeCardIslandAdd = document.getElementById('node-card-island-add');
     const nodeCardSigninHint = document.getElementById('node-card-signin-hint');
     const nodeCardSigninHintText = document.getElementById('node-card-signin-hint-text');
     const nodeCardSigninLink = document.getElementById('node-card-signin-link');
@@ -8899,6 +8970,39 @@ function downloadPngBlob(blob) {
 
       renderEditAffordances(node);
       renderFollowAffordance(node);
+      renderIslandNote(node);
+    }
+
+    // Island disclosure on the band card: this band's members belong to
+    // no other band, so the constellation ends here -- for now. With the
+    // Sigma renderer up, the explorer's published island state is the
+    // authority (governor mode holds no local corpus to check against),
+    // and the note shows only when the card's band IS that anchor. In the
+    // SVG renderer the page holds the full corpus, so the check is local:
+    // every member's band list is this band alone (a band with no members
+    // at all qualifies vacuously -- it has no threads out either).
+    function renderIslandNote(node) {
+      if (!nodeCardIsland) return;
+      let show = false;
+      if (node && node.type === 'band') {
+        if (window.RBFT_SIGMA) {
+          show = sigmaIslandState.island
+            && (sigmaIslandState.anchorId === node.id || sigmaIslandState.anchorId === nodeName(node));
+        } else {
+          const memberRows = getBandMembersWithTenure(node.id);
+          show = memberRows.every(({ person }) => getPersonBandsWithTenure(person.id).length <= 1);
+        }
+      }
+      nodeCardIsland.hidden = !show;
+      if (show && nodeCardIslandAdd) {
+        // The same move the pencil makes (see renderEditAffordances):
+        // edit popover signed in, sign-in panel signed out.
+        nodeCardIslandAdd.onclick = (ev) => {
+          ev.stopPropagation();
+          if (loadCurrentUser()) openEditBandPopover(node);
+          else openSignupPopover();
+        };
+      }
     }
 
     // Show/hide the pencil icon (signed-in band OR musician nodes) OR the
