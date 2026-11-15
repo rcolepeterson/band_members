@@ -1008,7 +1008,7 @@ const STAGE_CSS = `
    island from a stalled fetch. This row names it, in the universe's own
    terms, and turns the dead end into the contribution on-ramp: the "Add it"
    button opens the same edit flow the band card's pencil opens. */
-#${STAGE_ID} .sigma-island{margin:0;font-size:13px;color:#9aa7b6;display:flex;
+#${STAGE_ID} .sigma-island{margin:0;font-size:13px;color:#ffb454;display:flex;
   flex-wrap:wrap;justify-content:center;align-items:baseline;gap:6px}
 #${STAGE_ID} .sigma-island[hidden]{display:none}
 #${STAGE_ID} .sigma-island__text{transition:color .35s ease}
@@ -1020,7 +1020,7 @@ const STAGE_CSS = `
   outline-offset:2px}
 /* Expand's answer on an island: the row brightens instead of the view
    silently re-rendering the same handful of nodes. */
-#${STAGE_ID} .sigma-island--pulse .sigma-island__text{color:#eaf4fb}
+#${STAGE_ID} .sigma-island--pulse .sigma-island__text{color:#ffe2ae}
 #${STAGE_ID} .sigma-island--pulse .sigma-island__btn{color:#eaf4fb}
 /* FOOTER ORDER: the hub member-group row is the featured constellation nav
    and sits ABOVE the other-groups row: in-view navigation comes first, the
