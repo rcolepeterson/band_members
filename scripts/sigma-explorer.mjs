@@ -700,11 +700,11 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-power-card{position:absolute;right:16px;bottom:96px;z-index:12;
   width:min(320px,86vw);max-height:min(62vh,480px);overflow-y:auto;
   padding:14px 16px;background:rgba(11,15,22,0.96);color:#e6ecf3;
-  border:1px solid rgba(240,182,74,0.35);border-radius:12px;
+  border:1px solid rgba(240,182,74,0.35);border-radius:12px; corner-shape: squircle;
   box-shadow:0 18px 44px rgba(0,0,0,0.55);font-size:14px;line-height:1.35}
 #${STAGE_ID} .sigma-power-card[hidden]{display:none}
 #${STAGE_ID} .sigma-power-card__close{position:absolute;top:6px;right:8px;background:transparent;
-  border:0;color:rgba(255,255,255,0.55);font-size:20px;line-height:1;cursor:pointer;padding:4px 6px;border-radius:6px}
+  border:0;color:rgba(255,255,255,0.55);font-size:20px;line-height:1;cursor:pointer;padding:4px 6px;border-radius:6px corner-shape: squircle;}
 #${STAGE_ID} .sigma-power-card__close:hover{color:#fff;background:rgba(255,255,255,0.08)}
 #${STAGE_ID} .sigma-power-card__name{font-size:16px;font-weight:600;margin:0 24px 2px 0}
 #${STAGE_ID} .sigma-power-card__sub{font-size:12px;color:#f0b64a;margin:0 0 10px}
@@ -736,7 +736,7 @@ const STAGE_CSS = `
    full height of a 100dvh stage and the panel opened just below the bottom of
    the window. It was doing everything else correctly, entirely off screen. */
 #${STAGE_ID} .sigma-filters{position:absolute;width:min(420px,92vw);z-index:8;padding:16px 18px 18px;
-  border-radius:var(--radius-card,12px);border:1px solid rgba(143,232,246,0.3);background:rgba(9,12,18,0.97);
+  border-radius:var(--radius-card,12px); corner-shape: squircle;border:1px solid rgba(143,232,246,0.3);background:rgba(9,12,18,0.97);
   box-shadow:0 18px 44px rgba(3,6,10,0.7);display:flex;flex-direction:column;gap:12px;
   text-align:left}
 /* On a phone, centred as a fixed modal instead -- same treatment as
@@ -760,7 +760,7 @@ const STAGE_CSS = `
 #${STAGE_ID} .sigma-filters__close:hover{color:#e6f1f8}
 #${STAGE_ID} .sigma-filters__slot label{display:block;margin-bottom:5px;font-size:12px;color:#93a1b2}
 #${STAGE_ID} .sigma-filters__slot select{width:100%;min-height:42px;margin:0;
-  border-radius:var(--radius-control,8px);border:1px solid rgba(190,206,224,0.24);background:rgba(14,19,26,0.92);
+  border-radius:var(--radius-control,8px); corner-shape: squircle;border:1px solid rgba(190,206,224,0.24);background:rgba(14,19,26,0.92);
   color:#e2ecf5;font-size:14px;padding:0 10px}
 #${STAGE_ID} .sigma-filters__row{display:flex;gap:8px;flex-wrap:wrap}
 #${STAGE_ID} .sigma-filters__row button{flex:1;min-width:130px;min-height:42px;margin:0;
@@ -866,7 +866,7 @@ const STAGE_CSS = `
   /* max-content so the sentence sets its own width up to the cap; without it the
      popover shrank to the space left of wherever it was previously placed. */
   width:max-content;max-width:min(280px,80vw);
-  padding:9px 12px;border-radius:var(--radius-card,12px);border:1px solid rgba(143,232,246,0.34);
+  padding:9px 12px;border-radius:var(--radius-card,12px); corner-shape: squircle;border:1px solid rgba(143,232,246,0.34);
   background:rgba(9,12,18,0.97);color:#dce9f3;font-size:13px;line-height:1.4;
   box-shadow:0 10px 30px rgba(3,6,10,0.7);pointer-events:none}
 #${STAGE_ID} .sigma-tip[hidden]{display:none}
@@ -901,7 +901,7 @@ const STAGE_CSS = `
   max-height:min(38vh,340px);overflow-y:auto;overscroll-behavior:contain;
   margin:0;padding:6px;box-sizing:border-box;
   background:rgba(10,14,20,0.97);border:1px solid rgba(143,232,246,0.38);
-  border-radius:14px;box-shadow:0 12px 32px rgba(4,7,12,0.6)}
+  border-radius:14px; corner-shape: squircle;box-shadow:0 12px 32px rgba(4,7,12,0.6)}
 #${STAGE_ID} .sigma-suggest[hidden]{display:none}
 /* The doubled class below is load-bearing: #stage .sigma-prompt button turns
    EVERY button in the prompt into a 36px icon circle, and it outranks a single
@@ -909,7 +909,7 @@ const STAGE_CSS = `
    overflowing into each other (seen on Android 2026-09-27). */
 #${STAGE_ID} .sigma-suggest .sigma-suggest__item{
   display:block;width:100%;box-sizing:border-box;text-align:left;
-  margin:0;padding:10px 14px;border:0;border-radius:8px;background:none;cursor:pointer;
+  margin:0;padding:10px 14px;border:0;border-radius:8px; corner-shape: squircle;background:none;cursor:pointer;
   color:#e8eef6;font:inherit;font-size:15px;line-height:1.3}
 #${STAGE_ID} .sigma-suggest .sigma-suggest__item:hover{background:rgba(143,232,246,0.10)}
 #${STAGE_ID} .sigma-suggest .sigma-suggest__item[aria-selected="true"]{background:rgba(143,232,246,0.16)}
