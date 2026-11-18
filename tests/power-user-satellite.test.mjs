@@ -49,12 +49,13 @@ test('satellite is on its own contributor layer, fixed member-satellite size, un
   assert.equal(SCOTT_SATELLITE.weight, undefined);
 });
 
-test('satellite renders only in its current band view (Fleetwood Mac interim)', () => {
-  assert.equal(SCOTT_SATELLITE.currentBand, 'Fleetwood Mac');
-  assert.equal(satelliteForAnchor('Fleetwood Mac', POWER_USER_SATELLITES), SCOTT_SATELLITE);
+test('satellite renders only in its current band view (War)', () => {
+  assert.equal(SCOTT_SATELLITE.currentBand, 'War');
+  assert.equal(satelliteForAnchor('War', POWER_USER_SATELLITES), SCOTT_SATELLITE);
+  assert.equal(satelliteForAnchor('Fleetwood Mac', POWER_USER_SATELLITES), null);
   assert.equal(satelliteForAnchor('Metallica', POWER_USER_SATELLITES), null);
   assert.equal(satelliteForAnchor(null, POWER_USER_SATELLITES), null);
-  assert.equal(satelliteForAnchor('Fleetwood Mac', []), null);
+  assert.equal(satelliteForAnchor('War', []), null);
 });
 
 test('satellite screen position is a fixed screen-space offset, never a graph position', () => {
@@ -152,13 +153,22 @@ test('card order: newest first, scroll for history (undated entries keep input o
   }
 });
 
-test('Scott contributions data invents no specific hole details', () => {
-  for (const entry of SCOTT_CONTRIBUTIONS) {
+test('placeholder contributions invent no details; the War catch is a real Fixed contribution', () => {
+  const placeholders = SCOTT_CONTRIBUTIONS.filter(
+    (e) => e.id === 'scott-fleetwood-mac-holes' || e.id === 'scott-missing-band-cards',
+  );
+  assert.equal(placeholders.length, 2);
+  for (const entry of placeholders) {
     assert.equal(entry.status, 'Reported');
     assert.match(entry.description, /to be filled from the tracker/);
     assert.equal(entry.fixLink, null);
+    assert.equal(isQualifyingContribution(entry), false);
   }
-  assert.equal(SCOTT_CONTRIBUTIONS.some((e) => isQualifyingContribution(e)), false);
+  const war = SCOTT_CONTRIBUTIONS.find((e) => e.id === 'scott-war-duplicate-members');
+  assert.ok(war);
+  assert.equal(war.status, 'Fixed');
+  assert.equal(war.band, 'War');
+  assert.equal(isQualifyingContribution(war), true);
 });
 
 test('satellite is excluded from counts and node lists by id, layer, and type', () => {
