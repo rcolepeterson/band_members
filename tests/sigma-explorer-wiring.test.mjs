@@ -589,6 +589,20 @@ test('clearing the search query hides the suggestion list', () => {
   assert.match(handler, /if \(!value\) \{\s+hideSuggestions\(\);\s+return;\s+\}/, 'empty query hides the list');
 });
 
+test('hiding the suggestion list clears the offered names', () => {
+  // Regression (2026-11-18): the input handler auto-picks a typed value
+  // that exactly matches an offered name. hideSuggestions used to leave
+  // the list in place after a pick, so on the War view, clearing the
+  // field and typing "War" again re-navigated to War instead of offering
+  // War Babies / War & Peace. Unrelated names were unaffected (no exact
+  // match in the stale list). The list must die with the box.
+  const hide = EXPLORER.slice(
+    EXPLORER.indexOf('function hideSuggestions()'),
+    EXPLORER.indexOf('function syncSuggestActive()'),
+  );
+  assert.match(hide, /suggestNames = \[\];/, 'hideSuggestions clears suggestNames');
+});
+
 test('typeahead waits for three characters and caps the dropdown', () => {
   // One or two characters match too much of the corpus to be useful -- a lone
   // "h" used to fan hundreds of rows across the constellation. The list stays
