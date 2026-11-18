@@ -213,7 +213,7 @@
     button,input,select,textarea{font:inherit;color:inherit}
     a,button,input,select,textarea{transition:background var(--transition-interactive),border-color var(--transition-interactive),color var(--transition-interactive),box-shadow var(--transition-interactive),transform var(--transition-interactive)}
     button{cursor:pointer;border:none;background:none}
-    .skip-link{position:absolute;left:var(--space-4);top:-100px;background:var(--color-primary);color:var(--color-text-inverse);padding:var(--space-3) var(--space-4);border-radius:var(--radius-md);z-index:1000}.skip-link:focus{top:var(--space-4)}
+    .skip-link{position:absolute;left:var(--space-4);top:-100px;background:var(--color-primary);color:var(--color-text-inverse);padding:var(--space-3) var(--space-4);border-radius:var(--radius-md); corner-shape: squircle;z-index:1000}.skip-link:focus{top:var(--space-4)}
     .page-shell{position:relative;min-height:100dvh;overflow:hidden}.page-shell::before{content:'';position:absolute;inset:0;background:var(--hero-glow);pointer-events:none}
     .grid-lines{position:absolute;inset:0;background-image:linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);background-size:44px 44px;mask-image:linear-gradient(to bottom, rgba(0,0,0,0.55), transparent 85%);pointer-events:none;opacity:.4}
     .site-header{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px);background:color-mix(in srgb, var(--color-bg) 78%, transparent);border-bottom:1px solid var(--color-divider)}
@@ -230,7 +230,7 @@
        it can be opened while a node card is up. */
     .graph-howto-backdrop{position:fixed;inset:0;background:rgba(4,10,20,0.6);z-index:600}
     .graph-howto-backdrop[hidden]{display:none}
-    .graph-howto-card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:601;width:min(92vw,480px);background:#0d1626;color:#e8eef6;border:1px solid rgba(255,180,84,0.35);border-radius:16px;padding:20px 22px;box-shadow:0 18px 50px rgba(0,0,0,0.5)}
+    .graph-howto-card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:601;width:min(92vw,480px);background:#0d1626;color:#e8eef6;border:1px solid rgba(255,180,84,0.35);border-radius:16px; corner-shape: squircle;padding:20px 22px;box-shadow:0 18px 50px rgba(0,0,0,0.5)}
     .graph-howto-card h2{margin:0 0 12px;font-size:18px;color:#ffb454}
     .graph-howto-card ul{margin:0 0 16px;padding-left:20px;font-size:14px;line-height:1.55}
     .graph-howto-card li + li{margin-top:8px}
@@ -251,12 +251,12 @@
     .primary-btn{background:var(--color-primary);color:var(--color-text-inverse);box-shadow:var(--shadow-md)}.primary-btn:hover{background:var(--color-primary-hover);transform:translateY(-1px)}
     .secondary-btn{border:1px solid var(--color-border);color:var(--color-text)}.secondary-btn:hover{border-color:rgba(82,174,182,0.45);background:rgba(255,255,255,0.03)}
     .workspace{display:grid;grid-template-columns:1fr;gap:var(--space-8);align-items:start}
-    .panel{background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));border:1px solid var(--color-border);border-radius:var(--radius-xl);box-shadow:var(--shadow-sm)}
+    .panel{background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));border:1px solid var(--color-border);border-radius:var(--radius-xl); corner-shape: squircle;box-shadow:var(--shadow-sm)}
     .graph-panel{padding:0;min-height:780px;display:grid;grid-template-rows:auto 1fr auto;gap:var(--space-4);background:transparent;border:none;box-shadow:none}
     .panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4)}.graph-panel-head{margin-bottom:var(--space-3)}.graph-toolbar{align-items:center}.graph-version-pill{margin-left:auto;min-height:40px;display:inline-flex;align-items:center}.panel-title{font-size:var(--text-lg);font-weight:700}.panel-copy{font-size:var(--text-sm);color:var(--color-text-muted);max-width:56ch}
     .status-pill{padding:0.4rem 0.8rem;border-radius:var(--radius-full);background:rgba(82,174,182,0.12);color:var(--color-primary-hover);font-size:var(--text-xs);letter-spacing:.1em;text-transform:uppercase}
     .toolbar{display:flex;flex-wrap:wrap;gap:var(--space-3)}.graph-toolbar{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--space-3);row-gap:var(--space-3)}.graph-toolbar-left{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;min-width:0}.graph-version-pill{justify-self:end;white-space:nowrap}.tool-chip{min-height:40px;padding:0 var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-full);background:rgba(255,255,255,0.02);font-size:var(--text-sm)}.tool-chip.active{background:rgba(82,174,182,0.12);border-color:rgba(82,174,182,0.35);color:var(--color-primary-hover)}.country-chip-row{margin-top:var(--space-2)}.country-chip{min-height:32px;padding:0 var(--space-3);font-size:var(--text-xs)}.scene-popover-divider{height:1px;background:var(--color-border);margin:var(--space-3) 0;opacity:.5}#scene-popover .country-chip-row{max-height:200px;overflow-y:auto}
-    .graph-stage{position:relative;border-radius:calc(var(--radius-xl) + var(--space-2));overflow:hidden;background:radial-gradient(circle at top, rgba(82,174,182,0.08), transparent 34%),linear-gradient(180deg, rgba(10,14,20,0.92), rgba(8,11,17,0.98));border:none;min-height:720px;box-shadow:0 30px 80px rgba(0,0,0,0.34)}
+    .graph-stage{position:relative;border-radius:calc(var(--radius-xl) + var(--space-2)); corner-shape: squircle;overflow:hidden;background:radial-gradient(circle at top, rgba(82,174,182,0.08), transparent 34%),linear-gradient(180deg, rgba(10,14,20,0.92), rgba(8,11,17,0.98));border:none;min-height:720px;box-shadow:0 30px 80px rgba(0,0,0,0.34)}
     #graph-svg{width:100%;height:100%;min-height:520px}
     /* Legacy .graph-badge kept invisible: some JS still writes to
        #graph-badge which is now nested inside .graph-stats-badge as the
@@ -265,7 +265,7 @@
     .graph-badge{display:none}
     /* Always-on graph stats badge, top-left of the stage. Two lines:
        counts on top, filter-status readout below. */
-    .graph-stats-badge{position:absolute;left:var(--space-5);top:var(--space-5);padding:0.5rem 0.85rem;border-radius:var(--radius-xl);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;background:rgba(9,11,17,0.72);border:1px solid rgba(255,255,255,0.08);color:var(--color-text-muted);pointer-events:none;display:flex;flex-direction:column;gap:0.22rem;align-items:flex-start;z-index:9;white-space:nowrap;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);text-align:left}
+    .graph-stats-badge{position:absolute;left:var(--space-5);top:var(--space-5);padding:0.5rem 0.85rem;border-radius:var(--radius-xl); corner-shape: squircle;font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;background:rgba(9,11,17,0.72);border:1px solid rgba(255,255,255,0.08);color:var(--color-text-muted);pointer-events:none;display:flex;flex-direction:column;gap:0.22rem;align-items:flex-start;z-index:9;white-space:nowrap;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);text-align:left}
     .graph-stats-badge__counts{display:inline-flex;align-items:center;gap:0.55rem}
     .graph-stats-badge__group{display:inline-flex;align-items:baseline;gap:0.3rem}
     .graph-stats-badge__value{color:#d4e8f4;font-weight:600;letter-spacing:0;text-transform:none}
@@ -276,13 +276,13 @@
        OF ROCK title on very small phones. */
     @media (max-width:720px){.graph-stats-badge{right:auto;top:var(--space-3);left:var(--space-3);padding:0.35rem 0.6rem;font-size:12px;gap:0.15rem;align-items:flex-start;text-align:left}.graph-stats-badge__counts{gap:0.35rem}.graph-stats-badge__group{gap:0.22rem}.graph-stats-badge__status{font-size:11px}}
     .sidebar{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-5)}.stack{padding:var(--space-5);display:grid;gap:var(--space-4)}.section-label{font-size:var(--text-xs);letter-spacing:.18em;text-transform:uppercase;color:var(--color-text-muted)}
-    .metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2)}.metric-card{padding:0.45rem var(--space-3);border-radius:var(--radius-md);background:linear-gradient(180deg, rgba(86,109,128,0.38), rgba(43,57,71,0.46));border:1px solid rgba(159,187,204,0.16);min-height:42px;display:grid;align-content:center;gap:0.08rem}.metric-value{font-size:var(--text-sm);font-weight:700;line-height:1.05}.metric-label{font-size:0.78rem;line-height:1;color:rgba(237,241,247,0.72);text-transform:uppercase;letter-spacing:.08em}
-    .detail-card{padding:var(--space-4);border-radius:var(--radius-lg);background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);display:grid;gap:var(--space-2);min-width:0}.detail-title{font-size:var(--text-sm);font-weight:700}.detail-copy{font-size:var(--text-sm);color:var(--color-text-muted)}
+    .metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2)}.metric-card{padding:0.45rem var(--space-3);border-radius:var(--radius-md); corner-shape: squircle;background:linear-gradient(180deg, rgba(86,109,128,0.38), rgba(43,57,71,0.46));border:1px solid rgba(159,187,204,0.16);min-height:42px;display:grid;align-content:center;gap:0.08rem}.metric-value{font-size:var(--text-sm);font-weight:700;line-height:1.05}.metric-label{font-size:0.78rem;line-height:1;color:rgba(237,241,247,0.72);text-transform:uppercase;letter-spacing:.08em}
+    .detail-card{padding:var(--space-4);border-radius:var(--radius-lg); corner-shape: squircle;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);display:grid;gap:var(--space-2);min-width:0}.detail-title{font-size:var(--text-sm);font-weight:700}.detail-copy{font-size:var(--text-sm);color:var(--color-text-muted)}
     .detail-stat{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-3);font-size:var(--text-sm);padding:0.55rem 0;border-bottom:1px solid rgba(255,255,255,0.06);min-width:0}.detail-stat:last-child{border-bottom:none}.detail-stat span:first-child{color:var(--color-text-muted);flex:0 0 84px}.detail-stat strong{flex:1 1 auto;min-width:0;text-align:right}.detail-stat span:last-child{color:var(--color-text-muted)}
     .form-grid{display:grid;gap:var(--space-3)}label{font-size:var(--text-xs);letter-spacing:.1em;text-transform:uppercase;color:var(--color-text-muted)}
     .location-fields-row{display:grid;grid-template-columns:2fr 1fr 1.4fr;gap:var(--space-3)}
     @media (max-width: 640px){.location-fields-row{grid-template-columns:1fr}}
-    input,select,textarea{width:100%;margin-top:var(--space-2);padding:0.85rem 0.95rem;border-radius:var(--radius-md);border:1px solid var(--color-border);background:rgba(10,12,18,0.55);min-height:48px}textarea{min-height:108px;resize:vertical}
+    input,select,textarea{width:100%;margin-top:var(--space-2);padding:0.85rem 0.95rem;border-radius:var(--radius-md); corner-shape: squircle;border:1px solid var(--color-border);background:rgba(10,12,18,0.55);min-height:48px}textarea{min-height:108px;resize:vertical}
     input:focus,select:focus,textarea:focus{outline:none;border-color:rgba(82,174,182,0.56);box-shadow:0 0 0 3px rgba(82,174,182,0.16)}
     input::placeholder,textarea::placeholder{color:rgba(230,232,240,0.32);font-style:italic;opacity:1}
     .submit-btn{display:block;width:100%;min-height:54px;padding:0 2.5rem;border-radius:var(--radius-full);background:var(--color-primary);color:var(--color-text-inverse);font-weight:700;font-size:var(--text-base);text-align:center;white-space:nowrap}.submit-btn:hover{background:var(--color-primary-hover)}
@@ -335,7 +335,7 @@
   pointer-events: none;
 }{filter:brightness(1.08)}
     @media (max-width: 1040px){.workspace{grid-template-columns:1fr}.graph-panel{min-height:auto}.sidebar{grid-template-columns:1fr}}
-    @media (max-width: 720px){.header-inner{padding:var(--space-3) var(--space-4)}.header-right{display:none}.hero{display:none}.metric-grid{grid-template-columns:1fr}.stack{padding:var(--space-4)}.toolbar{gap:var(--space-2)}.tool-chip{padding:0 var(--space-3)}.graph-stage{min-height:560px;border-radius:var(--radius-xl)}}
+    @media (max-width: 720px){.header-inner{padding:var(--space-3) var(--space-4)}.header-right{display:none}.hero{display:none}.metric-grid{grid-template-columns:1fr}.stack{padding:var(--space-4)}.toolbar{gap:var(--space-2)}.tool-chip{padding:0 var(--space-3)}.graph-stage{min-height:560px;border-radius:var(--radius-xl) corner-shape: squircle;}}
     @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;scroll-behavior:auto !important}}
   
     .hero{display:grid !important;min-height:auto;padding:var(--space-8) 0 var(--space-4) !important}
@@ -345,7 +345,7 @@
     .graph-panel{padding:0;background:transparent !important;border:none !important;box-shadow:none !important;min-height:auto !important;grid-template-rows:auto auto 1fr auto !important;gap:var(--space-4) !important}
     .graph-panel-head{padding:0 var(--space-2)}
     .graph-toolbar{padding:0 var(--space-2)}
-    .graph-stage{min-height:680px !important;border:none !important;border-radius:calc(var(--radius-xl) + var(--space-2)) !important;box-shadow:0 30px 80px rgba(0,0,0,0.34) !important}
+    .graph-stage{min-height:680px !important;border:none !important;border-radius:calc(var(--radius-xl) + var(--space-2)) !important; corner-shape: squircle;box-shadow:0 30px 80px rgba(0,0,0,0.34) !important}
     .stage-header,.stage-toolbar,.stage-header-spacer{display:none !important}
     body.hero-condensed .hero{display:grid !important}
     @media (max-width: 720px){.graph-stage{min-height:560px !important}}
@@ -370,7 +370,7 @@
     .confirm-city-btn{font-size:var(--text-xs);font-weight:600;padding:0.3rem 0.7rem;margin:0.15rem 0;border-radius:var(--radius-full);border:1px solid var(--color-primary);background:var(--color-primary);color:var(--color-text-inverse);cursor:pointer}
     .confirm-city-btn-secondary{background:transparent;color:inherit;border-color:currentColor;opacity:0.75}
     .field-error{border-color:#f5c26b !important;box-shadow:0 0 0 3px rgba(245,194,107,0.14) !important}
-    .name-match-warning{border:1px solid #f5c26b;border-radius:var(--radius-md);padding:0.6rem 0.8rem;margin-bottom:0.4rem;background:rgba(245,194,107,0.07)}
+    .name-match-warning{border:1px solid #f5c26b;border-radius:var(--radius-md); corner-shape: squircle;padding:0.6rem 0.8rem;margin-bottom:0.4rem;background:rgba(245,194,107,0.07)}
     .name-match-warning strong{display:block;margin-bottom:0.35rem}
     .name-match-list{list-style:none;margin:0 0 0.35rem;padding:0}
     .name-match-list li{display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:0.25rem 0;font-size:var(--text-sm)}
@@ -382,19 +382,19 @@
 
     .members-block-label{display:block}
     #members-container{display:flex;flex-direction:column;gap:var(--space-3);margin-top:var(--space-2)}
-    .member-row{position:relative;border:1px solid var(--color-border);border-radius:var(--radius-md);background:rgba(10,12,18,0.35);padding:0.7rem 0.8rem}
+    .member-row{position:relative;border:1px solid var(--color-border);border-radius:var(--radius-md); corner-shape: squircle;background:rgba(10,12,18,0.35);padding:0.7rem 0.8rem}
     .member-row-fields{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)}
     .member-row-fields label{margin-top:0}
-    .member-row-remove{position:absolute;top:0.35rem;right:0.35rem;width:1.7rem;height:1.7rem;min-height:0;padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:1;font-size:1.05rem;cursor:pointer;color:#effcff;background:rgba(7,12,18,0.5);border:1px solid rgba(225,244,255,0.24);border-radius:var(--radius-md)}
+    .member-row-remove{position:absolute;top:0.35rem;right:0.35rem;width:1.7rem;height:1.7rem;min-height:0;padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:1;font-size:1.05rem;cursor:pointer;color:#effcff;background:rgba(7,12,18,0.5);border:1px solid rgba(225,244,255,0.24);border-radius:var(--radius-md) corner-shape: squircle;}
     .member-row-remove:hover{border-color:#f5c26b}
-    .member-add-btn{margin-top:var(--space-3);width:auto;min-height:0;padding:0.5rem 0.85rem;cursor:pointer;font-size:var(--text-sm);letter-spacing:.06em;text-transform:uppercase;color:var(--color-text-muted);background:rgba(10,12,18,0.55);border:1px dashed var(--color-border);border-radius:var(--radius-md)}
+    .member-add-btn{margin-top:var(--space-3);width:auto;min-height:0;padding:0.5rem 0.85rem;cursor:pointer;font-size:var(--text-sm);letter-spacing:.06em;text-transform:uppercase;color:var(--color-text-muted);background:rgba(10,12,18,0.55);border:1px dashed var(--color-border);border-radius:var(--radius-md) corner-shape: squircle;}
     .member-add-btn:hover{border-color:rgba(82,174,182,0.56);color:#effcff}
     @media (max-width: 720px){.member-row-fields{grid-template-columns:1fr}}
     /* Phase 3: band link rows (add-band + edit-band forms). Same bordered
        shell as .member-row, two columns of platform blocks on desktop,
        one column on narrow. Each block holds one platform label + URL. */
     .link-rows{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)}
-    .link-row{border:1px solid var(--color-border);border-radius:var(--radius-md);background:rgba(10,12,18,0.35);padding:0.7rem 0.8rem}
+    .link-row{border:1px solid var(--color-border);border-radius:var(--radius-md); corner-shape: squircle;background:rgba(10,12,18,0.35);padding:0.7rem 0.8rem}
     .link-row label{margin-top:0}
     @media (max-width: 720px){.link-rows{grid-template-columns:1fr}}
 
@@ -685,7 +685,7 @@ body {
   z-index: 500;
   background: linear-gradient(180deg, rgba(214,239,251,0.18), rgba(148,183,209,0.08));
   border: 1px solid rgba(225, 244, 255, 0.24);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-card); corner-shape: squircle;
   backdrop-filter: blur(18px) saturate(130%);
   -webkit-backdrop-filter: blur(18px) saturate(130%);
   box-shadow: 0 16px 34px rgba(0,0,0,0.4);
@@ -701,7 +701,7 @@ body {
 }
 .readonly-name {
   padding: 0.55rem 0.75rem;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md, 8px); corner-shape: squircle;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.10);
   color: var(--color-text, #e6ecf3);
@@ -778,7 +778,7 @@ body {
   justify-content: center;
   min-height: 44px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-lg); corner-shape: squircle;
   background: rgba(255,255,255,.02);
   color: var(--color-text);
   font-size: var(--text-sm);
@@ -821,7 +821,7 @@ body {
   padding: 0.55rem 0.75rem;
   margin-bottom: var(--space-3, 0.75rem);
   border: 1px solid var(--color-border, rgba(225, 244, 255, 0.14));
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md, 8px); corner-shape: squircle;
   font-size: var(--text-sm, 0.85rem);
   color: var(--color-text-muted, rgba(225, 244, 255, 0.7));
   background: var(--color-surface-soft, rgba(225, 244, 255, 0.04));
@@ -1123,7 +1123,7 @@ body.rbft-sigma-chrome .site-footer { display: none !important; }
   background: rgba(7,12,18,0.55);
   border: 1px solid rgba(225,244,255,0.24);
   color: var(--color-text);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-control); corner-shape: squircle;
 }
 @media (max-width: 900px) {
   /* Hide the desktop toolbar entirely on mobile — mobile users go through
@@ -1421,7 +1421,7 @@ button.header-user-chip:focus-visible {
   width: 100%;
   min-height: 40px;
   padding: 0.4rem 0.6rem;
-  border-radius: 0.5rem;
+  border-radius: 0.5rem; corner-shape: squircle;
   border: 1px solid var(--color-border);
   background: rgba(0, 0, 0, 0.25);
   color: var(--color-text);
@@ -1535,7 +1535,7 @@ button.header-user-chip:focus-visible {
     radial-gradient(circle at 20% 18%, rgba(255,255,255,0.06), transparent 18%),
     linear-gradient(180deg, rgba(10,20,32,0.95), rgba(4,7,11,0.98));
   border: 1px solid rgba(225, 244, 255, 0.10);
-  border-radius: 18px;
+  border-radius: 18px; corner-shape: squircle;
   box-shadow:
     0 30px 80px rgba(0,0,0,0.42),
     inset 0 1px 0 rgba(255,255,255,0.08);
@@ -1563,7 +1563,7 @@ button.header-user-chip:focus-visible {
 .share-popover {
   background: linear-gradient(180deg, rgba(214,239,251,0.18), rgba(148,183,209,0.08));
   border: 1px solid rgba(225, 244, 255, 0.24);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-card); corner-shape: squircle;
   /* This card carried no padding at all: every line of "Share this graph" sat
      one pixel off the border. Padding belongs on the shared glass style rather
      than on each of the three panels that use it, which is how it went missing.
@@ -1851,7 +1851,7 @@ button.header-user-chip:focus-visible {
   align-self: start;
   margin: 0;
   padding: 0.75rem 0.95rem;
-  border-radius: 18px;
+  border-radius: 18px; corner-shape: squircle;
   background: rgba(7, 12, 18, 0.34);
   border: 1px solid rgba(225, 244, 255, 0.14);
   backdrop-filter: blur(16px) saturate(135%);
@@ -1862,7 +1862,7 @@ button.header-user-chip:focus-visible {
 .filter-row {
   width: min(720px, 100%);
   padding: 0.8rem 0.95rem;
-  border-radius: 18px;
+  border-radius: 18px; corner-shape: squircle;
   background: rgba(7, 12, 18, 0.3);
   border: 1px solid rgba(225, 244, 255, 0.12);
   backdrop-filter: blur(16px) saturate(135%);
@@ -2307,7 +2307,7 @@ button.header-user-chip:focus-visible {
   color: #effcff;
   background: rgba(7, 12, 18, 0.5);
   border: 1px solid rgba(225, 244, 255, 0.24);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-control); corner-shape: squircle;
 }
 
 .popover-close:hover {
@@ -2570,7 +2570,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   background: rgba(11, 15, 22, 0.96);
   color: var(--color-text, #e6ecf3);
   border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-card); corner-shape: squircle;
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(8px);
   transform: translate(-50%, calc(-100% - 18px));
@@ -2599,7 +2599,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   line-height: 1;
   cursor: pointer;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: 6px; corner-shape: squircle;
 }
 .node-card__close:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
 /*
@@ -2619,7 +2619,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   line-height: 1;
   cursor: pointer;
   padding: 4px 6px;
-  border-radius: 6px;
+  border-radius: 6px; corner-shape: squircle;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2732,7 +2732,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   padding: 14px 16px 12px;
   background: rgba(18, 22, 30, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
+  border-radius: 14px; corner-shape: squircle;
   color: rgba(230, 236, 243, 0.92);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(14px) saturate(1.1);
@@ -2834,7 +2834,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   text-align: center;
   background: rgba(18, 22, 30, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-card); corner-shape: squircle;
   color: rgba(230, 236, 243, 0.92);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(14px) saturate(1.1);
@@ -2952,7 +2952,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
   margin-top: var(--space-2);
 }
 .node-card__verify-details .verify-field {
-  border: 1px solid rgba(255,255,255,0.06); border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; corner-shape: squircle;
   padding: 6px 8px; background: rgba(255,255,255,0.02);
 }
 .node-card__verify-details .verify-field__head {
@@ -3270,7 +3270,7 @@ main.layout { padding: 0 !important; gap: 0 !important; }
     padding: 8px 0 6px;
     background: rgba(11, 15, 22, 0.96);
     border: 0;
-    border-radius: 8px;
+    border-radius: 8px; corner-shape: squircle;
     cursor: grab;
     /* The grip is a drag surface, so it must not also be a scroll surface: with
        the card's pan-y in force, a pull on the handle would scroll the member
@@ -13478,13 +13478,13 @@ function downloadPngBlob(blob) {
       if (!banner) {
         banner = document.createElement('div');
         banner.id = 'governor-retry';
-        banner.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9999;background:#0d1620;color:#eaf4fb;border:1px solid rgba(143,232,246,0.6);border-radius:12px;padding:20px;text-align:center;max-width:320px;font-size:14px;line-height:1.5;';
+        banner.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9999;background:#0d1620;color:#eaf4fb;border:1px solid rgba(143,232,246,0.6);border-radius:12px; corner-shape: squircle;padding:20px;text-align:center;max-width:320px;font-size:14px;line-height:1.5;';
         const text = document.createElement('div');
         text.id = 'governor-retry-text';
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = 'Tap to retry';
-        button.style.cssText = 'margin-top:12px;padding:10px 18px;font-size:14px;border-radius:8px;border:0;background:#27b8ff;color:#06121c;cursor:pointer;';
+        button.style.cssText = 'margin-top:12px;padding:10px 18px;font-size:14px;border-radius:8px; corner-shape: squircle;border:0;background:#27b8ff;color:#06121c;cursor:pointer;';
         button.addEventListener('click', () => {
           banner.remove();
           onRetry();
