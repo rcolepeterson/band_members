@@ -27,10 +27,11 @@
 //   3. Otherwise build from Neon: one UNION ALL select of id, name, city,
 //      state, country (+ a 'band'/'member' type literal) ordered by name,
 //      then save the payload + meta back to Blobs best-effort.
-//   4. Filter server-side, case-insensitively, by substring on name AND on
-//      id (band ids for colliding names carry a city suffix and therefore
-//      differ from the plain name — a query for the suffixed form must
-//      still match), then clamp limit and slice.
+//   4. Filter server-side, case-insensitively, on name AND on id (band ids
+//      for colliding names carry a city suffix and therefore differ from
+//      the plain name — a query for the suffixed form must still match),
+//      ranked exact-first, then name-prefix, then substring (see
+//      searchNames), then clamp limit and slice.
 //
 // Cache headers: public, 60s fresh like bands_neon; the Blobs version key
 // (not the CDN TTL) is the staleness guard, so a names edit surfaces as
@@ -79,23 +80,37 @@ export function parseSearchLimit(raw) {
 }
 
 /**
- * Pure search over a names payload: case-insensitive substring match on
- * name OR id, in payload order, capped at `limit`. Every result is
- * allowlist-mapped to SEARCH_RESULT_FIELDS — no bio, links, memberships,
- * popularity_score, genre, label, or albums, even if the input rows have
- * them.
+ * Pure search over a names payload: case-insensitive match on name OR id,
+ * ranked in tiers and capped at `limit`. Tier 0: exact name (or exact
+ * id). Tier 1: name starts with the query. Tier 2: any other substring
+ * match on name or id. Payload order is preserved inside each tier.
+ * Every result is allowlist-mapped to SEARCH_RESULT_FIELDS — no bio,
+ * links, memberships, popularity_score, genre, label, or albums, even if
+ * the input rows have them.
+ *
+ * Why tiers (2026-11-18): the old single-pass scan returned the first
+ * `limit` substring matches in alphabetical payload order, so a short
+ * exact name was buried under every earlier substring match and never
+ * reached the cap — searching "War" returned 10 Minute Warning, 8th
+ * Dwarf, Alan Ward... and never War itself ("No Rawk Found"). Yes and X
+ * failed the same way. Exact-first ranking fixes the whole class.
  */
 export function searchNames(entries = [], q = '', limit = DEFAULT_LIMIT) {
   const needle = String(q || '').trim().toLowerCase();
   if (!needle) return [];
   const capped = parseSearchLimit(limit);
-  const out = [];
+  const tiers = [[], [], []];
   for (const row of entries) {
-    if (out.length >= capped) break;
     const name = String(row?.name ?? '');
     const id = String(row?.id ?? '');
-    if (!name.toLowerCase().includes(needle) && !id.toLowerCase().includes(needle)) continue;
-    out.push({
+    const lname = name.toLowerCase();
+    const lid = id.toLowerCase();
+    let tier = -1;
+    if (lname === needle || lid === needle) tier = 0;
+    else if (lname.startsWith(needle)) tier = 1;
+    else if (lname.includes(needle) || lid.includes(needle)) tier = 2;
+    if (tier < 0) continue;
+    tiers[tier].push({
       id,
       name,
       type: row?.type === 'member' ? 'member' : 'band',
@@ -104,7 +119,7 @@ export function searchNames(entries = [], q = '', limit = DEFAULT_LIMIT) {
       country: row?.country ?? null,
     });
   }
-  return out;
+  return tiers[0].concat(tiers[1], tiers[2]).slice(0, capped);
 }
 
 /**
