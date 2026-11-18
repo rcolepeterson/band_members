@@ -190,7 +190,7 @@
       aspect-ratio: 63 / 88;
       overflow: hidden;
       border: 1px solid rgba(126,207,225,.38);
-      border-radius: 13px;
+      border-radius: 13px; corner-shape: squircle;
       background: #070d14;
       box-shadow: 0 24px 52px rgba(9,17,25,.27);
       color: var(--card-text);
@@ -270,7 +270,7 @@
       overflow: hidden;
       padding: 13px;
       border: 1px solid rgba(143,232,246,.4);
-      border-radius: 12px;
+      border-radius: 12px; corner-shape: squircle;
       background: #0b1118;
       color: #d9ecf5;
       text-align: left;
@@ -283,12 +283,12 @@
     .reveal-card:disabled { cursor: default; }
     .reveal-empty {
       width: 100%; aspect-ratio: 63 / 88; display: grid; place-items: center;
-      border: 1px dashed rgba(225,244,255,.22); border-radius: 12px; color: #71889b; font-size: .8rem; text-align: center; padding: 12px;
+      border: 1px dashed rgba(225,244,255,.22); border-radius: 12px; corner-shape: squircle; color: #71889b; font-size: .8rem; text-align: center; padding: 12px;
     }
     .played-stack {
       width: 92px; height: 118px;
       display: grid; place-items: center;
-      border: 1px solid rgba(225,244,255,.16); border-radius: 10px;
+      border: 1px solid rgba(225,244,255,.16); border-radius: 10px; corner-shape: squircle;
       background: #0b1118;
       box-shadow: -4px 4px 0 #101a26, -8px 8px 0 #16222f;
       color: #c2d5e2; font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums;
@@ -309,7 +309,7 @@
       overflow: hidden;
       padding: 13px;
       border: 1px solid var(--card-line);
-      border-radius: 12px;
+      border-radius: 12px; corner-shape: squircle;
       background: #070d14;
       box-shadow: 0 18px 44px rgba(0,0,0,.56), 0 2px 6px rgba(0,0,0,.35);
       color: var(--card-text);
@@ -378,7 +378,7 @@
       aspect-ratio: 63 / 88;
       padding: 11px;
       border: 1px solid var(--card-line);
-      border-radius: 10px;
+      border-radius: 10px; corner-shape: squircle;
       background: linear-gradient(180deg, #142131, #080d14);
       color: var(--card-text);
       text-align: left;
@@ -424,7 +424,7 @@
       padding: 20px;
     }
     .gameover[hidden] { display: none; }
-    .gameover-card { max-width: 430px; max-height: calc(100dvh - 40px); overflow-y: auto; text-align: center; padding: 30px 28px; border: 1px solid rgba(255,180,84,.4); border-radius: 14px; background: #0a1119; box-shadow: 0 30px 70px rgba(0,0,0,.6); }
+    .gameover-card { max-width: 430px; max-height: calc(100dvh - 40px); overflow-y: auto; text-align: center; padding: 30px 28px; border: 1px solid rgba(255,180,84,.4); border-radius: 14px; corner-shape: squircle; background: #0a1119; box-shadow: 0 30px 70px rgba(0,0,0,.6); }
     .gameover-kicker { margin: 0 0 8px; color: var(--card-amber); font-size: .74rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
     .gameover-title { margin: 0 0 8px; font-family: var(--font-display); font-size: 2.3rem; font-weight: 500; line-height: 1; color: #fff; }
     .gameover-sub { margin: 0 0 20px; color: #a9bac8; font-size: .92rem; }
@@ -450,7 +450,7 @@
     .share-rescue { margin: 12px 0 0; color: #8fa4b5; font-size: .82rem; }
     .share-status { margin: 8px 0 0; color: var(--card-amber); font-size: .82rem; }
     .share-status[hidden] { display: none; }
-    .share-fallback { display: block; width: 100%; margin: 12px 0 0; padding: 10px 12px; border: 1px solid rgba(225,244,255,.25); border-radius: 8px; background: #060b11; color: #dcebf5; font: inherit; font-size: .82rem; resize: none; }
+    .share-fallback { display: block; width: 100%; margin: 12px 0 0; padding: 10px 12px; border: 1px solid rgba(225,244,255,.25); border-radius: 8px; corner-shape: squircle; background: #060b11; color: #dcebf5; font: inherit; font-size: .82rem; resize: none; }
     .share-fallback[hidden] { display: none; }
 
     /* v14b — game-night reminder signup, restored to match the live card:
@@ -493,7 +493,7 @@
     .modal-backdrop[hidden] { display: none; }
     .modal {
       width: min(680px, 100%); max-height: min(82vh, 720px); overflow: auto;
-      padding: 24px; border: 1px solid rgba(255,180,84,.45); border-radius: 14px;
+      padding: 24px; border: 1px solid rgba(255,180,84,.45); border-radius: 14px; corner-shape: squircle;
       background: #0a1119; color: var(--card-text);
       box-shadow: 0 30px 80px rgba(0,0,0,.65);
     }
@@ -501,12 +501,12 @@
     .modal p { margin: 0 0 16px; color: #a9bac8; font-size: .9rem; }
     .modal input[type="search"] {
       width: 100%; padding: 10px 13px; margin-bottom: 14px;
-      border: 1px solid rgba(225,244,255,.25); border-radius: 9px;
+      border: 1px solid rgba(225,244,255,.25); border-radius: 9px; corner-shape: squircle;
       background: #060b11; color: #edf7ff; font: inherit; font-size: .92rem;
     }
     .joker-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
     .joker-option {
-      padding: 9px 12px; border: 1px solid rgba(225,244,255,.18); border-radius: 9px;
+      padding: 9px 12px; border: 1px solid rgba(225,244,255,.18); border-radius: 9px; corner-shape: squircle;
       background: rgba(255,255,255,.04); color: #e6ecf3; text-align: left; cursor: pointer;
     }
     .joker-option:hover { border-color: var(--card-amber); background: rgba(255,180,84,.08); }
@@ -556,7 +556,7 @@
       overflow: hidden;
       padding: 16px;
       border: 1px solid rgba(255,180,84,.55);
-      border-radius: 12px;
+      border-radius: 12px; corner-shape: squircle;
       background:
         radial-gradient(circle at 74% 23%, rgba(255,180,84,.16), transparent 24%),
         linear-gradient(160deg, #192432 0%, #090d13 56%, #15100b 100%);
@@ -604,7 +604,7 @@
     .options-sheet { width: min(560px, 100%); }
     .options-section-title { margin: 22px 0 8px; color: var(--card-amber); font-size: .74rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
     .options-section-title:first-of-type { margin-top: 4px; }
-    .full-rules-scroll { max-height: 210px; overflow-y: auto; padding: 4px 10px 4px 2px; border: 1px solid rgba(225,244,255,.12); border-radius: 10px; }
+    .full-rules-scroll { max-height: 210px; overflow-y: auto; padding: 4px 10px 4px 2px; border: 1px solid rgba(225,244,255,.12); border-radius: 10px; corner-shape: squircle; }
     .full-rules-scroll p { margin: 0 0 12px; }
     .full-rules-scroll .rule-list { border-top: 0; }
     .full-rules-scroll .rule-list li { border-bottom-color: rgba(225,244,255,.1); padding: 12px 0; }
@@ -621,7 +621,7 @@
     .music-controls button:disabled { opacity: .45; cursor: default; }
     .music-controls .music-play-btn { border-color: rgba(255,180,84,.55); color: var(--card-amber); min-width: 84px; }
     .music-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-    .music-track { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 1px solid rgba(225,244,255,.16); border-radius: 9px; background: rgba(255,255,255,.03); color: #e6ecf3; text-align: left; cursor: pointer; }
+    .music-track { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 1px solid rgba(225,244,255,.16); border-radius: 9px; corner-shape: squircle; background: rgba(255,255,255,.03); color: #e6ecf3; text-align: left; cursor: pointer; }
     .music-track:hover:not(:disabled) { border-color: rgba(143,232,246,.5); }
     .music-track.current { border-color: rgba(255,180,84,.55); background: rgba(255,180,84,.06); }
     .music-track:disabled { cursor: default; opacity: .75; }
@@ -747,7 +747,7 @@
       .intro-copy { font-size: .96rem; }
       .card-study { padding: 22px 4px 48px; }
       .study-cards { gap: 10px; }
-      .physical-card { border-radius: 10px; }
+      .physical-card { border-radius: 10px; corner-shape: squircle; }
       .back-mark { font-size: 3.9rem; }
       .scorebar { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 12px 12px 10px; gap: 8px 10px; }
       .player { font-size: .84rem; }
@@ -814,7 +814,7 @@
       .last-play { grid-area: last; width: 100%; max-width: none; text-align: center; font-size: .76rem; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .stage .pile-zone:last-child { grid-area: played; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 10px; padding-top: 0; }
       #reveal-slot { max-width: none; width: 100%; }
-      .stage .band-card, .stage .reveal-card { aspect-ratio: auto; width: 100%; max-width: none; padding: 7px 10px; border-radius: 11px; cursor: pointer; }
+      .stage .band-card, .stage .reveal-card { aspect-ratio: auto; width: 100%; max-width: none; padding: 7px 10px; border-radius: 11px; corner-shape: squircle; cursor: pointer; }
       .stage .reveal-card { box-shadow: -3px 3px 0 #121f2c, -6px 6px 0 #1a2b3b, 0 10px 22px rgba(0,0,0,.35); }
       .stage .reveal-card.can-draw { box-shadow: -3px 3px 0 #121f2c, -6px 6px 0 #1a2b3b, 0 0 0 2px rgba(255,180,84,.25), 0 10px 22px rgba(0,0,0,.35); }
       .stage .reveal-empty { aspect-ratio: auto; min-height: 96px; }
@@ -833,7 +833,7 @@
       .hand-label { order: 2; flex: none; margin: 4px auto 0; width: 100%; padding-top: 5px; border-top: 1px solid rgba(225,244,255,.09); font-size: .78rem; }
       .rules-btn { display: inline-block; }
       .hand { order: 1; flex: 1 1 auto; align-content: center; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; width: 100%; max-width: none; min-height: 0; overflow: hidden; padding: 6px 2px 0; margin: 0; }
-      .hand-card { max-width: none; max-height: none; justify-self: stretch; aspect-ratio: 63 / 82; height: auto; padding: 6px 5px; border-radius: 9px; overflow: hidden; }
+      .hand-card { max-width: none; max-height: none; justify-self: stretch; aspect-ratio: 63 / 82; height: auto; padding: 6px 5px; border-radius: 9px; corner-shape: squircle; overflow: hidden; }
       /* Overlap beats scroll: when a grown hand would need a third row on a
          short screen, the minis fan like tableau cards — number, sky and
          name stay readable up top, and playable minis lift clear of the fan
@@ -916,7 +916,7 @@
       .rules-btn { padding: 3px 11px; font-size: .72rem; }
       .hand { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px; padding-top: 6px; }
       .hand.cols-5, .hand.cols-6 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
-      .hand-card { aspect-ratio: auto; height: clamp(74px, 20dvh, 120px); max-height: none; padding: 5px 4px; border-radius: 8px; }
+      .hand-card { aspect-ratio: auto; height: clamp(74px, 20dvh, 120px); max-height: none; padding: 5px 4px; border-radius: 8px; corner-shape: squircle; }
       .hand-card.playable::before { top: -7px; right: 5px; padding: 1px 5px; font-size: .52rem; }
       .face-mini .card-top { height: 11px; }
       .face-mini .card-no { font-size: .44rem; }
