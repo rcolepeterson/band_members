@@ -129,19 +129,21 @@ export function jwstIconSvg() {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%" role="img" aria-label="JWST power-user satellite">${polys}</svg>`;
 }
 
-// Scott's satellite, v1. Interim placement: the Fleetwood Mac view, as
-// agreed, at 7 o'clock outside the member ring and unconnected. When a later ticket is
-// ticked Fixed, update `currentBand` to that band's anchor name — that
-// update IS the move in v1. Do not add a musician node id here: Scott has
-// no musician node linked yet, and inventing one would violate the
-// two-node rule's account-link requirement.
+// Scott's satellite, v1. Placement: the War view — Scott caught War's
+// duplicate member rows (14 listed members, 8 real people); the merge
+// fixed it 2026-11-18, and the satellite moved here per the v1 rule:
+// when a ticket is ticked Fixed, update `currentBand` to that band's
+// anchor name — that update IS the move in v1. At 7 o'clock outside
+// the member ring and unconnected, as agreed. Do not add a musician
+// node id here: Scott has no musician node linked yet, and inventing
+// one would violate the two-node rule's account-link requirement.
 export const SCOTT_SATELLITE = Object.freeze({
   id: `${POWER_USER_SATELLITE_ID_PREFIX}scott`,
   displayName: 'Scott',
   accountId: null,
   icon: 'jwst-hex',
   layer: POWER_USER_CONTRIBUTOR_LAYER,
-  currentBand: 'Fleetwood Mac',
+  currentBand: 'War',
   musicianNodeId: null,
 });
 
