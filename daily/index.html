@@ -166,7 +166,7 @@
     .game-modal-backdrop{display:none}
     .game-modal-card{position:relative;width:min(640px,100%);margin:0 auto;overflow:auto;
       background:linear-gradient(180deg, rgba(16,28,40,.72), rgba(9,16,24,.58));
-      border:1px solid rgba(225,244,255,.22);border-radius:var(--radius-xl);
+      border:1px solid rgba(225,244,255,.22);border-radius:var(--radius-xl); corner-shape: squircle;
       padding:var(--space-6);box-shadow:var(--shadow-lg)}
     .game-modal-card::before{content:'';position:absolute;top:0;left:10%;right:10%;height:1px;
       background:linear-gradient(90deg, transparent, rgba(143,232,246,.5), transparent);pointer-events:none}
@@ -205,10 +205,10 @@
     .game-field label{display:block;font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;
       color:var(--color-text-muted);margin-bottom:var(--space-1)}
     .game-field input{width:100%;min-height:48px;padding:0 var(--space-3);border:1px solid var(--color-border);
-      border-radius:var(--radius-lg);background:rgba(255,255,255,.02);color:var(--color-text);font-size:var(--text-sm)}
+      border-radius:var(--radius-lg); corner-shape: squircle;background:rgba(255,255,255,.02);color:var(--color-text);font-size:var(--text-sm)}
     .game-field input:focus{outline:none;border-color:rgba(82,174,182,.6)}
     .game-ac-list{position:absolute;z-index:5;left:0;right:0;margin-top:4px;max-height:220px;overflow-y:auto;
-      background:#0a141d;border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md)}
+      background:#0a141d;border:1px solid var(--color-border);border-radius:var(--radius-lg); corner-shape: squircle;box-shadow:var(--shadow-md)}
     .game-ac-list[hidden]{display:none}
     .game-ac-item{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;
       padding:var(--space-2) var(--space-3);background:none;border:0;color:var(--color-text);text-align:left;cursor:pointer}
@@ -252,7 +252,7 @@
     .challenge-text{font-size:var(--text-sm);color:var(--color-text)}
     .challenge-actions{display:flex;gap:var(--space-2);flex:0 0 auto}
     .game-nudge{position:relative;margin-top:var(--space-4);border:1px solid var(--color-border);
-      border-radius:var(--radius-lg);padding:var(--space-4);background:rgba(255,255,255,.02)}
+      border-radius:var(--radius-lg); corner-shape: squircle;padding:var(--space-4);background:rgba(255,255,255,.02)}
     .game-nudge p{margin:0 0 var(--space-3);font-size:var(--text-sm);color:var(--color-text)}
     .game-nudge-close{position:absolute;top:6px;right:6px;width:28px;height:28px;border:0;background:none;
       color:var(--color-text-muted);font-size:18px;line-height:1;cursor:pointer;border-radius:50%}
@@ -273,7 +273,7 @@
     .feedback-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(6px)}
     .feedback-card{position:relative;width:min(460px,100%);max-height:min(90vh,640px);overflow-y:auto;
       background:linear-gradient(180deg, rgba(16,28,40,.96), rgba(9,16,24,.96));
-      border:1px solid rgba(225,244,255,.22);border-radius:var(--radius-xl);
+      border:1px solid rgba(225,244,255,.22);border-radius:var(--radius-xl); corner-shape: squircle;
       padding:var(--space-6);box-shadow:var(--shadow-lg);scrollbar-width:none}
     .feedback-card::-webkit-scrollbar{display:none}
     .feedback-close{position:absolute;top:10px;right:10px;width:32px;height:32px;border:0;background:none;
@@ -285,7 +285,7 @@
     .feedback-field label{display:block;font-size:var(--text-xs);letter-spacing:.06em;text-transform:uppercase;
       color:var(--color-text-muted);margin-bottom:var(--space-1)}
     .feedback-field input,.feedback-field select,.feedback-field textarea{width:100%;padding:var(--space-2) var(--space-3);
-      border:1px solid var(--color-border);border-radius:var(--radius-lg);background:rgba(255,255,255,.02);
+      border:1px solid var(--color-border);border-radius:var(--radius-lg); corner-shape: squircle;background:rgba(255,255,255,.02);
       color:var(--color-text);font-size:var(--text-sm);font-family:inherit}
     .feedback-field textarea{min-height:6.5rem;resize:vertical}
     .feedback-field input:focus,.feedback-field select:focus,.feedback-field textarea:focus{outline:none;border-color:rgba(82,174,182,.6)}
