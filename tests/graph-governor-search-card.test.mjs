@@ -226,6 +226,29 @@ test('search matching is id-aware: a city-suffixed id matches its suffix', () =>
   assert.equal(results[0].name, 'Skid Row');
 });
 
+test('search ranking: exact name beats earlier alphabetical substring matches (War regression)', () => {
+  const rows = [
+    { id: 'b1', name: '10 Minute Warning', type: 'band', city: 'Seattle', state: 'WA', country: 'US' },
+    { id: 'm1', name: 'Alan Ward', type: 'member', city: null, state: null, country: null },
+    { id: 'm2', name: 'Anna Waronker', type: 'member', city: null, state: null, country: null },
+    { id: 'b2', name: 'War', type: 'band', city: 'Long Beach', state: 'CA', country: 'US' },
+    { id: 'b3', name: 'Warrant', type: 'band', city: 'Los Angeles', state: 'CA', country: 'US' },
+  ];
+  const results = searchNames(rows, 'war', 20);
+  assert.equal(results[0].name, 'War');
+  assert.equal(results[1].name, 'Warrant');
+  assert.deepEqual(results.slice(2).map((r) => r.name), ['10 Minute Warning', 'Alan Ward', 'Anna Waronker']);
+});
+
+test('search ranking: an exact match survives the limit cap', () => {
+  const rows = [];
+  for (let i = 0; i < 30; i++) rows.push({ id: `w${i}`, name: `Ward Band ${i}`, type: 'band', city: null, state: null, country: null });
+  rows.push({ id: 'war-id', name: 'War', type: 'band', city: 'Long Beach', state: 'CA', country: 'US' });
+  const results = searchNames(rows, 'war', 20);
+  assert.equal(results.length, 20);
+  assert.equal(results[0].name, 'War');
+});
+
 test('limit clamp: 1..50, default 20', () => {
   assert.equal(parseSearchLimit(null), 20);
   assert.equal(parseSearchLimit(''), 20);
