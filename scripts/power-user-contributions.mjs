@@ -9,20 +9,34 @@
 // scripts/power-user-satellite.mjs to the fixed band — that update IS the
 // satellite's move in v1.
 //
-// HONESTY RULE: do not invent specific band/member details. The two entries
-// below are exactly what is known about Scott's finds so far — the
-// categories "Fleetwood Mac holes" and "missing band cards" — and both are
-// explicitly marked as needing specifics from the tracker. They are
-// status 'Reported', NOT 'Fixed', so they must never be presented as
-// completed contributions, and they must never be counted as qualifying
-// contributions by isQualifyingContribution() in power-user-satellite.mjs
-// (which requires status 'Fixed').
+// HONESTY RULE: do not invent specific band/member details. The last two
+// entries below are placeholders for Scott's earlier finds — the
+// categories "Fleetwood Mac holes" and "missing band cards" — explicitly
+// marked as needing specifics from the tracker. They stay status
+// 'Reported', NOT 'Fixed', must never be presented as completed
+// contributions, and must never be counted as qualifying contributions.
+// The War entry is different: a specific, verified catch (duplicate
+// member rows), fixed 2026-11-18, so it carries real details and status
+// 'Fixed' — it IS a qualifying contribution under
+// isQualifyingContribution() in power-user-satellite.mjs (which requires
+// status 'Fixed').
 //
 // NO TOKEN FIELDS: tokens are shelved for v1. Do not add balances, earn
 // rates, or spend fields to these entries.
 // ---------------------------------------------------------------------------
 
 export const SCOTT_CONTRIBUTIONS = [
+  {
+    id: 'scott-war-duplicate-members',
+    title: 'War duplicate members',
+    type: 'bug',
+    band: 'War',
+    date: '2026-11-18',
+    status: 'Fixed',
+    description:
+      'War\'s card listed 14 members for 8 people — name variants (Leroy "Lonnie" Jordan, B. B. Dickerson, Howard E. Scott, Harold Ray Brown, Thomas Allen) had been imported as separate people. Merged 2026-11-18: War now lists its 8 actual members, and the graph-wide scan this catch triggered cleaned 16 more split identities (Brain Mantia, Jim O\'Rourke, D.J. Bonebrake, and others).',
+    fixLink: null,
+  },
   {
     id: 'scott-fleetwood-mac-holes',
     title: 'Fleetwood Mac holes',
