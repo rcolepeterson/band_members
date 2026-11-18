@@ -3719,6 +3719,13 @@ export function initSigmaExplorer({
     input.setAttribute('aria-expanded', 'false');
     input.removeAttribute('aria-activedescendant');
     suggestActive = -1;
+    // The offered-names list dies with the box (2026-11-18): the input
+    // handler auto-picks any typed value that exactly matches a listed
+    // name, so a stale list made re-typing the current band's name
+    // re-navigate instead of offering suggestions — on the War view,
+    // clearing the field and typing "War" again just refreshed the
+    // constellation and War Babies / War & Peace never appeared.
+    suggestNames = [];
   }
 
   function syncSuggestActive() {
