@@ -46,7 +46,7 @@ function pageShell({ title, body }) {
   }
   .card {
     max-width: 420px; text-align: center;
-    border: 1px solid rgba(255,255,255,.12); border-radius: 16px;
+    border: 1px solid rgba(255,255,255,.12); border-radius: 16px; corner-shape: squircle;
     padding: 40px 32px; background: rgba(255,255,255,.02);
   }
   .card h1 { font-size: 20px; margin: 0 0 12px; font-weight: 600; }
