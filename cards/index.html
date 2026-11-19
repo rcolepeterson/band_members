@@ -259,8 +259,11 @@
       margin: 0 auto;
     }
     #reveal-slot { width: 100%; max-width: 310px; }
-    .pile-zone { display: grid; justify-items: center; gap: 9px; padding-top: 6px; }
-    .pile-label { color: #8fa4b5; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; text-align: center; }
+    /* The reveal pile zone and the chain zone are one shared structure:
+       same display, gap, padding and label metrics, so their labels and
+       card tops align by construction at every breakpoint. */
+    .pile-zone, .top-zone { display: grid; justify-items: center; gap: 9px; padding-top: 6px; min-width: 0; }
+    .pile-label { margin: 0; padding: 0; color: #8fa4b5; font-size: .72rem; line-height: 1.5; letter-spacing: .08em; text-transform: uppercase; text-align: center; }
     .pile-note { color: #71889b; font-size: .74rem; text-align: center; }
     .reveal-card {
       position: relative;
@@ -295,14 +298,6 @@
       box-shadow: -4px 4px 0 #101a26, -8px 8px 0 #16222f;
       color: #c2d5e2; font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums;
     }
-    .top-zone { display: grid; justify-items: center; gap: 12px; min-width: 0; }
-    /* Chain label: same label as the piles, in the same slot above its
-       card, so the reveal and chain cards share one top line. The 6px
-       top padding matches .pile-zone, and the label's -3px bottom
-       margin absorbs the gap difference (pile gap 9px vs top-zone
-       gap 12px) — card tops land on the exact same line. */
-    .top-zone { padding-top: 6px; }
-    .chain-label { margin-bottom: -3px; }
     .last-play { max-width: 430px; text-align: center; color: #c2d5e2; font-size: .86rem; line-height: 1.45; }
     .last-play strong { color: #fff; }
     .last-play .via { color: var(--card-amber); font-weight: 700; }
@@ -822,11 +817,8 @@
       .playfield { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 8px 10px 8px; overflow: hidden; }
       .stage { flex: none; grid-template-columns: 1fr 1fr; grid-template-areas: 'reveal top' 'last last' 'played played'; gap: 6px 10px; max-width: none; }
       .stage .pile-zone:first-child { grid-area: reveal; }
-      .top-zone { grid-area: top; gap: 8px; }
-      /* Phone gap is 8px (not 12px), so the chain label's offset to the
-         shared card-top line is +1px here instead of -3px. */
-      .chain-label { margin-bottom: 1px; }
-      #top-slot { grid-area: top; width: 100%; min-width: 0; }
+      .top-zone { grid-area: top; }
+      #top-slot { width: 100%; min-width: 0; }
       .last-play { grid-area: last; width: 100%; max-width: none; text-align: center; font-size: .76rem; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .stage .pile-zone:last-child { grid-area: played; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 10px; padding-top: 0; }
       #reveal-slot { max-width: none; width: 100%; }
@@ -890,17 +882,27 @@
       .joker-option .jo-name { font-size: .8rem; }
       .modal-cancel { flex: none; }
     }
-    /* Phone portrait: the top zone dissolves so the connection line spans
-       the full stage width on its own row, directly under the stage pair. */
+    /* Phone portrait: BOTH stage zones dissolve into the stage grid, so
+       the two labels share one grid row and the two cards share the next
+       — their tops align by construction, with no per-zone offsets. The
+       reveal pile's note and the chain's connection line keep their own
+       rows below the card row, where they sat inside the zones. */
     @media (any-pointer: coarse) and (max-width: 950px) and (orientation: portrait) {
-      .top-zone { display: contents; }
-      /* With the top zone dissolved, the chain label becomes a stage
-         grid item sharing the 'top' cell: it sits at the cell's top
-         and the chain card drops by the reveal pile's label row
-         (6px padding + label line + 9px gap ≈ 30px), so the two
-         stage cards still share one top line. */
-      .chain-label { grid-area: top; justify-self: center; align-self: start; margin-bottom: 0; }
-      #top-slot { margin-top: 30px; }
+      .stage {
+        grid-template-areas:
+          'rlabel clabel'
+          'rcard ccard'
+          'rnote .'
+          'last last'
+          'played played';
+      }
+      .stage .pile-zone:first-child, .top-zone { display: contents; }
+      .stage .pile-zone:first-child > .pile-label { grid-area: rlabel; }
+      .chain-label { grid-area: clabel; }
+      .stage .pile-zone:first-child > .pile-label, .chain-label { justify-self: center; align-self: start; }
+      #reveal-slot { grid-area: rcard; }
+      #top-slot { grid-area: ccard; }
+      #reveal-note { grid-area: rnote; justify-self: center; }
     }
     /* ---------- phone landscape: fit the one-screen table into a short viewport ---------- */
     @media (any-pointer: coarse) and (orientation: landscape) and (max-height: 600px) {
