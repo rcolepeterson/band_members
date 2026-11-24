@@ -458,6 +458,12 @@
     .share-status[hidden] { display: none; }
     .share-fallback { display: block; width: 100%; margin: 12px 0 0; padding: 10px 12px; border: 1px solid rgba(225,244,255,.25); border-radius: 8px; corner-shape: squircle; background: #060b11; color: #dcebf5; font: inherit; font-size: .82rem; resize: none; }
     .share-fallback[hidden] { display: none; }
+    /* Challenge-share landing line: in-flow at the top of the table —
+       part of the page, never a modal or popup. */
+    .challenge-banner { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; padding: 9px 12px; border: 1px solid rgba(255,180,84,.55); border-radius: 12px; corner-shape: squircle; background: rgba(255,180,84,.08); color: var(--card-text); font-size: .92rem; font-weight: 600; }
+    .challenge-banner[hidden] { display: none; }
+    .challenge-text { flex: 1 1 auto; text-align: center; }
+    .challenge-close { flex: 0 0 auto; border: 0; background: transparent; color: #8fa4b5; font: inherit; font-size: 1rem; line-height: 1; cursor: pointer; padding: 2px 4px; }
 
     /* v14b — game-night reminder signup, restored to match the live card:
        a rule line, the heading, a one-line sub, email field + button on
@@ -973,6 +979,10 @@
 
 
     <section class="table-shell wrap" aria-label="Playable Six Degrees card game">
+      <div class="challenge-banner" id="challenge-banner" role="status" hidden>
+        <span class="challenge-text" id="challenge-text"></span>
+        <button class="challenge-close" id="challenge-close" type="button" aria-label="Dismiss challenge">&times;</button>
+      </div>
       <div class="table-topbar"><button class="options-btn" id="how-btn-top" type="button">How to play</button><button class="options-btn" id="options-btn-top" type="button">Options</button></div>
       <div class="scorebar" id="scorebar"></div>
       <div class="turnbar"><span class="turn-pill" id="turn-pill">Dealing…</span></div>
@@ -1714,6 +1724,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         if (idx < 0) return;
         hand.splice(idx, 1);
         G.played.push(G.top.card);
+        if (seat === 0) dismissChallenge();
         if (seat === 0) cardsGa('first_move', { game: 'cards' }, 'cards-firstmove-' + cardsSessionId);
         var viaSet = null;
         if (viaPerson !== null && viaPerson !== undefined) { viaSet = {}; viaSet[viaPerson] = true; }
@@ -1745,6 +1756,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         if (idx < 0) return;
         hand.splice(idx, 1);
         G.played.push(card);
+        if (seat === 0) dismissChallenge();
         if (seat === 0) cardsGa('first_move', { game: 'cards' }, 'cards-firstmove-' + cardsSessionId);
         session.freeze++; G.freezePlays++; if (seat === 0) G.myFreeze++; renderStats();
         var target = (seat + 1) % 4;
@@ -1837,8 +1849,9 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
          the full chain. If the clipboard refuses, the text appears in a
          selectable area. The overlay is never blocked. Share taps fire
          cardsEvent('share_tapped'), never the stats beacon.
-         The page ignores ?s=1&r= on load — a shared-link visit deals a
-         fresh normal game. */
+         The page ignores ?s=1&r= for dealing — a shared-link visit
+         deals a fresh normal game. (2026-11-22: it now reads ?r= for
+         the challenge-share landing line — see parseCardsShareCode.) */
       var lastResult = null; // snapshot of the finished game, set in gameOver()
 
       /* ---------- v15d: save / restore the finished game ----------
@@ -1930,7 +1943,10 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
         var first = r.won
           ? '6* Card Game — I beat Mara, Dev, and Kit — ' + stats
           : '6* Card Game — ' + r.winnerName + ' took the game — I finished ' + r.cardsLeft + (r.cardsLeft === 1 ? ' card' : ' cards') + ' short. ' + stats;
-        return first + '\n' + shareUrl(r);
+        // Challenge share (2026-11-22): the share IS the dare — same
+        // shapes as Rawkle and Daily, in Cards' own outcome words.
+        var dare = r.won ? 'Beat that.' : 'Think you can do better?';
+        return first + ' ' + dare + '\n' + shareUrl(r);
       }
       function winnerCode(r) {
         if (r.won) return 'Y';
@@ -1945,6 +1961,45 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       function shareUrl(r) {
         return 'https://sixdegreesofrock.com/cards?s=1&r=' + resultCode(r);
       }
+      /* ---------- challenge-share landing ----------
+         Mirror of parseCardsResultCode in scripts/cards-result.mjs
+         (kept in step with it). A visitor who arrives on a friend's
+         result link gets one in-flow line at the top of the table:
+         the friend's score as a dare. Cards has no daily puzzle and
+         no seeded deals, so the dare is to beat the score on a fresh
+         deal of your own — no replay is promised or implied. In-flow,
+         part of the page, never a popup; it clears on your first
+         play or on its close control. */
+      var CHALLENGE_WINNERS = { Y: 'You', M: 'Mara', D: 'Dev', K: 'Kit' };
+      function parseCardsShareCode(code) {
+        if (!code || typeof code !== 'string') return null;
+        var parts = code.split('-');
+        if (parts.length < 7) return null;
+        var winner = parts[0];
+        if (!CHALLENGE_WINNERS[winner]) return null;
+        function isInt(s, max) { return /^\d+$/.test(s) && Number(s) <= max; }
+        if (!isInt(parts[1], 999) || !isInt(parts[2], 999) || !isInt(parts[3], 999)) return null;
+        if (!isInt(parts[4], 99) || !isInt(parts[5], 99)) return null;
+        var closing;
+        try { closing = decodeURIComponent(parts.slice(6).join('-')); } catch (e) { return null; }
+        closing = closing.trim().replace(/[\u0000-\u001f\u007f]/g, '');
+        if (!closing || closing.length > 80) return null;
+        return { won: winner === 'Y', winnerName: CHALLENGE_WINNERS[winner], turns: Number(parts[1]) };
+      }
+      var challengeBanner = document.getElementById('challenge-banner');
+      function dismissChallenge() { if (challengeBanner) challengeBanner.hidden = true; }
+      function showChallenge() {
+        var parsed = null;
+        try { parsed = parseCardsShareCode(new URLSearchParams(location.search).get('r')); } catch (e) {}
+        if (!parsed || !challengeBanner) return;
+        var turns = parsed.turns + (parsed.turns === 1 ? ' turn' : ' turns');
+        document.getElementById('challenge-text').textContent = parsed.won
+          ? 'A friend won in ' + turns + '. Think you can do better?'
+          : 'A friend lost to ' + parsed.winnerName + ' in ' + turns + '. Think you can do better?';
+        challengeBanner.hidden = false;
+        cardsGa('challenge_viewed', { game: 'cards' });
+      }
+      document.getElementById('challenge-close').addEventListener('click', dismissChallenge);
       /* ---------- preload the result-card image (2026-10-30) ----------
          Facebook was always the first fetcher of a fresh result code, so
          its scraper hit the cold, heavy card render and timed out; the
@@ -2526,6 +2581,7 @@ var BANDS = [{"n":"Foo Fighters","g":"Alternative Rock","l":"Seattle, WA","y":"1
       } else {
         newGame();
       }
+      showChallenge();
       if (!rulesSeen()) openRules();
     }());
   </script>
