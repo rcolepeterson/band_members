@@ -144,6 +144,16 @@
       #message { min-height: 21px; text-align: center; font-size: 14.5px; font-weight: 600; color: var(--gold); margin: 6px 0 2px; flex: 0 0 auto; }
       #message.dim { color: var(--ink-dim); font-weight: 500; }
 
+      /* Challenge-share landing line: in-flow, part of the page — never
+         a modal or popup. Shows only when a share link's result code is
+         for today's puzzle. */
+      #challenge { display: none; align-items: center; gap: 10px; margin: 8px auto 0; width: 100%; max-width: 520px; box-sizing: border-box;
+        background: rgba(19,34,56,0.82); border: 1px solid rgba(255,180,84,0.55); border-radius: 12px; corner-shape: squircle;
+        color: var(--ink); font-size: 14.5px; font-weight: 600; padding: 9px 12px; flex: 0 0 auto; }
+      #challenge.show { display: flex; }
+      #challenge .challenge-text { flex: 1 1 auto; text-align: center; }
+      #challenge .challenge-close { flex: 0 0 auto; border: 0; background: transparent; color: var(--ink-dim); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 4px; }
+
       #board { display: flex; flex-direction: column; gap: var(--gap); align-items: center; justify-content: center; margin: 2px auto; flex: 1 1 auto; min-height: 0; }
       .row { display: flex; gap: var(--wgap); justify-content: center; flex-wrap: nowrap; max-width: 100%; }
       .word { display: flex; gap: var(--gap); flex-wrap: nowrap; }
@@ -244,6 +254,11 @@
         <button class="pill-btn" id="practice-btn" type="button">Practice round</button>
         <button class="pill-btn" id="daily-btn" type="button" style="display:none">Today&rsquo;s band</button>
         <button class="pill-btn result" id="result-btn" type="button" style="display:none">&#9733; Result</button>
+      </div>
+
+      <div id="challenge" role="status">
+        <span class="challenge-text" id="challenge-text"></span>
+        <button class="challenge-close" id="challenge-close" type="button" aria-label="Dismiss challenge">&times;</button>
       </div>
 
       <p id="message" role="status" aria-live="polite"></p>
@@ -620,7 +635,7 @@
            Measure the real chrome (header, toolbar, message, keyboard,
            footer) and give the board what is left. */
         var chrome = 0;
-        ["site-header", "toolbar", "message", "keyboard", "site-footer"].forEach(function (id) {
+        ["site-header", "toolbar", "challenge", "message", "keyboard", "site-footer"].forEach(function (id) {
           var el = document.getElementById(id);
           if (el) chrome += el.offsetHeight;
         });
@@ -782,6 +797,7 @@
         guesses.push(guessBoard);
         rawkleEvent("move_made", { move_number: guesses.length });
         if (guesses.length === 1) {
+          dismissChallenge();
           if (mode === "daily") rawkleGa("first_move", { game: "rawkle", mode: "daily" }, "rawkle-firstmove-" + dateKey);
           else if (!rawkleGaPracticeFirst) { rawkleGaPracticeFirst = true; rawkleGa("first_move", { game: "rawkle", mode: "practice" }); }
         }
@@ -858,7 +874,12 @@
             ? "Rawkle by Six Degrees #" + puzzleNo
             : "Rawkle by Six Degrees — preview";
         var score = status === "won" ? guesses.length + "/" + MAX_TRIES : "X/" + MAX_TRIES;
-        var lines = [head + " — " + score, ""];
+        var lines = [head + " — " + score];
+        /* Challenge share: the share IS the dare (daily rounds only —
+           practice shares stay plain, as they carry no result code). */
+        if (mode === "daily" && status === "won") lines.push("I got it in " + guesses.length + ". Beat that.");
+        else if (mode === "daily" && status === "lost") lines.push("It stumped me. Think you can get it?");
+        lines.push("");
         guesses.forEach(function (g) {
           var scored = scoreGuess(g, answer);
           var li = 0;
@@ -875,6 +896,37 @@
         lines.push("", "sixdegreesofrock.com/rawkle");
         return lines.join("\n");
       }
+      /* ---------- challenge-share landing ----------
+         The mirror-image parser for the share code (kept in step with
+         parseRawkleResultCode in scripts/rawkle-result.mjs). A visitor
+         who arrives on a friend's share link gets one in-flow line at
+         the top of the game — part of the page, never a popup — but
+         only when the code is for TODAY's puzzle; yesterday's dare is
+         just a link. It clears on the first guess, on the close
+         control, or when a practice round starts. */
+      function parseRawkleShareCode(code) {
+        var m = /^(\d{1,4})(x?)-([gba.]{1,200})$/.exec(String(code || "").trim());
+        if (!m || Number(m[1]) < 1) return null;
+        var rows = m[3].split(".");
+        if (rows.some(function (r) { return r.length === 0; })) return null;
+        if (!rows.length || rows.length > MAX_TRIES) return null;
+        if (rows.some(function (r) { return r.length > 24; })) return null; /* RAWKLE_RESULT_MAX_TILES */
+        return { num: Number(m[1]), won: !m[2], tries: rows.length };
+      }
+      var challengeEl = document.getElementById("challenge");
+      function dismissChallenge() { if (challengeEl) challengeEl.classList.remove("show"); }
+      function showChallenge() {
+        var parsed = null;
+        try { parsed = parseRawkleShareCode(new URLSearchParams(location.search).get("r")); } catch (e) {}
+        if (!parsed || parsed.num !== puzzleNo || !challengeEl) return;
+        document.getElementById("challenge-text").textContent = parsed.won
+          ? "A friend solved today's Rawkle in " + parsed.tries + (parsed.tries === 1 ? " try" : " tries") + ". Beat that."
+          : "Today's Rawkle stumped a friend. Think you can get it?";
+        challengeEl.classList.add("show");
+        rawkleGa("challenge_viewed", { game: "rawkle", mode: "daily" });
+        refit();
+      }
+      document.getElementById("challenge-close").addEventListener("click", dismissChallenge);
       document.getElementById("result-btn").addEventListener("click", function () {
         endEl.classList.add("show");
       });
@@ -982,6 +1034,7 @@
       function startRound(newMode, display) {
         rawkleGaPracticeStarted = false;
         rawkleGaPracticeFirst = false;
+        dismissChallenge();
         mode = newMode;
         answerDisplay = display;
         answer = boardName(display);
@@ -1050,6 +1103,7 @@
       buildBoard();
       buildKeyboard();
       refit();
+      showChallenge();
       if (status !== "playing") finishRound();
       if (status === "playing" && guesses.length === 0 && !loadStats()) {
         message("Fill every tile with a band that fits the shape, then hit Enter.", true);
