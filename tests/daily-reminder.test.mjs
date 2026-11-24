@@ -251,7 +251,9 @@ test('the welcome email and the unsubscribe that forgets a guest', () => {
 
 test('the game offers guests the email box once, after a daily', () => {
   const engine = read('../scripts/six-degrees-game.mjs');
-  assert.match(engine, /if \(!practiceMode && shouldAskGuestForReminder\(\)\) \{[\s\S]{0,120}guestReminderFormEl\('Or just get a reminder tomorrow:'\)/);
+  assert.match(engine, /if \(!practiceMode && shouldAskGuestForReminder\(\)\) \{[\s\S]{0,160}guestReminderFormEl\(guestReminderLead\(won, streak\)\)/);
+  assert.match(engine, /Save your streak — you’re on a \$\{streak\}-day streak\. One email each morning keeps it alive\. No account needed\./);
+  assert.match(engine, /'Or just get a reminder tomorrow:'/);
   assert.match(engine, /await dailyFetch\('\/api\/reminder-signup', \{ method: 'POST', body: JSON\.stringify\(\{ email \}\) \}\);/);
   assert.match(engine, /You’re on the list ✓ — see you tomorrow morning\./);
 });
