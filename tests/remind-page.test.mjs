@@ -37,7 +37,8 @@ test('signed-in visitors get one tap, no email box', () => {
 });
 
 test('it says what you get, links to the game, and counts signups', () => {
-  assert.match(page, /skipped on days you&rsquo;ve played\. Free, no account\. Unsubscribe in one tap\./);
+  assert.match(page, /<p class="ask" id="ask">Save your streak<\/p>/);
+  assert.match(page, /One email each morning keeps it alive\. No account needed\./);
   assert.match(page, /<a class="play" href="\/daily\/">Play today&rsquo;s puzzle<\/a>/);
   assert.match(page, /gtag\('event', 'reminder_signup', \{ game: 'daily', method: method, where: 'remind_page', signup_source: sa\.source \|\| '', signup_medium: sa\.medium \|\| '', signup_campaign: sa\.campaign \|\| '' \}\)/);
   assert.match(page, /googletagmanager\.com\/gtag\/js\?id=G-E2SNSPFHGB/);
