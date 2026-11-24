@@ -275,8 +275,8 @@
             <button class="btn" id="end-close" type="button">See the board</button>
           </div>
           <div class="remind" id="remind-block">
-            <p class="remind-head">Never miss a Rawkle</p>
-            <p class="remind-sub">One email each morning when the new band drops. No account needed.</p>
+            <p class="remind-head" id="remind-head">Never miss a Rawkle</p>
+            <p class="remind-sub" id="remind-sub">One email each morning when the new band drops. No account needed.</p>
             <div class="remind-row">
               <input id="remind-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" aria-label="Email for the daily Rawkle reminder" />
               <button class="btn gold" id="remind-btn" type="button">Remind me</button>
@@ -846,6 +846,23 @@
         if (rs) { rs.textContent = ""; rs.className = "remind-status"; }
         var rb = document.getElementById("remind-btn");
         if (rb) { rb.disabled = false; rb.textContent = "Remind me"; }
+        /* Save-your-streak ask: with a live streak the reminder is framed
+           as keeping it alive, in the streak's real number; a loss (or a
+           practice round) keeps the plain never-miss-a-day copy. */
+        var rh = document.getElementById("remind-head");
+        var rsub = document.getElementById("remind-sub");
+        if (rh && rsub) {
+          if (stats && stats.streak >= 2) {
+            rh.textContent = "Save your streak";
+            rsub.textContent = "You're on a " + stats.streak + "-day streak. One email each morning keeps it alive. No account needed.";
+          } else if (stats && stats.streak === 1) {
+            rh.textContent = "Save your streak";
+            rsub.textContent = "Day one of a streak. One email each morning keeps it going. No account needed.";
+          } else {
+            rh.textContent = "Never miss a Rawkle";
+            rsub.textContent = "One email each morning when the new band drops. No account needed.";
+          }
+        }
         endEl.classList.add("show");
         syncResultPill();
         message("");
