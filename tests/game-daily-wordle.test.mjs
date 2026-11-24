@@ -60,9 +60,10 @@ test('a win names start and target, one square per move, no band spoilers', () =
     won: true,
     seconds: 28,
   });
-  // Clean: score line, bands, link. No stars (picks in the card carry the visual).
+  // Clean: score line, dare, bands, link. No stars (picks in the card carry the visual).
   assert.equal(text, [
     '6° Rock #9 🎸 Solved in 4 moves', // plain words, no timer
+    'I got it in 4 moves. Beat that.', // challenge share (2026-11-22): the share is the dare
     'Nirvana ➡️ Metallica',
     'sixdegreesofrock.com/daily?s=1&r=9-odso', // the score rides in the link too
   ].join('\n'));
@@ -76,6 +77,7 @@ test('a loss says Not solved', () => {
   });
   assert.equal(text, [
     '6° Rock #9 🎸 Not solved',
+    'It stumped me. Think you can finish it?', // challenge share (2026-11-22)
     'Nirvana ➡️ Metallica',
     'sixdegreesofrock.com/daily?s=1&r=9x-ds',
   ].join('\n'));
@@ -384,9 +386,11 @@ test('share squares are each move\'s real color, so grids differ by how you play
   const perfect = dailyShareResultText({ ...base, picks: [{ kind: 'optimal' }, { kind: 'optimal' }, { kind: 'optimal' }] });
   const messy = dailyShareResultText({ ...base, picks: [{ kind: 'optimal' }, { kind: 'deadend' }, { kind: 'obscure' }, { kind: 'solid' }, { kind: 'optimal' }] });
   assert.equal(perfect.split('\n')[0], '6° Rock #9 🎸 Solved in 3 moves');
-  assert.equal(perfect.split('\n')[1], 'Journey ➡️ Heart');
+  assert.equal(perfect.split('\n')[1], 'I got it in 3 moves. Beat that.');
+  assert.equal(perfect.split('\n')[2], 'Journey ➡️ Heart');
   assert.equal(messy.split('\n')[0], '6° Rock #9 🎸 Solved in 5 moves');
-  assert.equal(messy.split('\n')[1], 'Journey ➡️ Heart');
+  assert.equal(messy.split('\n')[1], 'I got it in 5 moves. Beat that.');
+  assert.equal(messy.split('\n')[2], 'Journey ➡️ Heart');
   assert.equal(messy.split('\n').at(-1), 'sixdegreesofrock.com/daily?s=1&r=9-odsso');
   assert.ok(!/\d+\/\d+/.test(messy), 'no fraction score');
 });

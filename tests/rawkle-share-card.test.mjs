@@ -7,7 +7,8 @@
 //
 // What this locks in:
 //   1. The result code round-trips, and rejects codes that cannot be real.
-//   2. The preview title reads "Rawkle #N · Solved in X tries" / "Not solved".
+//   2. The preview title reads "Rawkle #N · Solved in X tries — beat that"
+//      / "Not solved — think you can get it?" (challenge share, 2026-11-22).
 //   3. The card draws for a production-shaped result and comes back as a
 //      valid PNG — and draws the same picture for the same code.
 //   4. Every failure path returns the static-card redirect, never an error.
@@ -41,12 +42,12 @@ test('result code round-trips and the title reads like Daily', () => {
   assert.equal(back.num, 2);
   assert.equal(back.won, true);
   assert.equal(back.rows.length, 4);
-  assert.equal(rawkleResultTitle(back), 'Rawkle #2 · Solved in 4 tries');
+  assert.equal(rawkleResultTitle(back), 'Rawkle #2 · Solved in 4 tries — beat that');
   const loss = parseRawkleResultCode(rawkleResultCode(3, ['a', 'a', 'a', 'a', 'a', 'a'], false));
   assert.equal(loss.won, false);
-  assert.equal(rawkleResultTitle(loss), 'Rawkle #3 · Not solved');
+  assert.equal(rawkleResultTitle(loss), 'Rawkle #3 · Not solved — think you can get it?');
   const one = parseRawkleResultCode(rawkleResultCode(1, ['ggggggg'], true));
-  assert.equal(rawkleResultTitle(one), 'Rawkle #1 · Solved in 1 try');
+  assert.equal(rawkleResultTitle(one), 'Rawkle #1 · Solved in 1 try — beat that');
 });
 
 test('result code rejects what cannot be real', () => {
@@ -86,7 +87,7 @@ test('edge function rewrites a share link and passes ordinary visits through', a
   );
   assert.ok(shared, 'expected a rewritten response');
   const html = await shared.text();
-  assert.ok(html.includes('content="Rawkle #2 · Solved in 4 tries"'), 'title rewritten');
+  assert.ok(html.includes('content="Rawkle #2 · Solved in 4 tries — beat that"'), 'title rewritten');
   assert.ok(html.includes(`content="https://sixdegreesofrock.com/api/rawkle-card?r=${CODE}"`), 'image rewritten');
   assert.ok(html.includes('content="https://sixdegreesofrock.com/rawkle?s=1&amp;r=' + CODE + '"'), 'url rewritten');
   assert.ok(!html.includes('rawkle-og.png'), 'no static image left in a share preview');
