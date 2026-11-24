@@ -1955,7 +1955,7 @@ function initGameUI() {
         endActions.after(el('<p class="sd-end-caption">to save your streak and stats!</p>'));
         if (!practiceMode && shouldAskGuestForReminder()) {
           try { localStorage.setItem(REMINDER_PROMPT_KEY, '1'); } catch {}
-          c.appendChild(guestReminderFormEl('Or just get a reminder tomorrow:'));
+          c.appendChild(guestReminderFormEl(guestReminderLead(won, streak)));
         }
       } else if (!practiceMode && shouldAskForReminder()) {
         // Once, after any finished puzzle: the moment people think "tomorrow".
@@ -2022,6 +2022,14 @@ function initGameUI() {
   }
   function shouldAskGuestForReminder() {
     try { return !isSignedIn() && !guestReminderAsked() && !localStorage.getItem(REMINDER_PROMPT_KEY); } catch { return false; }
+  }
+  // Save-your-streak ask (same frame as Rawkle's end card): with a live
+  // streak the reminder is keeping it alive, in the streak's real number;
+  // anything else keeps the plain reminder lead.
+  function guestReminderLead(won, streak) {
+    if (won && streak >= 2) return `Save your streak — you’re on a ${streak}-day streak. One email each morning keeps it alive. No account needed.`;
+    if (won && streak === 1) return 'Save your streak — day one of a streak. One email each morning keeps it going. No account needed.';
+    return 'Or just get a reminder tomorrow:';
   }
   function guestReminderFormEl(lead) {
     const form = el('<form class="sd-guest sd-reminder sd-remind-form" novalidate>'
