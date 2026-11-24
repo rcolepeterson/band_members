@@ -19,9 +19,9 @@ test('a result becomes a short code and back', () => {
   assert.equal(resultCode(15, picks, false), '15x-odso');
   assert.deepEqual(parseDailyResultCode('15-odso'), { num: 15, won: true, kinds: ['o', 'd', 's', 'o'] });
   assert.deepEqual(parseDailyResultCode('15x-'), { num: 15, won: false, kinds: [] });
-  assert.equal(dailyResultTitle(parseDailyResultCode('15-odso')), '6° Rock #15 · Solved in 4 moves');
-  assert.equal(dailyResultTitle(parseDailyResultCode('15-o')), '6° Rock #15 · Solved in 1 move');
-  assert.equal(dailyResultTitle(parseDailyResultCode('15x-ds')), '6° Rock #15 · Not solved');
+  assert.equal(dailyResultTitle(parseDailyResultCode('15-odso')), '6° Rock #15 · Solved in 4 moves — beat that');
+  assert.equal(dailyResultTitle(parseDailyResultCode('15-o')), '6° Rock #15 · Solved in 1 move — beat that');
+  assert.equal(dailyResultTitle(parseDailyResultCode('15x-ds')), '6° Rock #15 · Not solved — think you can finish it?');
 });
 
 test('anything else in the code is rejected, so nothing from the URL reaches the page', () => {
@@ -43,8 +43,8 @@ const ctx = { next: async () => new Response(gamePage, { headers: { 'content-typ
 test('a shared result previews its score, picture and own link', async () => {
   const res = await ogDaily(new Request('https://sixdegreesofrock.com/daily/?s=1&r=15-odso'), ctx);
   const html = await res.text();
-  assert.match(html, /<meta property="og:title" content="6° Rock #15 · Solved in 4 moves"/);
-  assert.match(html, /<meta name="twitter:title" content="6° Rock #15 · Solved in 4 moves"/);
+  assert.match(html, /<meta property="og:title" content="6° Rock #15 · Solved in 4 moves — beat that"/);
+  assert.match(html, /<meta name="twitter:title" content="6° Rock #15 · Solved in 4 moves — beat that"/);
   assert.match(html, /<meta property="og:image" content="https:\/\/sixdegreesofrock\.com\/api\/daily-card\?r=15-odso"/);
   assert.match(html, /<meta name="twitter:image" content="https:\/\/sixdegreesofrock\.com\/api\/daily-card\?r=15-odso"/);
   // Its own og:url, or Facebook folds it back into the generic /daily preview.
