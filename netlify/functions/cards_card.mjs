@@ -144,8 +144,14 @@ async function renderCardsCard({ result, host }) {
   const stats = `${result.turns} turns · ${result.chain}-card chain · ${result.stalls} stalls · Ricky ${result.ricky} · Freeze ${result.freeze}`;
   centerText(ctx, ellipsize(ctx, stats, 22, WIDTH - 120), 22, 252, COLORS.muted);
 
-  // Fan of four backs, fanned about the center.
-  const fanY = 375;
+  // Challenge share (2026-11-22): the dare rides the card picture too,
+  // in the same shapes as the share text and the preview title.
+  const dare = result.won ? 'Beat that.' : 'Think you can do better?';
+  centerText(ctx, dare, 22, 286, COLORS.gold);
+
+  // Fan of four backs, fanned about the center. (fanY 375 -> 384 with
+  // the dare line above it, so the fan's top corners clear the text.)
+  const fanY = 384;
   const fanCards = [
     { cx: 457, angle: -14 },
     { cx: 563, angle: -5 },
