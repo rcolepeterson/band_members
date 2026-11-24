@@ -2,7 +2,7 @@
 //
 // Facebook and Instagram drop pre-filled share text but always unfurl the
 // link, so the score rides in it: /rawkle?s=1&r=2-gbbbab.gbbbaa... previews
-// as "Rawkle #2 · Solved in 4 tries". The code is the puzzle number, an x if
+// as "Rawkle #2 · Solved in 4 tries — beat that". The code is the puzzle number, an x if
 // not solved, then one row per guess, tiles as letters: g = gold (right
 // letter, right spot), b = blue (in the name, wrong spot), a = absent (not
 // in the name at all). Rows are joined with dots.
@@ -40,7 +40,10 @@ export function parseRawkleResultCode(code) {
 }
 
 // The preview title, shared by the link tags and the card picture.
+// Challenge share (2026-11-22): every share is a dare, so the title
+// carries it too — Facebook and Instagram drop the player's text but
+// always unfurl this. Same shape as Daily's title.
 export function rawkleResultTitle({ num, won, rows }) {
   const tries = rows.length;
-  return `Rawkle #${num} · ${won ? `Solved in ${tries} ${tries === 1 ? 'try' : 'tries'}` : 'Not solved'}`;
+  return `Rawkle #${num} · ${won ? `Solved in ${tries} ${tries === 1 ? 'try' : 'tries'} — beat that` : 'Not solved — think you can get it?'}`;
 }

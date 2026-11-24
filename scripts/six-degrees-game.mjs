@@ -12,7 +12,7 @@
 // native share on wins, and an after-3-chains signup nudge for logged-out
 // players.
 
-import { resultCode } from './daily-result.mjs';
+import { resultCode, parseDailyResultCode } from './daily-result.mjs';
 
 // ---------------------------------------------------------------------------
 // Engine
@@ -195,11 +195,12 @@ export function fmtElapsed(seconds) {
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
 }
 
-// Spoiler-free share text: no slogan, no timer (the clock counted idle
-// hours, e.g. "194m"), just the score, the bands and the link. No stars in
+// Spoiler-free share text: no timer (the clock counted idle hours, e.g.
+// "194m"), just the score, the dare, the bands and the link. No stars in
 // the text (Aaron, 2026-10-14): the card's guitar picks carry the visual
 // score; stars in the text fought the picks for attention.
 //   6° Rock #17 🎸 Solved in 5 moves      ("Not solved" on a loss)
+//   I got it in 5 moves. Beat that.       (challenge share, 2026-11-22)
 // "6°" is the game's name (Aaron, 2026-10-11: 6° the game, Six Degrees the
 // graph); "Rock" stays so a stranger in a group text knows what it is.
 //   Rage Against the Machine ➡️ Pearl Jam
@@ -209,8 +210,12 @@ export function fmtElapsed(seconds) {
 export function dailyShareResultText({ date, start, target, picks = [], moves = picks.length, par, won }) {
   const num = dailyPuzzleNumber(date);
   const score = won ? `Solved in ${moves} ${moves === 1 ? 'move' : 'moves'}` : 'Not solved';
+  const dare = won
+    ? `I got it in ${moves} ${moves === 1 ? 'move' : 'moves'}. Beat that.`
+    : 'It stumped me. Think you can finish it?';
   return [
     `6\u00b0 Rock${num ? ` #${num}` : ''} 🎸 ${score}`,
+    dare,
     [start, target].join(' ➡️ '),
     dailyShareLink({ date, picks, won }).replace(/^https:\/\//, ''),
   ].join('\n');
@@ -402,6 +407,64 @@ function initGameUI() {
     }
     return p;
   })();
+
+  // --- challenge-share landing line ---------------------------------------
+  // A visitor who arrives on a friend's result link (/daily?s=1&r=<code>)
+  // gets one in-flow line above the board: the friend's score as a dare.
+  // Only when the code is for TODAY's puzzle — yesterday's dare is just a
+  // link. In-flow, part of the page, never a popup; clears on the first
+  // move, on a mode change away from Daily, or on its close control.
+  const challengeLine = (() => {
+    const wrap = document.createElement('div');
+    wrap.id = 'game-challenge-line';
+    wrap.className = 'game-challenge-line';
+    wrap.style.display = 'none';
+    const text = document.createElement('span');
+    text.className = 'game-challenge-text';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'game-challenge-close';
+    close.setAttribute('aria-label', 'Dismiss challenge');
+    close.textContent = '×';
+    close.addEventListener('click', () => dismissChallengeLine());
+    wrap.appendChild(text);
+    wrap.appendChild(close);
+    if (result && result.parentNode) result.parentNode.insertBefore(wrap, result);
+    if (!document.getElementById('game-challenge-line-style')) {
+      const st = document.createElement('style');
+      st.id = 'game-challenge-line-style';
+      // 12px floor: the text-legibility CI gate fails anything smaller.
+      st.textContent = '.game-challenge-line{display:flex;align-items:center;gap:10px;margin:0 0 var(--space-2,8px);padding:9px 12px;border:1px solid rgba(255,180,84,.55);border-radius:var(--radius-lg,12px);corner-shape:squircle;background:rgba(255,180,84,.08);font-size:14px;font-weight:600}'
+        + '.game-challenge-text{flex:1 1 auto;text-align:center}'
+        + '.game-challenge-close{flex:0 0 auto;border:0;background:transparent;color:inherit;font-size:16px;line-height:1;cursor:pointer;padding:2px 4px;opacity:.7}';
+      document.head.appendChild(st);
+    }
+    return wrap;
+  })();
+  function dismissChallengeLine() {
+    challengeLine.style.display = 'none';
+  }
+  function showChallengeLine() {
+    let parsed = null;
+    try { parsed = parseDailyResultCode(new URLSearchParams(window.location.search).get('r')); } catch (_) {}
+    if (!parsed) return;
+    const onDailyPage = !!document.getElementById('front-door') || /(^|\/)daily\/?$/.test(window.location.pathname);
+    if (!onDailyPage) return;
+    // Today's puzzle number, Pacific — the front door's own reckoning.
+    let todayNum = null;
+    try {
+      todayNum = dailyPuzzleNumber(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date()));
+    } catch (_) {}
+    if (!todayNum || parsed.num !== todayNum) return;
+    const moves = parsed.kinds.length;
+    challengeLine.querySelector('.game-challenge-text').textContent = parsed.won
+      ? `A friend solved today's puzzle in ${moves} ${moves === 1 ? 'move' : 'moves'}. Beat that.`
+      : `Today's puzzle stumped a friend. Think you can finish it?`;
+    challengeLine.style.display = '';
+    gaEvent('challenge_viewed', { game: 'daily', puzzle_id: String(parsed.num) });
+  }
+  showChallengeLine();
+
   function showHowto(text) {
     howtoLine.textContent = text || '';
     howtoLine.style.display = text ? '' : 'none';
@@ -658,6 +721,7 @@ function initGameUI() {
 
   function syncModeUI() {
     const mode = currentMode();
+    if (mode !== 'daily') dismissChallengeLine();
     syncModesButton();
     // Tab bar description: one line under the tabs naming what this mode does.
     // (Full descriptions live in the label markup for accessibility.)
@@ -2727,6 +2791,7 @@ function initGameUI() {
         // about moves, but GA had no pick event, so Cole's email
         // "First moves" read 0. Once per run (run id as the key, same
         // as game_started/game_completed) and first attempts only.
+        if (analyticsMoveCount === 1) dismissChallengeLine();
         if (analyticsMoveCount === 1 && gaCountsRun(dailyRun)) {
           gaEvent('first_move', { puzzle_id: gaPuzzleId(dailyRun) }, dailyRun.id);
         }

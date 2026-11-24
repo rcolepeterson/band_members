@@ -2,7 +2,7 @@
 //
 // Facebook and Instagram drop pre-filled share text but always unfurl the
 // link, so the score rides in it: /game?s=1&r=14-osdo previews as
-// "6° Rock #14 · Solved in 4 moves". The code is the puzzle number, an x if
+// "6° Rock #14 · Solved in 4 moves — beat that". The code is the puzzle number, an x if
 // not solved, then one letter per move: o = on the shortest path (gold),
 // s = connects (silver), d = dead end. It's only a picture of a score, so a
 // hand-edited code fakes nothing that matters.
@@ -26,7 +26,10 @@ export function parseDailyResultCode(code) {
 }
 
 // The preview title, shared by the link tags and the card picture.
+// Challenge share (2026-11-22): every share is a dare, so the title
+// carries it too — Facebook and Instagram drop the player's text but
+// always unfurl this. Same shape as Rawkle's title.
 export function dailyResultTitle({ num, won, kinds }) {
   const moves = kinds.length;
-  return `6° Rock #${num} · ${won ? `Solved in ${moves} ${moves === 1 ? 'move' : 'moves'}` : 'Not solved'}`;
+  return `6° Rock #${num} · ${won ? `Solved in ${moves} ${moves === 1 ? 'move' : 'moves'} — beat that` : 'Not solved — think you can finish it?'}`;
 }
