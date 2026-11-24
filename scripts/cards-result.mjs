@@ -48,10 +48,13 @@ export function parseCardsResultCode(code) {
   };
 }
 
+// Challenge share (2026-11-22): every share is a dare, so the preview
+// title carries it too — same suffix shapes as Rawkle and Daily.
 export function cardsResultTitle(result) {
   const turns = `${result.turns} turn${result.turns === 1 ? '' : 's'}`;
   const outcome = result.won
     ? 'You beat Mara, Dev, and Kit'
     : `${WINNER_NAMES[result.winner]} takes the game`;
-  return `6* Card Game — ${outcome} — ${turns}`;
+  const dare = result.won ? 'beat that' : 'think you can do better?';
+  return `6* Card Game — ${outcome} — ${turns} — ${dare}`;
 }
