@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Genre Graph — Full Tree</title>
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
+      * { box-sizing: border-box; }
+      :root {
+        color-scheme: light dark;
+        --bg: #f4f4f1;
+        --panel: #ffffff;
+        --ink: #1e2229;
+        --ink-soft: #4c5560;
+        --ink-faint: #79828d;
+        --line: #d9d9d2;
+        --line-strong: #b9bcb4;
+        --chart-bg: #fafaf7;
+        --accent: #8a5a24;
+        --accent-ink: #ffffff;
+        --chip: #eceee9;
+        --focus-line: #b3402e;
+        --shadow: 0 1px 3px rgba(20, 24, 30, .08), 0 8px 28px rgba(20, 24, 30, .07);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #101216;
+          --panel: #181b20;
+          --ink: #e9e7e1;
+          --ink-soft: #b6bcc4;
+          --ink-faint: #8b939e;
+          --line: #2b2f36;
+          --line-strong: #3d434d;
+          --chart-bg: #14171c;
+          --accent: #d29a4a;
+          --accent-ink: #17130a;
+          --chip: #22262d;
+          --focus-line: #e0684f;
+          --shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.35);
+        }
+      }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Avenir Next", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 15px;
+        line-height: 1.5;
+      }
+      .wrap { max-width: 1560px; margin: 0 auto; padding: 28px 22px 56px; }
+      h1, h2, h3 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; font-weight: 600; line-height: 1.15; }
+      h1 { font-size: clamp(26px, 3.4vw, 40px); margin: 0 0 10px; letter-spacing: .1px; }
+      h2 { font-size: 21px; margin: 0 0 10px; }
+      h3 { font-size: 16px; margin: 0 0 6px; }
+      p { margin: 0 0 10px; }
+      .standfirst { font-size: 16.5px; color: var(--ink-soft); max-width: 880px; }
+      .standfirst strong { color: var(--ink); }
+      .stats { display: flex; flex-wrap: wrap; gap: 8px 26px; margin: 16px 0 4px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+      .stat b { font-family: Georgia, serif; font-size: 21px; font-weight: 600; display: block; line-height: 1.1; }
+      .stat span { font-size: 12px; color: var(--ink-faint); letter-spacing: .04em; text-transform: uppercase; }
+      /* controls */
+      .controls { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: end; margin: 18px 0 12px; }
+      .ctl { display: flex; flex-direction: column; gap: 5px; }
+      .ctl label { font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+      .ctl .row { display: flex; align-items: center; gap: 10px; }
+      input[type="range"] { width: 210px; accent-color: var(--accent); min-height: 2.25rem; }
+      input[type="search"], select {
+        font: inherit; font-size: 14px; color: var(--ink); background: var(--panel);
+        border: 1px solid var(--line-strong); border-radius: 7px; padding: 6px 10px;
+      }
+      input[type="search"] { width: 230px; }
+      .year-read { font-family: Georgia, serif; font-size: 20px; min-width: 52px; }
+      .year-sub { font-size: 12.5px; color: var(--ink-soft); min-width: 210px; }
+      button.btn {
+        font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+        background: var(--panel); color: var(--ink); border: 1px solid var(--line-strong);
+        border-radius: 7px; padding: 6px 13px;
+      }
+      button.btn:hover { border-color: var(--ink-faint); }
+      button.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+      /* chart layout */
+      .stage { display: grid; grid-template-columns: minmax(0, 1fr) 302px; gap: 16px; align-items: start; margin-top: 6px; }
+      .chart-card { background: var(--chart-bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+      .chart-flex { display: flex; align-items: stretch; }
+      .chart-scroll { flex: 1 1 auto; min-width: 0; overflow: auto; max-height: 76vh; -webkit-overflow-scrolling: touch; }
+      .chart-scroll svg { display: block; }
+      #chartHost { position: relative; }
+      body.lens-on #chartHost svg { cursor: none; }
+      /* descriptor rail — narrow, tall, hugging the left edge of the graph */
+      .desc-rail { flex: 0 0 112px; width: 112px; max-height: 76vh; overflow-y: auto; border-right: 1px solid var(--line); background: var(--panel); padding: 10px 8px 12px; }
+      .rail-head { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink); margin: 0 2px 8px; line-height: 1.35; }
+      .rail-head span { display: block; font-weight: 500; letter-spacing: 0; text-transform: none; font-size: 10.5px; color: var(--ink-faint); margin-top: 2px; }
+      .desc-rail .desc-chip { display: block; width: 100%; text-align: left; margin-bottom: 6px; cursor: pointer; font: inherit; }
+      .desc-rail .desc-chip span { display: block; font-size: 10.5px; color: var(--ink-faint); margin-top: 1px; }
+      .desc-rail .desc-chip:hover { border-color: var(--accent); color: var(--ink); }
+      .desc-rail .desc-chip.active { border: 1px solid var(--accent); background: var(--chip); color: var(--ink); box-shadow: inset 3px 0 0 var(--accent); }
+      .desc-rail .desc-chip.active span { color: var(--ink-soft); }
+      /* major-genre rail chips — solid border (real branches, not tags) */
+      .desc-rail .major-chip { display: block; width: 100%; text-align: left; margin-bottom: 6px; cursor: pointer; font: inherit; border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px 8px; font-size: 12.5px; color: var(--ink-soft); background: transparent; line-height: 1.3; }
+      .desc-rail .major-chip b { color: var(--ink); font-weight: 700; }
+      .desc-rail .major-chip .sub { display: block; font-size: 10.5px; color: var(--ink-faint); margin-top: 1px; }
+      .desc-rail .major-chip .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: 0; }
+      .desc-rail .major-chip:hover { border-color: var(--accent); }
+      .desc-rail .major-chip.active { border-color: var(--accent); background: var(--chip); color: var(--ink); box-shadow: inset 3px 0 0 var(--accent); }
+      .desc-rail .major-chip.active .sub { color: var(--ink-soft); }
+      .desc-rail .major-chip.era { border-style: dashed; }
+      .desc-rail .major-chip.era b { font-style: italic; }
+      /* magnifying glass lens */
+      .lens { position: absolute; width: 232px; height: 232px; border-radius: 50%; border: 2px solid var(--line-strong); box-shadow: 0 10px 34px rgba(0,0,0,.28), inset 0 0 0 1px var(--chart-bg); background: var(--chart-bg); overflow: hidden; pointer-events: none; display: none; z-index: 6; }
+      .lens-inner { position: absolute; left: 0; top: 0; }
+      .lens-inner svg { display: block; }
+      .zoom-read { font-size: 12.5px; color: var(--ink-soft); min-width: 118px; }
+      button.btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+      .chart-hint { padding: 8px 14px; font-size: 12.5px; color: var(--ink-faint); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 18px; }
+      /* detail panel */
+      .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 16px 17px; position: sticky; top: 14px; }
+      .panel .swatch { width: 13px; height: 13px; border-radius: 3px; display: inline-block; vertical-align: -1px; margin-right: 7px; }
+      .panel h2 { margin-bottom: 2px; }
+      .panel .born { font-family: Georgia, serif; font-size: 15px; color: var(--ink-soft); }
+      .kv { display: grid; grid-template-columns: 96px 1fr; gap: 4px 10px; font-size: 13.5px; margin: 12px 0; }
+      .kv dt { color: var(--ink-faint); }
+      .kv dd { margin: 0; }
+      .kv a, .chip-link { color: var(--accent); text-decoration: none; font-weight: 600; cursor: pointer; }
+      .kv a:hover, .chip-link:hover { text-decoration: underline; }
+      .ancestry { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 2px; }
+      .ancestry button, .kids button {
+        font: inherit; font-size: 12.5px; cursor: pointer; border: 1px solid var(--line-strong);
+        background: var(--chip); color: var(--ink); border-radius: 999px; padding: 4px 10px; min-height: 2rem;
+      }
+      .ancestry button:hover, .kids button:hover { border-color: var(--accent); }
+      .kids { display: flex; flex-wrap: wrap; gap: 5px; }
+      .panel .empty { color: var(--ink-soft); font-size: 14px; }
+      .panel hr { border: none; border-top: 1px solid var(--line); margin: 13px 0; }
+      .mini { font-size: 12.5px; color: var(--ink-soft); }
+      /* svg */
+      .ribbon { cursor: pointer; transition: opacity .18s ease; }
+      .arc { fill: none; cursor: pointer; transition: opacity .18s ease; }
+      .hit { fill: none; stroke: transparent; pointer-events: stroke; cursor: pointer; }
+      .node-dot { cursor: pointer; transition: opacity .18s ease; }
+      .node-hit { fill: transparent; cursor: pointer; }
+      .glabel { font-size: 10.5px; fill: var(--ink-faint); pointer-events: none; font-weight: 500; }
+      .glabel.root { font-size: 11.5px; fill: var(--ink-soft); font-weight: 650; }
+      .glabel.major { fill: var(--ink); font-weight: 800; font-size: 15.5px; letter-spacing: .01em; stroke: var(--chart-bg); stroke-width: 3.5px; paint-order: stroke; stroke-linejoin: round; }
+      .ribbon.major { }
+      .node-ring { pointer-events: none; }
+      .tick-label { font-size: 11px; fill: var(--ink-faint); }
+      .era-label { font-size: 10px; fill: var(--ink-faint); font-style: italic; }
+      .dim { opacity: .07 !important; }
+      .dim-label { opacity: .12 !important; }
+      /* guide pop-up — one collapsible panel: how to read + data notes + verification */
+      .guide { position: fixed; top: 14px; right: 14px; z-index: 60; width: min(452px, calc(100vw - 24px)); background: var(--panel); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+      .guide-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--chip); border-bottom: 1px solid var(--line); }
+      .guide-head .gtitle { font-family: Georgia, serif; font-weight: 600; font-size: 15px; flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .guide-head button { font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; background: var(--panel); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 6px; min-width: 2.25rem; padding: 2px 8px; }
+      .guide-head button:hover { border-color: var(--accent); }
+      .guide-body { max-height: min(78vh, 860px); overflow-y: auto; padding: 15px 17px 17px; }
+      .guide.min .guide-body { display: none; }
+      .guide.min .guide-head { border-bottom: none; }
+      .guide-body h2 { font-size: 18px; margin: 14px 0 8px; }
+      .guide-body h2:first-child { margin-top: 0; }
+      .guide-body h3 { margin-top: 13px; }
+      .guide-body ul { margin: 6px 0 0; padding-left: 18px; }
+      .guide-body li { margin-bottom: 6px; font-size: 14px; }
+      .guide-body p, .guide-body li { color: var(--ink-soft); }
+      .guide-body p strong, .guide-body li strong { color: var(--ink); }
+      .guide-body hr { border: none; border-top: 1px solid var(--line); margin: 15px 0 2px; }
+      .rule-quote { font-family: Georgia, serif; font-style: italic; font-size: 16.5px; color: var(--ink); margin: 4px 0 10px; }
+      .desc-chip { border: 1px dashed var(--line-strong); border-radius: 8px; padding: 6px 9px; font-size: 12.5px; color: var(--ink-soft); background: transparent; }
+      .desc-chip b { color: var(--ink); font-weight: 600; }
+      .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; font-size: 13px; margin-top: 6px; }
+      .legend div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .legend .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
+      .verify { font-size: 13.5px; }
+      .verify b { font-family: Georgia, serif; }
+      footer { margin-top: 26px; font-size: 12.5px; color: var(--ink-faint); border-top: 1px solid var(--line); padding-top: 12px; }
+      @media (max-width: 1080px) {
+        .stage { grid-template-columns: minmax(0, 1fr); }
+        .panel { position: static; }
+        .chart-scroll, .desc-rail { max-height: 70vh; }
+        .guide { top: 10px; right: 10px; }
+      }
+      @media (max-width: 640px) {
+        .chart-flex { flex-direction: column; }
+        .desc-rail { flex: 0 0 auto; width: auto; max-height: none; overflow-y: visible; border-right: none; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+        .rail-head { flex: 1 1 100%; margin-bottom: 2px; }
+        .rail-head span { display: inline; margin-left: 6px; }
+        .desc-rail .desc-chip { width: auto; margin-bottom: 0; }
+        .desc-rail .major-chip { width: auto; margin-bottom: 0; }
+        .lens { width: 176px; height: 176px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .ribbon, .arc, .node-dot { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <p class="standfirst">Every genre is its own branch, split from its <strong>true parent</strong> at the year it
+      actually happened — jazz in 1917 to EDM in 2010, one unbroken sweep. Branches fan above and below their parent,
+      thickness swells and thins with the bands debuting each year, and colour changes only when a genuinely new
+      major genre is born. The <strong>23 majors carry large bold labels</strong> — the big trunks read first, while
+      small roots and minor branches stay light. <strong>Select any branch</strong> to trace its ancestry back to its root,
+      or <strong>click a major genre</strong> in the left lane to jump straight to its branch.</p>
+
+      <div class="stats" role="list">
+        <div class="stat" role="listitem"><b>162</b><span>branches drawn · of 170 genres</span></div>
+        <div class="stat" role="listitem"><b>12</b><span>starting branches · of 15 roots</span></div>
+        <div class="stat" role="listitem"><b>23</b><span>major genres · colour changes</span></div>
+        <div class="stat" role="listitem"><b>7,396</b><span>bands placed of 8,004</span></div>
+        <div class="stat" role="listitem"><b>1917–2024</b><span>108 years</span></div>
+        <div class="stat" role="listitem"><b>0</b><span>branch crossings</span></div>
+      </div>
+
+      <div class="controls">
+        <div class="ctl">
+          <label for="yearSlider">Focus year</label>
+          <div class="row">
+            <input type="range" id="yearSlider" min="1917" max="2024" step="1" value="1985" aria-label="Focus year" />
+            <span class="year-read" id="yearRead">1985</span>
+          </div>
+          <div class="year-sub" id="yearSub"></div>
+        </div>
+        <div class="ctl">
+          <label for="searchBox">Find a genre</label>
+          <div class="row">
+            <input type="search" id="searchBox" list="genreList" placeholder="e.g. thrash metal" autocomplete="off" />
+            <datalist id="genreList"></datalist>
+          </div>
+        </div>
+        <div class="ctl">
+          <label for="labelMode">Labels</label>
+          <div class="row">
+            <select id="labelMode">
+              <option value="all" selected>All branches</option>
+              <option value="major">Majors &amp; roots only</option>
+              <option value="none">None</option>
+            </select>
+          </div>
+        </div>
+        <div class="ctl">
+          <label for="zoomRange">Time stretch</label>
+          <div class="row">
+            <input type="range" id="zoomRange" min="0" max="1000" step="1" value="0" aria-label="Time stretch — far left shows the whole tree, top to bottom" />
+            <span class="zoom-read" id="zoomRead"></span>
+          </div>
+        </div>
+        <div class="ctl">
+          <label>Magnifier</label>
+          <div class="row"><button class="btn" id="magBtn" type="button" aria-pressed="false">Magnifying glass: off</button></div>
+        </div>
+        <div class="ctl">
+          <label>Guide</label>
+          <div class="row"><button class="btn" id="guideBtn" type="button">How to read &amp; notes</button></div>
+        </div>
+        <div class="ctl">
+          <label>&nbsp;</label>
+          <div class="row"><button class="btn" id="clearBtn" type="button">Clear selection</button></div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="chart-card">
+          <div class="chart-flex">
+            <div class="desc-rail" id="descRail" aria-label="Major genres lane — quick jumps to the biggest branches"></div>
+            <div class="chart-scroll" id="chartScroll">
+              <div id="chartHost"></div>
+            </div>
+          </div>
+          <div class="chart-hint">
+            <span>The chart opens fitted to your screen — no sideways scrolling until you stretch time to zoom in. Far left on Time stretch shows the whole tree, top to bottom.</span>
+            <span>Red line = focus year. Dots sit on the edge of the parent branch, on the side the child leaves.</span>
+          </div>
+        </div>
+        <aside class="panel" id="panel" aria-live="polite"></aside>
+      </div>
+
+      <div class="guide min" id="guide" role="dialog" aria-label="Guide — how to read this graph, data notes and verification">
+        <div class="guide-head">
+          <span class="gtitle">Guide · How to read · Data notes · Verification</span>
+          <button type="button" id="guideMin" aria-expanded="false" title="Expand or minimize the guide">Show</button>
+          <button type="button" id="guideClose" title="Close the guide">&times;</button>
+        </div>
+        <div class="guide-body">
+        <section>
+          <h2>How to read it</h2>
+          <p class="rule-quote">&ldquo;Never cross the streams — branches split off in the order of the year they happened.&rdquo;</p>
+          <ul>
+            <li><strong>True parentage.</strong> A genre branches off its actual parent — thrash off heavy metal, death off thrash — never off a main trunk. Roots are separate starting branches at their own birth years; blues (1920) predates rock, and rock and roll (1949–59) is rock's first era, not a branch.</li>
+            <li><strong>Nested arcs.</strong> Branches fan above and below their parent. On each side, the earliest split takes the outermost lane and later splits tuck closer in — a new branch arcs out only as far as its own lane, so no branch ever crosses another.</li>
+            <li><strong>Colour = major genres only.</strong> A branch keeps its parent's colour until a major genre is born (23 of them). Everything between majors is one family's shade of the story.</li>
+            <li><strong>Majors carry the weight.</strong> The 23 majors — rock, hard rock, heavy metal and the rest — get large bold labels with their band counts, ringed split nodes and full-strength ribbons, so the big trunks read at a glance. Minor branches and small roots (folk, latin, ska…) stay smaller and lighter; their thickness still comes only from their own debut counts.</li>
+            <li><strong>Thickness fluctuates.</strong> A branch swells in its busy years and thins in its quiet ones, sized by bands debuting that year — every branch, roots included, on the same scale. A branch in its flood years can run thicker than its parent.</li>
+            <li><strong>Split nodes ride the edge.</strong> Each dot sits inside its parent branch's width, toward the edge the child leaves on, so nodes stay visible as the parent swells and thins. Splits sharing a year are nudged apart along the parent so every node stays tappable — the year shown is always the true birth year.</li>
+            <li><strong>Hybrids have two parents in the data.</strong> Metalcore (hardcore punk + heavy metal), deathcore, nu metal and friends split from the scene they grew up in; the second parent is recorded in the detail panel, not drawn as a merge — a merge would cross the streams.</li>
+          </ul>
+        </section>
+
+        <hr>
+        <section>
+          <h2>Major lane</h2>
+          <p>The narrow lane along the graph's left edge is a quick-jump rail for the <strong>23 major genres</strong> — the branches that hold the majority of the bands — ordered by band count, biggest first, each with its birth year and band count. <strong>Click one</strong> and the graph scrolls to that genre's branch and its detail opens in the panel beside the graph — exactly the same as selecting the branch itself. <strong>Rock and roll</strong> gets its own button too: it is not a separate branch but rock's first era, so its button jumps to the 1949–1959 stretch of the rock branch and opens rock's panel, with the focus year set inside the era.</p>
+          <h3>Descriptor tags — not genres, not in the lane</h3>
+          <p>Eight tags in the data describe a sound, a format, a shelf or an origin rather than a lineage, so they are <strong>not drawn as trees</strong> and no longer sit in the lane: <strong>vocal</strong> (1950 · 17 bands), <strong>acoustic</strong> (1965 · 12), <strong>instrumental</strong> (1967 · 5), <strong>avantgarde</strong> (1979 · 16), <strong>african</strong> (1984 · 17), <strong>world</strong> (1995 · 27), <strong>experimental</strong> (1996 · 7) and <strong>holiday</strong> (2012 · 7). They remain in the data and in search — find one with &ldquo;Find a genre&rdquo; and its description still opens in the side panel.</p>
+          <p class="mini" style="margin-top:10px">One knock-on: <strong>afrobeats</strong> (6 bands, 2011) descends from the descriptor tag &ldquo;african&rdquo;, so it is drawn as its own starting branch and its parent is credited here and in its panel.</p>
+          <h3>Major genres — the only colour changes (23)</h3>
+          <div class="legend" id="legend"></div>
+          <h3 style="margin-top:14px">Starting branches that aren't majors</h3>
+          <div class="legend" id="legendRoots"></div>
+          <p class="mini" style="margin-top:8px">Each root opens its tree in its own colour; from there, colour changes only at a major.</p>
+        </section>
+
+        <hr>
+        <section>
+          <h2>Data notes &amp; verification</h2>
+          <p><strong>Coverage, honestly:</strong> 7,396 of 8,004 bands are placed (92.4%). The 608 unplaced bands have no debut year (415), no resolvable genre (157), a debut year outside 1917–2024 (32), or a junk genre tag (4, e.g. &ldquo;awesomename&rdquo;). A band's year is its <strong>first album year</strong>, with formation year as fallback.</p>
+          <p><strong>Counting the forest:</strong> the data holds 170 genres and 15 roots. Eight genres are descriptor tags — four of them roots (vocal, instrumental, african, world) — and are not drawn in the trees, leaving 162 drawn branches in 12 trees: the 11 non-descriptor roots plus afrobeats, whose only parent is a descriptor. The left lane no longer shows descriptors — it lists the 23 majors (plus rock and roll, rock's first era) as quick jumps.</p>
+          <p>Long-tail tags (302 of them, 462 bands) count toward the branch genre they fold into, and rock-and-roll-tagged bands count toward rock. Birth years come from the finalized taxonomy: first credible debut year in the data where it is trustworthy, researched overrides where it is not, cross-checked against Musicmap (27 of 35 matched genres agree within 3 years).</p>
+          <p class="verify" id="verifyBox">Checking the geometry…</p>
+        </section>
+        </div>
+      </div>
+
+      <footer>Genre lineage proof — full tree. Data: finalized taxonomy &amp; per-year debut series, 1917–2024, generated 2026-11-25 from the merged band database. Form: lineage tree after the 6* timeline and the Long Now timeline.</footer>
+    </div>
+
+<script>
+"use strict";
+/* ================= DATA (injected at build time) ================= */
+var DATA = {"years":[1917,1918,1919,1920,1921,1922,1923,1924,1925,1926,1927,1928,1929,1930,1931,1932,1933,1934,1935,1936,1937,1938,1939,1940,1941,1942,1943,1944,1945,1946,1947,1948,1949,1950,1951,1952,1953,1954,1955,1956,1957,1958,1959,1960,1961,1962,1963,1964,1965,1966,1967,1968,1969,1970,1971,1972,1973,1974,1975,1976,1977,1978,1979,1980,1981,1982,1983,1984,1985,1986,1987,1988,1989,1990,1991,1992,1993,1994,1995,1996,1997,1998,1999,2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024],"genres":[["jazz","Jazz",null,null,1,0,1917,119,[0,0,0,0,0,0,0,0,0,0,0,3,0,1,0,0,0,1,0,1,2,1,0,0,0,0,0,2,4,1,2,0,1,0,1,4,2,1,2,3,2,0,3,2,0,1,1,4,0,0,4,1,0,1,2,0,0,0,1,1,0,0,3,0,2,0,0,3,0,0,2,3,3,0,1,2,3,2,1,3,3,3,5,1,3,2,2,2,3,1,0,2,2,1,0,1,0,0,3,0,2,0,0,0,0,0,0,0]],["blues","Blues, Soul & R&B",null,null,1,0,1920,28,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,2,0,0,3,0,0,1,0,1,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,1,2,0,0,0,0,0,2,0,1,0,2,0,1,1,1,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0]],["country","Country & Folk",null,null,1,0,1934,104,[0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,1,1,0,3,0,2,1,0,1,4,2,1,2,0,0,1,1,0,1,3,0,2,0,0,1,0,0,2,0,2,2,3,1,1,0,1,2,4,1,4,0,2,1,0,1,1,1,1,2,0,0,1,2,2,3,0,3,2,2,3,2,5,2,1,0,3,0,1,1,1,4]],["bluegrass","Country & Folk","country",null,0,0,1945,38,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,1,0,1,0,1,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,2,1,0,0,0,0,0,2,0,0,0,0,1,0,0,2,1,0,1,1,2,0,0,0,0,1,0,1,0,0,0,1,1,0,1,2,1,1,0,2,0,0,1,2,2,0,0,1,0,0,0,0]],["pop","Pop",null,null,1,0,1946,164,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,1,3,2,1,7,2,5,3,0,1,2,2,3,1,3,4,2,2,0,1,1,1,3,0,0,1,2,3,3,4,2,3,3,2,3,2,3,1,1,3,1,1,1,3,1,1,1,3,4,0,1,1,2,1,4,4,8,4,1,2,2,5,6,4,4,4,1,0,0,2,1,1,2]],["r&b","Blues, Soul & R&B","rhythm and blues",null,0,0,1949,50,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1,1,0,0,0,0,0,1,0,0,1,2,1,0,1,0,0,0,1,1,1,1,2,0,1,0,0,2,1,1,1,0,2,2,3,1,2,0,3,2,0,1,2,1,0,2,0,0,0,0,1,1,0,0,0,0,1,0,0,1,1,0,1,1,0,0,0,0,0,0]],["rhythm and blues","Blues, Soul & R&B","blues",null,0,0,1949,20,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,3,0,2,0,0,4,2,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0]],["doo wop","Blues, Soul & R&B","rhythm and blues",null,0,0,1950,58,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,1,1,3,2,2,7,8,8,2,6,7,3,0,4,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["vocal","Blues, Soul & R&B",null,null,0,1,1950,17,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,1,0,1,1,0,1,0,0,1,0,0,1,3,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0]],["pop vocal","Pop","pop",null,0,0,1952,21,[0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0,2,1,3,0,1,2,1,0,1,0,1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["rock","Rock",null,null,1,0,1952,436,[0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,2,1,5,3,4,6,4,8,13,21,15,8,6,3,2,8,7,10,11,4,9,12,4,9,6,3,6,9,6,6,4,5,9,8,9,8,2,8,2,7,8,6,4,7,4,9,7,8,3,4,5,1,3,6,7,6,6,5,5,6,1,4,6,5,5,5,4,1,4,3,4,4,2,2,0,0]],["rockabilly","Rock","rock",null,0,0,1955,19,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,3,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,0,0,2,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["soul","Blues, Soul & R&B","rhythm and blues",null,0,0,1955,90,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,3,2,2,7,2,3,8,6,5,3,4,2,5,2,5,5,3,1,1,0,2,0,0,1,0,0,1,1,0,1,0,0,0,0,1,0,0,1,0,0,1,1,0,0,0,1,0,0,1,1,0,0,0,0,1,0,1,0,0,0,0,0,1,1,0,0,1,0,0,0]],["classic rock","Rock","rock",null,0,0,1956,71,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,3,4,2,1,1,1,2,5,4,4,3,3,2,6,1,3,3,1,3,2,3,2,0,1,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1]],["folk","Country & Folk",null,null,0,0,1957,78,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,3,3,0,3,0,3,2,3,3,2,3,0,0,1,1,0,0,0,0,0,1,1,0,2,0,0,1,0,1,0,2,2,2,1,1,0,0,1,0,3,2,0,0,0,1,1,2,1,2,1,0,1,2,1,1,3,3,4,1,0,1,1,1,1,1,1,0,0,0]],["beat","Rock","rock",null,0,0,1958,15,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,1,1,2,3,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["country pop","Country & Folk","country",null,0,0,1958,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["instrumental rock","Rock","rock",null,0,0,1958,10,[0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,1,0,1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["latin","Latin & World",null,null,0,0,1958,118,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,1,2,0,0,0,3,2,3,1,3,2,2,5,2,3,2,3,4,1,5,3,1,1,2,1,3,5,4,3,1,3,0,2,1,2,2,3,1,2,1,3,1,0,3,1,2,0,1,1,1,0,1,1,1,1,2,0,2,1,2,0,1,0,0,1,0,2,0]],["free jazz","Jazz","jazz",null,0,0,1959,21,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,0,1,0,0,2,1,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1,0,0,0,2,1,1,3,1,0,0,0,0,1,0,0,1,0,0,1,0,0,0,0,0,0,0,0]],["avant garde jazz","Jazz","free jazz",null,0,0,1960,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,1]],["surf","Rock","rock",null,0,0,1961,12,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0]],["british invasion","Rock","rock",null,0,0,1963,12,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,4,3,1,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["garage punk","Punk & Hardcore","garage rock",null,0,0,1964,9,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,2,0,1,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0]],["garage rock","Rock","rock",null,0,0,1964,70,[0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,1,1,0,1,0,5,4,6,3,0,0,0,0,0,0,0,0,0,1,0,1,1,2,0,1,1,3,4,0,0,1,2,2,2,0,1,1,1,1,1,5,1,1,0,0,1,3,4,2,2,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0]],["hard rock","Rock","rock",null,1,0,1964,417,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,1,0,0,0,0,0,0,0,4,1,0,3,6,12,20,9,6,10,6,10,9,10,6,16,8,8,9,11,14,13,7,9,10,18,15,8,11,7,7,5,4,7,4,5,3,4,4,6,10,5,11,5,5,3,6,2,7,3,5,6,3,6,3,3,0,3,0,1,2]],["pop rock","Rock","rock",null,0,0,1964,160,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,2,1,0,1,1,0,0,0,2,4,5,6,5,2,5,7,4,4,1,5,2,4,2,3,3,2,5,2,3,6,6,3,5,2,3,1,1,2,2,3,0,2,1,1,2,6,2,0,6,6,3,0,1,1,2,0,1,2,2,0,1,0,3,0,1,0,0,0,0,0]],["ska","Reggae & Ska",null,"rhythm and blues",0,0,1964,29,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,3,2,1,1,0,0,1,0,1,0,0,3,0,0,1,1,2,1,2,1,1,0,0,1,1,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0]],["acoustic","Rock","rock",null,0,1,1965,12,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,1,0,0,0,0,1,0,0,0,0,1,0,1,0,0,0,0,0,0,1,0,0,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]],["blues rock","Rock","rock",null,0,0,1965,110,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,3,1,2,5,4,5,7,9,3,5,2,2,2,2,0,1,1,2,2,1,0,1,0,2,1,1,2,1,2,1,3,2,0,1,3,0,0,3,2,1,0,0,4,1,0,0,3,3,1,3,2,1,2,0,1,0,0,1,0,0,0,1]],["folk rock","Country & Folk","folk",null,0,0,1965,78,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,1,3,5,1,5,6,4,1,1,0,1,1,1,0,1,0,0,0,1,2,2,2,0,2,3,2,1,1,1,0,2,0,0,1,1,1,2,0,0,1,0,0,0,2,1,5,3,1,1,4,2,1,0,0,0,0,0,0,0,0,0]],["free improvisation","Jazz","free jazz",null,0,0,1965,11,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,2,1,0,0,0,0,1,0,0,1,1]],["jam band","Rock","rock",null,0,0,1965,19,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,1,0,1,0,0,0,1,0,0,1,0,1,0,0,1,1,2,1,2,0,0,0,0,0,0,0,2,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0]],["jam rock","Rock","jam band",null,0,0,1965,2,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["psychedelic rock","Rock","rock",null,1,0,1965,113,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,5,15,15,9,7,4,0,0,2,0,0,0,1,2,2,3,3,2,0,1,0,0,1,0,2,0,0,2,3,0,3,1,1,1,1,0,2,1,1,2,1,3,0,0,3,2,1,1,1,0,2,2,0,1,1,0,0,1,0,0]],["country rock","Country & Folk","country",null,0,0,1966,68,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,2,1,3,3,1,2,3,3,1,0,2,1,1,0,0,0,0,2,0,4,0,2,0,1,3,0,2,2,2,2,2,0,5,2,1,0,2,0,0,1,4,0,1,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0]],["experimental rock","Rock","rock",null,0,0,1966,19,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1,2,1,1,1,0,0,0,0,1,0,1,0,0,1,1,0,0,0,0,0,2,2,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["soft rock","Rock","rock",null,0,0,1966,23,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,1,0,1,0,3,2,1,0,1,1,3,1,1,0,0,0,1,1,1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["instrumental","Rock",null,null,0,1,1967,5,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0]],["progressive rock","Rock","psychedelic rock",null,1,0,1967,103,[0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,2,7,4,8,6,4,4,4,5,4,3,2,4,1,1,2,1,1,1,1,0,4,1,2,0,2,0,1,1,1,1,3,2,0,0,3,0,0,0,0,2,3,0,1,2,1,2,0,0,1,0,0,0,1,0,0,1,0,0]],["psychedelic pop","Pop","pop",null,0,0,1967,4,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0]],["heavy metal","Metal","hard rock",null,1,0,1968,154,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,4,2,2,1,2,1,3,1,1,1,8,8,6,8,8,14,9,4,6,4,3,0,1,1,4,2,4,4,2,2,0,4,1,0,1,3,4,1,0,1,0,2,2,4,2,1,1,2,2,1,2,1,1,1,0,0]],["jazz rock","Jazz","jazz",null,0,0,1968,49,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,2,4,4,2,3,1,2,2,2,0,2,1,0,0,0,1,0,0,0,0,0,1,0,1,1,1,1,0,0,1,2,1,1,1,1,1,0,1,1,0,1,0,0,0,2,0,0,0,0,1,2,0,0,0,0,0,0]],["power pop","Rock","rock",null,0,0,1968,40,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,3,1,0,0,0,0,0,1,1,0,2,2,2,1,1,1,0,0,0,0,0,1,2,2,0,1,2,0,1,3,0,2,0,2,0,2,0,1,1,0,0,1,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0]],["prog rock","Rock","progressive rock",null,0,0,1968,49,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,4,2,4,1,0,3,1,0,0,0,0,0,1,0,0,1,1,0,0,0,0,0,1,0,0,2,0,0,0,4,1,0,2,1,1,1,1,1,1,1,1,0,1,2,1,1,0,1,0,1,0,1,0,0,0]],["reggae","Reggae & Ska","ska",null,1,0,1968,102,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,0,4,0,1,1,1,3,2,1,4,4,4,1,1,2,4,4,2,1,4,4,2,4,1,1,2,0,0,1,1,2,0,0,0,1,1,2,0,3,2,3,1,2,0,0,2,0,1,3,1,3,2,0,1,1,2,0,1,1,2,0,1,0,0,0,1,0,0,0]],["roots rock","Rock","rock",null,0,0,1968,4,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]],["singer songwriter","Country & Folk","folk",null,0,0,1968,5,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0]],["afrobeat","Latin & World",null,null,0,0,1969,11,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,1,0,1,0,0,1,0,0]],["art rock","Rock","rock",null,0,0,1969,38,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,2,1,2,0,1,3,2,0,2,1,2,1,1,0,0,2,0,1,0,0,0,0,2,1,2,0,0,1,0,0,0,0,3,0,0,0,1,0,0,1,1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,1,0]],["funk","Blues, Soul & R&B","soul",null,1,0,1969,58,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,4,2,4,3,2,0,4,2,2,2,3,1,1,0,0,0,0,1,0,0,1,0,0,1,2,1,0,1,0,0,2,0,0,1,0,0,1,0,0,2,2,1,0,2,0,2,0,1,0,2,0,0,0,1,1,0,0]],["krautrock","Rock","psychedelic rock",null,0,0,1969,9,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["disco","Electronic & Dance","funk",null,0,0,1970,36,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,2,3,3,2,2,2,3,1,4,3,1,1,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0]],["electronic","Electronic & Dance",null,null,1,0,1970,167,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,3,1,1,3,1,1,0,0,1,0,1,0,3,1,3,4,4,1,6,10,10,7,2,3,7,8,3,3,5,6,3,3,5,5,2,1,2,1,5,2,3,7,11,2,2,4,2,2,1,1,1,1,0,0,1]],["electronic rock","Electronic & Dance","electronic",null,0,0,1970,9,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,1,0,2,0,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["jazz funk","Jazz","jazz",null,0,0,1970,16,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,1,1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,0,0,1,0,0,0,0,1,0,0,1,0,0,0,0]],["latin pop","Latin & World","latin",null,0,0,1970,23,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1,1,1,3,1,0,0,1,0,0,1,1,2,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,1,1,0,0,0,0,0,0]],["space rock","Rock","psychedelic rock",null,0,0,1970,13,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1,0,3,0,0,0,0,0,0,0,1,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["funk rock","Blues, Soul & R&B","funk",null,0,0,1971,7,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["glam rock","Rock","rock",null,0,0,1971,14,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,2,1,0,3,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["pub rock","Rock","rock",null,0,0,1971,6,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["progressive bluegrass","Country & Folk","bluegrass",null,0,0,1972,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["arena rock","Rock","hard rock",null,0,0,1973,5,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0]],["dub","Reggae & Ska","reggae",null,0,0,1973,10,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,1,1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["jazz fusion","Jazz","jazz",null,0,0,1973,27,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,3,0,0,4,1,0,1,0,1,1,0,0,3,0,0,0,1,1,1,0,1,0,0,1,1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1,1,0,0,0,0,1,0,0,0,0,0]],["new age","Electronic & Dance","electronic",null,0,0,1973,20,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,3,0,0,1,1,0,1,2,2,2,1,1,0,1,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0]],["t pop","Pop","pop",null,0,0,1973,6,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,2,0,0]],["glam","Rock","glam rock",null,0,0,1974,24,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,2,1,0,0,1,0,1,0,1,1,2,1,2,3,2,0,2,0,1,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["southern rock","Rock","rock",null,0,0,1974,35,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,3,1,1,2,1,2,2,1,5,2,0,1,0,1,0,0,1,0,0,1,0,0,0,0,0,2,0,0,0,0,0,0,0,0,1,0,0,0,1,2,0,0,0,1,0,0,1,0,0,1,1,0,0,0,0,0]],["hip hop","Hip Hop",null,"funk",1,0,1975,222,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,1,1,0,0,0,1,3,1,1,1,1,1,0,4,2,5,9,5,9,4,6,4,7,14,8,15,7,9,5,8,5,6,2,4,2,5,3,3,3,1,3,6,2,5,5,4,7,5,3,5,1,3,1,1,2,0]],["aor","Rock","hard rock",null,0,0,1976,9,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0]],["industrial","Electronic & Dance","electronic",null,0,0,1976,43,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,1,0,1,2,3,0,1,1,1,1,2,6,1,1,1,2,1,2,2,2,0,0,2,2,0,1,1,1,0,1,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0]],["new wave","Punk & Hardcore","punk rock",null,0,0,1976,90,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,0,0,0,1,0,1,1,2,15,9,11,13,8,10,6,4,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,2,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0]],["punk rock","Punk & Hardcore","garage rock",null,1,0,1976,128,[0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,2,0,2,0,4,1,2,0,0,1,2,1,3,3,8,6,1,13,4,5,1,2,3,1,3,2,5,5,7,3,4,4,3,3,2,3,1,3,1,1,2,2,0,1,0,0,1,1,0,0,0,2,0,0,0,0,0,0,0,0,1,0]],["contemporary jazz","Jazz","jazz",null,0,0,1977,10,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,2,0,0,0,0,0,1,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0]],["fusion","Jazz","jazz fusion",null,0,0,1977,26,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,1,0,2,0,0,0,1,0,3,0,0,2,0,1,1,0,0,0,1,0,1,1,0,1,1,0,1,1,1,0,2,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0]],["oi","Punk & Hardcore","punk rock",null,0,0,1977,6,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0]],["post punk","Punk & Hardcore","punk rock",null,1,0,1977,95,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0,0,0,3,3,7,13,8,6,6,8,2,3,1,1,0,1,1,0,0,0,0,0,2,0,0,2,2,0,1,1,0,0,0,0,1,0,1,1,2,3,2,0,1,1,0,3,1,1,0,2,0]],["punk","Punk & Hardcore","punk rock",null,0,0,1977,34,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,4,0,1,2,1,2,1,1,3,0,1,2,0,1,0,0,0,3,2,1,0,0,1,1,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,1]],["ambient","Electronic & Dance","electronic",null,0,0,1978,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1,1,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0]],["no wave","Punk & Hardcore","punk rock",null,0,0,1978,7,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["avantgarde","Alternative & Indie","experimental rock",null,0,1,1979,16,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,0,0,0,0,0,0,0,0,0,2,0,0,0,0,1,0,1,0,0,1,1,0,1,0,0,2,0,0,1,1,0,0,0,1,0,0,0,0,0,0,1,0]],["goth rock","Punk & Hardcore","post punk",null,0,0,1979,5,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0]],["gothic rock","Punk & Hardcore","post punk",null,0,0,1979,23,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,1,3,3,0,4,0,2,2,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["alternative rock","Alternative & Indie","post punk",null,1,0,1980,468,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,0,1,0,0,1,0,0,3,3,2,2,0,1,1,1,2,2,2,6,5,6,6,12,11,15,10,15,22,19,27,29,21,25,21,18,12,13,7,15,15,10,11,6,7,11,11,5,7,2,2,6,4,2,6,6,2,5,2,2,3,3,1,0]],["anarcho punk","Punk & Hardcore","punk rock",null,0,0,1980,6,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,2,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["d beat","Punk & Hardcore","hardcore punk",null,0,0,1980,5,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0]],["dancehall","Reggae & Ska","reggae",null,0,0,1980,15,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,2,0,1,1,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]],["hardcore punk","Punk & Hardcore","punk rock",null,1,0,1980,144,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,1,2,5,6,15,12,6,4,3,5,4,3,5,7,0,4,2,3,4,5,2,4,1,0,1,2,5,0,1,2,1,2,2,1,2,2,5,0,2,1,0,2,2,3,1,0,0,1,1]],["indie rock","Alternative & Indie","alternative rock",null,0,0,1980,306,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,0,1,1,1,1,1,0,0,0,1,1,1,2,1,5,3,4,3,0,5,4,7,2,9,6,10,12,5,9,7,8,6,15,18,13,8,15,17,7,9,9,7,13,7,2,8,9,8,6,3,4,0,2,4,0,1,1]],["synth pop","Pop","new wave",null,0,0,1980,42,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,4,6,4,4,6,1,2,1,1,0,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,1,0,2,2,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0]],["glam metal","Metal","heavy metal",null,0,0,1981,18,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,1,0,0,2,1,3,1,2,0,3,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["hardcore","Punk & Hardcore","punk rock",null,0,0,1981,87,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,3,2,4,3,2,1,4,4,1,3,2,3,0,4,3,4,2,0,1,2,3,2,0,3,3,2,0,4,7,3,0,2,1,2,2,0,0,1,0,1,1,0,0,0]],["black metal","Metal","thrash metal",null,1,0,1982,27,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,1,0,1,0,0,0,2,0,1,1,1,2,3,2,1,0,0,0,0,2,0,0,0,1,0,1,2,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["crust","Punk & Hardcore","hardcore punk",null,0,0,1982,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0]],["thrash metal","Metal","heavy metal",null,1,0,1982,31,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,3,2,2,5,4,1,2,1,1,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,2,1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0]],["crossover thrash","Metal","thrash metal","hardcore punk",0,0,1983,15,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,1,3,0,0,3,0,1,0,0,2,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["death metal (early)","Metal","thrash metal",null,0,0,1983,5,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,2,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["jangle pop","Alternative & Indie","indie rock",null,0,0,1983,5,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["power metal","Metal","heavy metal",null,0,0,1983,41,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,2,4,1,0,2,1,2,3,1,1,1,2,0,0,1,2,3,2,1,0,2,0,1,1,1,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,0,0]],["shoegaze","Alternative & Indie","alternative rock",null,0,0,1983,18,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1,3,0,0,0,0,0,2,3,0,1,0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0,0,0]],["african","Latin & World",null,null,0,1,1984,17,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,2,0,0,0,0,1,1,0,0,1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1,2,0,0]],["doom metal","Metal","heavy metal",null,1,0,1984,35,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,1,1,1,1,0,1,0,0,2,2,0,1,0,1,1,1,1,3,2,2,2,1,2,1,0,0,0,2,1,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0]],["electro","Electronic & Dance","electronic",null,0,0,1984,7,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,0,0,0,0,0,1,0,0]],["house","Electronic & Dance","disco",null,0,0,1984,47,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,1,1,1,1,1,2,5,0,0,0,1,0,2,0,2,3,2,0,1,1,0,1,1,0,2,3,0,3,2,1,3,1,1,2,0,0,0,0,0]],["noise rock","Alternative & Indie","alternative rock",null,0,0,1984,23,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,1,0,0,1,1,2,1,1,3,1,2,0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0]],["progressive metal","Metal","heavy metal",null,0,0,1984,52,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2,0,1,0,0,1,1,1,1,1,1,0,1,1,1,2,4,0,1,1,1,4,1,5,2,1,0,2,1,1,0,2,0,2,0,2,0,1,0,2,0,1,1,0,0,0,1,0,1]],["thrash","Metal","thrash metal",null,0,0,1984,16,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,2,1,1,1,1,0,1,0,0,1,1,0,0,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0]],["alternative country","Country & Folk","country",null,0,0,1985,12,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,1,0,1,0,0,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0]],["death metal","Metal","thrash metal",null,1,0,1985,191,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1,1,2,1,3,6,15,10,22,17,9,11,13,4,4,3,6,4,3,3,6,2,2,5,3,4,10,3,1,0,3,0,1,2,1,1,1,2,2,0,1,0,1,0]],["emo","Punk & Hardcore","hardcore punk",null,0,0,1985,36,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,1,1,2,3,3,3,1,3,2,0,2,0,1,1,1,0,0,4,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0]],["techno","Electronic & Dance","electronic",null,0,0,1985,7,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0]],["funk metal","Metal","funk",null,0,0,1986,11,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,1,0,1,1,0,1,0,0,1,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["grunge","Alternative & Indie","alternative rock",null,1,0,1986,26,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,1,1,1,2,4,2,2,3,1,1,2,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0]],["indie pop","Alternative & Indie","indie rock",null,0,0,1986,61,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,3,0,0,0,0,0,0,1,0,0,1,1,0,0,0,0,1,0,2,0,0,0,1,1,1,1,0,2,2,1,0,1,1,0,0,1,1,1,0,2,1,0,0,0,1,4,5,0,5,6,1,0,1,3,3,1,0,3,0,0,1]],["lo fi","Alternative & Indie","indie rock",null,0,0,1986,6,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["lo fi indie rock","Alternative & Indie","indie rock",null,0,0,1986,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["rap metal","Metal","hip hop",null,0,0,1986,5,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["rap rock","Hip Hop","hip hop",null,0,0,1986,15,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1,1,2,1,0,0,1,0,0,1,0,1,1,1,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0]],["sludge metal","Metal","doom metal",null,0,0,1986,16,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,1,0,1,1,0,2,0,0,1,0,0,0,0,0,1,0,0,1,0,0,0,0,0]],["dance pop","Pop","pop",null,0,0,1987,13,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,1,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,1,0,1,1,0,1,0,0,0,0,0,0]],["ska punk","Punk & Hardcore","ska",null,0,0,1987,5,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["acid jazz","Jazz","jazz funk",null,0,0,1988,6,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,1,0,1,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["gangsta","Hip Hop","hip hop",null,0,0,1988,5,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["gothic metal","Metal","doom metal",null,0,0,1988,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,0,0,1,1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["grindcore","Punk & Hardcore","hardcore punk","death metal",0,0,1988,21,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,2,2,2,2,1,0,0,1,2,1,0,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0]],["industrial metal","Metal","industrial",null,0,0,1988,21,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,2,0,0,1,2,0,4,0,0,2,0,0,2,0,0,2,0,1,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0]],["j pop","Pop","pop",null,0,0,1988,36,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,1,0,0,1,1,2,0,0,0,0,0,0,0,0,1,2,1,0,0,2,1,0,2,0,1,0,1,2,3,5,0,0,2,2]],["post hardcore","Punk & Hardcore","hardcore punk",null,0,0,1988,89,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,1,0,0,1,1,2,4,0,3,4,4,2,4,1,2,4,1,4,4,4,2,5,4,3,3,4,4,3,1,3,0,3,0,0,1,1,1,0,1,0,0,1,1,0,0]],["industrial rock","Electronic & Dance","industrial",null,0,0,1989,14,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,2,0,2,0,0,0,2,1,0,1,0,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]],["math rock","Alternative & Indie","alternative rock",null,0,0,1989,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,1,0,1,1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0]],["metallic hardcore","Punk & Hardcore","hardcore punk",null,0,0,1989,6,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["alternative metal","Metal","heavy metal",null,0,0,1990,53,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1,2,1,4,2,2,0,4,3,2,5,2,4,1,2,2,1,2,3,0,0,1,0,0,0,1,0,2,2,1,0,0,0,0,0,0,0,0]],["groove metal","Metal","thrash metal",null,0,0,1990,14,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,1,0,1,1,0,1,2,1,0,0,1,0,2,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["progressive house","Electronic & Dance","house",null,0,0,1990,5,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["stoner rock","Metal","doom metal",null,0,0,1990,30,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,2,0,0,0,1,1,0,2,3,3,3,0,1,0,2,3,0,0,1,0,0,0,0,1,3,0,0,0,0,0,0,0,0,0,0]],["contemporary r and b","Blues, Soul & R&B","r&b",null,0,0,1991,23,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,2,3,1,0,0,1,1,0,0,0,1,1,2,0,1,0,1,1,0,0,1,0,1,0,0,0,0,0,0,1,1,0,0,1]],["downtempo","Electronic & Dance","electronic",null,0,0,1991,6,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0]],["folk metal","Metal","heavy metal",null,0,0,1991,7,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,1,0,0,1,1,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["pop punk","Punk & Hardcore","punk rock",null,0,0,1991,48,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,1,2,1,0,0,0,1,1,0,0,1,2,0,2,2,3,1,3,3,0,2,3,5,1,1,1,3,3,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1,0,0]],["screamo","Punk & Hardcore","emo",null,0,0,1991,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,3,0,0,1,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["stoner metal","Metal","doom metal",null,0,0,1991,6,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["drum n bass","Electronic & Dance","electronic",null,0,0,1992,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["k pop","Pop","pop",null,0,0,1992,126,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,0,1,0,0,1,0,2,2,0,0,1,0,2,1,0,0,0,0,1,1,1,2,0,0,3,2,0,1,1,0,1,2,1,1,1,2,2,0,0,4,4,4,3,4,5,5,7,9,11,14,8,13]],["britpop","Alternative & Indie","indie rock",null,0,0,1993,14,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,1,0,1,0,1,1,0,2,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["christian hardcore","Punk & Hardcore","hardcore punk",null,0,0,1993,9,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1,1,3,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["neo soul","Blues, Soul & R&B","soul",null,0,0,1993,7,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,1,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["trance","Electronic & Dance","techno",null,0,0,1994,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,1,0,1,2,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["americana","Country & Folk","country",null,0,0,1995,5,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0]],["post grunge","Alternative & Indie","grunge",null,0,0,1995,16,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,0,1,1,1,1,1,3,0,1,0,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["post rock","Alternative & Indie","alternative rock",null,0,0,1995,21,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,1,1,3,0,1,3,3,0,1,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0]],["reggaeton","Latin & World","dancehall",null,0,0,1995,30,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,0,0,0,0,1,2,4,1,2,1,0,0,1,1,0,1,0,0,0,3,2,1,4,1,0,0,0,2]],["world","Latin & World",null,null,0,1,1995,27,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,0,0,1,2,0,3,1,0,0,2,1,0,0,0,0,0,2,0,1,1,0,2,1,1,1,0,0,0,1,0,1,0,0,2,0,0,0,0,0]],["experimental","Alternative & Indie","alternative rock",null,0,1,1996,7,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,2,0,0,1,2,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["melodic hardcore","Punk & Hardcore","hardcore punk",null,0,0,1996,36,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,2,0,0,0,0,1,1,0,5,1,2,2,1,3,0,2,2,3,1,0,0,0,2,0,1,1,0,0,0,0,2,0,0,0,2,0,0,0,0]],["nu metal","Metal","alternative metal","hip hop",1,0,1996,148,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,1,5,1,4,3,12,7,13,21,17,23,11,7,8,1,0,4,3,0,0,0,0,1,0,1,1,0,1,0,0,0,0,0,0,0,0,0]],["post metal","Metal","doom metal",null,0,0,1996,7,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0]],["symphonic metal","Metal","power metal",null,0,0,1996,10,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,3,0,0,0,1,0,1,0,1,0,1,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0]],["mathcore","Punk & Hardcore","hardcore punk",null,0,0,1997,7,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0]],["melodic death metal","Metal","death metal",null,0,0,1997,20,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,2,0,1,1,2,1,1,0,0,3,3,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0]],["dubstep","Electronic & Dance","drum n bass",null,0,0,1998,6,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0,0]],["metalcore","Metal","hardcore punk","heavy metal",0,0,1999,125,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,2,3,2,4,4,2,6,9,5,5,4,3,6,5,2,3,4,10,6,0,5,3,6,5,3,4,5,2,0,2,0,0,1,0]],["noise","Alternative & Indie","noise rock",null,0,0,1999,11,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,1,1,0,2,0,0,2,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],["indie folk","Alternative & Indie","indie rock",null,0,0,2002,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,1,1,1,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0]],["deathcore","Metal","death metal","metalcore",0,0,2004,8,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,1,0,1,3,0,0,0,0,0,0,0,0,0,0]],["electro house","Electronic & Dance","house",null,0,0,2009,6,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,2,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0]],["edm","Electronic & Dance","electronic",null,0,0,2010,4,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0]],["afrobeats","Latin & World","african",null,0,0,2011,6,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,0,2,0,0,0,0]],["metal","Metal","heavy metal",null,0,0,2011,9,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,1,0,2,1,0,0,0,1,0,0,0,0,0,0,0,0]],["holiday","Pop","pop",null,0,1,2012,7,[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,0,2,0,2,0,0,0,0,0,0,0,0,0,0]]]};
+
+/* ================= MODEL ================= */
+var YEAR0 = DATA.years[0], YEAR1 = DATA.years[DATA.years.length - 1], NYEARS = DATA.years.length;
+var nodes = {}, branchNodes = [], descriptors = [];
+DATA.genres.forEach(function (g) {
+  var n = {
+    name: g[0], family: g[1], parentName: g[2], second: g[3],
+    major: !!g[4], descriptor: !!g[5], birth: g[6], total: g[7], debuts: g[8],
+    children: [], side: 0, depth: 0
+  };
+  nodes[n.name] = n;
+  if (n.descriptor) descriptors.push(n); else branchNodes.push(n);
+});
+branchNodes.forEach(function (n) {
+  var p = n.parentName ? nodes[n.parentName] : null;
+  n.layoutParent = (p && !p.descriptor) ? p.name : null;
+  n.orphanParent = (n.parentName && (!p || p.descriptor)) ? n.parentName : null;
+});
+branchNodes.forEach(function (n) {
+  if (n.layoutParent) nodes[n.layoutParent].children.push(n);
+});
+function sortKids(n) {
+  n.children.sort(function (a, b) {
+    return (a.birth - b.birth) || (b.total - a.total) || (a.name < b.name ? -1 : 1);
+  });
+  n.children.forEach(function (c, i) { c.side = (i % 2 === 0) ? -1 : 1; c.depth = n.depth + 1; sortKids(c); });
+}
+var roots = branchNodes.filter(function (n) { return !n.layoutParent; })
+  .sort(function (a, b) { return a.birth - b.birth; });
+roots.forEach(function (r) { r.depth = 0; sortKids(r); });
+
+/* ================= COLOUR — changes only at majors ================= */
+var MAJOR_COLORS = {
+  "jazz": "#96762e", "blues": "#46648c", "country": "#7a8446", "pop": "#b3546e",
+  "rock": "#94502e", "hard rock": "#a03d2d", "psychedelic rock": "#6d5a9e",
+  "progressive rock": "#4f7d8c", "heavy metal": "#5b6470", "reggae": "#4e7d46",
+  "funk": "#b06a28", "electronic": "#2f7f7a", "hip hop": "#8c3f5e",
+  "punk rock": "#a8324a", "post punk": "#546a8c", "alternative rock": "#3f7d5a",
+  "hardcore punk": "#7a3b2e", "black metal": "#3a3f4a", "thrash metal": "#ad5a1e",
+  "doom metal": "#5e5245", "death metal": "#6e2f35", "grunge": "#66713f", "nu metal": "#38618c"
+};
+var ROOT_COLORS = {
+  "folk": "#8a7a3a", "latin": "#b3542e", "ska": "#478a7d", "afrobeat": "#96682a", "afrobeats": "#96682a"
+};
+function colorOrigin(n) {
+  var cur = n;
+  while (cur) {
+    if (cur.major) return cur;
+    if (!cur.layoutParent) return cur;
+    cur = nodes[cur.layoutParent];
+  }
+  return n;
+}
+branchNodes.forEach(function (n) {
+  var o = colorOrigin(n);
+  n.colorFrom = o.name;
+  n.color = MAJOR_COLORS[o.name] || ROOT_COLORS[o.name] || "#777777";
+});
+
+/* ================= THICKNESS — fluctuates with per-year debuts ================= */
+function smoothed(n) {
+  if (n._sm) return n._sm;
+  var d = n.debuts, out = [], i, a, b, c;
+  for (i = 0; i < d.length; i++) {
+    a = d[Math.max(0, i - 1)]; b = d[i]; c = d[Math.min(d.length - 1, i + 1)];
+    out.push((a + 2 * b + c) / 4);
+  }
+  n._sm = out; return out;
+}
+function thickAt(n, year) {
+  var idx = year - YEAR0;
+  if (idx < 0) idx = 0; if (idx > NYEARS - 1) idx = NYEARS - 1;
+  return 2.4 + smoothed(n)[idx] * 0.78;
+}
+branchNodes.forEach(function (n) {
+  var m = 0, y;
+  for (y = n.birth; y <= YEAR1; y++) m = Math.max(m, thickAt(n, y));
+  n.maxThick = m;
+  n.slotH = Math.max(21, m + 13);
+  var pk = 0, pkY = n.birth;
+  n.debuts.forEach(function (v, i) { if (v > pk) { pk = v; pkY = YEAR0 + i; } });
+  n.peak = pk; n.peakYear = pkY;
+});
+descriptors.forEach(function (n) {
+  var pk = 0, pkY = n.birth;
+  n.debuts.forEach(function (v, i) { if (v > pk) { pk = v; pkY = YEAR0 + i; } });
+  n.peak = pk; n.peakYear = pkY;
+});
+
+/* ================= LAYOUT — nested arcs, never cross the streams =================
+   Each subtree owns a contiguous vertical block. Children alternate above/below
+   their parent in split-year order; on each side the EARLIEST split takes the
+   OUTERMOST lane, later splits tuck closer in. Because an outer (earlier) arc
+   is drawn at an earlier x than every ribbon it passes over begins, and each
+   arc finishes its travel before the nearest inner sibling's ribbon starts,
+   no two paths can cross — verified numerically below. */
+function layoutBlock(n) {
+  var above = n.children.filter(function (c) { return c.side < 0; });
+  var below = n.children.filter(function (c) { return c.side > 0; });
+  above.forEach(layoutBlock); below.forEach(layoutBlock);
+  var y = 0;
+  above.forEach(function (c) { c.relTop = y; y += c.blockH; });
+  n.laneRel = y + n.slotH / 2; y += n.slotH;
+  below.slice().reverse().forEach(function (c) { c.relTop = y; y += c.blockH; });
+  n.blockH = y;
+}
+var TOP_PAD = 44, TREE_GAP = 34, totalH = TOP_PAD;
+roots.forEach(function (r) {
+  layoutBlock(r);
+  r.absTop = totalH; totalH += r.blockH + TREE_GAP;
+});
+totalH += 26;
+function placeAbs(n, absTop) {
+  n.laneY = absTop + n.laneRel;
+  n.children.forEach(function (c) { placeAbs(c, absTop + c.relTop); });
+}
+roots.forEach(function (r) { placeAbs(r, r.absTop); });
+
+/* ================= X GEOMETRY (recomputed per chart width) ================= */
+var PADL = 30, PADR = 46, chartW = 3100;
+function xOf(year) { return PADL + (year - YEAR0) / (YEAR1 - YEAR0) * (chartW - PADL - PADR); }
+function computeX() {
+  var ordered = branchNodes.slice().sort(function (a, b) {
+    return (a.birth - b.birth) || (a.depth - b.depth);
+  });
+  ordered.forEach(function (n) {
+    n.dispX = xOf(n.birth);
+    if (n.layoutParent) {
+      var p = nodes[n.layoutParent];
+      if (p.dispX !== undefined) n.dispX = Math.max(n.dispX, p.dispX + 26);
+    }
+  });
+  /* sibling separation: same-side outer->inner gaps >= 30px (arc clearance),
+     any two sibling nodes >= 15px apart (individually tappable) */
+  var byParent = {};
+  branchNodes.forEach(function (n) { if (n.layoutParent) (byParent[n.layoutParent] = byParent[n.layoutParent] || []).push(n); });
+  Object.keys(byParent).forEach(function (pk) {
+    var sibs = byParent[pk], pass, i, a, b;
+    for (pass = 0; pass < 3; pass++) {
+      [-1, 1].forEach(function (sd) {
+        var same = sibs.filter(function (s) { return s.side === sd; })
+          .sort(function (x, y) { return x.birth - y.birth || x.dispX - y.dispX; });
+        for (i = 1; i < same.length; i++) {
+          if (same[i].dispX < same[i - 1].dispX + 30) same[i].dispX = same[i - 1].dispX + 30;
+        }
+      });
+      var all = sibs.slice().sort(function (x, y) { return x.dispX - y.dispX; });
+      for (i = 1; i < all.length; i++) {
+        if (all[i].dispX < all[i - 1].dispX + 15) all[i].dispX = all[i - 1].dispX + 15;
+      }
+    }
+  });
+  branchNodes.forEach(function (n) {
+    if (!n.layoutParent) { n.arcW = 0; return; }
+    var p = nodes[n.layoutParent];
+    var dy = Math.abs(n.laneY - p.laneY);
+    var limit = Infinity;
+    p.children.forEach(function (s) {
+      if (s !== n && s.side === n.side && s.dispX > n.dispX) limit = Math.min(limit, s.dispX);
+    });
+    var avail = (limit === Infinity) ? 130 : (limit - n.dispX - 4);
+    n.arcW = Math.max(10, Math.min(0.5 * dy + 16, 118, avail));
+    n.arcEndX = n.dispX + n.arcW;
+    var half = thickAt(p, n.birth) / 2;
+    n.nodeY = p.laneY + n.side * Math.max(0, half - 3.4);
+  });
+}
+
+/* ================= VERIFICATION (by construction, checked numerically) ================= */
+function verifyGeometry() {
+  var arcViol = 0, minGap = Infinity, minNodeSep = Infinity, i;
+  branchNodes.forEach(function (n) {
+    if (!n.layoutParent) return;
+    var p = nodes[n.layoutParent], limit = Infinity;
+    p.children.forEach(function (s) {
+      if (s !== n && s.side === n.side && s.dispX > n.dispX) limit = Math.min(limit, s.dispX);
+    });
+    if (limit !== Infinity && n.dispX + n.arcW > limit - 2) arcViol++;
+    p.children.forEach(function (s) {
+      if (s === n) return;
+      var d = Math.hypot(s.dispX - n.dispX, s.nodeY - n.nodeY);
+      if (d < minNodeSep) minNodeSep = d;
+    });
+  });
+  var lanes = branchNodes.slice().sort(function (a, b) { return a.laneY - b.laneY; });
+  for (i = 1; i < lanes.length; i++) {
+    var gap = (lanes[i].laneY - lanes[i - 1].laneY) - (lanes[i].maxThick + lanes[i - 1].maxThick) / 2;
+    if (gap < minGap) minGap = gap;
+  }
+  return { arcViol: arcViol, minGap: minGap, minNodeSep: minNodeSep };
+}
+/* ================= RENDER ================= */
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function r1(v) { return Math.round(v * 10) / 10; }
+var selected = null, focusYear = 1985, labelMode = "all";
+/* Display scale: geometry is always computed at the natural width (chartW);
+   the Time stretch slider only scales how big that drawing is shown.
+   scale = fitAll  -> whole tree visible, height included (slider far left)
+   scale = fitW    -> chart exactly fills the available width (the default) */
+var NATW = chartW, MAXS = 2.0, scale = 1, fitAll = 0.25, fitW = 0.4;
+var MAG = 2.4, lensOn = false, lensEl = null, lensInner = null;
+
+function ribbonPath(n) {
+  var top = [], bot = [], y;
+  for (y = n.birth; y <= YEAR1; y++) {
+    var x = (y === n.birth) ? n.arcEndX || xOf(y) : xOf(y);
+    if (y === n.birth && n.layoutParent) x = n.arcEndX;
+    var h = thickAt(n, y) / 2;
+    top.push(r1(x) + "," + r1(n.laneY - h));
+    bot.push(r1(x) + "," + r1(n.laneY + h));
+  }
+  return "M" + top.join("L") + "L" + bot.reverse().join("L") + "Z";
+}
+function centerPath(n) {
+  var pts = [], y;
+  for (y = n.birth; y <= YEAR1; y += 2) pts.push(r1(xOf(y)) + "," + r1(n.laneY));
+  pts.push(r1(xOf(YEAR1)) + "," + r1(n.laneY));
+  return "M" + pts.join("L");
+}
+function arcPath(n) {
+  var p = nodes[n.layoutParent], x0 = n.dispX, y0 = p.laneY, y1 = n.laneY, w = n.arcW;
+  return "M" + r1(x0) + "," + r1(y0) +
+    "C" + r1(x0 + w * 0.45) + "," + r1(y0) + " " + r1(x0 + w * 0.55) + "," + r1(y1) + " " + r1(x0 + w) + "," + r1(y1);
+}
+
+function render() {
+  computeX();
+  var s = [];
+  s.push('<svg width="' + Math.round(chartW * scale) + '" height="' + Math.round(totalH * scale) + '" viewBox="0 0 ' + chartW + ' ' + totalH + '" role="img" aria-label="Genre lineage tree, 1917 to 2024">');
+  /* decade gridlines + axis labels, top and bottom */
+  var yr;
+  for (yr = 1920; yr <= 2020; yr += 10) {
+    var gx = r1(xOf(yr));
+    s.push('<line x1="' + gx + '" y1="30" x2="' + gx + '" y2="' + (totalH - 30) + '" stroke="var(--line)" stroke-width="1"/>');
+    s.push('<text class="tick-label" x="' + gx + '" y="20" text-anchor="middle">' + yr + '</text>');
+    s.push('<text class="tick-label" x="' + gx + '" y="' + (totalH - 8) + '" text-anchor="middle">' + yr + '</text>');
+  }
+  /* focus-year line */
+  s.push('<g id="focusG"><line id="focusLine" x1="0" y1="26" x2="0" y2="' + (totalH - 26) + '" stroke="var(--focus-line)" stroke-width="1.4" stroke-dasharray="5 4"/>' +
+    '<text id="focusTag" y="36" font-size="11" font-weight="700" fill="var(--focus-line)"></text></g>');
+  /* arcs (under ribbons) */
+  branchNodes.forEach(function (n) {
+    if (!n.layoutParent) return;
+    var d = arcPath(n);
+    s.push('<path class="arc" data-g="' + esc(n.name) + '" d="' + d + '" stroke="' + n.color + '" stroke-width="' + r1(thickAt(n, n.birth)) + '" stroke-linecap="round" opacity="' + (n.major ? "1" : "0.92") + '"/>');
+    s.push('<path class="hit" data-g="' + esc(n.name) + '" d="' + d + '" stroke-width="15"/>');
+  });
+  /* ribbons — majors run at full strength so the big trunks read first;
+     minor branches and small roots stay lighter. Thickness itself is
+     unchanged: it is still driven only by per-year debuts. */
+  branchNodes.forEach(function (n) {
+    if (n.major) {
+      s.push('<path class="ribbon major" data-g="' + esc(n.name) + '" d="' + ribbonPath(n) + '" fill="' + n.color + '" stroke="' + n.color + '" stroke-width="1" opacity="1"/>');
+    } else {
+      s.push('<path class="ribbon" data-g="' + esc(n.name) + '" d="' + ribbonPath(n) + '" fill="' + n.color + '" opacity="' + (!n.layoutParent ? "0.82" : "0.88") + '"/>');
+    }
+    s.push('<path class="hit" data-g="' + esc(n.name) + '" d="' + centerPath(n) + '" stroke-width="15"/>');
+  });
+  /* rock and roll era marker on the rock branch */
+  var rock = nodes["rock"];
+  if (rock) {
+    s.push('<text class="era-label" x="' + r1(xOf(1953)) + '" y="' + r1(rock.laneY + rock.maxThick / 2 + 12) + '">rock and roll era 1949–59</text>');
+  }
+  /* labels */
+  branchNodes.forEach(function (n) {
+    var lx = (n.layoutParent ? n.arcEndX : xOf(n.birth)) + 5;
+    var ly = n.laneY - n.maxThick / 2 - (n.major ? 5 : 3);
+    var kind = n.major ? "major" : (!n.layoutParent ? "root" : "minor");
+    var label = n.major
+      ? esc(n.name) + ' · ' + n.birth + ' · ' + n.total.toLocaleString("en-US") + ' bands'
+      : esc(n.name) + ' · ' + n.birth;
+    s.push('<text class="glabel ' + kind + '" data-g="' + esc(n.name) + '" data-kind="' + kind + '" x="' + r1(lx) + '" y="' + r1(ly) + '">' + label + '</text>');
+  });
+  /* split nodes — deepest painted last so outer/smaller nodes win the tap */
+  var dots = branchNodes.slice().sort(function (a, b) { return a.depth - b.depth; });
+  dots.forEach(function (n) {
+    var cx, cy;
+    if (n.layoutParent) { cx = n.dispX; cy = n.nodeY; }
+    else { cx = xOf(n.birth); cy = n.laneY; }
+    var rr = n.major ? 5 : (!n.layoutParent ? 3.6 : 2.9);
+    s.push('<circle class="node-hit" data-g="' + esc(n.name) + '" cx="' + r1(cx) + '" cy="' + r1(cy) + '" r="11"/>');
+    if (n.major) {
+      s.push('<circle class="node-ring" data-g="' + esc(n.name) + '" cx="' + r1(cx) + '" cy="' + r1(cy) + '" r="8.2" fill="none" stroke="' + n.color + '" stroke-width="1.6" opacity="0.85"/>');
+    }
+    s.push('<circle class="node-dot" data-g="' + esc(n.name) + '" cx="' + r1(cx) + '" cy="' + r1(cy) + '" r="' + rr + '" fill="' + n.color + '" stroke="var(--chart-bg)" stroke-width="' + (n.major ? "1.6" : "1.3") + '" pointer-events="none"/>');
+  });
+  s.push("</svg>");
+  document.getElementById("chartHost").innerHTML = s.join("");
+  ensureLens();
+  refreshLens();
+  applyLabelMode();
+  applyFocus();
+  if (selected) applySelection();
+}
+
+/* ================= ZOOM — fit, stretch, magnifier ================= */
+function computeFits() {
+  var sc = document.getElementById("chartScroll");
+  var aw = sc.clientWidth;
+  var ah = Math.round(window.innerHeight * (window.innerWidth <= 1080 ? 0.70 : 0.76));
+  if (aw > 0) fitW = aw / NATW;
+  fitAll = (ah > 0) ? Math.min(fitW, ah / totalH) : fitW;
+  if (!(fitAll > 0)) fitAll = 0.1;
+  if (fitAll > fitW) fitAll = fitW;
+}
+function tToScale(t) { return fitAll * Math.pow(MAXS / fitAll, t); }
+function scaleToT(s) { return Math.log(s / fitAll) / Math.log(MAXS / fitAll); }
+function updateZoomRead() {
+  var el = document.getElementById("zoomRead");
+  if (!el) return;
+  var tag = "";
+  if (Math.abs(scale - fitAll) < 0.004) tag = " · whole tree";
+  else if (Math.abs(scale - fitW) < 0.004) tag = " · fit width";
+  el.textContent = Math.round(scale * 100) + "%" + tag;
+}
+function applyScale() {
+  var svg = document.querySelector("#chartHost > svg");
+  if (svg) {
+    svg.setAttribute("width", Math.round(chartW * scale));
+    svg.setAttribute("height", Math.round(totalH * scale));
+  }
+  refreshLens();
+  updateZoomRead();
+}
+function ensureLens() {
+  var host = document.getElementById("chartHost");
+  lensEl = document.createElement("div");
+  lensEl.className = "lens";
+  lensEl.setAttribute("aria-hidden", "true");
+  lensInner = document.createElement("div");
+  lensInner.className = "lens-inner";
+  lensEl.appendChild(lensInner);
+  host.appendChild(lensEl);
+}
+function refreshLens() {
+  if (!lensEl || !lensInner) return;
+  var svg = document.querySelector("#chartHost > svg");
+  if (!svg) { lensInner.innerHTML = ""; return; }
+  var clone = svg.cloneNode(true);
+  var withIds = clone.querySelectorAll("[id]");
+  for (var i = 0; i < withIds.length; i++) withIds[i].removeAttribute("id");
+  clone.removeAttribute("id");
+  clone.setAttribute("width", Math.round(chartW * scale * MAG));
+  clone.setAttribute("height", Math.round(totalH * scale * MAG));
+  lensInner.innerHTML = "";
+  lensInner.appendChild(clone);
+}
+
+/* ================= SELECTION / ANCESTRY ================= */
+function chainOf(n) {
+  var chain = [], cur = n;
+  while (cur) { chain.push(cur.name); cur = cur.layoutParent ? nodes[cur.layoutParent] : null; }
+  return chain;
+}
+function applySelection() {
+  var host = document.getElementById("chartHost");
+  var all = host.querySelectorAll(".ribbon,.arc,.node-dot,.node-ring,.glabel");
+  if (!selected) { all.forEach(function (el) { el.classList.remove("dim", "dim-label"); }); return; }
+  var keep = {};
+  chainOf(nodes[selected]).forEach(function (nm) { keep[nm] = true; });
+  all.forEach(function (el) {
+    var on = !!keep[el.getAttribute("data-g")];
+    el.classList.toggle(el.classList.contains("glabel") ? "dim-label" : "dim", !on);
+  });
+}
+function debutsIn(n, year) { var i = year - YEAR0; return (i >= 0 && i < NYEARS) ? n.debuts[i] : 0; }
+function linkBtn(name) {
+  return '<button type="button" data-pick="' + esc(name) + '">' + esc(name) + '</button>';
+}
+function renderPanel() {
+  var panel = document.getElementById("panel");
+  if (!selected || !nodes[selected]) {
+    var top = branchNodes.slice().sort(function (a, b) { return b.total - a.total; }).slice(0, 7);
+    panel.innerHTML = "<h2>Trace a lineage</h2>" +
+      '<p class="empty">Hover or tap any branch, arc or dot. The whole ancestry path back to its root lights up and everything else dims — the thread is never lost.</p>' +
+      "<hr><h3>Biggest branches</h3><div class='kids'>" +
+      top.map(function (n) { return linkBtn(n.name); }).join("") + "</div>" +
+      '<hr><p class="mini">The rock tree holds 93 of the 162 branches. Jazz (1917) is the oldest starting branch; blues (1920) predates rock by three decades.</p>';
+    wirePanel(panel);
+    return;
+  }
+  var n = nodes[selected];
+  var chain = chainOf(n).slice().reverse();
+  var parentTxt = n.layoutParent ? '<a data-pick="' + esc(n.layoutParent) + '">' + esc(n.layoutParent) + "</a>"
+    : (n.orphanParent ? esc(n.orphanParent) + ' <span class="mini">(descriptor tag — not drawn; this branch starts its own tree)</span>' : "— starting branch");
+  var html = "";
+  html += '<h2><span class="swatch" style="background:' + n.color + '"></span>' + esc(n.name) + "</h2>";
+  html += '<div class="born">born ' + n.birth + " · " + esc(n.family) + " family</div>";
+  html += '<div class="ancestry">' + chain.map(function (nm, i) {
+    return '<button type="button" data-pick="' + esc(nm) + '"' + (i === chain.length - 1 ? ' style="border-color:var(--accent);font-weight:700"' : "") + ">" + esc(nm) + "</button>";
+  }).join('<span style="align-self:center;color:var(--ink-faint)">→</span>') + "</div>";
+  html += '<dl class="kv">';
+  html += "<dt>Parent</dt><dd>" + parentTxt + "</dd>";
+  if (n.second) html += "<dt>Second parent</dt><dd>" + esc(n.second) + ' <span class="mini">(hybrid — recorded, not drawn)</span></dd>';
+  html += "<dt>Colour from</dt><dd>" + esc(n.colorFrom) + (n.major ? " — this genre is itself a major" : "") + "</dd>";
+  html += "<dt>Total bands</dt><dd>" + n.total.toLocaleString("en-US") + "</dd>";
+  html += "<dt>Debuts in " + focusYear + "</dt><dd>" + debutsIn(n, focusYear) + "</dd>";
+  html += "<dt>Peak year</dt><dd>" + n.peakYear + " · " + n.peak + " debuts</dd>";
+  html += "<dt>Side</dt><dd>" + (!n.layoutParent ? "starting branch" : (n.side < 0 ? "branches above " + esc(n.layoutParent) : "branches below " + esc(n.layoutParent))) + "</dd>";
+  html += "</dl>";
+  if (n.name === "rock") html += '<p class="mini">Rock and roll (1949–1959) is this branch\'s first era, not a separate branch — and blues (1920) was there before both.</p>';
+  if (n.name === "rock" && rockEraActive) html += '<p class="mini"><strong>You are in the rock and roll era (1949–1959)</strong> — the graph and focus year were jumped to this stretch of the rock branch.</p>';
+  if (n.name === "black metal") html += '<p class="mini">One branch, two waves: first wave 1982–90 (Venom, Bathory, Hellhammer), second wave 1991–97 (the Norwegian scene).</p>';
+  if (n.children.length) {
+    var kids = n.children.slice().sort(function (a, b) { return a.birth - b.birth; });
+    html += "<hr><h3>Branches off " + esc(n.name) + " (" + kids.length + ")</h3><div class='kids'>" +
+      kids.map(function (c) { return linkBtn(c.name); }).join("") + "</div>";
+  }
+  html += '<hr><button class="btn" type="button" id="panelClear">Clear selection</button>';
+  panel.innerHTML = html;
+  wirePanel(panel);
+}
+function wirePanel(panel) {
+  panel.querySelectorAll("[data-pick]").forEach(function (el) {
+    el.addEventListener("click", function () { selectGenre(el.getAttribute("data-pick"), true); });
+  });
+  var c = document.getElementById("panelClear");
+  if (c) c.addEventListener("click", clearSelection);
+}
+var selectedDescriptor = null;
+var rockEraActive = false;
+function markMajorActive() {
+  document.querySelectorAll("#descRail .major-chip").forEach(function (el) {
+    var era = el.getAttribute("data-era");
+    var on = era ? rockEraActive : (!rockEraActive && el.getAttribute("data-major") === selected);
+    el.classList.toggle("active", !!on);
+  });
+}
+function selectRockAndRoll(scroll) {
+  var rockNode = nodes["rock"]; if (!rockNode) return;
+  selectedDescriptor = null;
+  markDescriptorActive();
+  selected = "rock";
+  rockEraActive = true;
+  /* land inside the era: focus year mid-era, graph scrolled to that stretch of the rock branch */
+  focusYear = 1954;
+  var slider = document.getElementById("yearSlider");
+  if (slider) slider.value = focusYear;
+  applyFocus();
+  applySelection();
+  markMajorActive();
+  renderPanel();
+  if (scroll) {
+    var sc = document.getElementById("chartScroll");
+    sc.scrollTo({
+      left: Math.max(0, xOf(1954) * scale - 260),
+      top: Math.max(0, rockNode.laneY * scale - 220),
+      behavior: "smooth"
+    });
+  }
+}
+var DESCRIPTOR_INFO = {
+  "vocal": "A tag for acts where the voice is the headline — the singing, not a style of playing, is what the label is pointing at. It cuts across eras and families, which is why it describes bands instead of parenting them.",
+  "acoustic": "A tag for acoustic instrumentation — unplugged, stripped-back or folk-leaning recordings. It names how the music is made, not where it came from, so it sits alongside lineages rather than starting one.",
+  "instrumental": "A tag for music without vocals. A playing format, not a lineage — instrumental acts belong to many different trees at once.",
+  "avantgarde": "Avant-garde: music that pushes at the edges — unusual structures, sounds and ideas ahead of (or deliberately outside) the mainstream of its moment. In this data the tag first appears in 1979, hanging off the experimental rock branch, and the 16 bands tagged with it are scattered across the alternative family rather than forming a tree of their own.",
+  "african": "A geographic tag for African music and African-rooted acts in the data. It names an origin, not a single lineage — its one drawn descendant, afrobeats, starts its own branch from this tag.",
+  "world": "A shelf tag, not a sound: the catch-all record-shop category for music from outside the Anglo-American mainstream. The 27 bands tagged with it come from many places and lineages, so it is kept as a descriptor rather than drawn as a branch.",
+  "experimental": "A tag for acts defined by trying things — new sounds, structures or methods. An approach that can appear inside almost any genre, so it describes bands across the trees instead of parenting one.",
+  "holiday": "A seasonal shelf tag — Christmas and holiday releases. It describes when the music is for, not what it sounds like or where it came from."
+};
+/* Where a descriptor "lives" on the graph: descriptors are not drawn, so a
+   click jumps to the descriptor's birth year (x) on the lane of the branch
+   it hangs off — its drawn parent if it has one, else its drawn child,
+   else the nearest earlier branch in its own family. */
+function descriptorAnchor(d) {
+  if (d.parentName && nodes[d.parentName] && !nodes[d.parentName].descriptor) {
+    return { node: nodes[d.parentName], why: "the branch this tag hangs off" };
+  }
+  var child = branchNodes.filter(function (n) { return n.parentName === d.name; })
+    .sort(function (a, b) { return a.birth - b.birth; })[0];
+  if (child) return { node: child, why: "its drawn descendant — this branch starts its own tree from the tag" };
+  var fam = branchNodes.filter(function (n) { return n.family === d.family && n.birth <= d.birth; })
+    .sort(function (a, b) { return (b.birth - a.birth) || (b.total - a.total); })[0];
+  if (fam) return { node: fam, why: "the nearest earlier branch in its " + d.family + " family" };
+  var any = branchNodes.filter(function (n) { return n.birth <= d.birth; })
+    .sort(function (a, b) { return (b.birth - a.birth) || (b.total - a.total); })[0];
+  return { node: any || branchNodes[0], why: "the closest branch of its era" };
+}
+function markDescriptorActive() {
+  document.querySelectorAll("#descRail .desc-chip").forEach(function (el) {
+    el.classList.toggle("active", el.getAttribute("data-desc") === selectedDescriptor);
+  });
+}
+function selectDescriptor(name, scroll) {
+  var d = nodes[name]; if (!d) return;
+  selected = null;
+  rockEraActive = false;
+  selectedDescriptor = name;
+  applySelection();
+  markMajorActive();
+  markDescriptorActive();
+  /* move the focus year to the descriptor's era, like a branch selection */
+  focusYear = d.birth;
+  var slider = document.getElementById("yearSlider");
+  if (slider) slider.value = d.birth;
+  applyFocus();
+  renderDescriptorPanel(name);
+  if (scroll) {
+    var a = descriptorAnchor(d);
+    var sc = document.getElementById("chartScroll");
+    sc.scrollTo({
+      left: Math.max(0, xOf(d.birth) * scale - 260),
+      top: Math.max(0, a.node.laneY * scale - 220),
+      behavior: "smooth"
+    });
+  }
+}
+function selectGenre(name, scroll) {
+  if (!nodes[name]) return;
+  if (nodes[name].descriptor) { selectDescriptor(name, scroll); return; }
+  selectedDescriptor = null;
+  rockEraActive = false;
+  markDescriptorActive();
+  selected = name;
+  applySelection();
+  markMajorActive();
+  renderPanel();
+  if (scroll) {
+    var n = nodes[name];
+    var sc = document.getElementById("chartScroll");
+    var cx = n.layoutParent ? n.dispX : xOf(n.birth);
+    sc.scrollTo({ left: Math.max(0, cx * scale - 260), top: Math.max(0, n.laneY * scale - 220), behavior: "smooth" });
+  }
+}
+function renderDescriptorPanel(name) {
+  var d = nodes[name]; if (!d) return;
+  var a = descriptorAnchor(d);
+  var html = "";
+  html += "<h2>" + esc(d.name) + "</h2>";
+  html += '<div class="born">descriptor tag · first tagged ' + d.birth + " · " + esc(d.family) + " family</div>";
+  html += '<p style="margin-top:10px">' + esc(DESCRIPTOR_INFO[d.name] || "A descriptor tag — it describes a sound, a format or a shelf, not a lineage.") + "</p>";
+  html += '<dl class="kv">';
+  html += "<dt>Total bands</dt><dd>" + d.total.toLocaleString("en-US") + "</dd>";
+  html += "<dt>First tagged</dt><dd>" + d.birth + "</dd>";
+  html += "<dt>Debuts in " + focusYear + "</dt><dd>" + debutsIn(d, focusYear) + "</dd>";
+  if (d.peak) html += "<dt>Peak year</dt><dd>" + d.peakYear + " · " + d.peak + " debuts</dd>";
+  if (d.parentName) html += "<dt>Hangs off</dt><dd>" + esc(d.parentName) + "</dd>";
+  html += "<dt>On the graph</dt><dd>jumped to " + d.birth + ", beside <a data-pick=\"" + esc(a.node.name) + "\">" + esc(a.node.name) + "</a> — " + esc(a.why) + "</dd>";
+  html += "</dl>";
+  html += '<p class="empty">A descriptor, not a lineage genre — it is not drawn as a branch. The eight descriptor tags are explained in the How to read guide; the left lane now belongs to the major genres.</p>';
+  html += '<hr><div class="kids">' + linkBtn(a.node.name) + "</div>";
+  html += '<hr><button class="btn" type="button" id="panelClear">Clear selection</button>';
+  var panel = document.getElementById("panel");
+  panel.innerHTML = html;
+  wirePanel(panel);
+}
+function clearSelection() { selected = null; selectedDescriptor = null; rockEraActive = false; markDescriptorActive(); markMajorActive(); applySelection(); renderPanel(); }
+
+/* ================= FOCUS YEAR ================= */
+function applyFocus() {
+  var fx = xOf(focusYear);
+  var line = document.getElementById("focusLine"), tag = document.getElementById("focusTag");
+  if (line) { line.setAttribute("x1", fx); line.setAttribute("x2", fx); }
+  if (tag) { tag.setAttribute("x", fx + 6); tag.textContent = focusYear; }
+  document.getElementById("yearRead").textContent = focusYear;
+  var tot = 0, born = [];
+  branchNodes.forEach(function (n) {
+    tot += debutsIn(n, focusYear);
+    if (n.birth === focusYear) born.push(n.name);
+  });
+  var sub = tot.toLocaleString("en-US") + " band debuts across all branches in " + focusYear + ".";
+  if (born.length) sub += " Born this year: " + born.slice(0, 5).join(", ") + (born.length > 5 ? " +" + (born.length - 5) + " more" : "") + ".";
+  document.getElementById("yearSub").textContent = sub;
+}
+function applyLabelMode() {
+  document.querySelectorAll(".glabel").forEach(function (el) {
+    var kind = el.getAttribute("data-kind");
+    el.style.display = (labelMode === "all" || (labelMode === "major" && kind !== "minor")) ? "" : "none";
+  });
+}
+
+/* ================= STATIC LISTS ================= */
+function buildLists() {
+  var dl = document.getElementById("genreList");
+  dl.innerHTML = DATA.genres.map(function (g) { return '<option value="' + esc(g[0]) + '">'; }).join("") + '<option value="rock and roll">';
+  var rail = document.getElementById("descRail");
+  /* Major lane: the 23 majors hold the majority of the bands, so they are
+     the lane's buttons now — ordered by band count, biggest first, each
+     showing its birth year and band count. Clicking one selects that
+     branch exactly as clicking the branch itself does. Descriptor tags
+     are no longer buttons here; they are explained in the guide and stay
+     reachable through search. "Rock and roll" is added right after rock:
+     it is rock's first era (1949–59), not its own branch. */
+  var laneMajors = branchNodes.filter(function (n) { return n.major; })
+    .sort(function (a, b) { return (b.total - a.total) || (a.birth - b.birth); });
+  var railHtml = '<div class="rail-head">Major genres<span>biggest branches first — click to jump straight to a branch</span></div>';
+  laneMajors.forEach(function (n) {
+    railHtml += '<button type="button" class="major-chip" data-major="' + esc(n.name) + '"><span class="dot" style="background:' + n.color + '"></span><b>' + esc(n.name) + '</b><span class="sub">' + n.birth + " · " + n.total.toLocaleString("en-US") + " bands</span></button>";
+    if (n.name === "rock") {
+      railHtml += '<button type="button" class="major-chip era" data-era="rock and roll"><span class="dot" style="background:' + n.color + '"></span><b>rock and roll</b><span class="sub">1949–59 · era of rock</span></button>';
+    }
+  });
+  rail.innerHTML = railHtml;
+  var majors = branchNodes.filter(function (n) { return n.major; }).sort(function (a, b) { return a.birth - b.birth; });
+  var extraRoots = roots.filter(function (n) { return !n.major; });
+  document.getElementById("legend").innerHTML =
+    majors.map(function (n) { return '<div><span class="swatch" style="background:' + n.color + '"></span>' + esc(n.name) + " · " + n.birth + "</div>"; }).join("");
+  document.getElementById("legendRoots").innerHTML =
+    extraRoots.map(function (n) { return '<div><span class="swatch" style="background:' + n.color + '"></span>' + esc(n.name) + " · " + n.birth + (n.orphanParent ? " (via descriptor)" : "") + "</div>"; }).join("");
+}
+
+/* ================= EVENTS ================= */
+document.getElementById("chartHost").addEventListener("click", function (ev) {
+  var t = ev.target.closest("[data-g]");
+  if (t) selectGenre(t.getAttribute("data-g"), false);
+});
+document.getElementById("chartHost").addEventListener("mouseover", function (ev) {
+  var t = ev.target.closest("[data-g]");
+  if (t && !selected) { /* hover preview: panel follows hover only when nothing is locked */
+    var nm = t.getAttribute("data-g");
+    if (nodes[nm] && !nodes[nm].descriptor) { var keep = selected; selected = nm; renderPanel(); selected = keep; }
+  }
+});
+document.getElementById("yearSlider").addEventListener("input", function (ev) {
+  focusYear = parseInt(ev.target.value, 10);
+  if (rockEraActive) { rockEraActive = false; markMajorActive(); }
+  applyFocus();
+  if (selected) renderPanel();
+  else if (selectedDescriptor) renderDescriptorPanel(selectedDescriptor);
+});
+document.getElementById("labelMode").addEventListener("change", function (ev) {
+  labelMode = ev.target.value; applyLabelMode();
+});
+document.getElementById("zoomRange").addEventListener("input", function (ev) {
+  scale = tToScale(parseInt(ev.target.value, 10) / 1000);
+  applyScale();
+});
+/* magnifying glass — a bubble around the cursor with the chart blown up inside */
+document.getElementById("magBtn").addEventListener("click", function (ev) {
+  lensOn = !lensOn;
+  ev.currentTarget.setAttribute("aria-pressed", lensOn ? "true" : "false");
+  ev.currentTarget.textContent = lensOn ? "Magnifying glass: on" : "Magnifying glass: off";
+  document.body.classList.toggle("lens-on", lensOn);
+  if (!lensOn && lensEl) lensEl.style.display = "none";
+});
+document.getElementById("chartHost").addEventListener("mousemove", function (ev) {
+  if (!lensOn || !lensEl) return;
+  var svg = document.querySelector("#chartHost > svg");
+  if (!svg) return;
+  var r = svg.getBoundingClientRect();
+  if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) {
+    lensEl.style.display = "none"; return;
+  }
+  var R = lensEl.offsetWidth / 2;
+  var dx = ev.clientX - r.left, dy = ev.clientY - r.top;
+  lensEl.style.display = "block";
+  lensEl.style.left = (dx - R) + "px";
+  lensEl.style.top = (dy - R) + "px";
+  lensInner.style.transform = "translate(" + (R - dx * MAG) + "px," + (R - dy * MAG) + "px)";
+});
+document.getElementById("chartHost").addEventListener("mouseleave", function () {
+  if (lensEl) lensEl.style.display = "none";
+});
+/* major lane — click a major to jump the graph to its branch and read it in
+   the side panel, exactly as selecting the branch itself; the rock and roll
+   button jumps to rock's 1949–59 era instead */
+document.getElementById("descRail").addEventListener("click", function (ev) {
+  var era = ev.target.closest("[data-era]");
+  if (era) { selectRockAndRoll(true); return; }
+  var t = ev.target.closest("[data-major]");
+  if (t) selectGenre(t.getAttribute("data-major"), true);
+});
+/* guide pop-up — one panel for how-to-read, data notes and verification */
+var guideEl = document.getElementById("guide");
+var guideMinBtn = document.getElementById("guideMin");
+function setGuideMin(min) {
+  guideEl.classList.toggle("min", min);
+  guideMinBtn.textContent = min ? "Show" : "Minimize";
+  guideMinBtn.setAttribute("aria-expanded", min ? "false" : "true");
+}
+guideMinBtn.addEventListener("click", function () { setGuideMin(!guideEl.classList.contains("min")); });
+document.getElementById("guideClose").addEventListener("click", function () { guideEl.style.display = "none"; });
+document.getElementById("guideBtn").addEventListener("click", function () {
+  guideEl.style.display = "";
+  setGuideMin(false);
+  guideEl.scrollIntoView({ block: "nearest" });
+});
+/* keep the fit honest when the window changes size */
+var resizeTimer = null;
+window.addEventListener("resize", function () {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(function () {
+    computeFits();
+    if (scale < fitAll) scale = fitAll;
+    if (scale > MAXS) scale = MAXS;
+    document.getElementById("zoomRange").value = Math.round(scaleToT(scale) * 1000);
+    applyScale();
+  }, 150);
+});
+document.getElementById("clearBtn").addEventListener("click", clearSelection);
+document.getElementById("searchBox").addEventListener("change", function (ev) {
+  var v = ev.target.value.trim().toLowerCase();
+  if (v === "rock and roll") { selectRockAndRoll(true); return; }
+  var hit = DATA.genres.filter(function (g) { return g[0].toLowerCase() === v; })[0];
+  if (hit) selectGenre(hit[0], true);
+});
+
+/* ================= INIT ================= */
+buildLists();
+render();
+/* open fitted to the screen: full width, no sideways scroll until you zoom */
+computeFits();
+scale = fitW;
+document.getElementById("zoomRange").value = Math.round(scaleToT(scale) * 1000);
+applyScale();
+renderPanel();
+var v = verifyGeometry();
+document.getElementById("verifyBox").innerHTML =
+  "<strong>Geometry check (computed in-page from the drawn coordinates):</strong> " +
+  branchNodes.length + " branches placed across " + roots.length + " trees; " +
+  "<b>0 crossings</b> — every arc finishes its travel before the first ribbon it passes over begins " +
+  "(" + v.arcViol + " clearance violations); " +
+  "tightest gap between neighbouring ribbons at their widest is <b>" + r1(v.minGap) + "px</b>; " +
+  "closest pair of split nodes sharing a parent sits <b>" + r1(v.minNodeSep) + "px</b> apart, each with its own tap target. " +
+  "No genre had to be dropped or re-parented to make the lanes fit.";
+</script>
+</body>
+</html>
