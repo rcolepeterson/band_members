@@ -358,7 +358,7 @@ test('upsertGenreRows inserts, then re-upserting the same row is a no-op diff', 
 
 test('sql migration, migrate.mjs, and GENRE_COLUMNS agree', () => {
   const sqlFile = readFileSync(new URL('../sql/genre-graph-migration-v1.sql', import.meta.url), 'utf8');
-  const migrate = readFileSync(new URL('../netlify/migrate.mjs', import.meta.url), 'utf8');
+  const migrate = readFileSync(new URL('../netlify/functions/migrate.mjs', import.meta.url), 'utf8');
   assert.ok(sqlFile.includes('create table if not exists band_genre_data'));
   assert.ok(migrate.includes('create table if not exists band_genre_data'));
   assert.ok(migrate.includes('band_genre_data_primary_genre_idx'));
