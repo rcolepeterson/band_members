@@ -51,7 +51,12 @@
         font-size: 15px;
         line-height: 1.5;
       }
-      .wrap { max-width: 1560px; margin: 0 auto; padding: 28px 22px 56px; }
+      .wrap { max-width: 1560px; margin: 0 auto; padding: 28px 22px 56px; display: flex; flex-direction: column; }
+      .intro-wrap { order: 0; }
+      .controls { order: 1; }
+      .stage { order: 2; }
+      footer { order: 4; }
+      .intro-toggle { display: none; }
       h1, h2, h3 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; font-weight: 600; line-height: 1.15; }
       h1 { font-size: clamp(26px, 3.4vw, 40px); margin: 0 0 10px; letter-spacing: .1px; }
       h2 { font-size: 21px; margin: 0 0 10px; }
@@ -86,10 +91,15 @@
       .stage { display: grid; grid-template-columns: minmax(0, 1fr) 302px; gap: 16px; align-items: start; margin-top: 6px; }
       .chart-card { background: var(--chart-bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
       .chart-flex { display: flex; align-items: stretch; }
-      .chart-scroll { flex: 1 1 auto; min-width: 0; overflow: auto; max-height: 76vh; -webkit-overflow-scrolling: touch; }
+      .chart-scroll { flex: 1 1 auto; min-width: 0; overflow: auto; max-height: 76vh; touch-action: none; user-select: none; -webkit-user-select: none; }
       .chart-scroll svg { display: block; }
       #chartHost { position: relative; }
       body.lens-on #chartHost svg { cursor: none; }
+      /* pan & zoom: the scroll box has touch-action:none, so drags reach
+         the pointer handlers and pan the chart instead of scrolling it
+         natively; while the lens is armed it owns drags instead */
+      #chartHost > svg { cursor: grab; }
+      body.panning #chartHost > svg { cursor: grabbing; }
       /* descriptor rail — narrow, tall, hugging the left edge of the graph */
       .desc-rail { flex: 0 0 112px; width: 112px; max-height: 76vh; overflow-y: auto; border-right: 1px solid var(--line); background: var(--panel); padding: 10px 8px 12px; }
       .rail-head { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink); margin: 0 2px 8px; line-height: 1.35; }
@@ -115,7 +125,14 @@
       .lens-inner svg { display: block; }
       .zoom-read { font-size: 12.5px; color: var(--ink-soft); min-width: 118px; }
       button.btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-      .chart-hint { padding: 8px 14px; font-size: 12.5px; color: var(--ink-faint); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 18px; }
+      .chart-hint { padding: 8px 14px; font-size: 12.5px; color: var(--ink-faint); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+      /* gold magnifier toggle right in the hint bar under the chart — the
+         handy tap target on mobile, kept in sync with the controls button */
+      .mag-toggle { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 700; letter-spacing: .02em; cursor: pointer; color: var(--accent); background: transparent; border: 1.5px solid var(--accent); border-radius: 999px; padding: 4px 14px 4px 10px; min-height: 2rem; flex: 0 0 auto; }
+      .mag-toggle svg { width: 15px; height: 15px; flex: 0 0 auto; }
+      .mag-toggle:hover { background: var(--chip); }
+      .mag-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+      .mag-toggle[aria-pressed="true"]:hover { background: var(--accent); }
       /* detail panel */
       .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 16px 17px; position: sticky; top: 14px; }
       .panel .swatch { width: 13px; height: 13px; border-radius: 3px; display: inline-block; vertical-align: -1px; margin-right: 7px; }
@@ -183,13 +200,36 @@
         .chart-scroll, .desc-rail { max-height: 70vh; }
         .guide { top: 10px; right: 10px; }
       }
+      @media (max-width: 720px) {
+        /* Mobile: the forest is the landing view. The chart stage comes
+           first, controls follow it, and the intro + stats collapse into
+           a toggle below the graph (also duplicated in the Guide). */
+        .wrap { padding: 10px 10px 40px; }
+        .stage { order: 1; margin-top: 0; }
+        .controls { order: 2; margin-top: 14px; }
+        .intro-wrap { order: 3; margin-top: 16px; }
+        .guide { order: 4; position: static; width: auto; margin-top: 14px; }
+        footer { order: 5; }
+        .intro-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 10px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; background: var(--panel); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 9px; padding: 10px 13px; }
+        .intro-toggle .chev { transition: transform .18s ease; }
+        .intro-wrap.open .intro-toggle .chev { transform: rotate(180deg); }
+        .intro-content { display: none; padding-top: 12px; }
+        .intro-wrap.open .intro-content { display: block; }
+        .chart-scroll, .desc-rail { max-height: 74vh; }
+        .chart-scroll { max-height: 74vh; }
+        input[type="search"] { width: min(230px, 62vw); }
+        input[type="range"] { width: min(210px, 52vw); }
+      }
       @media (max-width: 640px) {
         .chart-flex { flex-direction: column; }
-        .desc-rail { flex: 0 0 auto; width: auto; max-height: none; overflow-y: visible; border-right: none; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
-        .rail-head { flex: 1 1 100%; margin-bottom: 2px; }
-        .rail-head span { display: inline; margin-left: 6px; }
-        .desc-rail .desc-chip { width: auto; margin-bottom: 0; }
-        .desc-rail .major-chip { width: auto; margin-bottom: 0; }
+        /* Major-genre lane becomes one compact horizontal strip above the
+           chart instead of a tall wrapped block pushing the forest down. */
+        .desc-rail { flex: 0 0 auto; width: auto; max-height: 74px; overflow-x: auto; overflow-y: hidden; border-right: none; border-bottom: 1px solid var(--line); display: flex; flex-wrap: nowrap; gap: 6px; align-items: stretch; padding: 8px; -webkit-overflow-scrolling: touch; }
+        .rail-head { flex: 0 0 86px; margin: 0; align-self: center; }
+        .rail-head span { display: none; }
+        .desc-rail .desc-chip { width: auto; margin-bottom: 0; flex: 0 0 auto; }
+        .desc-rail .major-chip { width: auto; margin-bottom: 0; flex: 0 0 auto; white-space: nowrap; padding: 5px 9px; align-self: center; }
+        .desc-rail .major-chip .sub { display: inline; margin-left: 5px; }
         .lens { width: 176px; height: 176px; }
       }
       @media (prefers-reduced-motion: reduce) {
@@ -199,6 +239,9 @@
   </head>
   <body>
     <div class="wrap">
+      <div class="intro-wrap" id="introWrap">
+        <button class="intro-toggle" id="introToggle" type="button" aria-expanded="false" aria-controls="introContent">About this graph &amp; stats <span class="chev" aria-hidden="true">▾</span></button>
+        <div class="intro-content" id="introContent">
       <p class="standfirst">Every genre is its own branch, split from its <strong>true parent</strong> at the year it
       actually happened — jazz in 1917 to EDM in 2010, one unbroken sweep. Branches fan above and below their parent,
       thickness swells and thins with the bands debuting each year, and colour changes only when a genuinely new
@@ -213,6 +256,8 @@
         <div class="stat" role="listitem"><b>7,396</b><span>bands placed of 8,004</span></div>
         <div class="stat" role="listitem"><b>1917–2024</b><span>108 years</span></div>
         <div class="stat" role="listitem"><b>0</b><span>branch crossings</span></div>
+      </div>
+        </div>
       </div>
 
       <div class="controls">
@@ -271,8 +316,10 @@
             </div>
           </div>
           <div class="chart-hint">
-            <span>The chart opens fitted to your screen — no sideways scrolling until you stretch time to zoom in. Far left on Time stretch shows the whole tree, top to bottom.</span>
+            <button class="mag-toggle" id="magBtnHint" type="button" aria-pressed="false" aria-label="Toggle magnifying glass"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><line x1="15.5" y1="15.5" x2="21" y2="21"></line></svg>Mag</button>
+            <span>Drag to pan. Scroll, pinch or use Time stretch to zoom — far left on Time stretch shows the whole tree, top to bottom.</span>
             <span>Red line = focus year. Dots sit on the edge of the parent branch, on the side the child leaves.</span>
+            <span>Magnifier: tap the gold Mag button, then move over the chart — on touch screens, press, hold and drag. While it's on, dragging moves the lens instead of panning.</span>
           </div>
         </div>
         <aside class="panel" id="panel" aria-live="polite"></aside>
@@ -405,11 +452,24 @@ function thickAt(n, year) {
   if (idx < 0) idx = 0; if (idx > NYEARS - 1) idx = NYEARS - 1;
   return 2.4 + smoothed(n)[idx] * 0.78;
 }
+/* Dense-cluster parents: branches that split many children within a few
+   years (the 1976–85 punk / metal knot). Their children — and the cluster
+   trunks themselves — get taller lanes and wider split spacing below so
+   arcs and labels separate in the base view, at the cost of a taller
+   stretch of chart there. */
+var CLUSTER_PARENTS = { "punk rock": 1, "hardcore punk": 1, "heavy metal": 1, "thrash metal": 1, "post punk": 1, "new wave": 1, "garage rock": 1 };
+function isDenseLane(n) {
+  if (CLUSTER_PARENTS[n.name]) return true;
+  if (n.birth < 1975 || n.birth > 1987) return false;
+  if (n.family === "Punk & Hardcore" || n.family === "Metal") return true;
+  return !!CLUSTER_PARENTS[n.parentName];
+}
 branchNodes.forEach(function (n) {
   var m = 0, y;
   for (y = n.birth; y <= YEAR1; y++) m = Math.max(m, thickAt(n, y));
   n.maxThick = m;
-  n.slotH = Math.max(21, m + 13);
+  n.dense = isDenseLane(n);
+  n.slotH = n.dense ? Math.max(42, m + 27) : Math.max(27, m + 17);
   var pk = 0, pkY = n.birth;
   n.debuts.forEach(function (v, i) { if (v > pk) { pk = v; pkY = YEAR0 + i; } });
   n.peak = pk; n.peakYear = pkY;
@@ -469,17 +529,24 @@ function computeX() {
   branchNodes.forEach(function (n) { if (n.layoutParent) (byParent[n.layoutParent] = byParent[n.layoutParent] || []).push(n); });
   Object.keys(byParent).forEach(function (pk) {
     var sibs = byParent[pk], pass, i, a, b;
+    /* Cluster parents (punk rock, hardcore punk, heavy metal, thrash…)
+       split many children in a handful of years: give those splits
+       roughly double the horizontal room so their arcs fan out instead
+       of piling into a knot, and every split node stays tappable. */
+    var cluster = !!CLUSTER_PARENTS[pk];
+    var sameGap = cluster ? 56 : 30;
+    var anyGap = cluster ? 28 : 15;
     for (pass = 0; pass < 3; pass++) {
       [-1, 1].forEach(function (sd) {
         var same = sibs.filter(function (s) { return s.side === sd; })
           .sort(function (x, y) { return x.birth - y.birth || x.dispX - y.dispX; });
         for (i = 1; i < same.length; i++) {
-          if (same[i].dispX < same[i - 1].dispX + 30) same[i].dispX = same[i - 1].dispX + 30;
+          if (same[i].dispX < same[i - 1].dispX + sameGap) same[i].dispX = same[i - 1].dispX + sameGap;
         }
       });
       var all = sibs.slice().sort(function (x, y) { return x.dispX - y.dispX; });
       for (i = 1; i < all.length; i++) {
-        if (all[i].dispX < all[i - 1].dispX + 15) all[i].dispX = all[i - 1].dispX + 15;
+        if (all[i].dispX < all[i - 1].dispX + anyGap) all[i].dispX = all[i - 1].dispX + anyGap;
       }
     }
   });
@@ -534,6 +601,8 @@ var selected = null, focusYear = 1985, labelMode = "all";
    scale = fitW    -> chart exactly fills the available width (the default) */
 var NATW = chartW, MAXS = 2.0, scale = 1, fitAll = 0.25, fitW = 0.4;
 var MAG = 2.4, lensOn = false, lensEl = null, lensInner = null;
+var lensTouchId = null, lensDragMoved = false, lensSuppressClick = false;
+var lensStartX = 0, lensStartY = 0, lensLastTouchEnd = 0;
 
 function ribbonPath(n) {
   var top = [], bot = [], y;
@@ -937,6 +1006,8 @@ function buildLists() {
 
 /* ================= EVENTS ================= */
 document.getElementById("chartHost").addEventListener("click", function (ev) {
+  if (lensSuppressClick) { lensSuppressClick = false; return; } /* a lens drag just ended — not a tap */
+  if (panSuppressClick) { panSuppressClick = false; return; } /* a pan or pinch just ended — not a tap */
   var t = ev.target.closest("[data-g]");
   if (t) selectGenre(t.getAttribute("data-g"), false);
 });
@@ -961,32 +1032,162 @@ document.getElementById("zoomRange").addEventListener("input", function (ev) {
   scale = tToScale(parseInt(ev.target.value, 10) / 1000);
   applyScale();
 });
-/* magnifying glass — a bubble around the cursor with the chart blown up inside */
-document.getElementById("magBtn").addEventListener("click", function (ev) {
-  lensOn = !lensOn;
-  ev.currentTarget.setAttribute("aria-pressed", lensOn ? "true" : "false");
-  ev.currentTarget.textContent = lensOn ? "Magnifying glass: on" : "Magnifying glass: off";
+/* magnifying glass — a bubble around the cursor with the chart blown up inside.
+   Two toggles drive it: the controls button and the gold Mag button in the
+   hint bar under the chart; setLens keeps both in sync. */
+function setLens(on) {
+  lensOn = on;
+  var mb = document.getElementById("magBtn");
+  mb.setAttribute("aria-pressed", lensOn ? "true" : "false");
+  mb.textContent = lensOn ? "Magnifying glass: on" : "Magnifying glass: off";
+  var hb = document.getElementById("magBtnHint");
+  if (hb) hb.setAttribute("aria-pressed", lensOn ? "true" : "false");
   document.body.classList.toggle("lens-on", lensOn);
-  if (!lensOn && lensEl) lensEl.style.display = "none";
-});
-document.getElementById("chartHost").addEventListener("mousemove", function (ev) {
-  if (!lensOn || !lensEl) return;
+  if (!lensOn) { lensTouchId = null; if (lensEl) lensEl.style.display = "none"; }
+}
+document.getElementById("magBtn").addEventListener("click", function () { setLens(!lensOn); });
+document.getElementById("magBtnHint").addEventListener("click", function () { setLens(!lensOn); });
+/* position the lens bubble over a chart point; lift raises the bubble
+   above the point so a fingertip never covers what it magnifies */
+function moveLens(clientX, clientY, lift) {
   var svg = document.querySelector("#chartHost > svg");
   if (!svg) return;
   var r = svg.getBoundingClientRect();
-  if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) {
+  if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) {
     lensEl.style.display = "none"; return;
   }
   var R = lensEl.offsetWidth / 2;
-  var dx = ev.clientX - r.left, dy = ev.clientY - r.top;
+  var dx = clientX - r.left, dy = clientY - r.top;
+  var top = dy - lift - R;
+  if (top < 0) top = 0;
   lensEl.style.display = "block";
   lensEl.style.left = (dx - R) + "px";
-  lensEl.style.top = (dy - R) + "px";
+  lensEl.style.top = top + "px";
   lensInner.style.transform = "translate(" + (R - dx * MAG) + "px," + (R - dy * MAG) + "px)";
+}
+document.getElementById("chartHost").addEventListener("mousemove", function (ev) {
+  if (!lensOn || !lensEl) return;
+  if (lensTouchId !== null) return; /* a touch drag owns the lens right now */
+  if (Date.now() - lensLastTouchEnd < 600) return; /* synthesized mouse event trailing a touch */
+  moveLens(ev.clientX, ev.clientY, 0);
 });
 document.getElementById("chartHost").addEventListener("mouseleave", function () {
   if (lensEl) lensEl.style.display = "none";
 });
+/* touch & pen: press, hold and drag moves the lens. While the lens is on,
+   touch-action:none (CSS, body.lens-on) stops the chart scroll box from
+   claiming the drag, so pointermove fires for the whole gesture. */
+function lensLift() { return Math.round(lensEl.offsetWidth * 0.55) + 14; }
+var chartHostEl = document.getElementById("chartHost");
+chartHostEl.addEventListener("pointerdown", function (ev) {
+  if (!lensOn || !lensEl || ev.pointerType === "mouse") return;
+  lensTouchId = ev.pointerId; lensDragMoved = false;
+  lensStartX = ev.clientX; lensStartY = ev.clientY;
+  if (chartHostEl.setPointerCapture) { try { chartHostEl.setPointerCapture(ev.pointerId); } catch (e) {} }
+  moveLens(ev.clientX, ev.clientY, lensLift());
+});
+chartHostEl.addEventListener("pointermove", function (ev) {
+  if (lensTouchId === null || ev.pointerId !== lensTouchId) return;
+  if (Math.abs(ev.clientX - lensStartX) + Math.abs(ev.clientY - lensStartY) > 8) lensDragMoved = true;
+  moveLens(ev.clientX, ev.clientY, lensLift());
+});
+function endLensTouch(ev) {
+  if (lensTouchId === null || ev.pointerId !== lensTouchId) return;
+  lensTouchId = null;
+  lensLastTouchEnd = Date.now();
+  if (lensDragMoved) lensSuppressClick = true; /* releasing a drag must not select the branch underneath */
+  lensDragMoved = false;
+  if (lensEl) lensEl.style.display = "none";
+}
+chartHostEl.addEventListener("pointerup", endLensTouch);
+chartHostEl.addEventListener("pointercancel", endLensTouch);
+/* ================= PAN & ZOOM — drag to pan, wheel / pinch to zoom =================
+   The scroll box keeps its scrollbars; a drag simply drives its
+   scrollLeft/scrollTop, and zoom keeps the chart point under the cursor
+   (or under the pinch midpoint) pinned in place while the scale changes.
+   The Time stretch slider stays in sync either way. While the magnifier
+   is on it owns drags, exactly as before — wheel zoom still works. */
+var chartScrollEl = document.getElementById("chartScroll");
+var panSuppressClick = false;
+function clampScale(v) { return Math.max(fitAll, Math.min(MAXS, v)); }
+function setScaleAt(ns, clientX, clientY) {
+  ns = clampScale(ns);
+  if (Math.abs(ns - scale) < 0.0005) return;
+  var rect = chartScrollEl.getBoundingClientRect();
+  var ax = clientX - rect.left, ay = clientY - rect.top;
+  var nx = (chartScrollEl.scrollLeft + ax) / scale;
+  var ny = (chartScrollEl.scrollTop + ay) / scale;
+  scale = ns;
+  applyScale();
+  chartScrollEl.scrollLeft = nx * scale - ax;
+  chartScrollEl.scrollTop = ny * scale - ay;
+  var zr = document.getElementById("zoomRange");
+  if (zr) zr.value = Math.round(scaleToT(scale) * 1000);
+}
+chartScrollEl.addEventListener("wheel", function (ev) {
+  ev.preventDefault();
+  setScaleAt(scale * Math.exp(-ev.deltaY * 0.0016), ev.clientX, ev.clientY);
+}, { passive: false });
+var pzPointers = new Map();
+var pzPanStart = null, pzPinchStart = null, pzMoved = false;
+function pzCapture(id) {
+  if (chartHostEl.setPointerCapture) { try { chartHostEl.setPointerCapture(id); } catch (e) {} }
+}
+chartHostEl.addEventListener("pointerdown", function (ev) {
+  if (lensOn) return; /* the magnifier owns drags while it is on */
+  if (ev.pointerType === "mouse" && ev.button !== 0) return;
+  pzPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pzPointers.size === 1) {
+    pzPanStart = { x: ev.clientX, y: ev.clientY, sl: chartScrollEl.scrollLeft, st: chartScrollEl.scrollTop };
+    pzMoved = false;
+  } else if (pzPointers.size === 2) {
+    var pts = Array.from(pzPointers.values());
+    pzPinchStart = { dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y), scale: scale };
+    pzMoved = true; /* a pinch is never a tap */
+    document.body.classList.add("panning");
+    pzPointers.forEach(function (p, id) { pzCapture(id); });
+  }
+});
+chartHostEl.addEventListener("pointermove", function (ev) {
+  if (!pzPointers.has(ev.pointerId)) return;
+  pzPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pzPointers.size === 1 && pzPanStart) {
+    var dx = ev.clientX - pzPanStart.x, dy = ev.clientY - pzPanStart.y;
+    if (!pzMoved && Math.abs(dx) + Math.abs(dy) > 6) {
+      pzMoved = true;
+      document.body.classList.add("panning");
+      pzCapture(ev.pointerId); /* capture only once it is a drag, so plain taps still land on branches */
+    }
+    if (pzMoved) {
+      chartScrollEl.scrollLeft = pzPanStart.sl - dx;
+      chartScrollEl.scrollTop = pzPanStart.st - dy;
+    }
+  } else if (pzPointers.size === 2 && pzPinchStart) {
+    var pts = Array.from(pzPointers.values());
+    var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    if (pzPinchStart.dist > 0) {
+      setScaleAt(pzPinchStart.scale * dist / pzPinchStart.dist,
+        (pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2);
+    }
+  }
+});
+function endPanZoom(ev) {
+  if (!pzPointers.has(ev.pointerId)) return;
+  pzPointers.delete(ev.pointerId);
+  if (pzPointers.size === 1) {
+    /* one finger left after a pinch: re-anchor the pan so it doesn't jump */
+    var p = Array.from(pzPointers.values())[0];
+    pzPanStart = { x: p.x, y: p.y, sl: chartScrollEl.scrollLeft, st: chartScrollEl.scrollTop };
+    pzPinchStart = null;
+  }
+  if (pzPointers.size === 0) {
+    if (pzMoved) panSuppressClick = true; /* releasing a pan/pinch must not select the branch underneath */
+    pzPanStart = null; pzPinchStart = null; pzMoved = false;
+    document.body.classList.remove("panning");
+  }
+}
+chartHostEl.addEventListener("pointerup", endPanZoom);
+chartHostEl.addEventListener("pointercancel", endPanZoom);
 /* major lane — click a major to jump the graph to its branch and read it in
    the side panel, exactly as selecting the branch itself; the rock and roll
    button jumps to rock's 1949–59 era instead */
@@ -995,6 +1196,15 @@ document.getElementById("descRail").addEventListener("click", function (ev) {
   if (era) { selectRockAndRoll(true); return; }
   var t = ev.target.closest("[data-major]");
   if (t) selectGenre(t.getAttribute("data-major"), true);
+});
+/* mobile intro toggle — intro + stats live collapsed below the graph
+   on small screens; the button is hidden (and the content always shown)
+   on wider screens via CSS */
+var introToggle = document.getElementById("introToggle");
+if (introToggle) introToggle.addEventListener("click", function () {
+  var wrap = document.getElementById("introWrap");
+  var open = wrap.classList.toggle("open");
+  introToggle.setAttribute("aria-expanded", open ? "true" : "false");
 });
 /* guide pop-up — one panel for how-to-read, data notes and verification */
 var guideEl = document.getElementById("guide");
