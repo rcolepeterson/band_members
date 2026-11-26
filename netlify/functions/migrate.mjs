@@ -1073,6 +1073,46 @@ export default async (req) => {
     await ensureGameExclusionsTable(sql);
     results.push('table game_excluded_bands ready');
 
+
+    // band_genre_data table --------------------------------------------------
+    // The verified genre layer (Genre Graph live-pull, spec 2026-11-26):
+    // one row per band, keyed by the band's UUID, carrying the merge's
+    // primary genre + fringe genres + first album + formation years, with
+    // the FULL merge record preserved in provenance jsonb. The bands
+    // table is NOT touched — its genre/years_active columns stay verbatim
+    // (additive-merge lock); they are one source ("existing_db") inside
+    // the provenance record. Debut year is computed at read time
+    // (first_album_year ?? formation_year), never stored. Mirrored in
+    // sql/genre-graph-migration-v1.sql for the Neon-editor path; the two
+    // are kept in sync by tests/genre-graph-endpoints.test.mjs.
+    await sql`
+      create table if not exists band_genre_data (
+        band_id           uuid primary key references bands(id) on delete cascade,
+        primary_genre     text,
+        genre_tier        text,
+        genre_sources     jsonb not null default '[]'::jsonb,
+        genre_agreement   integer,
+        fringe_genres     jsonb not null default '[]'::jsonb,
+        first_album_year  integer,
+        first_album_title text,
+        first_album_source text,
+        first_album_tier  text,
+        formation_year    integer,
+        end_year          integer,
+        has_conflict      boolean not null default false,
+        provenance        jsonb not null default '{}'::jsonb,
+        created_at        timestamptz not null default now(),
+        updated_at        timestamptz not null default now()
+      )
+    `;
+    results.push('table band_genre_data ready');
+
+    await sql`
+      create index if not exists band_genre_data_primary_genre_idx
+      on band_genre_data (primary_genre)
+    `;
+    results.push('index band_genre_data_primary_genre_idx ready');
+
     return ok({ steps: results });
   } catch (err) {
     console.error('migrate failed', err);
