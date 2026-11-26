@@ -40,6 +40,7 @@ import {
   serverError,
   methodNotAllowed,
 } from './_db.mjs';
+import { ensureGameExclusionsTable } from './_game_exclusions.mjs';
 
 const ADMIN_TOKEN_HEADER = 'x-admin-token';
 
@@ -361,11 +362,11 @@ export default async (req) => {
     `;
     results.push('table band_members ready');
 
-    await sql`
-      create unique index if not exists band_members_name_lower_idx
-      on band_members (lower(name))
-    `;
-    results.push('index band_members_name_lower_idx ready');
+    // Member identity is UUID-based, not name-based (2026-10-12): same-name
+    // members in different bands/towns are distinct people. The old unique
+    // index on lower(name) forced collisions; drop it if it exists.
+    await sql`drop index if exists band_members_name_lower_idx`;
+    results.push('index band_members_name_lower_idx dropped (member identity is UUID-based)');
 
     await sql`drop trigger if exists band_members_set_updated_at on band_members`;
     await sql`
@@ -411,6 +412,24 @@ export default async (req) => {
       on memberships (member_id)
     `;
     results.push('index memberships_member_id_idx ready');
+
+    // Neon transfer (2026-10-10): the Blobs version cache keys off
+    // max(updated_at) per table, so memberships needs the column and the
+    // trigger like bands/band_members/band_links already have. ADD COLUMN IF
+    // NOT EXISTS is safe on existing tables; only adds, never changes data.
+    await sql`
+      alter table memberships
+      add column if not exists updated_at timestamptz not null default now()
+    `;
+    results.push('column memberships.updated_at ready');
+
+    await sql`drop trigger if exists memberships_set_updated_at on memberships`;
+    await sql`
+      create trigger memberships_set_updated_at
+      before update on memberships
+      for each row execute function set_updated_at()
+    `;
+    results.push('trigger memberships_set_updated_at ready');
 
     // verifications table ------------------------------------------------------
     // PR 4a: cross-check RESULT (not a lock — see _verify_helpers.mjs's header
@@ -510,6 +529,48 @@ export default async (req) => {
       add column if not exists notify_member_edited boolean not null default true
     `;
     results.push('notification_prefs event-type columns ready');
+
+    // Onboarding email toggle + sent log (thank-you from Aaron, day-2 drip).
+    await sql`
+      alter table notification_prefs
+      add column if not exists email_onboarding boolean not null default true
+    `;
+    await sql`
+      create table if not exists onboarding_emails (
+        user_id        uuid primary key references users(id) on delete cascade,
+        kind           text not null check (kind in ('blast', 'drip')),
+        credits_granted integer not null,
+        sent_at        timestamptz not null default now()
+      )
+    `;
+    results.push('onboarding email prefs + log ready');
+
+    // 6° daily puzzle reminder (2026-10-11): opt-in flag, off by default,
+    // plus a one-row-per-user-per-day send log. See _daily_reminder.mjs,
+    // which also creates these on first use.
+    await sql`alter table notification_prefs add column if not exists email_daily_reminder boolean not null default false`;
+    await sql`
+      create table if not exists daily_reminder_log (
+        user_id    uuid not null references users(id) on delete cascade,
+        chain_date text not null,
+        sent_at    timestamptz not null default now(),
+        primary key (user_id, chain_date)
+      )
+    `;
+    // Guests can get the reminder too (2026-10-15): an email on their guest
+    // row, used only after they click the confirmation link.
+    await sql`
+      create table if not exists guest_reminders (
+        user_id           uuid primary key references users(id) on delete cascade,
+        email             text not null,
+        confirm_token     text not null unique,
+        unsubscribe_token text not null unique,
+        confirmed_at      timestamptz,
+        confirm_sent_at   timestamptz,
+        created_at        timestamptz not null default now()
+      )
+    `;
+    results.push('daily reminder prefs + log ready');
 
     await sql`drop trigger if exists notification_prefs_set_updated_at on notification_prefs`;
     await sql`
@@ -652,6 +713,43 @@ export default async (req) => {
       )
     `;
     results.push('table daily_snapshots ready');
+
+    // GA metrics on daily_snapshots (2026-10-10): Google Analytics numbers
+    // (active users, new users, avg engagement, events) logged alongside the
+    // IG/Neon counts. Idempotent — safe on existing deployments.
+    await sql`alter table daily_snapshots add column if not exists ga_active_users          integer`;
+    await sql`alter table daily_snapshots add column if not exists ga_new_users             integer`;
+    await sql`alter table daily_snapshots add column if not exists ga_avg_engagement_seconds integer`;
+    await sql`alter table daily_snapshots add column if not exists ga_events                integer`;
+    results.push('daily_snapshots GA columns ready');
+
+    // FB group + game value metrics on daily_snapshots (2026-10-23):
+    // fb_group_members tracks the "Six Degrees of Rock — Daily Game"
+    // Facebook group; the game_* columns carry the Daily Chain value
+    // metrics from Cole's analytics email (players, day-over-day return,
+    // weekly/repeat players, completion, share taps). All logged manually
+    // (Aaron reports, Nova POSTs). Idempotent — safe on existing rows.
+    await sql`alter table daily_snapshots add column if not exists fb_group_members    integer`;
+    await sql`alter table daily_snapshots add column if not exists game_players         integer`;
+    await sql`alter table daily_snapshots add column if not exists game_retention_pct   integer`;
+    await sql`alter table daily_snapshots add column if not exists game_weekly_players integer`;
+    await sql`alter table daily_snapshots add column if not exists game_repeat_players integer`;
+    await sql`alter table daily_snapshots add column if not exists game_completion_pct integer`;
+    await sql`alter table daily_snapshots add column if not exists game_share_taps     integer`;
+    results.push('daily_snapshots fb group + game value columns ready');
+
+    // Rawkle (same six metrics as Daily Chain, from game events) + Cards
+    // (plays/shares/wins) — midnight auto-log, 2026-11-03. Idempotent.
+    await sql`alter table daily_snapshots add column if not exists rawkle_players         integer`;
+    await sql`alter table daily_snapshots add column if not exists rawkle_retention_pct   integer`;
+    await sql`alter table daily_snapshots add column if not exists rawkle_weekly_players integer`;
+    await sql`alter table daily_snapshots add column if not exists rawkle_repeat_players integer`;
+    await sql`alter table daily_snapshots add column if not exists rawkle_completion_pct integer`;
+    await sql`alter table daily_snapshots add column if not exists rawkle_share_taps     integer`;
+    await sql`alter table daily_snapshots add column if not exists cards_plays            integer`;
+    await sql`alter table daily_snapshots add column if not exists cards_shares           integer`;
+    await sql`alter table daily_snapshots add column if not exists cards_wins             integer`;
+    results.push('daily_snapshots rawkle + cards columns ready');
 
     // shared_chains table ----------------------------------------------------
     // Game share cards: one row per "Share the chain" tap. The row is the
@@ -842,6 +940,50 @@ export default async (req) => {
     await sql`alter table users add column if not exists freeze_count integer not null default 0`;
     results.push('column users.freeze_count ready');
 
+    // Daily Chain replays ----------------------------------------------------
+    // v1 allowed one run per user per day (unique(user_id, chain_date)).
+    // Replays need many: replace with unique(user_id, chain_date, run_number).
+    // Existing rows keep run_number = 1, so Aaron's in-progress run survives.
+    await sql`alter table daily_runs add column if not exists run_number integer not null default 1`;
+    await sql`alter table daily_runs drop constraint if exists daily_runs_user_id_chain_date_key`;
+    const _rr = await sql`select 1 from pg_constraint where conname = 'daily_runs_user_replay_key'`;
+    if (!_rr[0]) {
+      await sql`alter table daily_runs add constraint daily_runs_user_replay_key unique (user_id, chain_date, run_number)`;
+    }
+    results.push('daily_runs replay support ready');
+
+    // Solo Run tables --------------------------------------------------------
+    // Solo v2 (Oct 2026): the guessing game — the tree deals a pair (or the
+    // player picks band A and the tree supplies band B), and the player
+    // builds the chain link-by-link from multiple-choice options, Daily
+    // Chain style. Free to start; hints and blackhole escapes cost credits.
+    // No streaks, no archive — each run is a fresh deal.
+    await sql`
+      create table if not exists solo_runs (
+        id              uuid primary key default gen_random_uuid(),
+        user_id         uuid not null references users(id) on delete cascade,
+        status          text not null default 'active',
+        band_a          uuid not null references bands(id) on delete cascade,
+        band_b          uuid not null references bands(id) on delete cascade,
+        optimal_hops    integer not null,
+        current_band_id uuid not null,
+        hops_used       integer not null default 0,
+        hints_used      integer not null default 0,
+        picks           jsonb not null default '[]',
+        current_options jsonb,
+        escaped         jsonb not null default '[]',
+        created_at      timestamptz not null default now(),
+        completed_at    timestamptz
+      )
+    `;
+    results.push('table solo_runs ready');
+
+    await sql`
+      create index if not exists solo_runs_user_id_idx
+      on solo_runs (user_id)
+    `;
+    results.push('index solo_runs_user_id_idx ready');
+
     // duplicate_flags table --------------------------------------------------
     // Duplicate-band monitor (see scanDuplicateBands in
     // cron_verify_stale_bands.mjs). One row per detected true-duplicate pair
@@ -867,6 +1009,70 @@ export default async (req) => {
       on duplicate_flags (resolved_at)
     `;
     results.push('index duplicate_flags_resolved_at_idx ready');
+
+    // game_analytics_events table --------------------------------------------
+    // Anonymous + signed-in game engagement tracking (Cole's request, Oct 2026).
+    // Fire-and-forget events from the game client: game_started, move_made,
+    // hint_clicked, game_completed. The ops board aggregates these into
+    // Games Started per User, Win/Loss/Abandon Rate, Hint Clicks, and
+    // Average Moves per Game.
+    //
+    // Privacy: user_id is NULL for anonymous players. session_id is a
+    // client-generated UUID per game — no cross-session tracking for anon.
+    await sql`
+      create table if not exists game_analytics_events (
+        id uuid primary key default gen_random_uuid(),
+        user_id uuid references users(id) on delete set null,
+        session_id text not null,
+        event_type text not null,
+        game_mode text,
+        band_a text,
+        band_b text,
+        result text,
+        moves_count integer,
+        hints_used integer,
+        duration_seconds integer,
+        created_at timestamptz not null default now()
+      )
+    `;
+    results.push('table game_analytics_events ready');
+
+    await sql`
+      create index if not exists game_analytics_events_type_date_idx
+      on game_analytics_events (event_type, created_at)
+    `;
+    results.push('index game_analytics_events_type_date_idx ready');
+
+    await sql`
+      create index if not exists game_analytics_events_session_idx
+      on game_analytics_events (session_id, event_type)
+    `;
+    results.push('index game_analytics_events_session_idx ready');
+
+    // Real numbers (Aaron, 2026-10-28): session-level bot-vs-human detail.
+    // The request's User-Agent string only — IPs stay rate-limit-only and
+    // are never stored, and session_id is still a per-game UUID, so this
+    // adds no cross-session tracking for anonymous players.
+    await sql`alter table game_analytics_events add column if not exists user_agent text`;
+    results.push('column game_analytics_events.user_agent ready');
+
+    // Guest play support (Aaron/Cole, 2026-10-08): guests play free without
+    // sign-up; credits tracked against a guest session, migrated on signup.
+    await sql`alter table users add column if not exists is_guest boolean not null default false`;
+    results.push('column users.is_guest ready');
+    await sql`alter table users add column if not exists guest_session_id text`;
+    results.push('column users.guest_session_id ready');
+    await sql`
+      create unique index if not exists users_guest_session_id_idx
+      on users (guest_session_id) where guest_session_id is not null
+    `;
+    results.push('index users_guest_session_id_idx ready');
+
+    // Bands the game never uses but the explorer keeps (Cole, 2026-10-09).
+    // Seeded with Supergroup A/B; see _game_exclusions.mjs.
+    await ensureGameExclusionsTable(sql);
+    results.push('table game_excluded_bands ready');
+
 
     // band_genre_data table --------------------------------------------------
     // The verified genre layer (Genre Graph live-pull, spec 2026-11-26):
