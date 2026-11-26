@@ -22,6 +22,7 @@
 // mocks without a live DB or Blobs.
 
 import { getStore } from '@netlify/blobs';
+import { GENRE_TABLES } from './_genre_graph.mjs';
 
 // Tables whose changes invalidate the /api/bands payload.
 export const BANDS_TABLES = ['bands', 'band_members', 'memberships', 'band_links'];
@@ -32,7 +33,7 @@ export const GAME_TABLES = ['bands', 'band_members', 'memberships'];
 // parameters, which cannot be table identifiers, so table names are
 // interpolated into the query string directly — safe ONLY because they come
 // from these hardcoded constants, never from user input.
-const KNOWN_TABLES = new Set([...BANDS_TABLES, ...GAME_TABLES]);
+const KNOWN_TABLES = new Set([...BANDS_TABLES, ...GAME_TABLES, ...GENRE_TABLES]);
 
 function assertKnownTable(table) {
   if (!KNOWN_TABLES.has(table)) {
