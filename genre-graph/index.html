@@ -273,6 +273,12 @@
       .p-node.ring3-node:focus { outline: none; }
       .p-node.ring3-node:focus circle { stroke: var(--accent); stroke-width: 2.2; }
       .portal-svgwrap .faded { opacity: .13; }
+      /* portal pan & zoom: drag pans, wheel / pinch zooms toward the
+         pointer; touch-action none so a pinch never scrolls the page */
+      .portal-svgwrap svg { touch-action: none; cursor: grab; }
+      .portal-svgwrap.panning svg { cursor: grabbing; }
+      /* zoomed in, a dense third ring has room for its labels again */
+      .portal-svgwrap svg.dense.zoomed .p-node.ring3-node text { opacity: 1; }
       @media (max-width: 720px) {
         .portal-body { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
         .portal-svgwrap svg { max-height: 52vh; }
@@ -557,6 +563,7 @@
           <div class="portal-tools">
             <button type="button" class="deg-btn" id="portalDeg2" aria-pressed="true">2° view</button>
             <button type="button" class="deg-btn" id="portalDeg3" aria-pressed="false">3° view</button>
+            <button type="button" class="deg-btn" id="portalReset">Reset view</button>
             <button type="button" class="portal-close" id="portalClose" aria-label="Close portal">&times;</button>
           </div>
         </div>
@@ -1479,6 +1486,7 @@ function renderPortal() {
   if (!entry || !entry.length) {
     sub.textContent = headBits.join(" · ");
     wrap.innerHTML = '<svg viewBox="-370 -370 740 740" role="img" aria-label="Portal for ' + esc(name) + '"><g class="p-node center"><circle r="30" style="fill:var(--accent)"></circle><text y="52">' + esc(truncName(name, 30)) + "</text></g></svg>";
+    initPortalView(name);
     list.innerHTML = "<h3>No connections on record</h3><p class='mini'>The Bands Connections data has no member list for " + esc(name) + " yet, so there is no constellation to draw." + (look ? " The band is still pinned on the genre tree behind this window." : " This band isn't placed on the genre tree, so there is no branch to pin it to.") + "</p>";
     note.textContent = LIVE ? "Portal data is live from Bands Connections." : "Portal data covers 7,976 bands from the Six Degrees member graph.";
     return;
@@ -1664,6 +1672,7 @@ function renderPortal() {
   s.push('<g class="p-node center p-el" data-mems="' + memsAttr(allIdx) + '"><circle r="30" style="fill:var(--accent)"></circle><text y="52">' + esc(truncName(name, 30)) + "</text></g>");
   s.push("</svg>");
   wrap.innerHTML = s.join("");
+  initPortalView(name);
   /* side list — every member with their other bands as re-centring chips */
   var lh = "<h3>Members of " + esc(name) + " — and their other bands</h3>";
   members.forEach(function (m) {
@@ -1687,7 +1696,7 @@ function renderPortal() {
   var bits = ["Centre: " + name + " · gold ring: its members · outer ring: their other bands" + (portalDegrees === 3 ? " · third ring: those bands' own members" : "") + "."];
   if (bandsCapped) bits.push("Showing " + bandsShown.length + " of " + totalBands + " connected bands — the most-connected first.");
   if (renderPortal._r3Capped) bits.push("Third ring capped at " + PORTAL_MEMBER3_CAP + " members.");
-  bits.push("Click any band to re-centre the portal on it · click a member in the constellation to trace just their threads · Esc closes.");
+  bits.push("Click any band to re-centre the portal on it · click a member in the constellation to trace just their threads · scroll or pinch to zoom, drag to pan, double-click resets the view · Esc closes.");
   note.textContent = bits.join(" ");
   applyPortalFocus();
 }
@@ -1704,6 +1713,7 @@ function openPortal(name) {
   portalBand = name;
   portalDegrees = 2;
   portalFocusMember = -1;
+  portalViewKey = ""; /* a fresh open starts at the default framing */
   document.getElementById("portalBackdrop").hidden = false;
   renderPortal();
   var c = document.getElementById("portalClose");
@@ -1720,6 +1730,7 @@ function closePortal() {
 function centrePortal(name) {
   portalBand = name;
   portalFocusMember = -1;
+  portalViewKey = ""; /* re-centring starts at the default framing */
   if (BAND_LOOKUP[name]) selectBand(name, null, null, { portal: false });
   renderPortal();
   if (LIVE && !LIVE_PORTAL[name]) {
@@ -1738,6 +1749,7 @@ document.addEventListener("keydown", function (ev) {
   if (ev.key === "Escape" && !document.getElementById("portalBackdrop").hidden) closePortal();
 });
 function portalClick(ev) {
+  if (portalSuppressClick) { portalSuppressClick = false; return; } /* a pan or pinch just ended — not a tap */
   var b = ev.target.closest("[data-portal-band]");
   if (b) { centrePortal(b.getAttribute("data-portal-band")); return; }
   var m = ev.target.closest("[data-portal-member]");
@@ -1749,6 +1761,148 @@ function portalClick(ev) {
 }
 document.getElementById("portalSvgWrap").addEventListener("click", portalClick);
 document.getElementById("portalList").addEventListener("click", portalClick);
+
+/* ================= PORTAL PAN & ZOOM =================
+   The constellation is an SVG with a square viewBox; pan/zoom just
+   moves that window. Wheel zooms toward the cursor, pinch zooms
+   toward the fingers, drag pans — the same feel as the main chart.
+   Labels are SVG text, so they scale with the zoom; in a dense
+   third ring the resting labels also come back once zoomed in far
+   enough for them to fit (see the .zoomed rule). A drag past a few
+   px suppresses the click, so re-centring still takes a clean tap.
+   The saved view is keyed by band + degrees: a live-data re-render
+   of the same constellation keeps the user's zoom, while opening,
+   re-centring or switching degrees starts from the default framing. */
+var portalView = null;    /* {cx, cy, w} — centre + width, SVG units */
+var portalViewKey = "";   /* band|degrees the saved view belongs to */
+var portalDefaultW = 740; /* viewBox width of the default framing */
+var portalSuppressClick = false;
+function portalSvgEl() {
+  var w = document.getElementById("portalSvgWrap");
+  return w ? w.querySelector("svg") : null;
+}
+function applyPortalView() {
+  var svg = portalSvgEl();
+  if (!svg || !portalView) return;
+  var w = portalView.w;
+  svg.setAttribute("viewBox", (portalView.cx - w / 2) + " " + (portalView.cy - w / 2) + " " + w + " " + w);
+  svg.classList.toggle("zoomed", portalDefaultW / w > 1.5);
+}
+function resetPortalView() {
+  portalView = { cx: 0, cy: 0, w: portalDefaultW };
+  applyPortalView();
+}
+function initPortalView(name) {
+  var svg = portalSvgEl();
+  if (!svg) return;
+  var vb = (svg.getAttribute("viewBox") || "").split(/\s+/).map(Number);
+  if (vb.length === 4 && vb[2] > 0) portalDefaultW = vb[2];
+  var key = name + "|" + portalDegrees;
+  if (key !== portalViewKey || !portalView) {
+    portalViewKey = key;
+    portalView = { cx: 0, cy: 0, w: portalDefaultW };
+  }
+  applyPortalView();
+}
+function portalClampView() {
+  portalView.w = Math.max(portalDefaultW / 6, Math.min(portalDefaultW * 1.25, portalView.w));
+  var maxC = portalDefaultW * 0.75;
+  portalView.cx = Math.max(-maxC, Math.min(maxC, portalView.cx));
+  portalView.cy = Math.max(-maxC, Math.min(maxC, portalView.cy));
+}
+function portalSvgPoint(svg, clientX, clientY) {
+  var ctm = svg.getScreenCTM();
+  if (!ctm) return null;
+  var pt = svg.createSVGPoint();
+  pt.x = clientX; pt.y = clientY;
+  return pt.matrixTransform(ctm.inverse());
+}
+function portalZoomAt(factor, clientX, clientY) {
+  var svg = portalSvgEl();
+  if (!svg || !portalView) return;
+  var p = portalSvgPoint(svg, clientX, clientY);
+  if (!p) return;
+  var nw = Math.max(portalDefaultW / 6, Math.min(portalDefaultW * 1.25, portalView.w / factor));
+  var r = nw / portalView.w;
+  portalView.cx = p.x - (p.x - portalView.cx) * r;
+  portalView.cy = p.y - (p.y - portalView.cy) * r;
+  portalView.w = nw;
+  portalClampView();
+  applyPortalView();
+}
+var portalWrapEl = document.getElementById("portalSvgWrap");
+portalWrapEl.addEventListener("wheel", function (ev) {
+  ev.preventDefault();
+  portalZoomAt(Math.exp(-ev.deltaY * 0.0016), ev.clientX, ev.clientY);
+}, { passive: false });
+portalWrapEl.addEventListener("dblclick", function () { resetPortalView(); });
+document.getElementById("portalReset").addEventListener("click", resetPortalView);
+var ppPointers = new Map();
+var ppPanStart = null, ppPinchStart = null, ppMoved = false;
+function ppCapture(id) {
+  if (portalWrapEl.setPointerCapture) { try { portalWrapEl.setPointerCapture(id); } catch (e) {} }
+}
+portalWrapEl.addEventListener("pointerdown", function (ev) {
+  if (ev.pointerType === "mouse" && ev.button !== 0) return;
+  var svg = portalSvgEl();
+  if (!svg || !portalView) return;
+  ppPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (ppPointers.size === 1) {
+    var ctm = svg.getScreenCTM();
+    ppPanStart = { x: ev.clientX, y: ev.clientY, cx: portalView.cx, cy: portalView.cy, upp: ctm && ctm.a ? 1 / ctm.a : 1 };
+    ppMoved = false;
+  } else if (ppPointers.size === 2) {
+    var pts = Array.from(ppPointers.values());
+    ppPinchStart = { dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y), w: portalView.w };
+    ppMoved = true; /* a pinch is never a tap */
+    portalWrapEl.classList.add("panning");
+    ppPointers.forEach(function (p, id) { ppCapture(id); });
+  }
+});
+portalWrapEl.addEventListener("pointermove", function (ev) {
+  if (!ppPointers.has(ev.pointerId)) return;
+  ppPointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (ppPointers.size === 1 && ppPanStart) {
+    var dx = ev.clientX - ppPanStart.x, dy = ev.clientY - ppPanStart.y;
+    if (!ppMoved && Math.abs(dx) + Math.abs(dy) > 6) {
+      ppMoved = true;
+      portalWrapEl.classList.add("panning");
+      ppCapture(ev.pointerId); /* capture only once it is a drag, so plain taps still land on nodes */
+    }
+    if (ppMoved) {
+      portalView.cx = ppPanStart.cx - dx * ppPanStart.upp;
+      portalView.cy = ppPanStart.cy - dy * ppPanStart.upp;
+      portalClampView();
+      applyPortalView();
+    }
+  } else if (ppPointers.size === 2 && ppPinchStart) {
+    var pts = Array.from(ppPointers.values());
+    var dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    if (ppPinchStart.dist > 0 && dist > 0) {
+      var targetW = ppPinchStart.w * ppPinchStart.dist / dist;
+      portalZoomAt(portalView.w / targetW, (pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2);
+    }
+  }
+});
+function endPortalPanZoom(ev) {
+  if (!ppPointers.has(ev.pointerId)) return;
+  ppPointers.delete(ev.pointerId);
+  if (ppPointers.size === 1 && portalView) {
+    /* one finger left after a pinch: re-anchor the pan so it doesn't jump */
+    var p = Array.from(ppPointers.values())[0];
+    var svg = portalSvgEl();
+    var ctm = svg ? svg.getScreenCTM() : null;
+    ppPanStart = { x: p.x, y: p.y, cx: portalView.cx, cy: portalView.cy, upp: ctm && ctm.a ? 1 / ctm.a : 1 };
+    ppPinchStart = null;
+  }
+  if (ppPointers.size === 0) {
+    if (ppMoved) portalSuppressClick = true; /* releasing a pan/pinch must not re-centre on the node underneath */
+    ppPanStart = null; ppPinchStart = null; ppMoved = false;
+    portalWrapEl.classList.remove("panning");
+  }
+}
+portalWrapEl.addEventListener("pointerup", endPortalPanZoom);
+portalWrapEl.addEventListener("pointercancel", endPortalPanZoom);
 /* band names anywhere — panel bands card, hover sweep — pin + portal */
 document.addEventListener("click", function (ev) {
   var pv = ev.target.closest("[data-prov-expand]");
