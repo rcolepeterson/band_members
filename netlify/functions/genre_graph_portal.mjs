@@ -26,6 +26,21 @@ import {
 } from './_db.mjs';
 import { isUuid, shapePortalNeighborhood } from './_genre_graph.mjs';
 
+// Dedupe merged membership rows by (band_id, member_id). At degrees=3 the
+// 2° rows are a subset of the 3° rows (the centre band's members are also
+// members of 2° bands), so merging them raw lands every membership twice.
+export function dedupeMembershipRows(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const r of rows) {
+    const key = `${r.band_id}:${r.member_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
+}
+
 export default async (req, context) => {
   if (req.method !== 'GET') return methodNotAllowed();
 
@@ -80,7 +95,7 @@ export default async (req, context) => {
     const memberById = new Map();
     const bandById = new Map();
     bandById.set(centre.id, { id: centre.id, name: centre.name });
-    for (const r of [...rows2, ...rows3]) {
+    for (const r of dedupeMembershipRows([...rows2, ...rows3])) {
       memberships.push({ band_id: r.band_id, member_id: r.member_id });
       if (!memberById.has(r.member_id)) memberById.set(r.member_id, { id: r.member_id, name: r.member_name });
       if (!bandById.has(r.band_id)) bandById.set(r.band_id, { id: r.band_id, name: r.band_name });
