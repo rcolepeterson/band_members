@@ -17,7 +17,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { DB_URL_ENV } from '../netlify/functions/_db.mjs';
 import genreGraph from '../netlify/functions/genre_graph.mjs';
 import genreGraphBand from '../netlify/functions/genre_graph_band.mjs';
-import genreGraphPortal from '../netlify/functions/genre_graph_portal.mjs';
+import genreGraphPortal, { dedupeMembershipRows } from '../netlify/functions/genre_graph_portal.mjs';
 import genreGraphApply, { MAX_APPLY_ROWS } from '../netlify/functions/genre_graph_apply.mjs';
 import {
   GENRE_TABLES,
@@ -271,6 +271,50 @@ test('shapePortalNeighborhood builds entry + outer in the embedded PORTAL shape'
   assert.equal(shaped.ids['Centre Band'], BAND_A);
   const twoDeg = shapePortalNeighborhood({ centre: bands[0], memberships, members, bands, degrees: 2 });
   assert.deepEqual(twoDeg.outer, {});
+});
+
+test('portal rows2+rows3 merge dedupes (rows2 is a subset of rows3 at degrees=3)', () => {
+  // Sweet Water-shaped fixture: 7 centre members, some shared with 2°
+  // bands, plus a third-ring member reachable only through a 2° band.
+  const BAND_C = '44444444-4444-4444-8444-444444444444';
+  const BAND_D = '55555555-5555-4555-8555-555555555555';
+  const bands = [
+    { id: BAND_A, name: 'Sweet Water' },
+    { id: BAND_B, name: 'SGM' },
+    { id: BAND_C, name: 'The Protocol' },
+    { id: BAND_D, name: 'Third Ring Band' },
+  ];
+  const members = [
+    { id: 'm1', name: 'Member One' },
+    { id: 'm2', name: 'Member Two' },
+    { id: 'm3', name: 'Member Three' },
+    { id: 'm4', name: 'Member Four' },
+    { id: 'm5', name: 'Member Five' },
+    { id: 'm6', name: 'Member Six' },
+    { id: 'm7', name: 'Member Seven' },
+    { id: 'm8', name: 'Third Ring Member' },
+  ];
+  const row = (band_id, member_id) => ({ band_id, member_id });
+  // 2°: every membership held by the centre band's members.
+  const rows2 = [
+    row(BAND_A, 'm1'), row(BAND_A, 'm2'), row(BAND_A, 'm3'), row(BAND_A, 'm4'),
+    row(BAND_A, 'm5'), row(BAND_A, 'm6'), row(BAND_A, 'm7'),
+    row(BAND_B, 'm1'), row(BAND_B, 'm2'), row(BAND_C, 'm3'),
+  ];
+  // 3°: memberships of the 2° bands' members — includes all of rows2
+  // (centre members sit in 2° bands too) plus the third ring.
+  const rows3 = [...rows2, row(BAND_B, 'm8'), row(BAND_D, 'm8')];
+  const merged = dedupeMembershipRows([...rows2, ...rows3]);
+  assert.equal(merged.length, rows3.length);
+  const shaped = shapePortalNeighborhood({ centre: bands[0], memberships: merged, members, bands, degrees: 3 });
+  assert.equal(shaped.entry.length, 7);
+  const names = shaped.entry.map(([n]) => n);
+  assert.equal(new Set(names).size, 7, 'entry members are unique');
+  for (const [, others] of shaped.entry) {
+    assert.equal(new Set(others).size, others.length, 'other-band lists have no duplicates');
+  }
+  assert.deepEqual(shaped.entry[0], ['Member One', ['SGM']]);
+  assert.ok(shaped.outer['SGM'].some(([n]) => n === 'Third Ring Member'));
 });
 
 // --- Apply script mapping --------------------------------------------------------
