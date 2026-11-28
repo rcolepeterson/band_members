@@ -42,6 +42,25 @@ const fallback = () =>
     headers: { location: '/rawkle-og.png', 'cache-control': 'no-store' },
   });
 
+// Squircle tile outline: superellipse n=4, matching the board's CSS
+// corner-shape: squircle. Drawn as a path, not fillRect/strokeRect —
+// pureimage's strokeRect ignores the canvas transform, so under the 2x
+// supersample the tile outlines landed half-size in the top-left corner
+// as a faint ghost grid (seen live 2026-11-28). Paths respect the
+// transform, so the outlines sit on their tiles.
+function squirclePath(ctx, x, y, size, n = 4) {
+  const cx = x + size / 2, cy = y + size / 2, a = size / 2;
+  const SEG = 96;
+  ctx.beginPath();
+  for (let i = 0; i <= SEG; i++) {
+    const t = (i / SEG) * Math.PI * 2;
+    const c = Math.cos(t), s = Math.sin(t);
+    const px = cx + a * Math.sign(c) * Math.pow(Math.abs(c), 2 / n);
+    const py = cy + a * Math.sign(s) * Math.pow(Math.abs(s), 2 / n);
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+}
+
 function centerText(ctx, text, size, y, color) {
   ctx.fillStyle = color;
   ctx.font = `${size}pt ${FONT_FAMILY}`;
@@ -75,11 +94,12 @@ export async function renderRawkleCard({ result, host = 'sixdegreesofrock.com' }
     let x = (WIDTH - rowW) / 2;
     const y = top + ri * rowH;
     row.forEach((tile) => {
+      squirclePath(ctx, x, y, size);
       ctx.fillStyle = TILE[tile] || TILE.a;
-      ctx.fillRect(x, y, size, size);
+      ctx.fill();
       ctx.strokeStyle = TILE_STROKE;
       ctx.lineWidth = 2;
-      ctx.strokeRect(x, y, size, size);
+      ctx.stroke();
       x += size + gap;
     });
   });

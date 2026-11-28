@@ -76,20 +76,51 @@ function centerText(ctx, text, size, y, color) {
   ctx.fillText(text, WIDTH / 2, y);
 }
 
-// One card back, rotated about its center. Pureimage has no roundRect, so
-// the back is a straight rectangle with a gold border + inner hairline.
+// Squircle-cornered rectangle: straight edges, corners as superellipse
+// arcs (n=4) of radius r — the path form of the game's CSS
+// corner-shape: squircle. Drawn as a path, not fillRect/strokeRect:
+// pureimage's strokeRect ignores the canvas transform, so under this
+// card's translate/rotate the gold borders used to land unrotated in
+// the top-left corner and the backs shipped borderless (seen live
+// 2026-11-28). Paths respect the transform.
+function squircleRectPath(ctx, x, y, w, h, r, n = 4) {
+  const SEG = 16;
+  const corners = [
+    { cx: x + w - r, cy: y + r, a0: -Math.PI / 2 },
+    { cx: x + w - r, cy: y + h - r, a0: 0 },
+    { cx: x + r, cy: y + h - r, a0: Math.PI / 2 },
+    { cx: x + r, cy: y + r, a0: Math.PI },
+  ];
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  for (const c of corners) {
+    for (let i = 0; i <= SEG; i++) {
+      const t = c.a0 + (i / SEG) * (Math.PI / 2);
+      const co = Math.cos(t), si = Math.sin(t);
+      const px = c.cx + r * Math.sign(co) * Math.pow(Math.abs(co), 2 / n);
+      const py = c.cy + r * Math.sign(si) * Math.pow(Math.abs(si), 2 / n);
+      ctx.lineTo(px, py);
+    }
+  }
+  ctx.closePath();
+}
+
+// One card back, rotated about its center: squircle corners (matching
+// the in-game cards), gold border + inner hairline.
 function drawCardBack(ctx, cx, cy, w, h, angleDeg) {
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate((angleDeg * Math.PI) / 180);
+  squircleRectPath(ctx, -w / 2, -h / 2, w, h, 10);
   ctx.fillStyle = '#0e1a28';
-  ctx.fillRect(-w / 2, -h / 2, w, h);
+  ctx.fill();
   ctx.strokeStyle = COLORS.gold;
   ctx.lineWidth = 2;
-  ctx.strokeRect(-w / 2, -h / 2, w, h);
+  ctx.stroke();
+  squircleRectPath(ctx, -w / 2 + 5, -h / 2 + 5, w - 10, h - 10, 5);
   ctx.strokeStyle = 'rgba(217,179,108,0.35)';
   ctx.lineWidth = 1;
-  ctx.strokeRect(-w / 2 + 5, -h / 2 + 5, w - 10, h - 10);
+  ctx.stroke();
   ctx.font = `30pt ${FONT_FAMILY}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -104,11 +135,14 @@ async function renderCardsCard({ result, host }) {
   const img = PImage.make(WIDTH, HEIGHT);
   const ctx = img.getContext('2d');
 
-  // Midnight sky: vertical gradient, deep blue up top fading to near-black.
+  // Midnight sky: vertical gradient, deep blue up top fading to black.
+  // Deepened 2026-11-28 (Aaron's hybrid pick): the static card's
+  // fade-to-black mood on the result card too — the fade now reaches
+  // near-black higher up, so the fan and closing band sit on black.
   const sky = ctx.createLinearGradient(0, 0, 0, HEIGHT);
   sky.addColorStop(0, '#122640');
-  sky.addColorStop(0.48, '#0a1524');
-  sky.addColorStop(1, '#05090f');
+  sky.addColorStop(0.38, '#0a1524');
+  sky.addColorStop(1, '#03060a');
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
